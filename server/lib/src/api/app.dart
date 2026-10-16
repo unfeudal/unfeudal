@@ -18,6 +18,7 @@ import '../util/clock.dart';
 import 'errors.dart';
 import 'middleware.dart';
 import 'routes/auth.dart';
+import 'routes/devices.dart';
 import 'routes/health.dart';
 import 'routes/info.dart';
 import 'routes/setup.dart';
@@ -100,7 +101,12 @@ Handler buildHandler(AppDeps deps) {
   final api = Router(notFoundHandler: _notFound)
     ..post('/setup', setup)
     ..post('/prelogin', prelogin)
-    ..post('/login', login);
+    ..post('/login', login)
+    ..get('/devices', requireAuth(listDevices))
+    ..delete(
+      '/devices/<id>',
+      (Request r, String id) => requireAuth((r) => deleteDevice(r, id))(r),
+    );
   final root = Router(notFoundHandler: _notFound)
     ..get('/healthz', healthz)
     ..get('/api/info', info)
