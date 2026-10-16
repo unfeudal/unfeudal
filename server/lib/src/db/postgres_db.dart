@@ -47,7 +47,23 @@ class PostgresDb implements Db {
   Future<T> transaction<T>(
     Future<T> Function(Tx tx) fn, {
     bool readOnly = false,
-  }) => _pool.runTx((session) => fn(_PostgresTx(session)));
+  }) => _pool.runTx(
+    (session) => fn(_PostgresTx(session)),
+    settings: TransactionSettings(
+      isolationLevel: readOnly
+          ? IsolationLevel.repeatableRead
+          : IsolationLevel.readCommitted,
+      accessMode: readOnly ? AccessMode.readOnly : AccessMode.readWrite,
+    ),
+  );
+
+  /// The cluster should use the C collation; the server warns at start otherwise.
+  Future<bool> collationIsC() async {
+    final row = (await query(
+      'SELECT datcollate, datctype FROM pg_database WHERE datname = current_database()',
+    )).single;
+    return row['datcollate'] == 'C' && row['datctype'] == 'C';
+  }
 
   @override
   Future<void> close() async {

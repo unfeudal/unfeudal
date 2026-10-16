@@ -19,6 +19,11 @@ class SqliteDb implements Db {
       );
     }
     final db = path == ':memory:' ? sqlite3.openInMemory() : sqlite3.open(path);
+    // Before the first table; no effect on an existing file.
+    db.execute('PRAGMA auto_vacuum = INCREMENTAL');
+    db.execute('PRAGMA journal_mode = WAL');
+    db.execute('PRAGMA foreign_keys = ON');
+    db.execute('PRAGMA busy_timeout = 5000');
     return SqliteDb._(db);
   }
 
@@ -46,7 +51,8 @@ class SqliteDb implements Db {
     Future<T> Function(Tx tx) fn, {
     bool readOnly = false,
   }) => _locked(() async {
-    _db.execute('BEGIN');
+    // Writers take the write lock at BEGIN; readers keep one WAL snapshot.
+    _db.execute(readOnly ? 'BEGIN DEFERRED' : 'BEGIN IMMEDIATE');
     try {
       final result = await fn(_SqliteTx(this));
       _db.execute('COMMIT');
