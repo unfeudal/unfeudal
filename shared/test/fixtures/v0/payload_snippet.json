@@ -1,0 +1,1 @@
+{"color":"blue","schemaVersion":1,"name":"Disk usage","command":"df -h | sort -k5 -r\n","tags":["ops"]}
