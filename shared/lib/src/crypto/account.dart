@@ -28,13 +28,13 @@ class AccountBundle {
   factory AccountBundle.fromJson(Object? json) {
     final r = JsonReader(json, 'accountBundle');
     return AccountBundle(
-      salt: _bytes(r, 'salt', 16),
+      salt: r.bytes('salt', length: 16),
       kdf: KdfParams.fromJson(r.object('kdf')),
       wrappedUserKey: Envelope.fromJson(r.object('wrappedUserKey')),
       wrappedUserKeyByRecovery: Envelope.fromJson(
         r.object('wrappedUserKeyByRecovery'),
       ),
-      publicKey: _bytes(r, 'publicKey', 32),
+      publicKey: r.bytes('publicKey', length: 32),
       wrappedPrivateKey: Envelope.fromJson(r.object('wrappedPrivateKey')),
       extra: r.extra(_known),
     );
@@ -82,19 +82,6 @@ class AccountBundle {
     'publicKey': b64(publicKey),
     'wrappedPrivateKey': wrappedPrivateKey.toJson(),
   };
-
-  static Uint8List _bytes(JsonReader r, String key, int length) {
-    final Uint8List bytes;
-    try {
-      bytes = unb64(r.req<String>(key));
-    } on FormatException {
-      throw FormatException('accountBundle.$key: invalid base64url');
-    }
-    if (bytes.length != length) {
-      throw FormatException('accountBundle.$key: must be $length bytes');
-    }
-    return bytes;
-  }
 }
 
 class NewAccount {

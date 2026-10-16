@@ -29,8 +29,8 @@ class Envelope {
       v: r.integer('v'),
       alg: r.text('alg', max: 64),
       keyId: keyId,
-      nonce: _bytes(r, 'nonce'),
-      ct: _bytes(r, 'ct'),
+      nonce: r.bytes('nonce'),
+      ct: r.bytes('ct'),
       extra: r.extra(_known),
     );
     if (envelope.isSupported &&
@@ -60,14 +60,6 @@ class Envelope {
     'nonce': b64(nonce),
     'ct': b64(ct),
   };
-
-  static Uint8List _bytes(JsonReader r, String key) {
-    try {
-      return unb64(r.req<String>(key));
-    } on FormatException {
-      throw FormatException('envelope.$key: invalid base64url');
-    }
-  }
 }
 
 /// The key labels of crypto.md; each one is bound into the AEAD data.

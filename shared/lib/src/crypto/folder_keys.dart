@@ -223,15 +223,7 @@ class FolderKeyHistory {
     for (final element in decoded) {
       final r = JsonReader(element, 'history');
       final version = r.integer('version', min: 1, max: current - 1);
-      final Uint8List key;
-      try {
-        key = unb64(r.req<String>(field));
-      } on FormatException {
-        throw FormatException('history.$field: invalid base64url');
-      }
-      if (key.length != 32) {
-        throw FormatException('history.$field: must be 32 bytes');
-      }
+      final key = r.bytes(field, length: 32);
       if (entries.containsKey(version)) {
         throw const FormatException('history.version: duplicate');
       }

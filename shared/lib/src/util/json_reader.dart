@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
+import 'dart:typed_data';
+
+import '../bytes.dart';
 import '../ids.dart';
 
 /// Typed reads over a decoded JSON object. Every malformed value is a
@@ -62,6 +65,21 @@ class JsonReader {
   }
 
   Map<String, Object?> object(String key) => req<Map<String, Object?>>(key);
+
+  /// Base64url text, exactly [length] bytes when given.
+  Uint8List bytes(String key, {int? length}) {
+    final text = req<String>(key);
+    final Uint8List value;
+    try {
+      value = unb64(text);
+    } on FormatException {
+      throw _error(key, 'invalid base64url');
+    }
+    if (length != null && value.length != length) {
+      throw _error(key, 'must be $length bytes');
+    }
+    return value;
+  }
 
   /// Fields outside [known], kept so newer data survives a round-trip.
   Map<String, Object?> extra(Set<String> known) => {

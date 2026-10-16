@@ -59,4 +59,13 @@ void main() {
       'x': 'extra',
     });
   });
+
+  test('bytes are base64url with an optional exact length', () {
+    final b = JsonReader({'k': '-_8', 'bad': '+/8'}, 'thing');
+    expect(b.bytes('k'), [0xfb, 0xff]);
+    expect(b.bytes('k', length: 2), [0xfb, 0xff]);
+    expect(() => b.bytes('k', length: 3), throwsFormatException);
+    expect(() => b.bytes('bad'), throwsFormatException);
+    expect(() => b.bytes('missing'), throwsFormatException);
+  });
 }
