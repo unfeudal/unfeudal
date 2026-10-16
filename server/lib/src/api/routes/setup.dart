@@ -34,9 +34,9 @@ Future<Response> setup(Request request) async {
   final locale = body.containsKey('locale')
       ? parseLocale(body['locale'])
       : 'en';
-  if ((await deps.db.query('SELECT id FROM users LIMIT 1')).isNotEmpty) {
-    throw _setupDone();
-  }
+  Future<bool> hasUser() async =>
+      (await deps.db.query('SELECT id FROM users LIMIT 1')).isNotEmpty;
+  if (await hasUser()) throw _setupDone();
   final h = hashToken(token);
   final stored = await deps.db.query(
     "SELECT value FROM meta WHERE key = 'setup_token_hash'",
@@ -46,6 +46,8 @@ Future<Response> setup(Request request) async {
         utf8.encode(stored.single['value']! as String),
         utf8.encode(h),
       )) {
+    // A concurrent setup may have committed since the first check.
+    if (await hasUser()) throw _setupDone();
     // No reason on setup: one message for every failure.
     throw ApiError(ApiErrorCode.unauthorized, 'Invalid setup token.');
   }
