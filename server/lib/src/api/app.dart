@@ -24,6 +24,7 @@ import 'routes/health.dart';
 import 'routes/info.dart';
 import 'routes/items.dart';
 import 'routes/setup.dart';
+import 'routes/sync.dart';
 
 /// Everything a request handler needs, built once at start.
 class AppDeps {
@@ -123,7 +124,8 @@ Handler buildHandler(AppDeps deps) {
     ..put(
       '/items/<id>',
       (Request r, String id) => requireAuth((r) => putItem(r, id))(r),
-    );
+    )
+    ..get('/sync', requireAuth(sync));
   final root = Router(notFoundHandler: _notFound)
     ..get('/healthz', healthz)
     ..get('/api/info', info)
