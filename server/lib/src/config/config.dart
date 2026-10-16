@@ -1,9 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+// latest_all keeps the link names (UTC, US/Eastern…) that latest drops.
+import 'package:timezone/data/latest_all.dart';
+import 'package:timezone/timezone.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 import 'package:yaml/yaml.dart';
 
 import '../log/logger.dart';
 import '../net/client_ip.dart';
+import '../version.dart';
 import 'features.dart';
 
 /// The server refuses to start (exit 2). [message] never contains the value.
@@ -74,20 +78,18 @@ class Config {
     final sources = _sources(env, yamlText);
     final r = _Reader(sources.values);
     final features = Features(sources.flags);
-    // ponytail: SMTP stays off; smtp_password is still validated so a bad secret refuses to start.
-    r.limitedText('smtp_password', 256);
     return Config._(
-      databaseUrl: 'sqlite:///data/unfeudal.db',
-      listen: (host: '0.0.0.0', port: 8080),
+      databaseUrl: r.databaseUrl('database_url'),
+      listen: r.listen('listen'),
       publicUrl: r.publicUrl(features),
-      secretFile: '/data/secret.key',
-      sourceUrl: Uri.parse('https://github.com/unfeudal/unfeudal'),
+      secretFile: r.nonEmpty('secret_file', '/data/secret.key'),
+      sourceUrl: r.sourceUrl('source_url'),
       trustedProxies: r.cidrs('trusted_proxies'),
       logLevel: r.logLevel('log_level'),
-      timezone: 'UTC',
+      timezone: r.timezone('timezone'),
       setupToken: r.setupToken('setup_token'),
-      minClientVersion: '0.1.0',
-      orgCreation: OrgCreation.all,
+      minClientVersion: r.minClientVersion('min_client_version'),
+      orgCreation: r.orgCreation('org_creation'),
       accessTokenTtl: r.duration('access_token_ttl', '15m', '1m', '1h'),
       refreshTokenTtl: r.duration('refresh_token_ttl', '30d', '1d', '365d'),
       loginMaxAttempts: r.count('login_max_attempts', 10, 3, 100),
@@ -106,7 +108,7 @@ class Config {
         36500,
       ),
       trashRetentionDays: r.count('trash_retention_days', 30, 0, 36500),
-      smtp: null,
+      smtp: r.smtp(),
       features: features,
     );
   }
@@ -349,6 +351,135 @@ class _Reader {
       throw ConfigError(key, 'must be an integer between $min and $max');
     }
     return value;
+  }
+
+  /// `sqlite:///<path>`, or `postgres://host/database` with sslmode absent, disable, require or verify-full.
+  String databaseUrl(String key) {
+    final text = _text(key) ?? 'sqlite:///data/unfeudal.db';
+    if (text.startsWith('sqlite:///') && text.length > 'sqlite:///'.length) {
+      return text;
+    }
+    final uri = Uri.tryParse(text);
+    final sslMode = uri?.queryParameters['sslmode'];
+    if (uri == null ||
+        uri.scheme != 'postgres' ||
+        uri.host.isEmpty ||
+        uri.pathSegments.isEmpty ||
+        uri.pathSegments.first.isEmpty ||
+        !(sslMode == null || _sslModes.contains(sslMode))) {
+      throw ConfigError(
+        key,
+        'must be sqlite:///<path> or postgres://host/database',
+      );
+    }
+    return text;
+  }
+
+  static const _sslModes = {'disable', 'require', 'verify-full'};
+
+  ({String host, int port}) listen(String key) {
+    final text = _text(key) ?? '0.0.0.0:8080';
+    final colon = text.lastIndexOf(':');
+    final host = colon < 0
+        ? ''
+        : text.substring(0, colon).replaceAll(RegExp(r'^\[|\]$'), '');
+    final portText = colon < 0 ? '' : text.substring(colon + 1);
+    final port = _count.hasMatch(portText) ? int.parse(portText) : 0;
+    if (host.isEmpty || port < 1 || port > 65535) {
+      throw ConfigError(key, 'must be host:port');
+    }
+    return (host: host, port: port);
+  }
+
+  String nonEmpty(String key, String fallback) {
+    final text = _text(key) ?? fallback;
+    if (text.isEmpty) throw ConfigError(key, 'must not be empty');
+    return text;
+  }
+
+  Uri sourceUrl(String key) {
+    final uri = Uri.tryParse(
+      _text(key) ?? 'https://github.com/unfeudal/unfeudal',
+    );
+    if (uri == null ||
+        !(uri.scheme == 'https' || uri.scheme == 'http') ||
+        uri.host.isEmpty) {
+      throw ConfigError(key, 'must be an http(s) URL');
+    }
+    return uri;
+  }
+
+  static bool _zonesLoaded = false;
+
+  /// An IANA name; times shown in mails only.
+  String timezone(String key) {
+    final name = _text(key) ?? 'UTC';
+    if (!_zonesLoaded) {
+      initializeTimeZones();
+      _zonesLoaded = true;
+    }
+    try {
+      getLocation(name);
+    } on LocationNotFoundException {
+      throw ConfigError(key, 'must be an IANA time zone name');
+    }
+    return name;
+  }
+
+  String minClientVersion(String key) {
+    final text = _text(key) ?? '0.1.0';
+    _orError(key, 'must be X.Y.Z', () => Version.parse(text));
+    if (compareVersions(text, latestClientVersion) > 0) {
+      throw ConfigError(key, 'must not exceed $latestClientVersion');
+    }
+    return text;
+  }
+
+  OrgCreation orgCreation(String key) => switch (_text(key)) {
+    null || 'all' => OrgCreation.all,
+    'instance_owner' => OrgCreation.instanceOwner,
+    _ => throw ConfigError(key, 'must be all or instance_owner'),
+  };
+
+  static final _email = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+  static final _host = RegExp(r'^[^\s/]+$');
+
+  /// Every given SMTP key is validated; mail is on only with smtp_host, which then requires smtp_from.
+  SmtpConfig? smtp() {
+    final tls = switch (_text('smtp_tls')) {
+      null || 'starttls' => SmtpTls.starttls,
+      'implicit' => SmtpTls.implicit,
+      'none' => SmtpTls.none,
+      _ => throw ConfigError('smtp_tls', 'must be starttls, implicit or none'),
+    };
+    final port = count(
+      'smtp_port',
+      tls == SmtpTls.implicit ? 465 : 587,
+      1,
+      65535,
+    );
+    final user = limitedText('smtp_user', 256);
+    final password = limitedText('smtp_password', 256);
+    final from = _text('smtp_from');
+    if (from != null && (from.length > 254 || !_email.hasMatch(from))) {
+      throw ConfigError('smtp_from', 'must be an email address');
+    }
+    final host = _text('smtp_host');
+    if (host == null) return null;
+    if (!_host.hasMatch(host)) {
+      throw ConfigError('smtp_host', 'must be a host name or IP');
+    }
+    if (from == null) {
+      throw ConfigError('smtp_from', 'required with smtp_host');
+    }
+    return SmtpConfig(
+      host: host,
+      port: port,
+      tls: tls,
+      user: user,
+      password: password,
+      from: from,
+    );
   }
 
   String? limitedText(String key, int max) {
