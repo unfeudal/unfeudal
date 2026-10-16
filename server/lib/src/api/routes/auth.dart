@@ -92,3 +92,18 @@ Future<Response> login(Request request) async {
   });
   return jsonResponse(session.toJson());
 }
+
+/// A fresh access token and the refresh successor; a replay revokes the device.
+Future<Response> refreshToken(Request request) async {
+  final deps = depsOf(request);
+  final body = await readJson(request);
+  final rotated = await deps.refresh.rotate(
+    reqString(body, 'refreshToken', max: 200),
+  );
+  return jsonResponse(
+    TokenPair(
+      deps.access.issue(rotated.userId, rotated.deviceId),
+      rotated.refreshToken,
+    ).toJson(),
+  );
+}
