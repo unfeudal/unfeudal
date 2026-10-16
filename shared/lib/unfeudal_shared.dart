@@ -5,6 +5,7 @@ export 'src/bytes.dart';
 export 'src/crypto/cipher.dart';
 export 'src/crypto/envelope.dart';
 export 'src/crypto/errors.dart';
+export 'src/crypto/kdf.dart';
 export 'src/crypto/payload_crypto.dart';
 export 'src/ids.dart';
 export 'src/time.dart';
