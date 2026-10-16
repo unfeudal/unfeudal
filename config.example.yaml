@@ -1,0 +1,63 @@
+# Unfeudal server configuration. Point UNFEUDAL_CONFIG_FILE at this file.
+# Every key can also be set as UNFEUDAL_<KEY> (upper case), which wins over this file. Prefer the
+# environment for secrets (setup_token, smtp_password). An unknown key or a bad value stops the server.
+# Durations: 30s, 15m, 12h, 7d. Sizes: 512KB, 50MB, 1GB (binary), or 0.
+
+# sqlite:///data/unfeudal.db, or postgres://user:password@host:5432/unfeudal?sslmode=verify-full
+# (sslmode: disable | require | verify-full). PostgreSQL: create the database with
+# TEMPLATE template0 ENCODING 'UTF8' LC_COLLATE 'C' LC_CTYPE 'C'. Several instances on one PostgreSQL
+# database must share the same secret_file content.
+database_url: sqlite:///data/unfeudal.db
+listen: 0.0.0.0:8080
+# Required. https://, or http:// only for a LAN address with the plain_http_lan feature on.
+public_url: https://vault.example.org
+# Token-signing secret: 32 bytes, created with mode 0600 at first start. Back it up with the database.
+secret_file: /data/secret.key
+# Source code of this server (AGPL), announced in /api/info.
+source_url: https://github.com/unfeudal/unfeudal
+# Reverse proxies allowed to set X-Forwarded-For (CIDR list).
+trusted_proxies: []
+log_level: info               # debug | info | warn | error
+timezone: UTC                 # IANA name; times in mails only
+# One-time token for POST /setup (26 base32 chars). Unset: generated and printed once at first start.
+# setup_token: ABCD-EFGH-IJKL-MNOP-QRST-UVWX-YZ
+min_client_version: 0.1.0
+org_creation: all             # all | instance_owner
+access_token_ttl: 15m         # 1m–1h
+refresh_token_ttl: 30d        # 1d–365d
+login_max_attempts: 10        # 3–100
+login_lockout: 15m            # 1m–24h
+invite_ttl: 7d                # 1h–30d
+max_vault_size: 50MB          # history included; 0 = unlimited
+max_org_size: 500MB           # history included; 0 = unlimited
+max_orgs_per_user: 0          # 0 = unlimited
+max_devices_per_user: 0       # 0 = unlimited
+audit_retention_days: 365     # 0 = forever
+audit_ip_retention_days: 90
+item_history_max_versions: 50 # 0 = unlimited
+trash_retention_days: 30      # 0 = never purged
+
+# Mail (invites and security alerts). No smtp_host: no mail.
+# smtp_host: smtp.example.org
+# smtp_port: 587              # 465 with implicit
+# smtp_tls: starttls          # starttls | implicit | none
+# smtp_user: unfeudal
+# smtp_password: change-me
+# smtp_from: vault@example.org
+
+features:
+  orgs: true
+  teams: true
+  user_overrides: true
+  invites_from_orgs: true
+  smtp_invites: true
+  security_emails: true
+  audit: true
+  client_events: true
+  item_history: true
+  recovery_kit: true
+  plain_http_lan: false        # on: http:// public_url allowed for a LAN address
+  reveal: true
+  biometric_unlock: true
+  ssh_config_import: true
+  mascot: true
