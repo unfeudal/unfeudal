@@ -205,3 +205,79 @@ extension SetupOwner on TestServer {
     );
   }
 }
+
+extension Accounts on TestServer {
+  Future<TestSession> login(
+    String email,
+    String password, {
+    String deviceName = 'Test device',
+    String ip = '203.0.113.7',
+  }) async {
+    final pre = await post('/api/v1/prelogin', body: {'email': email}, ip: ip);
+    final keys = await deriveMasterKeys(
+      password,
+      unb64(pre.body['salt'] as String),
+      KdfParams.fromJson(pre.body['kdf']),
+    );
+    final r = await post(
+      '/api/v1/login',
+      body: {
+        'email': email,
+        'authKey': b64(keys.authKey),
+        'device': testDevice(deviceName),
+      },
+      ip: ip,
+    );
+    if (r.status != 200) {
+      throw StateError('login failed: ${r.status} ${r.json}');
+    }
+    final session = Session.fromJson(r.json);
+    return TestSession(
+      session.userId,
+      session.deviceId,
+      session.accessToken,
+      session.refreshToken,
+      email,
+      password,
+      session.bundle,
+      session.bundleVersion,
+      await testCrypto.unlock(session.bundle, password),
+    );
+  }
+
+  /// Inserts the account directly (accounts otherwise come from invites, p6), then logs in.
+  Future<TestSession> createUser(
+    String email, {
+    String password = testPassword,
+  }) async {
+    final acc = await testCrypto.create(password);
+    await db.execute(
+      'INSERT INTO users (id, email, bundle, auth_hash, recovery_auth_hash, created_at) '
+      'VALUES (@id, @email, @bundle, @auth, @recovery, @now)',
+      {
+        'id': newId(),
+        'email': email,
+        'bundle': jsonEncode(acc.bundle.toJson()),
+        'auth': await hashSecret(acc.authKey, SecretHashParams.testing),
+        'recovery': await hashSecret(
+          acc.recoveryAuthKey,
+          SecretHashParams.testing,
+        ),
+        'now': iso(clock.now()),
+      },
+    );
+    final s = await login(email, password);
+    return TestSession(
+      s.userId,
+      s.deviceId,
+      s.accessToken,
+      s.refreshToken,
+      email,
+      password,
+      s.bundle,
+      s.bundleVersion,
+      s.account,
+      recoveryKey: acc.recoveryKey,
+    );
+  }
+}
