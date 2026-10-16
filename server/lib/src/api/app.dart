@@ -102,6 +102,7 @@ Handler buildHandler(AppDeps deps) {
     ..post('/setup', setup)
     ..post('/prelogin', prelogin)
     ..post('/login', login)
+    ..post('/token/refresh', refreshToken)
     ..get('/devices', requireAuth(listDevices))
     ..delete(
       '/devices/<id>',
