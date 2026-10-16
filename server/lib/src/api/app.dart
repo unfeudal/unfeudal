@@ -17,6 +17,7 @@ import '../log/logger.dart';
 import '../util/clock.dart';
 import 'errors.dart';
 import 'middleware.dart';
+import 'routes/account.dart';
 import 'routes/auth.dart';
 import 'routes/devices.dart';
 import 'routes/health.dart';
@@ -103,6 +104,16 @@ Handler buildHandler(AppDeps deps) {
     ..post('/prelogin', prelogin)
     ..post('/login', login)
     ..post('/token/refresh', refreshToken)
+    ..post('/account/password', requireAuth(changePassword))
+    ..post(
+      '/account/recover/start',
+      requireFeature(Flag.recoveryKit)(recoverStart),
+    )
+    ..post('/account/recover', requireFeature(Flag.recoveryKit)(recover))
+    ..post(
+      '/account/recovery-kit',
+      requireAuth(requireFeature(Flag.recoveryKit)(recoveryKit)),
+    )
     ..get('/devices', requireAuth(listDevices))
     ..delete(
       '/devices/<id>',
