@@ -11,6 +11,7 @@ import 'package:unfeudal_server/src/db/maintenance.dart';
 import 'package:unfeudal_server/src/db/migrate.dart';
 import 'package:unfeudal_server/src/log/logger.dart';
 import 'package:unfeudal_server/src/net/client_ip.dart';
+import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import 'fake_clock.dart';
 import 'peer.dart';
@@ -133,5 +134,74 @@ class TestServer {
   Future<void> close() async {
     await db.close();
     _dir.deleteSync(recursive: true);
+  }
+}
+
+class TestSession {
+  TestSession(
+    this.userId,
+    this.deviceId,
+    this.accessToken,
+    this.refreshToken,
+    this.email,
+    this.password,
+    this.bundle,
+    this.bundleVersion,
+    this.account, {
+    this.recoveryKey,
+  });
+  final String userId;
+  final String deviceId;
+  String accessToken;
+  String refreshToken;
+  final String email;
+  final String password;
+  final AccountBundle bundle;
+  final int bundleVersion;
+  final UnlockedAccount account;
+  final String?
+  recoveryKey; // recovery key text; set by setupOwner and createUser
+}
+
+final testCrypto = AccountCrypto(kdf: KdfParams.testing, allowTestingKdf: true);
+
+Map<String, Object?> testDevice([String name = 'Test device']) => {
+  'name': name,
+  'platform': 'linux',
+};
+
+extension SetupOwner on TestServer {
+  Future<TestSession> setupOwner({
+    String email = 'owner@example.org',
+    String password = testPassword,
+  }) async {
+    final acc = await testCrypto.create(password);
+    final r = await post(
+      '/api/v1/setup',
+      body: {
+        'token': testSetupToken,
+        'email': email,
+        'bundle': acc.bundle.toJson(),
+        'authKey': b64(acc.authKey),
+        'recoveryAuthKey': b64(acc.recoveryAuthKey),
+        'device': testDevice(),
+      },
+    );
+    if (r.status != 201) {
+      throw StateError('setup failed: ${r.status} ${r.json}');
+    }
+    final session = Session.fromJson(r.json);
+    return TestSession(
+      session.userId,
+      session.deviceId,
+      session.accessToken,
+      session.refreshToken,
+      email.trim().toLowerCase(),
+      password,
+      session.bundle,
+      session.bundleVersion,
+      acc.unlocked,
+      recoveryKey: acc.recoveryKey,
+    );
   }
 }

@@ -19,6 +19,7 @@ import 'errors.dart';
 import 'middleware.dart';
 import 'routes/health.dart';
 import 'routes/info.dart';
+import 'routes/setup.dart';
 
 /// Everything a request handler needs, built once at start.
 class AppDeps {
@@ -95,7 +96,7 @@ Never _notFound(Request _) =>
 
 /// withDeps → requestLog → securityHeaders → errorMapper → routes.
 Handler buildHandler(AppDeps deps) {
-  final api = Router(notFoundHandler: _notFound);
+  final api = Router(notFoundHandler: _notFound)..post('/setup', setup);
   final root = Router(notFoundHandler: _notFound)
     ..get('/healthz', healthz)
     ..get('/api/info', info)
