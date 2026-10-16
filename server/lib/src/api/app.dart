@@ -17,6 +17,7 @@ import '../log/logger.dart';
 import '../util/clock.dart';
 import 'errors.dart';
 import 'middleware.dart';
+import 'routes/auth.dart';
 import 'routes/health.dart';
 import 'routes/info.dart';
 import 'routes/setup.dart';
@@ -96,7 +97,10 @@ Never _notFound(Request _) =>
 
 /// withDeps → requestLog → securityHeaders → errorMapper → routes.
 Handler buildHandler(AppDeps deps) {
-  final api = Router(notFoundHandler: _notFound)..post('/setup', setup);
+  final api = Router(notFoundHandler: _notFound)
+    ..post('/setup', setup)
+    ..post('/prelogin', prelogin)
+    ..post('/login', login);
   final root = Router(notFoundHandler: _notFound)
     ..get('/healthz', healthz)
     ..get('/api/info', info)
