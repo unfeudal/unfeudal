@@ -39,6 +39,7 @@ secret.key
 
 # Editors, tools and OS
 .claude/
+CLAUDE.md
 .idea/
 *.iml
 .vscode/
