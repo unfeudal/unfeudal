@@ -9,6 +9,7 @@ export 'src/crypto/errors.dart';
 export 'src/crypto/kdf.dart';
 export 'src/crypto/payload_crypto.dart';
 export 'src/crypto/recovery_key.dart';
+export 'src/crypto/sealed_box.dart';
 export 'src/ids.dart';
 export 'src/protocol/item.dart';
 export 'src/time.dart';
