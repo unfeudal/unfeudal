@@ -28,6 +28,8 @@ export 'src/protocol/api_error.dart';
 export 'src/protocol/api_info.dart';
 export 'src/protocol/compat.dart';
 export 'src/protocol/item.dart';
+export 'src/protocol/org_block.dart';
 export 'src/protocol/session.dart';
+export 'src/protocol/sync_page.dart';
 export 'src/protocol/version.dart';
 export 'src/time.dart';
