@@ -22,6 +22,7 @@ import 'routes/auth.dart';
 import 'routes/devices.dart';
 import 'routes/health.dart';
 import 'routes/info.dart';
+import 'routes/items.dart';
 import 'routes/setup.dart';
 
 /// Everything a request handler needs, built once at start.
@@ -118,6 +119,10 @@ Handler buildHandler(AppDeps deps) {
     ..delete(
       '/devices/<id>',
       (Request r, String id) => requireAuth((r) => deleteDevice(r, id))(r),
+    )
+    ..put(
+      '/items/<id>',
+      (Request r, String id) => requireAuth((r) => putItem(r, id))(r),
     );
   final root = Router(notFoundHandler: _notFound)
     ..get('/healthz', healthz)
