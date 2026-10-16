@@ -13,6 +13,7 @@ export 'src/crypto/recovery_key.dart';
 export 'src/crypto/safety_code.dart';
 export 'src/crypto/sealed_box.dart';
 export 'src/ids.dart';
+export 'src/net/lan.dart';
 export 'src/payload/folder.dart';
 export 'src/payload/host.dart';
 export 'src/payload/host_binding.dart';
