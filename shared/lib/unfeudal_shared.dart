@@ -24,5 +24,8 @@ export 'src/payload/member_pin.dart';
 export 'src/payload/payload.dart';
 export 'src/payload/profile.dart';
 export 'src/payload/snippet.dart';
+export 'src/protocol/api_info.dart';
+export 'src/protocol/compat.dart';
 export 'src/protocol/item.dart';
+export 'src/protocol/version.dart';
 export 'src/time.dart';
