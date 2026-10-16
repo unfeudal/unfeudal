@@ -1,0 +1,15 @@
+services:
+  unfeudal:
+    image: ghcr.io/unfeudal/unfeudal-server:latest
+    restart: unless-stopped
+    ports: ["127.0.0.1:8080:8080"]   # reachable only through the reverse proxy on this host
+    environment:
+      UNFEUDAL_PUBLIC_URL: https://vault.example.org
+      UNFEUDAL_TRUSTED_PROXIES: 172.30.0.1/32   # the host proxy as the container sees it: the gateway below
+    volumes: ["unfeudal-data:/data"]              # unfeudal.db and secret.key: back up both
+networks:
+  default:
+    ipam:
+      config: [{subnet: 172.30.0.0/24, gateway: 172.30.0.1}]   # fixed, so the trusted proxy address is known
+volumes:
+  unfeudal-data:
