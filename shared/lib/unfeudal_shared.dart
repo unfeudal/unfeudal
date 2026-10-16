@@ -17,6 +17,7 @@ export 'src/payload/folder.dart';
 export 'src/payload/host.dart';
 export 'src/payload/host_binding.dart';
 export 'src/payload/identity.dart';
+export 'src/payload/inheritance.dart';
 export 'src/payload/known_host.dart';
 export 'src/payload/ledger.dart';
 export 'src/payload/member_pin.dart';
