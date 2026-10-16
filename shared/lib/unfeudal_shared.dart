@@ -13,5 +13,7 @@ export 'src/crypto/recovery_key.dart';
 export 'src/crypto/safety_code.dart';
 export 'src/crypto/sealed_box.dart';
 export 'src/ids.dart';
+export 'src/payload/host.dart';
+export 'src/payload/payload.dart';
 export 'src/protocol/item.dart';
 export 'src/time.dart';
