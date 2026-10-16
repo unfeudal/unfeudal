@@ -1,0 +1,137 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:shelf/shelf.dart';
+import 'package:unfeudal_server/src/api/app.dart';
+import 'package:unfeudal_server/src/auth/secret_hash.dart';
+import 'package:unfeudal_server/src/config/config.dart';
+import 'package:unfeudal_server/src/db/db.dart';
+import 'package:unfeudal_server/src/db/maintenance.dart';
+import 'package:unfeudal_server/src/db/migrate.dart';
+import 'package:unfeudal_server/src/log/logger.dart';
+import 'package:unfeudal_server/src/net/client_ip.dart';
+
+import 'fake_clock.dart';
+import 'peer.dart';
+import 'test_db.dart';
+
+const testPassword = 'correct horse battery staple';
+const testSetupToken = 'ABCD-EFGH-IJKL-MNOP-QRST-UVWX-YZ';
+
+class TestResponse {
+  TestResponse(this.status, this.headers, this.json, this.error);
+  final int status;
+  final Map<String, String> headers;
+  final Object? json;
+  final String? error;
+  Map<String, Object?> get body => json! as Map<String, Object?>;
+}
+
+class TestServer {
+  TestServer._(
+    this.db,
+    this.clock,
+    this.deps,
+    this.handler,
+    this.logLines,
+    this._dir,
+  );
+  final Db db;
+  final FakeClock clock;
+  final AppDeps deps;
+  final Handler handler;
+  final List<String> logLines;
+  final Directory _dir;
+
+  static Future<TestServer> start({Map<String, String> env = const {}}) async {
+    final dir = Directory.systemTemp.createTempSync('unfeudal_test_');
+    final config = Config.load({
+      'UNFEUDAL_PUBLIC_URL': 'https://vault.test',
+      'UNFEUDAL_SECRET_FILE': '${dir.path}/secret.key',
+      'UNFEUDAL_SETUP_TOKEN': testSetupToken,
+      ...env,
+    });
+    final db = await openTestDb();
+    await migrate(db);
+    final clock = FakeClock(DateTime.utc(2026, 10, 13, 12));
+    final lines = <String>[];
+    final deps = await AppDeps.create(
+      config,
+      db,
+      clock: clock,
+      log: Logger(LogLevel.debug, lines.add),
+      secretHash: SecretHashParams.testing,
+      allowTestingKdf: true,
+    );
+    await ensureSetupToken(db, config.setupToken);
+    return TestServer._(db, clock, deps, buildHandler(deps), lines, dir);
+  }
+
+  /// Sends `X-Unfeudal-Client: 0.1.0` unless [headers] overrides it; a header given as '' is not sent.
+  Future<TestResponse> send(
+    String method,
+    String path, {
+    String? token,
+    Object? body,
+    Map<String, String> headers = const {},
+    String ip = '203.0.113.7',
+  }) async {
+    final all = {
+      'x-unfeudal-client': '0.1.0',
+      if (token != null) 'authorization': 'Bearer $token',
+      ...headers,
+    }..removeWhere((_, v) => v.isEmpty);
+    final response = await handler(
+      Request(
+        method,
+        Uri.parse('https://vault.test$path'),
+        body: body == null ? null : (body is String ? body : jsonEncode(body)),
+        headers: all,
+        context: {connectionInfoKey: FakePeer(ip)},
+      ),
+    );
+    final text = await response.readAsString();
+    final Object? json = text.isEmpty ? null : jsonDecode(text);
+    return TestResponse(
+      response.statusCode,
+      response.headers,
+      json,
+      json is Map ? json['error'] as String? : null,
+    );
+  }
+
+  Future<TestResponse> get(
+    String path, {
+    String? token,
+    Map<String, String> headers = const {},
+    String ip = '203.0.113.7',
+  }) => send('GET', path, token: token, headers: headers, ip: ip);
+  Future<TestResponse> post(
+    String path, {
+    String? token,
+    Object? body,
+    Map<String, String> headers = const {},
+    String ip = '203.0.113.7',
+  }) => send('POST', path, token: token, body: body, headers: headers, ip: ip);
+  Future<TestResponse> put(
+    String path, {
+    String? token,
+    Object? body,
+    Map<String, String> headers = const {},
+    String ip = '203.0.113.7',
+  }) => send('PUT', path, token: token, body: body, headers: headers, ip: ip);
+  Future<TestResponse> delete(
+    String path, {
+    String? token,
+    Object? body,
+    Map<String, String> headers = const {},
+    String ip = '203.0.113.7',
+  }) =>
+      send('DELETE', path, token: token, body: body, headers: headers, ip: ip);
+
+  Future<void> close() async {
+    await db.close();
+    _dir.deleteSync(recursive: true);
+  }
+}
