@@ -1,0 +1,22 @@
+name: mirror
+on:
+  push:
+    branches: [main]
+    tags: ["*"]
+permissions:
+  contents: read
+concurrency:
+  group: mirror
+  cancel-in-progress: false
+jobs:
+  gitea:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # a bare clone holds exactly refs/heads and refs/tags; --mirror makes Gitea equal to it
+      - run: |
+          git clone --bare "https://github.com/$REPO.git" repo.git
+          git -C repo.git push --mirror "https://unfeudal-bot:$TOKEN@git.killiandalcin.fr/unfeudal/unfeudal.git"
+        env:
+          REPO: ${{ github.repository }}
+          TOKEN: ${{ secrets.GITEA_MIRROR_TOKEN }}

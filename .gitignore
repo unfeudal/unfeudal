@@ -1,4 +1,48 @@
-.claude/
+# Dart and Flutter
+.dart_tool/
+build/
+coverage/
+.flutter-plugins
+.flutter-plugins-dependencies
+**/windows/flutter/ephemeral/
+**/linux/flutter/ephemeral/
+**/macos/Flutter/ephemeral/
+**/macos/Pods/
+**/ios/Pods/
+
+# Xcode
+xcuserdata/
+DerivedData/
+*.xcuserstate
+
+# Release outputs
+dist/
+
+# Docs and assets
 brand/
-docs/
+docs/contract/
+docs/rfc/
+docs/superpowers/
 TODO.md
+
+# Local server data and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+secret.key
+/data/
+
+# Editors, tools and OS
+.claude/
+.idea/
+*.iml
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini
+*.log

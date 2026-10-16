@@ -1,0 +1,48 @@
+name: checks
+on:
+  push: {branches: [main]}
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+permissions:
+  contents: read
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  title:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      # the PR title is the squash commit message: type(scope[,scope]): description
+      - run: |
+          re='^(feat|fix|docs|refactor|test|ci|chore|perf|security)(\((server|client|shared|tool|ci|release)(,(server|client|shared|tool|ci|release))*\))?: [^ ].*$'
+          if [[ "$TITLE" =~ $re ]]; then echo "ok: $TITLE"; else
+            echo "::error::PR title must be 'type(scope): description' (see CONTRIBUTING.md), got: $TITLE"; exit 1; fi
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+  zizmor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: {persist-credentials: false}
+      - run: pipx run zizmor==1.31.1 --config .github/zizmor.yml .github/workflows
+  secrets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: {fetch-depth: 0, persist-credentials: false}
+      # whole history: private keys, tokens and generic secrets that GitHub's provider patterns miss
+      - run: docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f git /repo --redact --no-banner
+  ci-ok:
+    if: always()
+    needs: [title, zizmor, secrets]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      # passes when every needed job succeeded or was skipped (title on main)
+      - run: echo "$NEEDS" | jq -e '[.[].result] | all(. == "success" or . == "skipped")'
+        env:
+          NEEDS: ${{ toJSON(needs) }}
