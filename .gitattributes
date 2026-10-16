@@ -1,0 +1,22 @@
+# Universal line endings: LF in the repository and in every checkout, on every OS.
+* text=auto eol=lf
+
+# Windows-only scripts need CRLF to run.
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+*.ps1  text eol=crlf
+
+# Binary files: never touched.
+*.png   binary
+*.jpg   binary
+*.ico   binary
+*.icns  binary
+*.ttf   binary
+*.otf   binary
+*.woff  binary
+*.woff2 binary
+*.pdf   binary
+*.zip   binary
+*.exe   binary
+*.dll   binary
+*.db    binary
