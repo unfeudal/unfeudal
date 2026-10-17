@@ -1,4 +1,10 @@
 {
   "@@locale": "en",
-  "appName": "Unfeudal"
+  "appName": "Unfeudal",
+  "sealConnected": "Connected",
+  "sealVerify": "Fingerprint to verify",
+  "sealChanged": "Fingerprint changed, connection blocked",
+  "sealOffline": "Offline",
+  "sealConnecting": "Connecting",
+  "bannerDismiss": "Dismiss"
 }

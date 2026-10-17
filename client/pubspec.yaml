@@ -42,7 +42,6 @@ dependencies:
   path: ^1.9.1
   dartssh2: ^4.1.0
   xterm2: ^5.3.0
-  phosphor_flutter: ^2.1.0
   animations: ^3.0.0
   cryptography: ^2.9.0
   pointycastle: ^4.0.0
@@ -121,3 +120,6 @@ flutter:
     - family: JetBrainsMono
       fonts:
         - asset: assets/fonts/JetBrainsMono-Regular.ttf
+    - family: Phosphor
+      fonts:
+        - asset: assets/fonts/Phosphor-Regular.ttf

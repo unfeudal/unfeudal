@@ -56,6 +56,9 @@ class UfColors extends ThemeExtension<UfColors> {
     danger: Color(0xFFD9645A),
   );
 
+  static UfColors of(BuildContext context) =>
+      Theme.of(context).extension<UfColors>()!;
+
   List<Color> get _all => [
     bg,
     rail,
@@ -148,9 +151,7 @@ const monoStyle = TextStyle(fontFamily: 'JetBrainsMono');
 const _ui = 'HankenGrotesk';
 const _titles = 'Alegreya';
 const _tabular = [FontFeature.tabularFigures()];
-final _controlShape = RoundedRectangleBorder(
-  borderRadius: BorderRadius.circular(8),
-);
+const _controlRadius = BorderRadius.all(Radius.circular(8));
 
 ThemeData ufTheme(Brightness brightness) {
   final c = brightness == Brightness.light ? UfColors.light : UfColors.dark;
@@ -204,20 +205,20 @@ ThemeData ufTheme(Brightness brightness) {
       style: FilledButton.styleFrom(
         backgroundColor: c.accentBg,
         foregroundColor: c.accentFg,
-        shape: _controlShape,
+        shape: const RoundedRectangleBorder(borderRadius: _controlRadius),
         textStyle: text.labelLarge,
       ),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: c.field,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
+      border: const OutlineInputBorder(
+        borderRadius: _controlRadius,
         borderSide: BorderSide.none,
       ),
       // fills over borders, except the focus ring: accent marks focus (RFC 0009 tokens)
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: _controlRadius,
         borderSide: BorderSide(color: c.accent, width: 2),
       ),
     ),

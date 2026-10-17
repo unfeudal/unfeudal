@@ -1,4 +1,10 @@
 {
   "@@locale": "fr",
-  "appName": "Unfeudal"
+  "appName": "Unfeudal",
+  "sealConnected": "Connecté",
+  "sealVerify": "Empreinte à vérifier",
+  "sealChanged": "Empreinte changée, connexion bloquée",
+  "sealOffline": "Hors ligne",
+  "sealConnecting": "Connexion en cours",
+  "bannerDismiss": "Masquer"
 }
