@@ -77,7 +77,7 @@ void main() {
     );
     final doc = pw.Document()
       ..addPage(
-        pw.Page(pageFormat: PdfPageFormat.a4, build: (_) => pw.Text('x')),
+        pw.Page(pageFormat: PdfPageFormat.a4, build: (_) => pw.SizedBox()),
       );
     expect(String.fromCharCodes((await doc.save()).take(5)), '%PDF-');
   });
