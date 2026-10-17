@@ -10,7 +10,7 @@ Matcher errorOn(String key) =>
 String env(String key) => 'UNFEUDAL_${key.toUpperCase()}';
 
 void main() {
-  test('defaults of config.md', () {
+  test('documented defaults', () {
     final c = load(const {});
     expect(c.databaseUrl, 'sqlite:///data/unfeudal.db');
     expect((c.listen.host, c.listen.port), ('0.0.0.0', 8080));

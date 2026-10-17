@@ -46,7 +46,7 @@ void main() {
     )),
   );
 
-  test('rotate returns the successor of crypto.md, stores only hashes, touches last_seen_at', () async {
+  test('rotate returns the token successor, stores only hashes, touches last_seen_at', () async {
     final t = await db.transaction((tx) => refresh.create(tx, d));
     expect(t, matches(RegExp(r'^[A-Za-z0-9_-]{43}$')));
     clock.advance(const Duration(minutes: 6));

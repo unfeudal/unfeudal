@@ -9,7 +9,7 @@ double contrast(Color a, Color b) {
 }
 
 void main() {
-  test('tokens match RFC 0009', () {
+  test('tokens match the design palette', () {
     const light = UfColors.light, dark = UfColors.dark;
     expect(
       [

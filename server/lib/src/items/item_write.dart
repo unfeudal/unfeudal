@@ -226,7 +226,7 @@ Future<void> _checkPersonalFolder(Tx tx, AuthContext auth, Item input) async {
   }
 }
 
-/// sync.md Definitions: deleted, or a folder of its chain deleted (seen-set: a stored loop never hangs).
+/// Trashed: deleted, or a folder of its chain deleted (seen-set: a stored loop never hangs).
 Future<bool> isTrashed(
   Tx tx, {
   required bool deleted,

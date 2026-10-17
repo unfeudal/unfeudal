@@ -62,7 +62,7 @@ class Envelope {
   };
 }
 
-/// The key labels of crypto.md; each one is bound into the AEAD data.
+/// The envelope key labels; each one is bound into the AEAD data.
 abstract final class KeyIds {
   static const master = 'master';
   static const recovery = 'recovery';
