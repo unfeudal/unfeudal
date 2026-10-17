@@ -1,0 +1,30 @@
+name: client
+on:
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: windows-latest, target: windows}
+          - {os: macos-latest, target: macos}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    defaults:
+      run: {shell: bash, working-directory: client}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: {persist-credentials: false}
+      - run: |
+          git clone --depth 1 --branch 3.47.7 https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+      - run: flutter pub get
+      - run: dart format --output=none --set-exit-if-changed .
+      - run: flutter analyze
+      - run: flutter test --exclude-tags docker,slow
+      - run: flutter build "$TARGET" --debug
+        env:
+          TARGET: ${{ matrix.target }}

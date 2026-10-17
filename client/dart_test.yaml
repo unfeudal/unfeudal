@@ -1,0 +1,3 @@
+tags:
+  docker: {timeout: 3x}
+  slow: {}
