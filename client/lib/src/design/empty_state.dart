@@ -1,0 +1,60 @@
+// SPDX-License-Identifier: Apache-2.0
+import 'package:flutter/material.dart';
+
+import 'logo.dart';
+import 'tokens.dart';
+
+/// A title, one sentence and at most two actions (RFC 0009 empty and error states).
+class EmptyState extends StatelessWidget {
+  const EmptyState({
+    super.key,
+    required this.title,
+    required this.body,
+    this.primary,
+    this.secondary,
+  });
+
+  final String title;
+  final String body;
+  final (String, VoidCallback)? primary;
+  final (String, VoidCallback)? secondary;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = UfColors.of(context);
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const UfLogo(size: 88),
+          const SizedBox(height: 20),
+          Text(
+            title,
+            style: theme.textTheme.headlineMedium,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            body,
+            style: theme.textTheme.bodyMedium!.copyWith(color: colors.muted),
+            textAlign: TextAlign.center,
+          ),
+          if (primary != null || secondary != null) ...[
+            const SizedBox(height: 20),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              spacing: 8,
+              children: [
+                if (primary case (final label, final onPressed))
+                  FilledButton(onPressed: onPressed, child: Text(label)),
+                if (secondary case (final label, final onPressed))
+                  TextButton(onPressed: onPressed, child: Text(label)),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
