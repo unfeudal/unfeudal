@@ -10,7 +10,7 @@ enum LoquetMode { on, sober, off }
 
 enum TerminalThemeId { charte, solarizedDark, dracula }
 
-/// Synced prefs (items.md `profile`) plus per-device settings; [extra] keeps unknown keys.
+/// Prefs synced in the profile item, plus per-device settings; [extra] keeps unknown keys.
 @immutable
 class Settings {
   const Settings({

@@ -145,7 +145,7 @@ class UfColors extends ThemeExtension<UfColors> {
   int get hashCode => Object.hashAll(_all);
 }
 
-/// Terminal and fingerprints only (RFC 0009 typography).
+/// Terminal and fingerprints only.
 const monoStyle = TextStyle(fontFamily: 'JetBrainsMono');
 
 const _ui = 'HankenGrotesk';
@@ -216,7 +216,7 @@ ThemeData ufTheme(Brightness brightness) {
         borderRadius: _controlRadius,
         borderSide: BorderSide.none,
       ),
-      // fills over borders, except the focus ring: accent marks focus (RFC 0009 tokens)
+      // fills over borders, except the focus ring: the accent marks focus
       focusedBorder: OutlineInputBorder(
         borderRadius: _controlRadius,
         borderSide: BorderSide(color: c.accent, width: 2),

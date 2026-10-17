@@ -16,7 +16,7 @@ void main() {
   final clock = FakeClock(DateTime.utc(2026, 10, 13, 12));
   final access = AccessTokens(secret, clock, const Duration(minutes: 15));
 
-  test('access token is payload.mac of crypto.md and verifies until exp', () {
+  test('access token is payload.mac and verifies until exp', () {
     final t = access.issue(u, d);
     final [payload, mac] = t.split('.');
     expect(jsonDecode(utf8.decode(unb64(payload))), {
@@ -69,7 +69,7 @@ void main() {
     expect(access.verify(t), isNull, reason: 'now == exp is expired');
   });
 
-  test('hashToken, successor and prelogin fake salt follow crypto.md', () {
+  test('hashToken, successor and prelogin fake salt are pinned', () {
     expect(hashToken('abc'), b64(sha256.convert(utf8.encode('abc')).bytes));
     expect(
       refreshSuccessor(secret, 'tok'),

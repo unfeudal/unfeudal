@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'logo.dart';
 import 'tokens.dart';
 
-/// A title, one sentence and at most two actions (RFC 0009 empty and error states).
+/// A title, one sentence and at most two actions.
 class EmptyState extends StatelessWidget {
   const EmptyState({
     super.key,

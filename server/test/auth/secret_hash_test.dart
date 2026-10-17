@@ -9,7 +9,7 @@ import 'package:unfeudal_server/src/auth/secret_hash.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 void main() {
-  test('verifySecret matches the Argon2id vector of crypto.md', () async {
+  test('verifySecret matches the pinned Argon2id vector', () async {
     const vector =
         '16253e23a29b20d7c7a0c05f9150e74baaa6cf1832edc838d484fc250a02bef9';
     final hash = [

@@ -9,7 +9,7 @@ import 'tokens.dart';
 
 enum SealState { connected, verify, changed, offline, connecting }
 
-/// Host status: each state differs by shape, not by colour alone (RFC 0009 status seals).
+/// Host status: each state differs by shape, not by colour alone.
 class Seal extends StatefulWidget {
   const Seal({super.key, required this.state, this.size = 14});
 
