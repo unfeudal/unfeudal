@@ -226,5 +226,59 @@
     }
   },
   "fieldRequired": "Required",
-  "fieldInvalid": "Invalid value"
+  "fieldInvalid": "Invalid value",
+  "hostKeyUnknownTitle": "Unknown host key",
+  "hostKeyUnknownBody": "First connection to {host}. Check that this fingerprint matches the server's before trusting it.",
+  "@hostKeyUnknownBody": {
+    "placeholders": {
+      "host": {
+        "type": "String"
+      }
+    }
+  },
+  "hostKeyTrust": "Trust and connect",
+  "hostKeyChangedTitle": "The host key changed",
+  "hostKeyChangedBody": "The key presented by {host} differs from the recorded one: a reinstalled server, or someone intercepting the connection. Connect only if the change is expected.",
+  "@hostKeyChangedBody": {
+    "placeholders": {
+      "host": {
+        "type": "String"
+      }
+    }
+  },
+  "hostKeyRecorded": "Recorded",
+  "hostKeyPresented": "Presented",
+  "hostKeyTypeName": "Type {host} to accept the new key",
+  "@hostKeyTypeName": {
+    "placeholders": {
+      "host": {
+        "type": "String"
+      }
+    }
+  },
+  "hostKeyAccept": "Accept the new key",
+  "cancel": "Cancel",
+  "startupCommandTitle": "Run this startup command on {host}?",
+  "@startupCommandTitle": {
+    "placeholders": {
+      "host": {
+        "type": "String"
+      }
+    }
+  },
+  "startupCommandBody": "A member of the organisation set this command. It runs in this session, with the rights of the SSH account used.",
+  "startupCommandRun": "Run",
+  "startupCommandSkip": "Open without it",
+  "sshPasswordTitle": "Password for {target}",
+  "@sshPasswordTitle": {
+    "placeholders": {
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "sshPromptsTitle": "The host asks for more information",
+  "tabsEmpty": "No open session",
+  "tabsEmptyBody": "Double-click a host, or select it and press Enter.",
+  "tabClose": "Close"
 }

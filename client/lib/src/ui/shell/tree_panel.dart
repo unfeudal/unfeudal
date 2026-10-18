@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+import 'package:flutter/gestures.dart' show kDoubleTapTimeout;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
@@ -38,6 +39,7 @@ class TreePanel extends StatefulWidget {
 class _TreePanelState extends State<TreePanel> {
   final _query = TextEditingController();
   final _collapsed = <String>{};
+  ({String id, DateTime at})? _lastTap;
 
   @override
   void dispose() {
@@ -243,29 +245,47 @@ class _TreePanelState extends State<TreePanel> {
     ];
     return CallbackShortcuts(
       bindings: {const SingleActivator(LogicalKeyboardKey.enter): connect},
-      child: InkWell(
-        key: Key('host-${e.id}'),
-        borderRadius: BorderRadius.circular(8),
-        onDoubleTap: connect,
-        child: Padding(
-          padding: padding,
-          child: Row(
-            spacing: 10,
-            children: [
-              Seal(state: state.sealFor(e.id)),
-              Expanded(
-                child: Text(e.name ?? '', overflow: TextOverflow.ellipsis),
-              ),
-              if (notes.isNotEmpty)
-                Flexible(
-                  child: Text(
-                    notes.join(', '),
-                    style: muted,
-                    overflow: TextOverflow.ellipsis,
+      child: Focus(
+        child: Builder(
+          builder: (row) => InkWell(
+            key: Key('host-${e.id}'),
+            borderRadius: BorderRadius.circular(8),
+            // a click selects the row (its own focus node, so Enter connects); a second one in time connects.
+            // Detected here: onDoubleTap would hold back onTap and leave a timer behind every click
+            onTap: () {
+              Focus.of(row).requestFocus();
+              final now = DateTime.now();
+              final last = _lastTap;
+              if (last != null &&
+                  last.id == e.id &&
+                  now.difference(last.at) < kDoubleTapTimeout) {
+                _lastTap = null;
+                connect();
+              } else {
+                _lastTap = (id: e.id, at: now);
+              }
+            },
+            child: Padding(
+              padding: padding,
+              child: Row(
+                spacing: 10,
+                children: [
+                  Seal(state: state.sealFor(e.id)),
+                  Expanded(
+                    child: Text(e.name ?? '', overflow: TextOverflow.ellipsis),
                   ),
-                ),
-              _editButton(context, e),
-            ],
+                  if (notes.isNotEmpty)
+                    Flexible(
+                      child: Text(
+                        notes.join(', '),
+                        style: muted,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  _editButton(context, e),
+                ],
+              ),
+            ),
           ),
         ),
       ),
