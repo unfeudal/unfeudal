@@ -17,10 +17,11 @@ class UfColors extends ThemeExtension<UfColors> {
     required this.ok,
     required this.warn,
     required this.danger,
+    required this.onDanger,
   });
 
   final Color bg, rail, side, panel, field, select, text, muted;
-  final Color accent, accentBg, accentFg, ok, warn, danger;
+  final Color accent, accentBg, accentFg, ok, warn, danger, onDanger;
 
   static const light = UfColors(
     bg: Color(0xFFE7ECEA),
@@ -37,6 +38,7 @@ class UfColors extends ThemeExtension<UfColors> {
     ok: Color(0xFF56664A),
     warn: Color(0xFF8A6A1F),
     danger: Color(0xFFA23B32),
+    onDanger: Color(0xFFFFFFFF),
   );
 
   static const dark = UfColors(
@@ -54,6 +56,7 @@ class UfColors extends ThemeExtension<UfColors> {
     ok: Color(0xFF9DB089),
     warn: Color(0xFFC9A54E),
     danger: Color(0xFFD9645A),
+    onDanger: Color(0xFF171B1F),
   );
 
   static UfColors of(BuildContext context) =>
@@ -74,6 +77,7 @@ class UfColors extends ThemeExtension<UfColors> {
     ok,
     warn,
     danger,
+    onDanger,
   ];
 
   @override
@@ -92,6 +96,7 @@ class UfColors extends ThemeExtension<UfColors> {
     Color? ok,
     Color? warn,
     Color? danger,
+    Color? onDanger,
   }) => UfColors(
     bg: bg ?? this.bg,
     rail: rail ?? this.rail,
@@ -107,6 +112,7 @@ class UfColors extends ThemeExtension<UfColors> {
     ok: ok ?? this.ok,
     warn: warn ?? this.warn,
     danger: danger ?? this.danger,
+    onDanger: onDanger ?? this.onDanger,
   );
 
   @override
@@ -128,6 +134,7 @@ class UfColors extends ThemeExtension<UfColors> {
       ok: mix(ok, other.ok),
       warn: mix(warn, other.warn),
       danger: mix(danger, other.danger),
+      onDanger: mix(onDanger, other.onDanger),
     );
   }
 
