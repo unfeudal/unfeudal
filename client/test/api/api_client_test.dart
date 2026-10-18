@@ -211,6 +211,13 @@ void main() {
     expect(h.requests.where((r) => r.endsWith('/token/refresh')), hasLength(1));
   });
 
+  test('info with only a refresh token (after an unlock) refreshes and returns the full answer', () async {
+    final (h, _, _) = await signedIn();
+    final login = h.devices.values.single;
+    final api = ApiClient(h.baseUrl, h.client)..refreshToken = login.refresh;
+    expect((await api.info()).instanceEpoch, h.instanceEpoch);
+  });
+
   test('putItem sends If-Match and returns the stored item; 409 carries the current item', () async {
     final (h, api, _) = await signedIn();
     final id = newId();

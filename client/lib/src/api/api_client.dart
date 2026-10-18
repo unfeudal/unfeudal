@@ -226,13 +226,14 @@ class ApiClient {
         ),
       );
 
-  /// `GET /api/info` with the token. A public answer while signed in means the token went stale:
-  /// refresh once and ask again. The second answer is final.
+  /// `GET /api/info` with the token. A public answer while signed in (a refresh token held; right after
+  /// an unlock there is no access token yet) means the token is stale or missing: refresh once and ask
+  /// again. The second answer is final.
   Future<ApiInfo> info() async {
     var info = ApiInfo.fromJson(
       _decode(await _raw('GET', '/api/info', auth: true)),
     );
-    if (info.server == null && accessToken != null && refreshToken != null) {
+    if (info.server == null && refreshToken != null) {
       await _refreshOnce();
       info = ApiInfo.fromJson(
         _decode(await _raw('GET', '/api/info', auth: true)),
