@@ -283,7 +283,11 @@ class AppState extends ChangeNotifier implements SshCallbacks {
 
   /// Offline: the cached bundle opens the vault; the API resumes with the stored refresh token.
   Future<void> unlock(String password) async {
-    final session = stored ?? (throw StateError('no stored session'));
+    // the keystore holds the latest refresh token (rotations since sign-in); a stale one is a replay
+    final session = stored =
+        await sessions.load() ??
+        stored ??
+        (throw StateError('no stored session'));
     final (:bundle, bundleVersion: _) = _cachedBundle();
     final UnlockedAccount unlocked;
     try {

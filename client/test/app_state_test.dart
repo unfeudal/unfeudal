@@ -149,6 +149,19 @@ void main() {
     },
   );
 
+  test('unlock resumes with the refresh token rotated since sign-in, not a replayed one', () async {
+    final (h, s, _, _) = await loggedIn();
+    h.expireAccess();
+    await s.sync!.syncNow(); // rotates the refresh token
+    await s.lock();
+    await s.unlock(password);
+    await s.sync!.syncNow();
+    expect(
+      (s.stage, s.deviceRevoked, h.devices.values.single.revokedAt),
+      (AppStage.home, false, null),
+    );
+  });
+
   test('lock wipes the key, entries and terminal tabs', () async {
     final (h, s, _, _) = await loggedIn();
     await s.vault!.upsertItem(
