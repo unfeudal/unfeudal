@@ -6,5 +6,6 @@
   "sealChanged": "Fingerprint changed, connection blocked",
   "sealOffline": "Offline",
   "sealConnecting": "Connecting",
-  "bannerDismiss": "Dismiss"
+  "bannerDismiss": "Dismiss",
+  "conflictSuffix": "(conflict copy)"
 }
