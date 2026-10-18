@@ -3,12 +3,16 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:unfeudal_client/src/app_state.dart';
 import 'package:unfeudal_client/src/session/session_store.dart';
+import 'package:unfeudal_client/src/settings/settings.dart';
 import 'package:unfeudal_client/src/ssh/ssh_connector.dart';
 import 'package:unfeudal_client/src/storage/local_mirror.dart';
 import 'package:unfeudal_client/src/sync/ledger_store.dart';
 import 'package:unfeudal_client/src/vault/vault.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
+
+import 'sync_harness.dart';
 
 final testUserId = newId();
 final testDeviceId = newId();
@@ -250,4 +254,25 @@ class FakeShell implements SshShell {
     closed = true;
     hangUp();
   }
+}
+
+/// AppState over the harness, in memory, real crypto at KdfParams.testing.
+AppState testAppState({
+  SyncHarness? harness,
+  Settings settings = const Settings(),
+  FakeSecureKv? kv,
+  Map<String, LocalMirror>? mirrors,
+  SettingsStore? settingsStore,
+}) {
+  final h = harness ?? SyncHarness();
+  final m = mirrors ?? <String, LocalMirror>{};
+  return AppState(
+    sessions: SessionStore(kv ?? FakeSecureKv()),
+    settingsStore: settingsStore ?? SettingsStore.memory(settings),
+    openMirror: (userId) async => m[userId] ??= LocalMirror.inMemory(),
+    httpClient: h.client,
+
+    allowTestingKdf: true,
+    kdf: KdfParams.testing,
+  );
 }

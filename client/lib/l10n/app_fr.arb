@@ -6,5 +6,6 @@
   "sealChanged": "Empreinte changée, connexion bloquée",
   "sealOffline": "Hors ligne",
   "sealConnecting": "Connexion en cours",
-  "bannerDismiss": "Masquer"
+  "bannerDismiss": "Masquer",
+  "conflictSuffix": "(copie de conflit)"
 }
