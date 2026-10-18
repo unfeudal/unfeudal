@@ -121,5 +121,10 @@
   "joinLink": "Invitation or setup link",
   "joinOpenFile": "Open an enrollment file",
   "joinPassphrase": "File passphrase (if any)",
-  "joinSubmit": "Continue"
+  "joinSubmit": "Continue",
+  "recoverTitle": "Recover the account",
+  "recoverKey": "Recovery key",
+  "recoverNewPassword": "New master password",
+  "recoverSubmit": "Reset the password",
+  "recoverDone": "Password reset. Every device was signed out: log in with the new password."
 }
