@@ -8,6 +8,7 @@ import 'app_state.dart';
 import 'design/empty_state.dart';
 import 'design/motion.dart';
 import 'design/tokens.dart';
+import 'settings/settings.dart';
 import 'ui/lock/login_screen.dart';
 import 'ui/onboarding/join_screen.dart';
 import 'ui/onboarding/setup_screen.dart';
@@ -90,8 +91,8 @@ class _UnfeudalAppState extends State<UnfeudalApp> {
       return MaterialApp(
         navigatorKey: _navigator,
         onGenerateTitle: (context) => AppLocalizations.of(context).appName,
-        theme: ufTheme(Brightness.light),
-        darkTheme: ufTheme(Brightness.dark),
+        theme: _theme(Brightness.light, settings),
+        darkTheme: _theme(Brightness.dark, settings),
         themeMode: settings.themeMode,
         locale:
             widget.locale ??
@@ -121,6 +122,14 @@ class _UnfeudalAppState extends State<UnfeudalApp> {
       );
     },
   );
+}
+
+/// Performance mode also drops Material's ink ripples.
+ThemeData _theme(Brightness brightness, Settings settings) {
+  final theme = ufTheme(brightness);
+  return settings.performanceMode
+      ? theme.copyWith(splashFactory: NoSplash.splashFactory)
+      : theme;
 }
 
 class _StageScreen extends StatelessWidget {
