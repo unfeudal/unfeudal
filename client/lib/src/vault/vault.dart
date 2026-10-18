@@ -3,6 +3,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
+import '../api/api_client.dart';
 import '../storage/local_mirror.dart';
 import '../sync/ledger_store.dart';
 
@@ -217,6 +218,63 @@ class Vault extends ChangeNotifier {
     );
   }
 
+  /// The ledger pin wins over the synced item: a server cannot revert or delete a pin on this device.
+  KnownHostMeta? trustedPin(String hostId) =>
+      ledger.hostPin(hostId) ?? _knownHostMeta(_knownHostWinner(hostId));
+
+  /// Ledger first (saved), then the winning knownHost item; read-only only skips the sync.
+  Future<void> pinHostKey(
+    String hostId,
+    String keyType,
+    String fingerprint,
+  ) async {
+    final pin = KnownHostMeta(
+      hostItemId: hostId,
+      keyType: keyType,
+      sha256Fingerprint: fingerprint,
+    );
+    await ledger.setHostPin(hostId, pin);
+    try {
+      await upsertItem(
+        type: 'knownHost',
+        id: _knownHostWinner(hostId)?.id,
+        meta: pin.toJson(),
+      );
+    } on ReadOnlyException {
+      // the local pin stands; the synced copy waits for a writable server
+    }
+  }
+
+  /// First sight of a synced pin seeds the ledger; an existing ledger pin is never replaced from the server.
+  Future<void> _seedPins() async {
+    final synced = _knownHostWinners(_entries.values.where((e) => !e.pending));
+    for (final MapEntry(key: host, value: winner) in synced.entries) {
+      if (ledger.hostPin(host) == null) {
+        await ledger.setHostPin(host, _knownHostMeta(winner)!);
+      }
+    }
+  }
+
+  VaultEntry? _knownHostWinner(String hostId) =>
+      _knownHostWinners(_entries.values)[hostId];
+
+  /// One knownHost per host: the `ok` entry with the smallest id wins.
+  static Map<String, VaultEntry> _knownHostWinners(
+    Iterable<VaultEntry> entries,
+  ) {
+    final winners = <String, VaultEntry>{};
+    for (final e in entries) {
+      if (e.kind != ItemKind.knownHost || e.state != EntryState.ok) continue;
+      final host = _knownHostMeta(e)!.hostItemId;
+      final best = winners[host];
+      if (best == null || e.id.compareTo(best.id) < 0) winners[host] = e;
+    }
+    return winners;
+  }
+
+  static KnownHostMeta? _knownHostMeta(VaultEntry? e) =>
+      e == null ? null : KnownHostMeta.fromJson(e.meta);
+
   ResolvedHost resolve(String hostId) => hostLookup(hostId)!.resolved;
 
   /// An `ok` host with its inherited values; null for anything else.
@@ -335,6 +393,7 @@ class Vault extends ChangeNotifier {
                 )); // replay: keep what was shown, take the new revision
     }
     _entries = next;
+    await _seedPins();
     await ledger.save();
     notifyListeners();
   }
