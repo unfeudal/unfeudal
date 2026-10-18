@@ -9,6 +9,8 @@ import 'design/empty_state.dart';
 import 'design/motion.dart';
 import 'design/tokens.dart';
 import 'ui/lock/login_screen.dart';
+import 'ui/onboarding/join_screen.dart';
+import 'ui/onboarding/setup_screen.dart';
 import 'ui/lock/unlock_screen.dart';
 
 /// Theme, language and motion from the cached settings (usable before unlock), then the screen of the stage.
@@ -158,9 +160,9 @@ class _StageScreen extends StatelessWidget {
               body: l.mirrorTooNewBody,
             ),
           ),
-          // Tasks 27 and 29 bring the setup, join and home screens
-          AppStage.setup ||
-          AppStage.join ||
+          AppStage.setup => const SetupScreen(),
+          AppStage.join => const JoinScreen(),
+          // Task 29 brings the home shell
           AppStage.home => const SizedBox.shrink(),
         },
       ),
