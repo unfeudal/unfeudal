@@ -6,6 +6,7 @@ abstract final class UfIcons {
   static const _family = 'Phosphor';
   static const caretDown = IconData(0xe136, fontFamily: _family);
   static const caretRight = IconData(0xe13a, fontFamily: _family);
+  static const copy = IconData(0xe1ca, fontFamily: _family);
   static const devices = IconData(0xeba4, fontFamily: _family);
   static const eye = IconData(0xe220, fontFamily: _family);
   static const eyeSlash = IconData(0xe224, fontFamily: _family);
@@ -17,6 +18,7 @@ abstract final class UfIcons {
   static const magnifyingGlass = IconData(0xe30c, fontFamily: _family);
   static const pencil = IconData(0xe3b4, fontFamily: _family);
   static const plus = IconData(0xe3d4, fontFamily: _family);
+  static const trash = IconData(0xe4a6, fontFamily: _family);
   static const user = IconData(0xe4c2, fontFamily: _family);
   static const warning = IconData(0xe4e0, fontFamily: _family);
   static const warningOctagon = IconData(0xe4e4, fontFamily: _family);

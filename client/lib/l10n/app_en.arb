@@ -280,5 +280,30 @@
   "sshPromptsTitle": "The host asks for more information",
   "tabsEmpty": "No open session",
   "tabsEmptyBody": "Double-click a host, or select it and press Enter.",
-  "tabClose": "Close"
+  "tabClose": "Close",
+  "keychainTitle": "Keychain",
+  "keychainEmpty": "No key or password yet.",
+  "keyImport": "Import a key",
+  "keyGenerate": "Generate a key",
+  "keyPassword": "Add a password",
+  "keyName": "Name",
+  "keyPem": "Private key (OpenSSH or PEM)",
+  "keyPassphrase": "Passphrase (optional)",
+  "keyTypeEd25519": "Ed25519 (recommended)",
+  "keyTypeRsa": "RSA 4096",
+  "keyCopyPublic": "Copy the public key",
+  "keyCopied": "Public key copied.",
+  "keyRename": "Rename",
+  "keyDelete": "Move to trash",
+  "keyDeleteConfirm": "Move \"{name}\" to the trash? Hosts using it fall back to their folder's key.",
+  "@keyDeleteConfirm": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "keySave": "Save",
+  "keyKindPrivateKey": "Private key",
+  "keyKindPassword": "Password"
 }
