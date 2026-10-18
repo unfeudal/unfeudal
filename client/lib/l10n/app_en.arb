@@ -126,5 +126,66 @@
   "recoverKey": "Recovery key",
   "recoverNewPassword": "New master password",
   "recoverSubmit": "Reset the password",
-  "recoverDone": "Password reset. Every device was signed out: log in with the new password."
+  "recoverDone": "Password reset. Every device was signed out: log in with the new password.",
+  "railKeychain": "Keychain",
+  "railDevices": "Devices",
+  "railSettings": "Settings",
+  "railLock": "Lock",
+  "vaultPersonal": "Personal",
+  "treeSearch": "Search ({shortcut})",
+  "@treeSearch": {
+    "placeholders": {
+      "shortcut": {
+        "type": "String"
+      }
+    }
+  },
+  "treeNewHost": "New host",
+  "treeNewFolder": "New folder",
+  "treeEmpty": "No host yet. Add one to connect.",
+  "treeUnreadable": "Unreadable item",
+  "treeUnsupported": "Made by a newer version",
+  "treeReadOnly": "read-only",
+  "treePending": "not synced yet",
+  "bannerOffline": "Offline: changes are kept and sent once the server is back.",
+  "bannerReadOnly": "Read-only mode ({reason}): changes are off.",
+  "@bannerReadOnly": {
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "readOnlyClientTooOld": "this version is too old for the server",
+  "readOnlyNoCommonApi": "no protocol in common with the server",
+  "bannerUpdate": "Unfeudal {version} is available.",
+  "@bannerUpdate": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "bannerDownload": "Download",
+  "bannerRestore": "The server was restored from a backup. Sync is paused until a choice is made.",
+  "bannerRestoreRefused": "Restore refused: this server stays read-only.",
+  "restoreAccept": "Accept the restore",
+  "restoreRefuse": "Refuse",
+  "bannerRejected": "\"{name}\" was refused by the server: {reason}",
+  "@bannerRejected": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "rejectedRetry": "Retry",
+  "rejectedKeep": "Keep a personal copy",
+  "rejectedDiscard": "Discard the change",
+  "bannerLedgerReset": "The local security ledger could not be read and was reset; host keys will be asked again.",
+  "bannerProtocol": "The server sent an answer this version cannot read. Retrying.",
+  "bannerPlainHttp": "Unencrypted connection: this server is reached over plain http."
 }
