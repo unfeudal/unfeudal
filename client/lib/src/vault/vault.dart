@@ -65,8 +65,220 @@ class Vault extends ChangeNotifier {
 
   List<VaultEntry> ofKind(ItemKind kind) => [
     for (final e in _entries.values)
-      if (e.kind == kind && !e.item.deleted) e,
+      if (e.kind == kind && !isTrashed(e.id)) e,
   ];
+
+  /// Trashed: deleted, or a folder of its chain deleted (seen-set: a stored loop never hangs).
+  bool isTrashed(String id) {
+    final seen = <String>{};
+    for (String? current = id; current != null && seen.add(current);) {
+      final e = _entries[current];
+      if (e == null) return false;
+      if (e.item.deleted) return true;
+      current = e.folderId;
+    }
+    return false;
+  }
+
+  Future<void> trashItem(String id) => _setDeleted(id, true);
+
+  Future<void> restoreItem(String id) => _setDeleted(id, false);
+
+  /// The subtree is trashed by definition: only the folder itself is written.
+  Future<void> deleteFolder(String id) => trashItem(id);
+
+  Future<String> saveFolder(
+    FolderMeta meta, {
+    String? id,
+    String? parentId,
+  }) async {
+    final seen = <String>{};
+    for (
+      String? up = parentId;
+      up != null && seen.add(up);
+      up = _entries[up]?.folderId
+    ) {
+      if (up == id) {
+        throw ArgumentError.value(
+          parentId,
+          'parentId',
+          'is the folder itself or inside it',
+        );
+      }
+    }
+    return upsertItem(
+      type: 'folder',
+      id: id,
+      folderId: parentId,
+      meta: meta.toJson(),
+    );
+  }
+
+  /// A rename is never a move: the entry keeps its folder. The secret kind must match the meta kind.
+  Future<void> updateIdentity(
+    String id,
+    IdentityMeta meta, {
+    IdentitySecret? secret,
+  }) async {
+    final current =
+        _entries[id] ??
+        (throw ArgumentError.value(id, 'id', 'unknown identity'));
+    final kind = secret?.kind.name ?? current.meta?['kind'];
+    if (kind != meta.kind.name) {
+      throw ArgumentError(
+        'identity kind ${meta.kind.name} does not match its secret ($kind)',
+      );
+    }
+    await upsertItem(
+      type: 'identity',
+      id: id,
+      folderId: current.folderId,
+      meta: meta.toJson(),
+      secret: secret?.toJson(),
+    );
+  }
+
+  /// Null when unreadable, replayed or of another kind than its meta.
+  Future<IdentitySecret?> identitySecret(String id) async {
+    final e = _entries[id];
+    if (e == null || e.state != EntryState.ok || e.kind != ItemKind.identity) {
+      return null;
+    }
+    try {
+      final json = await _secretJson(id);
+      if (json == null) return null;
+      final secret = IdentitySecret.fromJson(json);
+      return secret.kind.name == e.meta?['kind'] ? secret : null;
+    } on _ReplayedSecret {
+      return null;
+    } on DecryptionFailed {
+      return null;
+    } on UnsupportedEnvelope {
+      return null;
+    } on FormatException {
+      return null;
+    }
+  }
+
+  /// The `ok` profile with the smallest id wins on every device; none → an empty profile.
+  ProfileMeta get profile => switch (_profileEntry) {
+    final VaultEntry e => ProfileMeta.fromJson(e.meta),
+    null => ProfileMeta(),
+  };
+
+  /// Merges into the winning profile's prefs: null removes a key, unknown keys stay.
+  Future<void> setPrefs(Map<String, Object?> changes) {
+    final current = profile;
+    final prefs = {...current.prefs};
+    for (final MapEntry(:key, :value) in changes.entries) {
+      value == null ? prefs.remove(key) : prefs[key] = value;
+    }
+    return _writeProfile(
+      ProfileMeta(
+        schemaVersion: current.schemaVersion,
+        displayName: current.displayName,
+        prefs: prefs,
+        extra: current.extra,
+      ),
+    );
+  }
+
+  Future<void> setDisplayName(String? name) {
+    final current = profile;
+    return _writeProfile(
+      ProfileMeta(
+        schemaVersion: current.schemaVersion,
+        displayName: name,
+        prefs: current.prefs,
+        extra: current.extra,
+      ),
+    );
+  }
+
+  /// A copy of [mine] under a new id at revision 0, name suffixed, secret re-sealed. Null for an unknown type.
+  Future<Item?> conflictCopy(Item mine, {required String suffix}) async {
+    if (mine.kind == ItemKind.unknown) return null;
+    final meta = (await open(mine, PayloadPart.meta, fromServer: false))!.json;
+    final secret = mine.secret == null
+        ? null
+        : (await open(mine, PayloadPart.secret, fromServer: false))!.json;
+    if (meta['name'] case final String name) {
+      final max = mine.kind == ItemKind.snippet
+          ? PayloadLimits.snippetName
+          : PayloadLimits.name;
+      meta['name'] = String.fromCharCodes('$name$suffix'.runes.take(max));
+    }
+    return seal(
+      id: newId(),
+      type: mine.type,
+      folderId: mine.folderId,
+      meta: meta,
+      secret: secret,
+    );
+  }
+
+  ResolvedHost resolve(String hostId) => hostLookup(hostId)!.resolved;
+
+  /// An `ok` host with its inherited values; null for anything else.
+  ({HostMeta meta, ResolvedHost resolved, bool org})? hostLookup(String id) {
+    final e = _entries[id];
+    if (e == null || e.state != EntryState.ok || e.kind != ItemKind.host) {
+      return null;
+    }
+    final meta = HostMeta.fromJson(e.meta);
+    return (
+      meta: meta,
+      resolved: resolveHost(
+        meta,
+        e.folderId,
+        _folderOf,
+        hostId: id,
+        parentOf: (f) => _entries[f]?.folderId,
+      ),
+      org: e.item.scope == ItemScope.org,
+    );
+  }
+
+  FolderMeta? _folderOf(String id) {
+    final f = _entries[id];
+    return f != null && f.state == EntryState.ok && f.kind == ItemKind.folder
+        ? FolderMeta.fromJson(f.meta)
+        : null;
+  }
+
+  VaultEntry? get _profileEntry {
+    final profiles = [
+      for (final e in _entries.values)
+        if (e.kind == ItemKind.profile && e.state == EntryState.ok) e,
+    ]..sort((a, b) => a.id.compareTo(b.id));
+    return profiles.firstOrNull;
+  }
+
+  Future<void> _writeProfile(ProfileMeta meta) =>
+      upsertItem(type: 'profile', id: _profileEntry?.id, meta: meta.toJson());
+
+  /// Same envelopes with `deleted` flipped: `deleted` is not in the AAD, so nothing is re-sealed; `secret: null` keeps it.
+  Future<void> _setDeleted(String id, bool deleted) async {
+    _requireKey();
+    final current =
+        _entries[id] ?? (throw ArgumentError.value(id, 'id', 'unknown item'));
+    if (current.state != EntryState.ok) {
+      throw StateError('${current.state.name} item is not rewritten');
+    }
+    final json = current.item.toJson()
+      ..removeWhere((k, _) => _serverSet.contains(k))
+      ..['deleted'] = deleted
+      ..['secret'] = null;
+    await _write(Item.fromJson(json));
+  }
+
+  static const _serverSet = {
+    'purged',
+    'createdAt',
+    'updatedAt',
+    'updatedBy',
+    'updatedDevice',
+  };
 
   /// Opens one part. A server payload ([fromServer]) older than its mark is a replay: [onReplay], null.
   Future<OpenedPayload?> open(
@@ -215,7 +427,7 @@ class Vault extends ChangeNotifier {
       PayloadPart.secret,
       fromServer: holder != queued,
     );
-    if (opened == null) throw StateError('replayed secret');
+    if (opened == null) throw const _ReplayedSecret();
     return opened.json;
   }
 
@@ -274,4 +486,8 @@ class Vault extends ChangeNotifier {
         ItemKind.memberPin => MemberPinMeta.fromJson(json),
         ItemKind.unknown => null,
       };
+}
+
+class _ReplayedSecret implements Exception {
+  const _ReplayedSecret();
 }
