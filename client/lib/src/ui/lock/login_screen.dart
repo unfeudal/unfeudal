@@ -18,16 +18,20 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  late final _server = TextEditingController(
-    text: AppScope.read(context).stored?.serverUrl.toString(),
-  );
-  late final _email = TextEditingController(
-    text: AppScope.read(context).stored?.email,
-  );
+  late final TextEditingController _server;
+  late final TextEditingController _email;
   final _password = TextEditingController();
   bool _busy = false;
   Object? _error;
   int _failures = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    final stored = AppScope.read(context).stored;
+    _server = TextEditingController(text: stored?.serverUrl.toString());
+    _email = TextEditingController(text: stored?.email);
+  }
 
   @override
   void dispose() {
