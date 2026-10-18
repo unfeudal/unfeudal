@@ -16,6 +16,10 @@ class StatusBanner extends StatelessWidget {
     this.action,
     this.secondAction,
     this.onDismiss,
+    this.actionKey,
+    this.secondActionKey,
+    this.dismissKey,
+    this.dismissTooltip,
   });
 
   final BannerTone tone;
@@ -23,6 +27,12 @@ class StatusBanner extends StatelessWidget {
   final (String, VoidCallback)? action;
   final (String, VoidCallback)? secondAction;
   final VoidCallback? onDismiss;
+  final Key? actionKey;
+  final Key? secondActionKey;
+  final Key? dismissKey;
+
+  /// Defaults to the generic "Dismiss".
+  final String? dismissTooltip;
 
   @override
   Widget build(BuildContext context) {
@@ -47,13 +57,24 @@ class StatusBanner extends StatelessWidget {
             Icon(icon, color: color, size: 20),
             Expanded(child: Text(message)),
             if (action case (final label, final onPressed))
-              TextButton(onPressed: onPressed, child: Text(label)),
+              TextButton(
+                key: actionKey,
+                onPressed: onPressed,
+                child: Text(label),
+              ),
             if (secondAction case (final label, final onPressed))
-              TextButton(onPressed: onPressed, child: Text(label)),
+              TextButton(
+                key: secondActionKey,
+                onPressed: onPressed,
+                child: Text(label),
+              ),
             if (onDismiss != null)
               IconButton(
+                key: dismissKey,
                 onPressed: onDismiss,
-                tooltip: AppLocalizations.of(context).bannerDismiss,
+                tooltip:
+                    dismissTooltip ??
+                    AppLocalizations.of(context).bannerDismiss,
                 icon: const Icon(UfIcons.x, size: 18),
               ),
           ],
