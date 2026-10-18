@@ -9,6 +9,12 @@ import '../api/api_client.dart';
 import '../storage/local_mirror.dart';
 import '../version.dart';
 
+/// A newer client exists: only its version text is shown, the link is compiled in.
+class UpdateNotice {
+  const UpdateNotice(this.version);
+  final String version;
+}
+
 /// Push the outbox, pull the server's changes: at start, after each local change, every [interval].
 class SyncEngine extends ChangeNotifier {
   SyncEngine({
@@ -44,6 +50,7 @@ class SyncEngine extends ChangeNotifier {
   DateTime? lastSyncAt;
   int ignoredRollbacks = 0;
   Compat? compat;
+  UpdateNotice? updateNotice;
 
   bool get readOnly => compat?.mode == CompatMode.readOnly;
 
@@ -150,8 +157,17 @@ class SyncEngine extends ChangeNotifier {
   /// False when there is no common API: no push, no pull.
   bool _negotiate(ApiInfo info) {
     compat = negotiate(version, apis, info);
+    updateNotice = compareVersions(info.latestClient, version) > 0
+        ? UpdateNotice(info.latestClient)
+        : null;
     api.readOnly = readOnly;
     return compat!.api != null;
+  }
+
+  /// A write answered 409 `client_too_old` although the info said compatible: read-only, stop pushing.
+  void _tooOld() {
+    compat = Compat(CompatMode.readOnly, compat?.api, 'client-too-old');
+    api.readOnly = true;
   }
 
   Future<void> _pull() async {
@@ -186,6 +202,7 @@ class SyncEngine extends ChangeNotifier {
         _pushAfter = null;
       } on ApiException catch (x) {
         if (x.status == 401) rethrow;
+        if (x.status == 409 && x.reason == 'client_too_old') return _tooOld();
         if (x.status == 409) {
           await _conflict(e.item, x.item);
         } else if (x.status == 429 || x.status >= 500) {
