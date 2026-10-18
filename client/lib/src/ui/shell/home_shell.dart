@@ -20,6 +20,7 @@ import '../hosts/folder_editor_panel.dart';
 import '../hosts/host_editor_panel.dart';
 import '../../ssh/ssh_connector.dart';
 import '../hosts/host_key_dialog.dart';
+import '../keychain/keychain_screen.dart';
 import '../terminal/ssh_dialogs.dart';
 import '../terminal/terminal_tabs.dart';
 import 'shortcuts.dart';
@@ -146,6 +147,10 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
         )
       : null;
 
+  void _push(Widget screen) => unawaited(
+    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => screen)),
+  );
+
   void _openEditor(Widget Function(VoidCallback close) build) =>
       setState(() => _editor = build(() => setState(() => _editor = null)));
 
@@ -163,7 +168,10 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
     return Scaffold(
       body: Row(
         children: [
-          VaultRail(onLock: state.lock),
+          VaultRail(
+            onLock: state.lock,
+            onKeychain: () => _push(const KeychainScreen()),
+          ),
           if (_treeVisible) ...[
             AnimatedContainer(
               key: const Key('tree-panel'),
