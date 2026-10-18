@@ -122,18 +122,25 @@ class SyncHarness {
   /// A signed-in engine over a fresh in-memory mirror; conflict copies are recorded in [copies].
   Future<(SyncEngine, LocalMirror, HarnessLogin)> engine({
     List<Item>? copies,
+    DateTime Function()? now,
   }) async {
     final login = await signIn();
     final api = ApiClient(baseUrl, client)
       ..accessToken = login.accessToken
       ..refreshToken = login.refreshToken;
     final mirror = LocalMirror.inMemory();
-    final e = SyncEngine(api: api, mirror: mirror, deviceId: login.deviceId)
-      ..copyOf = (mine, {required personal}) async {
-        final c = wireItem(newId(), revision: 0, type: mine.type);
-        copies?.add(c);
-        return c;
-      };
+    final e =
+        SyncEngine(
+            api: api,
+            mirror: mirror,
+            deviceId: login.deviceId,
+            now: now ?? DateTime.now,
+          )
+          ..copyOf = (mine, {required personal}) async {
+            final c = wireItem(newId(), revision: 0, type: mine.type);
+            copies?.add(c);
+            return c;
+          };
     return (e, mirror, login);
   }
 

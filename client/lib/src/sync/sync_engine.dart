@@ -30,6 +30,7 @@ class SyncEngine extends ChangeNotifier {
   final DateTime Function() _now;
 
   static const maxAttempts = 3;
+  static const maxBackoff = Duration(minutes: 10);
 
   /// Conflict copy of a local write (the vault seals it).
   Future<Item?> Function(Item mine, {required bool personal})? copyOf;
@@ -46,7 +47,15 @@ class SyncEngine extends ChangeNotifier {
 
   bool get readOnly => compat?.mode == CompatMode.readOnly;
 
+  /// Writes the server refused 3 times; they wait for retry, keep a personal copy, or discard.
+  List<OutboxEntry> get rejected => [
+    for (final e in mirror.outbox())
+      if (e.state == OutboxState.rejected) e,
+  ];
+
   Timer? _timer;
+  int _failures = 0;
+  DateTime? _pushAfter;
   Future<void>? _running;
   bool _again = false;
 
@@ -67,6 +76,26 @@ class SyncEngine extends ChangeNotifier {
     if (readOnly) throw ReadOnlyException(compat?.reason);
     mirror.enqueue(item, baseRevision: item.revision ?? 0);
     unawaited(syncNow());
+  }
+
+  Future<void> retry(String itemId) {
+    mirror.retryOutbox(itemId);
+    return syncNow();
+  }
+
+  /// The server row is already the shown version: only the local edit goes.
+  Future<void> discard(String itemId) async {
+    mirror.removeOutbox(itemId);
+    await onChanged?.call();
+    notifyListeners();
+  }
+
+  Future<void> keepPersonalCopy(String itemId) async {
+    final entry = mirror.outbox().firstWhere((e) => e.item.id == itemId);
+    final copy = await copyOf?.call(entry.item, personal: true);
+    mirror.removeOutbox(itemId);
+    if (copy != null) mirror.enqueue(copy, baseRevision: 0);
+    await syncNow();
   }
 
   Future<void> _single(Future<void> Function() first) {
@@ -147,23 +176,35 @@ class SyncEngine extends ChangeNotifier {
   }
 
   Future<void> _push() async {
+    if (_pushAfter case final after? when _now().isBefore(after)) return;
     for (final e in mirror.outbox().where(
       (e) => e.state == OutboxState.pending,
     )) {
       try {
         _settle(e.item, await api.putItem(e.item, ifMatch: e.baseRevision));
+        _failures = 0;
+        _pushAfter = null;
       } on ApiException catch (x) {
         if (x.status == 401) rethrow;
         if (x.status == 409) {
           await _conflict(e.item, x.item);
         } else if (x.status == 429 || x.status >= 500) {
-          return; // server busy or failing: the outbox waits for the next round
+          return _backOff(x.retryAfter); // nothing counted on the entry
         } else if (mirror.recordOutboxFailure(e.item.id, x.code) >=
             maxAttempts) {
           mirror.rejectOutbox(e.item.id); // 400, 403, 413…
         }
       }
     }
+  }
+
+  /// interval × 2^(failures − 1), capped at [maxBackoff]; a longer `retry-after` wins.
+  void _backOff(Duration? retryAfter) {
+    _failures++;
+    final doubled = interval * (1 << (_failures - 1).clamp(0, 20));
+    var wait = doubled < maxBackoff ? doubled : maxBackoff;
+    if (retryAfter != null && retryAfter > wait) wait = retryAfter;
+    _pushAfter = _now().add(wait);
   }
 
   /// Server accepted [sent]: mirror it; drop the outbox entry unless it was edited meanwhile (then rebase it).
