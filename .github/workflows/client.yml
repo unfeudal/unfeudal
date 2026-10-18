@@ -40,4 +40,6 @@ jobs:
           git clone --depth 1 --branch 3.47.7 https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
           echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
       - run: flutter pub get
+      # pulled ahead so the download does not eat the test timeout (same pin as ssh_docker_test.dart)
+      - run: docker pull lscr.io/linuxserver/openssh-server:10.3_p1-r1-ls239@sha256:bef23ec7e4b6849f8c61b7e5fc1c67fc38bafe100539d5c34fc2d682c582bbf2
       - run: flutter test --tags docker

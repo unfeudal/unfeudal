@@ -103,6 +103,8 @@ Future<void> waitForSsh() async {
       if (utf8.decode(first, allowMalformed: true).startsWith('SSH-')) return;
     } on Exception {
       // not listening yet
+    } on StateError {
+      // docker-proxy accepted and closed before sshd was up: no banner yet
     }
     await Future<void>.delayed(const Duration(seconds: 1));
   }
