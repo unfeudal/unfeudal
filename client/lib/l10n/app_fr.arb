@@ -86,5 +86,10 @@
   "joinLink": "Lien d'invitation ou de configuration",
   "joinOpenFile": "Ouvrir un fichier d'inscription",
   "joinPassphrase": "Phrase secrète du fichier (s'il y en a une)",
-  "joinSubmit": "Continuer"
+  "joinSubmit": "Continuer",
+  "recoverTitle": "Récupérer le compte",
+  "recoverKey": "Clé de récupération",
+  "recoverNewPassword": "Nouveau mot de passe maître",
+  "recoverSubmit": "Réinitialiser le mot de passe",
+  "recoverDone": "Mot de passe réinitialisé. Tous les appareils ont été déconnectés : se connecter avec le nouveau mot de passe."
 }
