@@ -3,6 +3,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:unfeudal_shared/unfeudal_shared.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../l10n/app_localizations.dart';
@@ -15,6 +16,8 @@ import '../../storage/local_mirror.dart';
 import '../../sync/sync_engine.dart';
 import '../../version.dart';
 import '../describe_error.dart';
+import '../hosts/folder_editor_panel.dart';
+import '../hosts/host_editor_panel.dart';
 import 'shortcuts.dart';
 import 'tree_panel.dart';
 import 'vault_rail.dart';
@@ -38,6 +41,9 @@ class _HomeShellState extends State<HomeShell> {
   late double _treeWidth = _state.settings.treeWidth;
   bool _treeVisible = true;
   bool _ledgerDismissed = false;
+
+  /// The floating host or folder editor over the terminal, if open.
+  Widget? _editor;
 
   static const _minTree = 220.0, _maxTree = 400.0, _resizeStep = 16.0;
 
@@ -84,6 +90,9 @@ class _HomeShellState extends State<HomeShell> {
     return true;
   }
 
+  void _openEditor(Widget Function(VoidCallback close) build) =>
+      setState(() => _editor = build(() => setState(() => _editor = null)));
+
   void _resize(double delta) => setState(
     () => _treeWidth = (_treeWidth + delta).clamp(_minTree, _maxTree),
   );
@@ -105,7 +114,26 @@ class _HomeShellState extends State<HomeShell> {
               duration: UfMotion.of(context).base,
               curve: UfMotion.curve,
               width: _treeWidth,
-              child: TreePanel(searchFocus: _searchFocus),
+              child: TreePanel(
+                searchFocus: _searchFocus,
+                onNewHost: () =>
+                    _openEditor((close) => HostEditorPanel(onClose: close)),
+                onNewFolder: () =>
+                    _openEditor((close) => FolderEditorPanel(onClose: close)),
+                onEdit: (e) => _openEditor(
+                  (close) => e.kind == ItemKind.folder
+                      ? FolderEditorPanel(
+                          key: ValueKey(e.id),
+                          folderId: e.id,
+                          onClose: close,
+                        )
+                      : HostEditorPanel(
+                          key: ValueKey(e.id),
+                          hostId: e.id,
+                          onClose: close,
+                        ),
+                ),
+              ),
             ),
             _resizer(),
           ],
@@ -114,11 +142,22 @@ class _HomeShellState extends State<HomeShell> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 ..._banners(context, state),
-                // Task 31 brings the terminal tabs
                 Expanded(
-                  child: Focus(
-                    focusNode: _terminalFocus,
-                    child: const SizedBox.expand(),
+                  child: Stack(
+                    children: [
+                      // Task 31 brings the terminal tabs
+                      Focus(
+                        focusNode: _terminalFocus,
+                        child: const SizedBox.expand(),
+                      ),
+                      if (_editor case final editor?)
+                        Positioned(
+                          top: 12,
+                          right: 12,
+                          bottom: 12,
+                          child: editor,
+                        ),
+                    ],
                   ),
                 ),
               ],

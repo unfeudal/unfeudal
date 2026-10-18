@@ -15,6 +15,7 @@ abstract final class UfIcons {
   static const key = IconData(0xe2d6, fontFamily: _family);
   static const lock = IconData(0xe308, fontFamily: _family);
   static const magnifyingGlass = IconData(0xe30c, fontFamily: _family);
+  static const pencil = IconData(0xe3b4, fontFamily: _family);
   static const plus = IconData(0xe3d4, fontFamily: _family);
   static const user = IconData(0xe4c2, fontFamily: _family);
   static const warning = IconData(0xe4e0, fontFamily: _family);

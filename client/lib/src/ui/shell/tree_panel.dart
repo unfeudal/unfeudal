@@ -19,6 +19,7 @@ class TreePanel extends StatefulWidget {
     required this.searchFocus,
     this.onNewHost,
     this.onNewFolder,
+    this.onEdit,
   });
 
   final FocusNode searchFocus;
@@ -26,6 +27,9 @@ class TreePanel extends StatefulWidget {
   /// Null keeps the button disabled; both are disabled while the server is read-only.
   final VoidCallback? onNewHost;
   final VoidCallback? onNewFolder;
+
+  /// Opens the editor of a host or folder (the pencil of its row).
+  final void Function(VaultEntry entry)? onEdit;
 
   @override
   State<TreePanel> createState() => _TreePanelState();
@@ -170,6 +174,15 @@ class _TreePanelState extends State<TreePanel> {
     return out;
   }
 
+  Widget _editButton(BuildContext context, VaultEntry e) => IconButton(
+    key: Key('edit-${e.id}'),
+    tooltip: AppLocalizations.of(context).itemEdit,
+    visualDensity: VisualDensity.compact,
+    iconSize: 16,
+    onPressed: widget.onEdit == null ? null : () => widget.onEdit!(e),
+    icon: const Icon(UfIcons.pencil),
+  );
+
   Widget _folderRow(BuildContext context, VaultEntry e, int depth, bool open) {
     final colors = UfColors.of(context);
     return InkWell(
@@ -194,6 +207,7 @@ class _TreePanelState extends State<TreePanel> {
                     .copyWith(color: colors.muted),
               ),
             ),
+            _editButton(context, e),
           ],
         ),
       ),
@@ -250,6 +264,7 @@ class _TreePanelState extends State<TreePanel> {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
+              _editButton(context, e),
             ],
           ),
         ),
