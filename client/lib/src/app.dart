@@ -63,32 +63,20 @@ class _UnfeudalAppState extends State<UnfeudalApp> {
     final l = AppLocalizations.of(context);
     return await showUfDialog<bool>(context, alert: true, (dialog) {
           void answer(bool value) => Navigator.pop(dialog, value);
-          return Actions(
-            actions: {
-              DismissIntent: CallbackAction<DismissIntent>(
-                onInvoke: (_) => answer(false),
+          return AlertDialog(
+            title: Text(l.plainHttpTitle),
+            content: Text(l.plainHttpBody('$server')),
+            actions: [
+              TextButton(
+                onPressed: () => answer(false),
+                child: Text(MaterialLocalizations.of(dialog).cancelButtonLabel),
               ),
-            },
-            child: Focus(
-              autofocus: true,
-              child: AlertDialog(
-                title: Text(l.plainHttpTitle),
-                content: Text(l.plainHttpBody('$server')),
-                actions: [
-                  TextButton(
-                    onPressed: () => answer(false),
-                    child: Text(
-                      MaterialLocalizations.of(dialog).cancelButtonLabel,
-                    ),
-                  ),
-                  FilledButton(
-                    key: const Key('plain-http-continue'),
-                    onPressed: () => answer(true),
-                    child: Text(l.plainHttpContinue),
-                  ),
-                ],
+              FilledButton(
+                key: const Key('plain-http-continue'),
+                onPressed: () => answer(true),
+                child: Text(l.plainHttpContinue),
               ),
-            ),
+            ],
           );
         }) ??
         false;

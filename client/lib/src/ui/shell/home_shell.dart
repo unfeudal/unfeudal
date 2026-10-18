@@ -18,6 +18,10 @@ import '../../version.dart';
 import '../describe_error.dart';
 import '../hosts/folder_editor_panel.dart';
 import '../hosts/host_editor_panel.dart';
+import '../../ssh/ssh_connector.dart';
+import '../hosts/host_key_dialog.dart';
+import '../terminal/ssh_dialogs.dart';
+import '../terminal/terminal_tabs.dart';
 import 'shortcuts.dart';
 import 'tree_panel.dart';
 import 'vault_rail.dart';
@@ -34,7 +38,7 @@ class HomeShell extends StatefulWidget {
   State<HomeShell> createState() => _HomeShellState();
 }
 
-class _HomeShellState extends State<HomeShell> {
+class _HomeShellState extends State<HomeShell> implements SshDialogs {
   late final AppState _state = AppScope.read(context);
   final _searchFocus = FocusNode();
   final _terminalFocus = FocusNode();
@@ -50,13 +54,16 @@ class _HomeShellState extends State<HomeShell> {
   @override
   void initState() {
     super.initState();
-    _state.onHomeMounted();
+    _state
+      ..dialogs = this
+      ..onHomeMounted();
     HardwareKeyboard.instance.addHandler(_onKey);
   }
 
   @override
   void dispose() {
     HardwareKeyboard.instance.removeHandler(_onKey);
+    if (identical(_state.dialogs, this)) _state.dialogs = null;
     _state.onHomeUnmounted();
     _searchFocus.dispose();
     _terminalFocus.dispose();
@@ -89,6 +96,55 @@ class _HomeShellState extends State<HomeShell> {
     }
     return true;
   }
+
+  @override
+  Future<bool> confirmHostKey(HostKeyCheck check) async {
+    if (!mounted) return false;
+    final changed = check.decision == HostKeyDecision.changed;
+    return await showUfDialog<bool>(
+          context,
+          (_) => changed
+              ? HostKeyChangedDialog(check: check)
+              : HostKeyUnknownDialog(check: check),
+          alert: changed,
+        ) ??
+        false;
+  }
+
+  @override
+  Future<bool> confirmStartupCommand(String hostName, String command) async {
+    if (!mounted) return false;
+    return await showUfDialog<bool>(
+          context,
+          (_) => StartupCommandDialog(hostName: hostName, command: command),
+          alert: true,
+        ) ??
+        false;
+  }
+
+  @override
+  Future<String?> askPassword(String target) async => mounted
+      ? showUfDialog<String>(
+          context,
+          (_) => PasswordPromptDialog(target: target),
+        )
+      : null;
+
+  @override
+  Future<List<String>?> answerPrompts(
+    String name,
+    String instruction,
+    List<SshPrompt> prompts,
+  ) async => mounted
+      ? showUfDialog<List<String>>(
+          context,
+          (_) => KeyboardInteractiveDialog(
+            name: name,
+            instruction: instruction,
+            prompts: prompts,
+          ),
+        )
+      : null;
 
   void _openEditor(Widget Function(VoidCallback close) build) =>
       setState(() => _editor = build(() => setState(() => _editor = null)));
@@ -145,10 +201,9 @@ class _HomeShellState extends State<HomeShell> {
                 Expanded(
                   child: Stack(
                     children: [
-                      // Task 31 brings the terminal tabs
                       Focus(
                         focusNode: _terminalFocus,
-                        child: const SizedBox.expand(),
+                        child: const TerminalTabs(),
                       ),
                       if (_editor case final editor?)
                         Positioned(
