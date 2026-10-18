@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import 'dart:typed_data';
 
+import 'package:unfeudal_client/src/session/session_store.dart';
 import 'package:unfeudal_client/src/storage/local_mirror.dart';
 import 'package:unfeudal_client/src/sync/ledger_store.dart';
 import 'package:unfeudal_client/src/vault/vault.dart';
@@ -166,4 +167,17 @@ class FakeClock {
   DateTime value;
   DateTime now() => value;
   void advance(Duration d) => value = value.add(d);
+}
+
+class FakeSecureKv implements SecureKv {
+  final values = <String, String>{};
+
+  @override
+  Future<String?> read(String key) async => values[key];
+
+  @override
+  Future<void> write(String key, String value) async => values[key] = value;
+
+  @override
+  Future<void> delete(String key) async => values.remove(key);
 }
