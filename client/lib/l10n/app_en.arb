@@ -305,5 +305,60 @@
   },
   "keySave": "Save",
   "keyKindPrivateKey": "Private key",
-  "keyKindPassword": "Password"
+  "keyKindPassword": "Password",
+  "devicesTitle": "Devices",
+  "deviceCurrent": "This device",
+  "deviceRevoked": "Signed out",
+  "deviceLastSeen": "Last seen {date}",
+  "@deviceLastSeen": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "deviceRevoke": "Sign out",
+  "deviceRevokeSelf": "Sign this device out? Its local data stays encrypted; logging in again is needed.",
+  "settingsTitle": "Settings",
+  "settingsTheme": "Theme",
+  "themeSystem": "System",
+  "themeLight": "Light",
+  "themeDark": "Dark",
+  "settingsTerminalTheme": "Terminal theme",
+  "terminalThemeCharte": "Charte",
+  "terminalThemeSolarizedDark": "Solarized Dark",
+  "terminalThemeDracula": "Dracula",
+  "settingsLanguage": "Language",
+  "languageSystem": "System",
+  "languageEnglish": "English",
+  "languageFrench": "Français",
+  "settingsAutoLock": "Lock automatically",
+  "autoLockNever": "Never",
+  "autoLockMinutes": "After {minutes} min",
+  "@autoLockMinutes": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "settingsPerformance": "Performance mode (no animation)",
+  "settingsDisplayName": "Display name",
+  "settingsSafetyCode": "Safety code",
+  "settingsRecoveryKit": "New recovery kit",
+  "settingsRecoveryKitBody": "Creates a new recovery key; the previous one stops working.",
+  "settingsLockNow": "Lock now",
+  "settingsSignOut": "Sign out",
+  "settingsServer": "Server",
+  "settingsVersion": "App {client}, server {server}",
+  "@settingsVersion": {
+    "placeholders": {
+      "client": {
+        "type": "String"
+      },
+      "server": {
+        "type": "String"
+      }
+    }
+  }
 }

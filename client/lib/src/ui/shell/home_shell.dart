@@ -20,7 +20,9 @@ import '../hosts/folder_editor_panel.dart';
 import '../hosts/host_editor_panel.dart';
 import '../../ssh/ssh_connector.dart';
 import '../hosts/host_key_dialog.dart';
+import '../devices/devices_screen.dart';
 import '../keychain/keychain_screen.dart';
+import '../settings/settings_screen.dart';
 import '../terminal/ssh_dialogs.dart';
 import '../terminal/terminal_tabs.dart';
 import 'shortcuts.dart';
@@ -171,6 +173,8 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
           VaultRail(
             onLock: state.lock,
             onKeychain: () => _push(const KeychainScreen()),
+            onDevices: () => _push(const DevicesScreen()),
+            onSettings: () => _push(const SettingsScreen()),
           ),
           if (_treeVisible) ...[
             AnimatedContainer(
