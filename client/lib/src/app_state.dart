@@ -134,6 +134,12 @@ class AppState extends ChangeNotifier implements SshCallbacks {
 
   Stream<AppEvent> get events => _events.stream;
 
+  /// Moves between the signed-out screens (login, setup, join).
+  void show(AppStage stage) {
+    this.stage = stage;
+    notifyListeners();
+  }
+
   void emit(AppEvent event) => _events.add(event);
 
   /// From the last ApiInfo seen (a sync round or [checkServer]), else the stored one; false when none.
