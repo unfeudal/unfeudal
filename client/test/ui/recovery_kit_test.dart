@@ -7,7 +7,8 @@ import 'package:unfeudal_client/src/ui/onboarding/recovery_kit_view.dart';
 
 import '../support/pump_app.dart';
 
-const sampleWords = 'ABCD-EFGH-IJKL-MNOP-QRST-UVWX-YZ23-4567-ABCD-EFGH-IJKL-MNOP-Q';
+const sampleWords =
+    'ABCD-EFGH-IJKL-MNOP-QRST-UVWX-YZ23-4567-ABCD-EFGH-IJKL-MNOP-Q';
 
 void main() {
   test('text kit: the contract lines', () {
@@ -71,7 +72,10 @@ void main() {
       );
       await t.tap(find.byKey(const Key('recovery-save')));
       await pumpReal(t, rounds: 5);
-      expect(String.fromCharCodes(saved['/tmp/kit.txt']!), contains(sampleWords));
+      expect(
+        String.fromCharCodes(saved['/tmp/kit.txt']!),
+        contains(sampleWords),
+      );
       await t.tap(find.byKey(const Key('recovery-print')));
       await pumpReal(t, rounds: 10);
       expect(printed, isNotNull);
