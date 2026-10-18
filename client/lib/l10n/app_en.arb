@@ -98,5 +98,28 @@
       }
     }
   },
-  "plainHttpContinue": "Continue unencrypted"
+  "plainHttpContinue": "Continue unencrypted",
+  "setupTitle": "Set up the server",
+  "setupServer": "Server address",
+  "setupToken": "Setup token (shown once in the server log)",
+  "setupEmail": "Email",
+  "setupPassword": "Master password",
+  "setupConfirm": "Confirm the master password",
+  "setupDisplayName": "Display name (optional)",
+  "setupWarning": "The master password cannot be recovered by anyone. Without it, only the recovery key opens the vault.",
+  "setupSubmit": "Create the account",
+  "passwordsDiffer": "The two passwords differ.",
+  "kitTitle": "Recovery kit",
+  "kitBody": "This key opens the vault if the master password is lost. It is shown once.",
+  "kitInstructions": "Keep this page offline, away from the computer. Anyone holding it can open the vault. To use it: Log in, then \"Forgotten password\".",
+  "kitCopy": "Copy (cleared after 60 s)",
+  "kitSave": "Save as PDF or text",
+  "kitPrint": "Print",
+  "kitConfirm": "The recovery key is stored somewhere safe.",
+  "kitContinue": "Continue",
+  "joinTitle": "Join a server",
+  "joinLink": "Invitation or setup link",
+  "joinOpenFile": "Open an enrollment file",
+  "joinPassphrase": "File passphrase (if any)",
+  "joinSubmit": "Continue"
 }
