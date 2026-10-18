@@ -44,6 +44,10 @@ class Vault extends ChangeNotifier {
 
   bool get isUnlocked => _key != null;
 
+  /// The user key copy, for tests that seal items as another device would.
+  @visibleForTesting
+  Uint8List get debugKey => _requireKey();
+
   /// Returns the ledger result: false when the sealed ledger could not be opened (the caller reports it).
   Future<bool> unlock(Uint8List userKey) async {
     final key = _key = Uint8List.fromList(userKey);

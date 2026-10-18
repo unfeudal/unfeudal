@@ -187,5 +187,44 @@
   "rejectedDiscard": "Discard the change",
   "bannerLedgerReset": "The local security ledger could not be read and was reset; host keys will be asked again.",
   "bannerProtocol": "The server sent an answer this version cannot read. Retrying.",
-  "bannerPlainHttp": "Unencrypted connection: this server is reached over plain http."
+  "bannerPlainHttp": "Unencrypted connection: this server is reached over plain http.",
+  "hostName": "Name",
+  "hostAddress": "Address",
+  "hostPort": "Port",
+  "hostUser": "User",
+  "hostIdentity": "Key or password",
+  "hostTags": "Tags, separated by commas",
+  "hostNotes": "Notes",
+  "hostStartup": "Startup command",
+  "hostFolder": "Folder",
+  "hostSave": "Save",
+  "hostDelete": "Move to trash",
+  "hostInherited": "From the folder {source}",
+  "@hostInherited": {
+    "placeholders": {
+      "source": {
+        "type": "String"
+      }
+    }
+  },
+  "hostDefault": "Default",
+  "itemNewer": "Made by a newer version: shown read-only.",
+  "itemTrashed": "In the trash: restore it to edit.",
+  "itemEdit": "Edit",
+  "folderName": "Name",
+  "folderParent": "Inside",
+  "folderRoot": "Top level",
+  "folderDefaults": "Defaults for the hosts inside",
+  "folderSave": "Save",
+  "folderDelete": "Move to trash",
+  "folderDeleteConfirm": "Move \"{name}\" and everything inside it to the trash?",
+  "@folderDeleteConfirm": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "fieldRequired": "Required",
+  "fieldInvalid": "Invalid value"
 }
