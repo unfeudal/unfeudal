@@ -45,6 +45,9 @@ class SyncEngine extends ChangeNotifier {
   Future<void> Function()? onChanged;
   void Function(String? reason)? onUnauthorized;
 
+  /// An accepted server restore: the ledger empties its replay marks (pins stay).
+  Future<void> Function()? onRestoreAccepted;
+
   bool online = true;
   Object? lastError;
   DateTime? lastSyncAt;
@@ -52,7 +55,7 @@ class SyncEngine extends ChangeNotifier {
   Compat? compat;
   UpdateNotice? updateNotice;
 
-  bool get readOnly => compat?.mode == CompatMode.readOnly;
+  bool get readOnly => compat?.mode == CompatMode.readOnly || restoreRefused;
 
   /// Writes the server refused 3 times; they wait for retry, keep a personal copy, or discard.
   List<OutboxEntry> get rejected => [
@@ -123,16 +126,28 @@ class SyncEngine extends ChangeNotifier {
     }();
   }
 
-  Future<void> _round() async {
+  Future<void> _round({bool restoring = false}) async {
     try {
       final info = await api.info();
       online = true;
       if (!_negotiate(info)) return;
+      if (!restoring && _mustPause(info)) return;
+      if (restoring) await _pull(full: true, acceptOlder: true);
       if (compat!.mode == CompatMode.full) {
         await _push(); // client-too-old: pull only
       }
-      await _pull();
-      mirror.setKv(KvKey.apiInfo, jsonEncode(info.toJson()));
+      if (!restoring) await _pull();
+      final stored =
+          _storedEpoch; // a missing epoch never replaces the stored one
+      mirror.setKv(
+        KvKey.apiInfo,
+        jsonEncode({
+          ...info.toJson(),
+          if (info.instanceEpoch == null && stored != null)
+            'instanceEpoch': stored,
+        }),
+      );
+      if (restoring) _finishRestore();
       lastSyncAt = _now();
       lastError = null;
     } on NetworkException catch (e) {
@@ -141,6 +156,8 @@ class SyncEngine extends ChangeNotifier {
     } on ApiException catch (e) {
       if (e.status == 401) {
         onUnauthorized?.call(e.reason);
+      } else if (e.reason == 'cursor_ahead') {
+        _pause();
       } else {
         lastError = e;
       }
@@ -170,15 +187,20 @@ class SyncEngine extends ChangeNotifier {
     api.readOnly = true;
   }
 
-  Future<void> _pull() async {
-    var cursor = int.parse(mirror.getKv(KvKey.cursor) ?? '0');
-    var orgCursor = int.parse(mirror.getKv(KvKey.orgCursor) ?? '0');
+  Future<void> _pull({bool full = false, bool acceptOlder = false}) async {
+    var cursor = full ? 0 : int.parse(mirror.getKv(KvKey.cursor) ?? '0');
+    var orgCursor = full ? 0 : int.parse(mirror.getKv(KvKey.orgCursor) ?? '0');
+    final seen = <String>{};
     for (var more = true; more;) {
       final page = await api.sync(
         cursor: cursor,
         orgCursor: orgCursor,
       ); // parsed whole before anything is applied
-      ignoredRollbacks += mirror.upsertItems(page.items);
+      ignoredRollbacks += mirror.upsertItems(
+        page.items,
+        acceptOlder: acceptOlder,
+      );
+      seen.addAll(page.items.map((i) => i.id));
       if (page.org case final org?) {
         mirror
           ..setKv(KvKey.orgBlock, jsonEncode(org.toJson()))
@@ -189,6 +211,69 @@ class SyncEngine extends ChangeNotifier {
       mirror.setKv(KvKey.cursor, '$cursor');
       more = page.more;
     }
+    if (full) {
+      // Replaced by the server's, only once the whole pull succeeded; queued items stay.
+      final queued = {for (final e in mirror.outbox()) e.item.id};
+      mirror.deleteItems([
+        for (final i in mirror.items())
+          if (!seen.contains(i.id) && !queued.contains(i.id)) i.id,
+      ]);
+    }
+  }
+
+  String? _seenEpoch; // epoch of the last /api/info, for a refusal
+  bool _pending = false;
+  bool _accepting = false; // the accepted round may write although the refusal is still stored
+
+  bool get restoreRefused =>
+      !_accepting && mirror.getKv(KvKey.refusedEpoch) != null;
+  bool get restorePending => _pending || restoreRefused;
+
+  String? get _storedEpoch {
+    final raw = mirror.getKv(KvKey.apiInfo);
+    return raw == null ? null : ApiInfo.fromJson(jsonDecode(raw)).instanceEpoch;
+  }
+
+  /// Called after negotiation on every normal round. No push, no pull while it returns true.
+  bool _mustPause(ApiInfo info) {
+    _seenEpoch = info.instanceEpoch;
+    final stored = _storedEpoch;
+    final changed =
+        info.instanceEpoch == null ||
+        (stored != null && info.instanceEpoch != stored);
+    if (changed || restoreRefused) _pending = true;
+    return _pending;
+  }
+
+  void _pause() => _pending = true; // 409 cursor_ahead
+
+  Future<void> refuseRestore() async {
+    mirror.setKv(
+      KvKey.refusedEpoch,
+      _seenEpoch ?? _storedEpoch ?? '',
+    ); // '' marks a missing epoch
+    api.readOnly = true;
+    notifyListeners();
+  }
+
+  Future<void> acceptRestore() async {
+    mirror.resetForRestore(); // cursor, orgCursor, orgBlock reset; anchors emptied
+    await onRestoreAccepted?.call(); // LedgerStore.reset: marks emptied, pins kept (p6, p7 add theirs)
+    _pending = false;
+    _accepting = true;
+    try {
+      await _single(
+        () => _round(restoring: true),
+      ); // full pull (acceptOlder), push, then store ApiInfo
+    } finally {
+      _accepting = false;
+      api.readOnly = readOnly;
+    }
+  }
+
+  void _finishRestore() {
+    mirror.setKv(KvKey.refusedEpoch, null);
+    api.readOnly = readOnly;
   }
 
   Future<void> _push() async {
