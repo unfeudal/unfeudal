@@ -119,7 +119,6 @@ class AppState extends ChangeNotifier implements SshCallbacks {
   /// Shown once on the recovery-kit screen of an onboarding, then forgotten.
   String? recoveryKey;
   Enrollment? enrollment;
-  Uint8List? accountPublicKey;
 
   /// Asked before any setup, join or login over plain http: the authKey and the tokens travel unencrypted.
   Future<bool> Function(Uri server)? confirmPlainHttp;
@@ -133,6 +132,16 @@ class AppState extends ChangeNotifier implements SshCallbacks {
   Future<void> _prefsWrite = Future.value();
 
   Stream<AppEvent> get events => _events.stream;
+
+  /// The account's X25519 public key, from the cached bundle (signed in or unlocked).
+  Uint8List get accountPublicKey => _cachedBundle().bundle.publicKey;
+
+  /// The server version of the last ApiInfo seen with a token, if any.
+  String? get serverVersion {
+    if (_lastInfo?.server case final server?) return server;
+    final raw = mirror?.getKv(KvKey.apiInfo);
+    return raw == null ? null : ApiInfo.fromJson(jsonDecode(raw)).server;
+  }
 
   /// Moves between the signed-out screens (login, setup, join).
   void show(AppStage stage) {
@@ -617,7 +626,7 @@ class AppState extends ChangeNotifier implements SshCallbacks {
     this.api = api;
     sync = engine;
     vault = v;
-    accountPublicKey = unlocked.bundle.publicKey;
+
     ledgerReported = !await v.unlock(unlocked.userKey);
     v.addListener(_applySyncedPrefs);
     engine.addListener(_onSyncChanged);
