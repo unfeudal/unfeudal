@@ -100,7 +100,8 @@ class _SealPainter extends CustomPainter {
       SealState.connected => colors.ok,
       SealState.verify => colors.warn,
       SealState.changed => colors.danger,
-      SealState.offline || SealState.connecting => colors.muted,
+      SealState.connecting => colors.warn,
+      SealState.offline => colors.muted,
     };
     final stroke = Paint()
       ..style = PaintingStyle.stroke
@@ -130,7 +131,7 @@ class _SealPainter extends CustomPainter {
         );
       case SealState.changed:
         canvas.drawCircle(_center, _ring, Paint()..color = colors.danger);
-        stroke.color = colors.panel;
+        stroke.color = colors.onDanger;
         canvas.drawLine(
           const Offset(5.6, 5.6),
           const Offset(10.4, 10.4),
@@ -144,7 +145,7 @@ class _SealPainter extends CustomPainter {
       case SealState.offline:
         break;
       case SealState.connecting:
-        stroke.color = colors.accent;
+        stroke.color = colors.text;
         canvas.drawArc(
           ringRect,
           spin.value * 2 * math.pi,
