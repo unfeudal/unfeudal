@@ -160,3 +160,10 @@ List<Item> confirmOutbox(LocalMirror m) => [
       return stored;
     }(),
 ];
+
+class FakeClock {
+  FakeClock([DateTime? t]) : value = t ?? DateTime.utc(2026, 10, 15, 12);
+  DateTime value;
+  DateTime now() => value;
+  void advance(Duration d) => value = value.add(d);
+}
