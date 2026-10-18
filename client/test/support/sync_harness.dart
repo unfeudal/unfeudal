@@ -3,7 +3,12 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:unfeudal_client/src/api/api_client.dart';
+import 'package:unfeudal_client/src/storage/local_mirror.dart';
+import 'package:unfeudal_client/src/sync/sync_engine.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
+
+import 'fakes.dart';
 
 class HarnessAccount {
   HarnessAccount(
@@ -112,6 +117,24 @@ class SyncHarness {
       accessToken: d.access,
       refreshToken: d.refresh,
     );
+  }
+
+  /// A signed-in engine over a fresh in-memory mirror; conflict copies are recorded in [copies].
+  Future<(SyncEngine, LocalMirror, HarnessLogin)> engine({
+    List<Item>? copies,
+  }) async {
+    final login = await signIn();
+    final api = ApiClient(baseUrl, client)
+      ..accessToken = login.accessToken
+      ..refreshToken = login.refreshToken;
+    final mirror = LocalMirror.inMemory();
+    final e = SyncEngine(api: api, mirror: mirror, deviceId: login.deviceId)
+      ..copyOf = (mine, {required personal}) async {
+        final c = wireItem(newId(), revision: 0, type: mine.type);
+        copies?.add(c);
+        return c;
+      };
+    return (e, mirror, login);
   }
 
   Item? serverItem(String id) => _items[id]?.$1;
