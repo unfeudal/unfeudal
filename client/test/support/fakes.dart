@@ -262,6 +262,7 @@ AppState testAppState({
   Settings settings = const Settings(),
   FakeSecureKv? kv,
   Map<String, LocalMirror>? mirrors,
+  SshConnector? ssh,
   SettingsStore? settingsStore,
 }) {
   final h = harness ?? SyncHarness();
@@ -271,8 +272,39 @@ AppState testAppState({
     settingsStore: settingsStore ?? SettingsStore.memory(settings),
     openMirror: (userId) async => m[userId] ??= LocalMirror.inMemory(),
     httpClient: h.client,
+    ssh: ssh ?? FakeSshConnector(),
 
     allowTestingKdf: true,
     kdf: KdfParams.testing,
   );
+}
+
+class FakeDialogs implements SshDialogs {
+  bool accept = false;
+  String? password;
+  bool runStartup = false;
+  final checks = <HostKeyCheck>[];
+  final startupAsked = <String>[];
+
+  @override
+  Future<bool> confirmHostKey(HostKeyCheck check) async {
+    checks.add(check);
+    return accept;
+  }
+
+  @override
+  Future<bool> confirmStartupCommand(String hostName, String command) async {
+    startupAsked.add(command);
+    return runStartup;
+  }
+
+  @override
+  Future<String?> askPassword(String target) async => password;
+
+  @override
+  Future<List<String>?> answerPrompts(
+    String name,
+    String instruction,
+    List<SshPrompt> prompts,
+  ) async => null;
 }
