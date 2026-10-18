@@ -25,8 +25,7 @@ void main() {
   test('zero never locks; stop cancels', () {
     fakeAsync((async) {
       var locks = 0;
-      final a = AutoLock(timeout: () => Duration.zero, onLock: () => locks++)
-        ..start();
+      AutoLock(timeout: () => Duration.zero, onLock: () => locks++).start();
       async.elapse(const Duration(hours: 5));
       expect(locks, 0);
       final b = AutoLock(

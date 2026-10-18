@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import 'package:flutter_test/flutter_test.dart';
 import 'package:unfeudal_client/src/storage/local_mirror.dart';
-import 'package:unfeudal_client/src/vault/vault.dart';
+
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../support/fakes.dart';
