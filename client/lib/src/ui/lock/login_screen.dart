@@ -8,6 +8,7 @@ import '../../design/banner.dart';
 import '../../design/motion.dart';
 import '../../design/tokens.dart';
 import '../describe_error.dart';
+import '../onboarding/recovery_screen.dart';
 import 'lock_frame.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -113,6 +114,14 @@ class _LoginScreenState extends State<LoginScreen> {
             onPressed: () => state.show(AppStage.join),
             child: Text(l.loginToJoin),
           ),
+          // shown unless the last known answer of this server says the recovery kit is off
+          if (state.stored == null || state.serverHas('recovery_kit'))
+            TextButton(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(builder: (_) => const RecoveryScreen()),
+              ),
+              child: Text(l.loginToRecover),
+            ),
         ],
       ),
     );
