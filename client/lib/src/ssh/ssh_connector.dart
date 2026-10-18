@@ -4,7 +4,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:dartssh2/dartssh2.dart';
-import 'package:pointycastle/digests/sha256.dart';
+
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 enum HostKeyDecision { trusted, unknown, changed }
@@ -20,10 +20,6 @@ HostKeyDecision decideHostKey(
       ? HostKeyDecision.trusted
       : HostKeyDecision.changed;
 }
-
-/// OpenSSH form: `SHA256:` + unpadded base64 of the SHA-256 of the key blob.
-String sshFingerprint(Uint8List blob) =>
-    'SHA256:${base64.encode(SHA256Digest().process(blob)).replaceAll('=', '')}';
 
 class HostKeyCheck {
   const HostKeyCheck({

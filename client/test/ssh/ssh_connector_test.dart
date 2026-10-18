@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: Apache-2.0
-import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:unfeudal_client/src/ssh/ssh_connector.dart';
@@ -56,13 +55,6 @@ Future<bool> verify(
 );
 
 void main() {
-  test('fingerprint is SHA256 of the key blob, base64 without padding', () {
-    expect(
-      sshFingerprint(Uint8List(0)),
-      'SHA256:47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU',
-    );
-  });
-
   test('decideHostKey', () {
     expect(
       decideHostKey(null, 'ssh-ed25519', 'SHA256:${'A' * 43}'),
