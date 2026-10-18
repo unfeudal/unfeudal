@@ -8,6 +8,7 @@ import '../../app_scope.dart';
 import '../../app_state.dart';
 import '../../design/tokens.dart';
 import '../describe_error.dart';
+import '../fields.dart';
 import '../lock/lock_frame.dart';
 import 'setup_screen.dart';
 
@@ -99,18 +100,6 @@ class _JoinScreenState extends State<JoinScreen> {
     }
   }
 
-  TextField _field(
-    String key,
-    TextEditingController controller,
-    String label, {
-    bool secret = false,
-  }) => TextField(
-    key: Key(key),
-    controller: controller,
-    obscureText: secret,
-    decoration: InputDecoration(labelText: label),
-  );
-
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
@@ -119,22 +108,27 @@ class _JoinScreenState extends State<JoinScreen> {
         children: [
           Text(l.joinTitle, style: Theme.of(context).textTheme.headlineMedium),
           if (_invite == null) ...[
-            _field('join-link', _link, l.joinLink),
+            keyedField('join-link', _link, l.joinLink),
             OutlinedButton(
               key: const Key('join-open-file'),
               onPressed: _pickFile,
               child: Text(l.joinOpenFile),
             ),
-            _field(
+            keyedField(
               'join-passphrase',
               _passphrase,
               l.joinPassphrase,
               secret: true,
             ),
           ] else ...[
-            _field('join-email', _email, l.setupEmail),
-            _field('join-password', _password, l.setupPassword, secret: true),
-            _field('join-confirm', _confirm, l.setupConfirm, secret: true),
+            keyedField('join-email', _email, l.setupEmail),
+            keyedField(
+              'join-password',
+              _password,
+              l.setupPassword,
+              secret: true,
+            ),
+            keyedField('join-confirm', _confirm, l.setupConfirm, secret: true),
             Text(
               l.setupWarning,
               style: TextStyle(color: UfColors.of(context).warn),

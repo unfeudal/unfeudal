@@ -7,6 +7,7 @@ import '../../app_scope.dart';
 import '../../design/motion.dart';
 import '../../design/tokens.dart';
 import '../describe_error.dart';
+import '../fields.dart';
 import '../lock/lock_frame.dart';
 import 'recovery_kit_view.dart';
 
@@ -83,14 +84,14 @@ class _SetupScreenState extends State<SetupScreen> {
       body: LockFrame(
         children: [
           Text(l.setupTitle, style: Theme.of(context).textTheme.headlineMedium),
-          _field(
+          keyedField(
             'setup-server',
             _server,
             l.setupServer,
             keyboard: TextInputType.url,
           ),
-          _field('setup-token', _token, l.setupToken),
-          _field(
+          keyedField('setup-token', _token, l.setupToken),
+          keyedField(
             'setup-email',
             _email,
             l.setupEmail,
@@ -101,17 +102,22 @@ class _SetupScreenState extends State<SetupScreen> {
             child: Column(
               spacing: 12,
               children: [
-                _field(
+                keyedField(
                   'setup-password',
                   _password,
                   l.setupPassword,
                   secret: true,
                 ),
-                _field('setup-confirm', _confirm, l.setupConfirm, secret: true),
+                keyedField(
+                  'setup-confirm',
+                  _confirm,
+                  l.setupConfirm,
+                  secret: true,
+                ),
               ],
             ),
           ),
-          _field('setup-name', _name, l.setupDisplayName),
+          keyedField('setup-name', _name, l.setupDisplayName),
           Text(
             l.setupWarning,
             style: TextStyle(color: UfColors.of(context).warn),
@@ -140,17 +146,3 @@ String? checkNewPassword(
   }
   return password == confirmation ? null : l.passwordsDiffer;
 }
-
-Widget _field(
-  String key,
-  TextEditingController controller,
-  String label, {
-  bool secret = false,
-  TextInputType? keyboard,
-}) => TextField(
-  key: Key(key),
-  controller: controller,
-  obscureText: secret,
-  keyboardType: keyboard,
-  decoration: InputDecoration(labelText: label),
-);
