@@ -92,7 +92,7 @@ class _ShakeOnErrorState extends State<ShakeOnError>
   );
 }
 
-/// [alert] marks the dialog as an `alertdialog` and disables barrier dismiss.
+/// [alert] marks the dialog as an `alertdialog` and disables barrier dismiss; Escape still closes it (null).
 Future<T?> showUfDialog<T>(
   BuildContext context,
   WidgetBuilder builder, {
@@ -109,14 +109,20 @@ Future<T?> showUfDialog<T>(
       barrierColor: Colors.black54,
       pageBuilder: (context, _, _) {
         final content = builder(context);
-        return alert
-            ? Semantics(
-                role: SemanticsRole.alertDialog,
-                scopesRoute: true,
-                explicitChildNodes: true,
-                child: content,
-              )
-            : content;
+        if (!alert) return content;
+        return Semantics(
+          role: SemanticsRole.alertDialog,
+          scopesRoute: true,
+          explicitChildNodes: true,
+          child: Actions(
+            actions: {
+              DismissIntent: CallbackAction<DismissIntent>(
+                onInvoke: (_) => Navigator.of(context).maybePop(),
+              ),
+            },
+            child: Focus(autofocus: true, child: content),
+          ),
+        );
       },
       transitionBuilder: (context, animation, _, child) {
         final eased = CurvedAnimation(parent: animation, curve: UfMotion.curve);
