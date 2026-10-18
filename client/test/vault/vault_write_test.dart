@@ -291,4 +291,31 @@ void main() {
     });
     expect(v.hostLookup(host)!.meta.name, 'web');
   });
+
+  test(
+    'editing an item whose create is still queued keeps its secret',
+    () async {
+      final m = LocalMirror.inMemory();
+      final v = await testVault(key, m);
+      final id = await v.upsertItem(
+        type: 'identity',
+        meta: idMeta('deploy'),
+        secret: idSecret,
+      );
+      await v.updateIdentity(
+        id,
+        IdentityMeta.fromJson(idMeta('renamed')),
+      ); // before the create reached the server
+      final queued = m.outbox().single.item;
+      expect(queued.secret, isNotNull);
+      final secret = await PayloadCrypto.open(
+        PayloadAad.of(queued, PayloadPart.secret),
+        queued.secret!,
+        key,
+      );
+      expect(secret.json['privateKeyPem'], pem);
+      await v.trashItem(id);
+      expect(m.outbox().single.item.secret, isNotNull);
+    },
+  );
 }
