@@ -7,5 +7,69 @@
   "sealOffline": "Offline",
   "sealConnecting": "Connecting",
   "bannerDismiss": "Dismiss",
-  "conflictSuffix": "(conflict copy)"
+  "conflictSuffix": "(conflict copy)",
+  "errorInvalidRequest": "The server refused this request. Update the app if it keeps happening.",
+  "errorUnauthorized": "Wrong email or password.",
+  "errorDeviceRevoked": "This device was signed out. Log in again.",
+  "errorSessionExpired": "Session expired. Log in again.",
+  "errorForbidden": "Not allowed.",
+  "errorNotFound": "Not found on the server.",
+  "errorConflict": "Changed elsewhere in the meantime. Try again.",
+  "errorCursorAhead": "The server went back in time. Sync is paused.",
+  "errorClientTooOld": "This version can only read. Update Unfeudal to make changes.",
+  "errorLastOwner": "Last owner of: {orgs}. Name another owner first.",
+  "@errorLastOwner": {
+    "placeholders": {
+      "orgs": {
+        "type": "String"
+      }
+    }
+  },
+  "errorAccountExists": "An account already uses this email. Log in, then accept the invitation.",
+  "errorPayloadTooLarge": "Too large for the server (vault quota or 1 MiB per item).",
+  "errorRateLimited": "Too many attempts. Wait {seconds} s.",
+  "@errorRateLimited": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "errorSetupDone": "This server is already set up. Log in instead.",
+  "errorFeatureDisabled": "Turned off on this server.",
+  "errorInternal": "Server error. Try again later.",
+  "errorUnexpected": "Unexpected error ({code}).",
+  "@errorUnexpected": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "errorNetwork": "Server unreachable. Local data stays available.",
+  "errorProtocol": "The server sent an answer this version cannot read. Retrying later.",
+  "errorWrongPassword": "Wrong password. The vault stays locked.",
+  "errorDecryptionFailed": "Data could not be decrypted.",
+  "errorUnsupportedEnvelope": "Made by a newer Unfeudal. Update the app.",
+  "errorUnsupportedKdf": "Made by a newer Unfeudal. Update the app.",
+  "errorWeakKdf": "The server asks for weak key settings. Refused.",
+  "errorWeakPassword": "At least {min} characters.",
+  "@errorWeakPassword": {
+    "placeholders": {
+      "min": {
+        "type": "int"
+      }
+    }
+  },
+  "errorInvalidRecoveryKey": "Invalid recovery key. Check each group.",
+  "errorKeyLabelMismatch": "A folder key has the wrong label. Refused.",
+  "errorReadOnly": "Read-only mode: changes are off.",
+  "errorHostKeyChanged": "The host key changed. Connection blocked until it is verified.",
+  "errorHostKeyUnknown": "Host key not confirmed. Not connected.",
+  "errorSshAuth": "The host refused the credentials.",
+  "errorMissingUser": "No user set for this host or its folders.",
+  "errorInvalidKey": "Unreadable key, or wrong passphrase. PuTTY keys are not supported.",
+  "errorMirrorTooNew": "Local data was written by a newer Unfeudal. Update the app.",
+  "errorInsecureServer": "Plain http only works toward a local network server that allows it.",
+  "errorPlainHttpRefused": "Sign-in cancelled: the connection to this server is not encrypted."
 }
