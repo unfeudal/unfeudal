@@ -329,8 +329,11 @@ class Vault extends ChangeNotifier {
     }
     final json = current.item.toJson()
       ..removeWhere((k, _) => _serverSet.contains(k))
-      ..['deleted'] = deleted
-      ..['secret'] = null;
+      ..['deleted'] = deleted;
+    if (!_queuedSecret(id)) {
+      json['secret'] =
+          null; // a queued secret not stored yet is sent again as is
+    }
     await _write(Item.fromJson(json));
   }
 
@@ -460,8 +463,12 @@ class Vault extends ChangeNotifier {
       throw StateError('${current.state.name} item is not rewritten');
     }
     final itemId = id ?? newId();
-    if (current != null && current.folderId != folderId && secret == null) {
-      secret = await _secretJson(itemId); // a move re-seals both parts: the server refuses a moved item without its secret
+    // A move re-seals both parts (the server refuses a moved item without its secret), and so does an edit
+    // of an item whose queued write still carries a secret the server has not stored yet.
+    if (current != null &&
+        secret == null &&
+        (current.folderId != folderId || _queuedSecret(itemId))) {
+      secret = await _secretJson(itemId);
     }
     final item = await seal(
       id: itemId,
@@ -493,6 +500,9 @@ class Vault extends ChangeNotifier {
     if (opened == null) throw const _ReplayedSecret();
     return opened.json;
   }
+
+  bool _queuedSecret(String id) =>
+      mirror.outbox().any((e) => e.item.id == id && e.item.secret != null);
 
   Future<void> _write(Item item) async {
     await _send(item);
