@@ -4,13 +4,16 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' show Locale, PlatformDispatcher;
 
+import 'package:cryptography/cryptography.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../l10n/app_localizations.dart';
 import 'api/api_client.dart';
+import 'design/seal.dart';
 import 'events/app_events.dart';
+import 'session/auto_lock.dart';
 import 'session/lock_machine.dart';
 import 'session/session_store.dart';
 import 'settings/settings.dart';
@@ -53,17 +56,38 @@ abstract interface class SshDialogs {
   );
 }
 
+/// The startup command sent with the shell. An org host's command can be written by anyone with `edit`:
+/// it runs only once the user approved this exact text on this device (SHA-256 in the sealed ledger).
+Future<String?> startupCommandToSend({
+  required String hostId,
+  required String hostName,
+  required String? command,
+  required bool org,
+  required LedgerStore ledger,
+  required SshDialogs? dialogs,
+}) async {
+  if (command == null || !org) return command;
+  final hash = base64Encode((await Sha256().hash(utf8.encode(command))).bytes);
+  if (ledger.startupApproval(hostId) == hash) return command;
+  if (await dialogs?.confirmStartupCommand(hostName, command) != true) {
+    return null; // the session opens without it
+  }
+  await ledger.approveStartup(hostId, hash);
+  return command;
+}
+
 /// The single state root: account, local stores, vault, sync and terminal tabs.
-class AppState extends ChangeNotifier {
+class AppState extends ChangeNotifier implements SshCallbacks {
   AppState({
     required this.sessions,
     required this.settingsStore,
     required this._openMirror,
     http.Client? httpClient,
-
+    SshConnector? ssh,
     this.allowTestingKdf = false,
     KdfParams kdf = KdfParams.defaults,
   }) : _http = httpClient ?? http.Client(),
+       _ssh = ssh ?? SshConnector(),
        _crypto = AccountCrypto(kdf: kdf, allowTestingKdf: allowTestingKdf);
 
   final SessionStore sessions;
@@ -71,6 +95,7 @@ class AppState extends ChangeNotifier {
   final bool allowTestingKdf;
   final Future<LocalMirror> Function(String userId) _openMirror;
   final http.Client _http;
+  final SshConnector _ssh;
 
   final AccountCrypto _crypto;
 
@@ -103,6 +128,9 @@ class AppState extends ChangeNotifier {
   ApiInfo? _lastInfo;
   String? _mirrorUser;
   int _unlockFailures = 0;
+  AutoLock? _autoLock;
+  bool _wasOnline = true;
+  Future<void> _prefsWrite = Future.value();
 
   Stream<AppEvent> get events => _events.stream;
 
@@ -264,6 +292,7 @@ class AppState extends ChangeNotifier {
     tabs.clear();
     activeTab = 0;
     sync?.stop();
+    _autoLock?.stop();
     vault?.lock();
     lockMachine.reset();
     stage = AppStage.unlock;
@@ -337,6 +366,182 @@ class AppState extends ChangeNotifier {
     return rotated.recoveryKey;
   }
 
+  /// Failures stay in the tab (seal and message), never thrown to the UI.
+  Future<TerminalSession> connect(String hostId) async {
+    final found =
+        vault!.hostLookup(hostId) ?? (throw StateError('unknown host'));
+    final tab = TerminalSession(hostId: hostId, title: found.meta.name);
+    tabs.add(tab);
+    activeTab = tabs.length - 1;
+    notifyListeners();
+    emit(ConnectStarted(hostId: hostId));
+    try {
+      final user = found.resolved.user ?? (throw const MissingUser());
+      final identityId = found.resolved.identityId;
+      final identity = identityId == null
+          ? null
+          : await vault!.identitySecret(identityId);
+      final shell = await _ssh.connect(
+        ConnectTarget(
+          hostId: hostId,
+          hostName: found.meta.name,
+          address: found.meta.address,
+          port: found.resolved.port,
+          user: user,
+          identity: identity,
+        ),
+        this,
+      );
+      tab.attach(
+        shell,
+        startupCommand: await startupCommandToSend(
+          hostId: hostId,
+          hostName: found.meta.name,
+          command: found.meta.startupCommand,
+          org: found.org,
+          ledger: vault!.ledger,
+          dialogs: dialogs,
+        ),
+      );
+      emit(ConnectSucceeded(hostId: hostId, user: user, tags: found.meta.tags));
+    } on HostKeyRejected catch (e) {
+      tab.fail(
+        e,
+        state: e.decision == HostKeyDecision.changed
+            ? SealState.changed
+            : SealState.verify,
+      );
+      emit(ConnectFailed(hostId: hostId, error: e));
+    } on Exception catch (e) {
+      tab.fail(e);
+      emit(ConnectFailed(hostId: hostId, error: e));
+    }
+    notifyListeners();
+    return tab;
+  }
+
+  void selectTab(int index) {
+    activeTab = index;
+    notifyListeners();
+  }
+
+  Future<void> closeTab(TerminalSession tab) async {
+    tabs.remove(tab);
+    activeTab = tabs.isEmpty ? 0 : activeTab.clamp(0, tabs.length - 1);
+    notifyListeners();
+    await tab.close();
+  }
+
+  /// The live tab's state; else `verify` until a key is trusted, then `offline`.
+  SealState sealFor(String hostId) {
+    final live = tabs.where((t) => t.hostId == hostId).lastOrNull;
+    if (live != null) return live.state;
+    return vault?.trustedPin(hostId) == null
+        ? SealState.verify
+        : SealState.offline;
+  }
+
+  @override
+  KnownHostMeta? pinnedKey(String hostId) => vault!.trustedPin(hostId);
+
+  @override
+  Future<bool> confirmHostKey(HostKeyCheck check) async {
+    if (check.decision == HostKeyDecision.changed) {
+      emit(HostKeyChanged(hostId: check.hostId));
+    }
+    return await dialogs?.confirmHostKey(check) ?? false;
+  }
+
+  @override
+  Future<void> pinHostKey(String hostId, String keyType, String fingerprint) =>
+      vault!.pinHostKey(hostId, keyType, fingerprint);
+
+  @override
+  Future<String?> askPassword(String target) async =>
+      dialogs?.askPassword(target);
+
+  @override
+  Future<List<String>?> answerPrompts(
+    String name,
+    String instruction,
+    List<SshPrompt> prompts,
+  ) async => dialogs?.answerPrompts(name, instruction, prompts);
+
+  /// Saved on this machine; synced prefs also go to the profile item (removed keys as null), one write at a time.
+  Future<void> updateSettings(Settings next) async {
+    final previous = settings;
+    settings = next;
+    await settingsStore.save(next);
+    if (next.themeMode != previous.themeMode) {
+      emit(ThemeChanged(mode: next.themeMode));
+    }
+    notifyListeners();
+    final prefs = next.toPrefs(), before = previous.toPrefs();
+    final v = vault;
+    if (mapEquals(prefs, before) ||
+        v == null ||
+        !v.isUnlocked ||
+        (sync?.readOnly ?? true)) {
+      return;
+    }
+    final changes = {
+      for (final key in before.keys)
+        if (!prefs.containsKey(key)) key: null,
+      ...prefs,
+    };
+    await (_prefsWrite = _prefsWrite.then((_) => v.setPrefs(changes)));
+  }
+
+  Future<List<Device>> loadDevices() => api!.devices();
+
+  /// Revoking this device signs out.
+  Future<void> revokeDevice(String id) async {
+    await api!.revokeDevice(id);
+    if (id == stored?.deviceId) {
+      deviceRevoked = true;
+      await signOut();
+    }
+  }
+
+  void onHomeMounted() {
+    sync?.start();
+    _autoLock = AutoLock(
+      timeout: () => Duration(minutes: settings.autoLockMinutes),
+      onLock: () => unawaited(lock()),
+      onIdle: () => emit(const UserIdle()),
+    )..start();
+  }
+
+  void onHomeUnmounted() {
+    sync?.stop();
+    _autoLock?.stop();
+  }
+
+  void activity() => _autoLock?.activity();
+
+  /// Synced prefs from the profile item apply here and are cached in settings.json; never written back.
+  void _applySyncedPrefs() {
+    final prefs = vault?.profile.prefs ?? const {};
+    if (prefs.isEmpty) return;
+    final next = settings.withPrefs(prefs);
+    if (next == settings) return;
+    settings = next;
+    unawaited(settingsStore.save(next));
+    notifyListeners();
+  }
+
+  void _onSyncChanged() {
+    final engine = sync!;
+    if (engine.online != _wasOnline) {
+      _wasOnline = engine.online;
+      emit(engine.online ? const CameOnline() : const WentOffline());
+    }
+    if (mirror?.getKv(KvKey.apiInfo) case final raw?) {
+      _lastInfo = ApiInfo.fromJson(jsonDecode(raw));
+    }
+    notifyListeners();
+  }
+
   String? get _displayName => vault?.profile.displayName ?? stored?.displayName;
 
   String? get _uiLocale {
@@ -391,6 +596,7 @@ class AppState extends ChangeNotifier {
   Future<void> _startVault(ApiClient api, UnlockedAccount unlocked) async {
     final m = mirror!;
     sync?.dispose();
+    vault?.removeListener(_applySyncedPrefs);
     api.onTokens = (t) => sessions.saveRefreshToken(t.refreshToken);
     final engine = SyncEngine(api: api, mirror: m, deviceId: stored!.deviceId);
     final v = Vault(mirror: m, ledger: LedgerStore(m), write: engine.write);
@@ -407,6 +613,9 @@ class AppState extends ChangeNotifier {
     vault = v;
     accountPublicKey = unlocked.bundle.publicKey;
     ledgerReported = !await v.unlock(unlocked.userKey);
+    v.addListener(_applySyncedPrefs);
+    engine.addListener(_onSyncChanged);
+    _applySyncedPrefs();
   }
 
   /// The server ended the session: back to login, mirror, outbox and stored session kept.
