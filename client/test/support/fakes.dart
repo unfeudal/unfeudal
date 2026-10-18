@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
+import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:unfeudal_client/src/session/session_store.dart';
+import 'package:unfeudal_client/src/ssh/ssh_connector.dart';
 import 'package:unfeudal_client/src/storage/local_mirror.dart';
 import 'package:unfeudal_client/src/sync/ledger_store.dart';
 import 'package:unfeudal_client/src/vault/vault.dart';
@@ -180,4 +183,71 @@ class FakeSecureKv implements SecureKv {
 
   @override
   Future<void> delete(String key) async => values.remove(key);
+}
+
+/// Runs the real host-key check against a fixed key, then hands out [FakeShell]s.
+class FakeSshConnector extends SshConnector {
+  String keyType = 'ssh-ed25519';
+  String fingerprint = 'SHA256:${'A' * 43}';
+  Object? failWith;
+  final targets = <ConnectTarget>[];
+  final shells = <FakeShell>[];
+
+  @override
+  Future<SshShell> connect(ConnectTarget target, SshCallbacks callbacks) async {
+    targets.add(target);
+    if (failWith case final error?) throw error;
+    final decision = decideHostKey(
+      callbacks.pinnedKey(target.hostId),
+      keyType,
+      fingerprint,
+    );
+    final ok = await SshConnector.verifyHostKey(
+      hostId: target.hostId,
+      hostName: target.hostName,
+      keyType: keyType,
+      fingerprint: fingerprint,
+      callbacks: callbacks,
+    );
+    if (!ok) throw HostKeyRejected(decision);
+    final shell = FakeShell();
+    shells.add(shell);
+    return shell;
+  }
+}
+
+class FakeShell implements SshShell {
+  final _stdout = StreamController<Uint8List>.broadcast();
+  final _stderr = StreamController<Uint8List>.broadcast();
+  final _done = Completer<void>();
+  final written = <Uint8List>[];
+  final sizes = <(int, int)>[];
+  bool closed = false;
+
+  void emit(String text) => _stdout.add(utf8.encode(text));
+
+  void hangUp() {
+    if (!_done.isCompleted) _done.complete();
+  }
+
+  @override
+  Stream<Uint8List> get stdout => _stdout.stream;
+
+  @override
+  Stream<Uint8List> get stderr => _stderr.stream;
+
+  @override
+  void write(Uint8List data) => written.add(data);
+
+  @override
+  void resize(int cols, int rows) => sizes.add((cols, rows));
+
+  @override
+  Future<void> get done => _done.future;
+
+  @override
+  Future<void> close() async {
+    closed = true;
+    hangUp();
+  }
 }

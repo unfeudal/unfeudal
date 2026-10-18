@@ -28,3 +28,16 @@ jobs:
       - run: flutter build "$TARGET" --debug
         env:
           TARGET: ${{ matrix.target }}
+  ssh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run: {shell: bash, working-directory: client}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: {persist-credentials: false}
+      - run: |
+          git clone --depth 1 --branch 3.47.7 https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+      - run: flutter pub get
+      - run: flutter test --tags docker
