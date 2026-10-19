@@ -1,0 +1,28 @@
+name: tag-release
+on:
+  push: {branches: [main]}
+permissions:
+  contents: read
+jobs:
+  tag:
+    if: startsWith(github.event.head_commit.message, 'chore(release):')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: bot
+    steps:
+      - id: app
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2.2.2
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_KEY }}
+          permission-contents: write
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: {token: "${{ steps.app.outputs.token }}", fetch-depth: 0, persist-credentials: true}
+      # a package is tagged when this commit changed its pubspec version and the tag does not exist yet
+      - run: |
+          for pkg in server client; do
+            git diff HEAD^ HEAD -- "$pkg/pubspec.yaml" | grep -q '^+version:' || continue
+            t="$pkg-v$(sed -n 's/^version: \([0-9]*\.[0-9]*\.[0-9]*\).*/\1/p' "$pkg/pubspec.yaml")"
+            git rev-parse -q --verify "refs/tags/$t" >/dev/null && continue
+            git tag "$t" && git push origin "$t"
+          done

@@ -1,0 +1,40 @@
+name: prepare-release
+on:
+  workflow_dispatch:
+    inputs:
+      package: {type: choice, options: [server, client], required: true}
+      version: {type: string, default: patch, description: "patch | minor | major | X.Y.Z"}
+permissions:
+  contents: read
+jobs:
+  pr:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: bot
+    steps:
+      - id: app
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2.2.2
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: {token: "${{ steps.app.outputs.token }}", persist-credentials: true}
+      - uses: dart-lang/setup-dart@6afc89df92d6eb3834022f73cd65adc8cdfcb92d # v1.8.1
+      - id: bump
+        run: cd tool && dart pub get && dart run bin/bump.dart "$PACKAGE" "$LEVEL" >> "$GITHUB_OUTPUT"
+        env:
+          PACKAGE: ${{ inputs.package }}
+          LEVEL: ${{ inputs.version }}
+      - run: |
+          git switch -c "release/$PACKAGE-$VERSION"
+          git add -A
+          git -c user.name="unfeudal-release[bot]" -c user.email="unfeudal-release[bot]@users.noreply.github.com" commit -m "$TITLE"
+          git push origin HEAD
+          gh pr create --title "$TITLE" --body "Review the changelog sections, then merge: the tags follow."
+        env:
+          PACKAGE: ${{ inputs.package }}
+          VERSION: ${{ steps.bump.outputs.version }}
+          TITLE: ${{ steps.bump.outputs.title }}
+          GH_TOKEN: ${{ steps.app.outputs.token }}
