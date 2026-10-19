@@ -40,7 +40,8 @@ class TreePanel extends StatefulWidget {
   final VoidCallback? onNewFolder;
 
   /// Opens the editor of a host or folder (the pencil of its row).
-  final void Function(VaultEntry entry)? onEdit;
+  /// [from] is the global rect of the control that asked: the editor grows out of it.
+  final void Function(VaultEntry entry, Rect? from)? onEdit;
 
   /// Hides the panel (the same as Ctrl+Shift+B).
   final VoidCallback? onHide;
@@ -339,15 +340,26 @@ class _TreePanelState extends State<TreePanel> {
     return out;
   }
 
-  Widget _editButton(BuildContext context, VaultEntry e) => IconButton(
-    key: Key('edit-${e.id}'),
-    tooltip: AppLocalizations.of(context).itemEdit,
-    visualDensity: VisualDensity.compact,
-    iconSize: 15,
-    color: UfColors.of(context).accent,
-    onPressed: widget.onEdit == null ? null : () => widget.onEdit!(e),
-    icon: const Icon(UfIcons.pencil),
+  Widget _editButton(BuildContext context, VaultEntry e) => Builder(
+    builder: (button) => IconButton(
+      key: Key('edit-${e.id}'),
+      tooltip: AppLocalizations.of(context).itemEdit,
+      visualDensity: VisualDensity.compact,
+      iconSize: 15,
+      color: UfColors.of(context).accent,
+      onPressed: widget.onEdit == null
+          ? null
+          : () => widget.onEdit!(e, _globalRect(button)),
+      icon: const Icon(UfIcons.pencil),
+    ),
   );
+
+  static Rect? _globalRect(BuildContext context) =>
+      switch (context.findRenderObject()) {
+        final RenderBox box when box.hasSize =>
+          box.localToGlobal(Offset.zero) & box.size,
+        _ => null,
+      };
 
   /// Access (with manage) and why, for an org folder.
   List<Widget> _orgFolderButtons(BuildContext context, VaultEntry e) {

@@ -60,6 +60,9 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
   /// The floating host or folder editor over the terminal, if open.
   Widget? _editor;
 
+  /// Where the open editor grows from (the control that opened it), in global coordinates.
+  Rect? _editorFrom;
+
   /// The management screen in place of the tree and terminals, if open.
   ShellPage? _page;
 
@@ -179,18 +182,22 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
     setState(() => _page = page);
   }
 
-  void _editHost(String hostId) => _openEditor(
+  void _editHost(String hostId, {Rect? from}) => _openEditor(
     (close) =>
         HostEditorPanel(key: ValueKey(hostId), hostId: hostId, onClose: close),
+    from: from,
   );
 
-  void _openEditor(Widget Function(VoidCallback close) build) {
+  void _openEditor(Widget Function(VoidCallback close) build, {Rect? from}) {
     final editor = build(() {
       trace(TraceArea.ui, 'editor closed');
       setState(() => _editor = null);
     });
     trace(TraceArea.ui, 'editor open: ${editor.runtimeType}');
-    setState(() => _editor = editor);
+    setState(() {
+      _editor = editor;
+      _editorFrom = from;
+    });
   }
 
   void _resize(double delta) => setState(
@@ -292,7 +299,11 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
                             top: 10,
                             right: 10,
                             bottom: 10,
-                            child: editor,
+                            child: GrowFrom(
+                              key: ObjectKey(editor),
+                              from: _editorFrom?.center,
+                              child: editor,
+                            ),
                           ),
                       ],
                     ),
@@ -316,15 +327,16 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
       (close) =>
           FolderEditorPanel(orgId: _state.orgs?.selected, onClose: close),
     ),
-    onEdit: (e) => e.kind == ItemKind.folder
+    onEdit: (e, from) => e.kind == ItemKind.folder
         ? _openEditor(
             (close) => FolderEditorPanel(
               key: ValueKey(e.id),
               folderId: e.id,
               onClose: close,
             ),
+            from: from,
           )
-        : _editHost(e.id),
+        : _editHost(e.id, from: from),
   );
 
   Widget _resizer() => Focus(
