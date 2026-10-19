@@ -30,6 +30,7 @@ import 'routes/info.dart';
 import 'routes/invites.dart';
 import 'routes/items.dart';
 import 'routes/orgs.dart';
+import 'routes/retention.dart';
 import 'routes/setup.dart';
 import 'routes/sync.dart';
 import 'routes/teams.dart';
@@ -234,7 +235,11 @@ Handler buildHandler(AppDeps deps) {
     )
     ..post('/admin/invites', requireAuth(createInstanceInvite))
     ..get('/admin/invites', requireAuth(listInstanceInvites))
-    ..get('/audit', requireAuth(requireFeature(Flag.audit)(getAudit)));
+    ..get('/audit', requireAuth(requireFeature(Flag.audit)(getAudit)))
+    ..get(
+      '/orgs/<id>/settings/retention',
+      (Request r, String id) => _org((r) => getRetention(r, id))(r),
+    );
   final root = Router(notFoundHandler: _notFound)
     ..get('/healthz', healthz)
     ..get('/api/info', info)
