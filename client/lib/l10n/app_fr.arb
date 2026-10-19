@@ -96,7 +96,7 @@
   "railDevices": "Appareils",
   "railSettings": "Réglages",
   "railLock": "Verrouiller",
-  "vaultPersonal": "Personnel",
+  "vaultPersonal": "Coffre personnel",
   "treeSearch": "Rechercher ({shortcut})",
   "treeNewHost": "Nouvel hôte",
   "treeNewFolder": "Nouveau dossier",
@@ -571,5 +571,5 @@
   "licensesAll": "Toutes les licences",
   "historySecretUnreadable": "Le secret de cette version ne s'ouvre pas sur cet appareil : rien n'a été restauré.",
   "snippetLocation": "Enregistré dans",
-  "snippetPersonal": "Coffre personnel"
+  "keychainPlace": "Clés de"
 }
