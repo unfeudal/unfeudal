@@ -40,7 +40,7 @@ jobs:
           Compress-Archive -Path "$rel\*" -DestinationPath "client/dist/Unfeudal-$v-windows-x64.zip"
           $env:UNFEUDAL_VERSION = $v
           & "${env:ProgramFiles(x86)}\Inno Setup 6\iscc.exe" client/windows/installer/unfeudal.iss
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: windows
           path: client/dist/*
@@ -60,7 +60,7 @@ jobs:
           v="${GITHUB_REF_NAME#client-v}"
           mkdir -p client/dist
           hdiutil create -volname Unfeudal -srcfolder client/build/macos/Build/Products/Release/Unfeudal.app -ov -format UDZO "client/dist/Unfeudal-$v-macos.dmg"
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: macos
           path: client/dist/*
@@ -77,12 +77,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: {persist-credentials: false}
       - uses: dart-lang/setup-dart@6afc89df92d6eb3834022f73cd65adc8cdfcb92d # v1.8.1
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: dist
           merge-multiple: true
       - run: cd dist && sha256sum * > SHA256SUMS
-      - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: dist/*
       - run: cd tool && dart pub get && dart run bin/changelog.dart client "${GITHUB_REF_NAME#client-v}" > ../notes.md
