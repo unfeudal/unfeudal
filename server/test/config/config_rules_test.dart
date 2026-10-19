@@ -88,7 +88,7 @@ void main() {
     );
   });
 
-  test('durations, sizes and counts follow the contract grammar', () {
+  test('durations, sizes and counts follow the config grammar', () {
     final c = load({
       'UNFEUDAL_ACCESS_TOKEN_TTL': '1h',
       'UNFEUDAL_REFRESH_TOKEN_TTL': '1d',
