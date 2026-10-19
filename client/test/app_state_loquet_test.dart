@@ -43,11 +43,14 @@ void main() {
       () => LoquetMemory.load(file, now: DateTime(2026, 10, 15)),
     ))!;
     final fileBacked = await signedInState(t, loquetMemory: memory);
-    fileBacked.emit(
-      const ConnectSucceeded(hostId: 'h', user: 'deploy', tags: []),
-    );
+    // in real time: the write the event starts is awaited, not a fixed delay
+    await t.runAsync(() async {
+      fileBacked.emit(
+        const ConnectSucceeded(hostId: 'h', user: 'deploy', tags: []),
+      );
+      await memory.save(); // queued behind that write
+    });
     await t.pump();
-    await pumpReal(t);
     expect(fileBacked.loquet.mood, LoquetMood.happy);
     expect((jsonDecode(file.readAsStringSync()) as Map)['connections'], 1);
   });
