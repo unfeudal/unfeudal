@@ -2,7 +2,17 @@
 import 'dart:typed_data';
 
 import 'package:cryptography/cryptography.dart';
+import 'package:unfeudal_client/src/api/api_client.dart';
+import 'package:unfeudal_client/src/events/app_events.dart';
+import 'package:unfeudal_client/src/orgs/folder_keyring.dart';
+import 'package:unfeudal_client/src/orgs/member_pins.dart';
+import 'package:unfeudal_client/src/storage/local_mirror.dart';
+import 'package:unfeudal_client/src/sync/ledger_store.dart';
+import 'package:unfeudal_client/src/sync/sync_engine.dart';
+import 'package:unfeudal_client/src/vault/vault.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
+
+import 'sync_harness.dart';
 
 const testOrgId = '3c5e7a9b-1d2f-4e6a-8b0c-2d4f6a8c0e1a';
 
@@ -170,4 +180,77 @@ Future<Item> sealOrgItem(
     'updatedBy': newId(),
     'updatedDevice': newId(),
   });
+}
+
+/// A signed-in client wired like AppState does for orgs: mirror, sync engine, vault with keyring, pins.
+class ClientOrg {
+  ClientOrg._(
+    this.h,
+    this.api,
+    this.mirror,
+    this.sync,
+    this.vault,
+    this.keyring,
+    this.pins,
+    this.userId,
+    this.keyPair,
+    this.publicKey,
+  );
+
+  /// Writes only queue (tests push with `sync.syncNow()`), as `testVault`.
+  Future<void> write(Item item) async =>
+      mirror.enqueue(item, baseRevision: item.revision ?? 0);
+  final SyncHarness h;
+  final ApiClient api;
+  final LocalMirror mirror;
+  final SyncEngine sync;
+  final Vault vault;
+  final FolderKeyring keyring;
+  final MemberPins pins;
+  final String userId;
+  final SimpleKeyPair keyPair;
+  final Uint8List publicKey;
+  final events = <AppEvent>[];
+
+  static Future<ClientOrg> start() async {
+    final h = SyncHarness();
+    final login = await h.signIn();
+    final acc = login.account.account!;
+    final api = ApiClient(h.baseUrl, h.client)
+      ..accessToken = login.accessToken
+      ..refreshToken = login.refreshToken;
+    final mirror = LocalMirror.inMemory();
+    final sync = SyncEngine(api: api, mirror: mirror, deviceId: login.deviceId);
+    final vault = Vault(
+      mirror: mirror,
+      ledger: LedgerStore(mirror),
+      write: (item) async =>
+          mirror.enqueue(item, baseRevision: item.revision ?? 0),
+    );
+    await vault.unlock(acc.unlocked.userKey);
+    final keyring = FolderKeyring(mirror);
+    await keyring.load(acc.unlocked.userKey);
+    vault.keyring = keyring;
+    h.orgMembers[testOrgId] = {login.account.userId};
+    return ClientOrg._(
+      h,
+      api,
+      mirror,
+      sync,
+      vault,
+      keyring,
+      MemberPins(vault),
+      login.account.userId,
+      acc.unlocked.keyPair,
+      Uint8List.fromList(acc.bundle.publicKey),
+    );
+  }
+
+  /// My own row of the block.
+  Map<String, Object?> me({String role = 'admin'}) => memberRow(
+    userId,
+    role: role,
+    status: role == 'member' ? null : 'confirmed',
+    publicKey: role == 'member' ? null : publicKey,
+  );
 }
