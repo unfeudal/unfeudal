@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:unfeudal_client/src/app.dart';
 import 'package:unfeudal_client/src/app_state.dart';
+import 'package:unfeudal_client/src/loquet/loquet_memory.dart';
 import 'package:unfeudal_client/src/settings/settings.dart';
 
 import 'fakes.dart';
@@ -43,6 +44,8 @@ Future<AppState> signedInState(
   SyncHarness? harness,
   FakeSshConnector? ssh,
   Settings settings = const Settings(),
+  LoquetMemory? loquetMemory,
+  DateTime Function()? loquetClock,
 }) async {
   final h = harness ?? SyncHarness();
   late AppState s;
@@ -50,8 +53,13 @@ Future<AppState> signedInState(
     if (!h.accounts.containsKey(testEmail)) {
       await h.createAccount(testEmail, testPassword);
     }
-    s = testAppState(harness: h, ssh: ssh, settings: settings)
-      ..confirmPlainHttp = (_) async => true;
+    s = testAppState(
+      harness: h,
+      ssh: ssh,
+      settings: settings,
+      loquetMemory: loquetMemory,
+      loquetClock: loquetClock,
+    )..confirmPlainHttp = (_) async => true;
     await s.boot();
     await s.login(server: h.baseUrl, email: testEmail, password: testPassword);
   });

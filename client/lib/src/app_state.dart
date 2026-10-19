@@ -18,6 +18,11 @@ import 'session/auto_lock.dart';
 import 'session/lock_machine.dart';
 import 'session/session_store.dart';
 import 'settings/settings.dart';
+import 'loquet/loquet_controller.dart';
+import 'loquet/loquet_memory.dart';
+import 'loquet/loquet_mode.dart';
+import 'loquet/mood.dart';
+import 'loquet/reaction_engine.dart';
 import 'ssh/jump_connector.dart';
 import 'ssh/port_forwarder.dart';
 import 'ssh/ssh_connector.dart';
@@ -89,9 +94,18 @@ class AppState extends ChangeNotifier implements SshCallbacks {
     SshConnector? ssh,
     this.allowTestingKdf = false,
     KdfParams kdf = KdfParams.defaults,
+    LoquetMemory? loquetMemory,
+    DateTime Function() loquetClock = DateTime.now,
   }) : _http = httpClient ?? http.Client(),
        _ssh = ssh ?? SshConnector(),
-       _crypto = AccountCrypto(kdf: kdf, allowTestingKdf: allowTestingKdf);
+       _crypto = AccountCrypto(kdf: kdf, allowTestingKdf: allowTestingKdf),
+       _loquetClock = loquetClock,
+       loquet = LoquetController(
+         ReactionEngine(
+           memory: loquetMemory ?? LoquetMemory(),
+           now: loquetClock,
+         ),
+       );
 
   final SessionStore sessions;
   final SettingsStore settingsStore;
@@ -101,6 +115,10 @@ class AppState extends ChangeNotifier implements SshCallbacks {
   final SshConnector _ssh;
 
   final AccountCrypto _crypto;
+  final DateTime Function() _loquetClock;
+
+  /// The mascot: local only, nothing about it is synced or logged.
+  final LoquetController loquet;
 
   AppStage stage = AppStage.booting;
   Settings settings = const Settings();
@@ -157,6 +175,37 @@ class AppState extends ChangeNotifier implements SshCallbacks {
   void emit(AppEvent event) {
     if (tracing(TraceArea.ui)) trace(TraceArea.ui, 'event ${_describe(event)}');
     _events.add(event);
+    loquet.show(loquet.engine.handle(event));
+  }
+
+  /// The three levels: server flag, then the orgs, then the user's pref. A server never seen yet shows the logo.
+  void _refreshLoquet() {
+    final mode = effectiveLoquetMode(
+      serverHas('mascot'),
+      const [],
+      settings.loquetMode,
+    );
+    if (mode != loquet.mode) loquet.mode = mode;
+  }
+
+  static final _conflictSuffixes = {
+    for (final l in AppLocalizations.supportedLocales)
+      ' ${lookupAppLocalizations(l).conflictSuffix}',
+  };
+
+  /// Loquet's resting mood, from the vault and the last sync round.
+  void _refreshHealth() {
+    final v = vault;
+    if (v == null || !v.isUnlocked) return;
+    loquet.setHealth(
+      vaultHealthOf(
+        v,
+        now: _loquetClock(),
+        lastSyncAt: sync?.lastSyncAt,
+        rejected: sync?.rejected.length ?? 0,
+        conflictSuffixes: _conflictSuffixes,
+      ),
+    );
   }
 
   /// The event's type, plus the host id and error type for connections; nothing from the vault.
@@ -187,6 +236,7 @@ class AppState extends ChangeNotifier implements SshCallbacks {
             .mirrorTooNew; // a newer client wrote it: nothing is touched
       }
     }
+    _refreshLoquet();
     notifyListeners();
   }
 
@@ -202,7 +252,9 @@ class AppState extends ChangeNotifier implements SshCallbacks {
         throw const PlainHttpRefused();
       }
     }
-    return _lastInfo = info;
+    _lastInfo = info;
+    _refreshLoquet();
+    return info;
   }
 
   Future<void> setup({
@@ -345,6 +397,7 @@ class AppState extends ChangeNotifier implements SshCallbacks {
     trace(TraceArea.session, 'lock (${tabs.length} tabs closed)');
     final closing = [for (final tab in tabs) _closeSession(tab)];
     tabs.clear();
+    loquet.engine.tabsChanged(const {});
     activeTab = 0;
     sync?.stop();
     _autoLock?.stop();
@@ -448,6 +501,12 @@ class AppState extends ChangeNotifier implements SshCallbacks {
     final found =
         vault!.hostLookup(hostId) ?? (throw StateError('unknown host'));
     final tab = TerminalSession(hostId: hostId, title: found.meta.name);
+    final input = tab.onUserInput;
+    // only that a key was typed, never which
+    tab.onUserInput = () {
+      input?.call();
+      loquet.engine.terminalInput();
+    };
     tabs.add(tab);
     activeTab = tabs.length - 1;
     notifyListeners();
@@ -529,6 +588,7 @@ class AppState extends ChangeNotifier implements SshCallbacks {
   Future<void> closeTab(TerminalSession tab) async {
     trace(TraceArea.ssh, 'tab closed ${shortId(tab.hostId)}');
     tabs.remove(tab);
+    loquet.engine.tabsChanged({for (final t in tabs) t.hostId});
     activeTab = tabs.isEmpty ? 0 : activeTab.clamp(0, tabs.length - 1);
     notifyListeners();
     await _closeSession(tab);
@@ -613,6 +673,7 @@ class AppState extends ChangeNotifier implements SshCallbacks {
     if (next.themeMode != previous.themeMode) {
       emit(ThemeChanged(mode: next.themeMode));
     }
+    _refreshLoquet();
     notifyListeners();
     final prefs = next.toPrefs(), before = previous.toPrefs();
     final v = vault;
@@ -661,7 +722,10 @@ class AppState extends ChangeNotifier implements SshCallbacks {
     _autoLock?.stop();
   }
 
-  void activity() => _autoLock?.activity();
+  void activity() {
+    _autoLock?.activity();
+    loquet.show(loquet.engine.wake());
+  }
 
   /// Synced prefs from the profile item apply here and are cached in settings.json; never written back.
   void _applySyncedPrefs() {
@@ -671,6 +735,7 @@ class AppState extends ChangeNotifier implements SshCallbacks {
     if (next == settings) return;
     settings = next;
     unawaited(settingsStore.save(next));
+    _refreshLoquet();
     notifyListeners();
   }
 
@@ -681,6 +746,8 @@ class AppState extends ChangeNotifier implements SshCallbacks {
       emit(engine.online ? const CameOnline() : const WentOffline());
     }
     _lastInfo = _storedInfo ?? _lastInfo;
+    _refreshLoquet();
+    _refreshHealth();
     notifyListeners();
   }
 
@@ -743,6 +810,7 @@ class AppState extends ChangeNotifier implements SshCallbacks {
     final m = mirror!;
     sync?.dispose();
     vault?.removeListener(_applySyncedPrefs);
+    vault?.removeListener(_refreshHealth);
     api.onTokens = (t) => sessions.saveRefreshToken(t.refreshToken);
     final engine = SyncEngine(api: api, mirror: m, deviceId: stored!.deviceId);
     final v = Vault(mirror: m, ledger: LedgerStore(m), write: engine.write);
@@ -760,8 +828,10 @@ class AppState extends ChangeNotifier implements SshCallbacks {
 
     ledgerReported = !await v.unlock(unlocked.userKey);
     v.addListener(_applySyncedPrefs);
+    v.addListener(_refreshHealth);
     engine.addListener(_onSyncChanged);
     _applySyncedPrefs();
+    _refreshHealth();
   }
 
   /// The server ended the session: back to login, mirror, outbox and stored session kept.

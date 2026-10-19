@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'src/app.dart';
 import 'src/app_state.dart';
+import 'src/loquet/loquet_memory.dart';
 import 'src/session/session_store.dart';
 import 'src/settings/settings.dart';
 import 'src/storage/local_mirror.dart';
@@ -29,7 +30,11 @@ Future<void> main() async {
     settingsStore: SettingsStore(File(p.join(support, 'settings.json'))),
     openMirror: (userId) async =>
         LocalMirror.open(p.join(support, 'mirror-$userId.sqlite')),
-  );
+    loquetMemory: await LoquetMemory.load(
+      File(p.join(support, 'loquet.json')),
+      now: DateTime.now(),
+    ),
+  )..loquet.life = true;
   await state.boot();
   runApp(UnfeudalApp(state: state, chrome: chrome));
 }
