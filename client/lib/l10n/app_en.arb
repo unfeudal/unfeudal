@@ -1349,5 +1349,14 @@
         "type": "int"
       }
     }
-  }
+  },
+  "activityScopeDeletedOrg": "Deleted organization {id}",
+  "@activityScopeDeletedOrg": {
+    "placeholders": {
+      "id": {
+        "type": "String"
+      }
+    }
+  },
+  "activityOpenDeletedOrg": "Open its activity"
 }

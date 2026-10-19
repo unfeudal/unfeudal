@@ -92,6 +92,10 @@ class _ActivityScreenState extends State<ActivityScreen> {
                 ),
               ),
       if (state.stored!.isInstanceOwner) ('instance', l.activityScopeInstance),
+      // a deleted org's chain, opened from its org.deleted event: the Instance Owner only
+      if (_scope.startsWith('org:') &&
+          !(block?.orgs.any((o) => 'org:${o.id}' == _scope) ?? false))
+        (_scope, l.activityScopeDeletedOrg(_scope.substring(4, 12))),
     ];
   }
 
@@ -241,7 +245,19 @@ class _ActivityScreenState extends State<ActivityScreen> {
                               ].join(' · '),
                               style: muted,
                             ),
-                            trailing: e.ipAddress == null
+                            trailing:
+                                e.action == 'org.deleted' &&
+                                    state.stored!.isInstanceOwner &&
+                                    e.targetIds.isNotEmpty
+                                ? TextButton(
+                                    key: Key(
+                                      'activity-open-org-${e.targetIds.first}',
+                                    ),
+                                    onPressed: () =>
+                                        _select('org:${e.targetIds.first}'),
+                                    child: Text(l.activityOpenDeletedOrg),
+                                  )
+                                : e.ipAddress == null
                                 ? null
                                 : Text(e.ipAddress!, style: muted),
                           );
