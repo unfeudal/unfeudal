@@ -1244,5 +1244,30 @@
   "unlockBiometricWindows": "Windows Hello",
   "unlockBiometricMac": "Touch ID",
   "settingsBiometric": "Unlock with Windows Hello or Touch ID",
-  "settingsBiometricBody": "The vault key is kept on this device, sealed by the secure hardware."
+  "settingsBiometricBody": "The vault key is kept on this device, sealed by the secure hardware.",
+  "settingsExport": "Export the vault",
+  "exportEncrypted": "Encrypted with a passphrase",
+  "exportPlain": "Not encrypted",
+  "exportPassphrase": "Export passphrase",
+  "exportPassphraseConfirm": "Repeat the passphrase",
+  "exportPassphraseShort": "At least 12 characters.",
+  "exportPlainWarning": "Every password and key will be readable by anyone who gets this file.",
+  "exportPlainConfirm": "I understand the file is not encrypted",
+  "exportSubmit": "Export",
+  "exportDone": "{count} items exported.",
+  "@exportDone": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "exportSkipped": "{count} unreadable items were left out.",
+  "@exportSkipped": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  }
 }
