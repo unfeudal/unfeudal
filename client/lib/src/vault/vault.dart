@@ -219,7 +219,8 @@ class Vault extends ChangeNotifier {
     );
   }
 
-  /// A copy of [mine] under a new id at revision 0, name suffixed, secret re-sealed. Null for an unknown type.
+  /// A personal copy of [mine] under a new id at revision 0, name suffixed, secret re-sealed; an org item's
+  /// copy leaves its org folder. Null for an unknown type.
   Future<Item?> conflictCopy(Item mine, {required String suffix}) async {
     if (mine.kind == ItemKind.unknown) return null;
     final meta = (await open(mine, PayloadPart.meta, fromServer: false))!.json;
@@ -235,7 +236,7 @@ class Vault extends ChangeNotifier {
     return seal(
       id: newId(),
       type: mine.type,
-      folderId: mine.folderId,
+      folderId: mine.scope == ItemScope.personal ? mine.folderId : null,
       meta: meta,
       secret: secret,
     );
