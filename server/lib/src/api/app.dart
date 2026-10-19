@@ -19,6 +19,7 @@ import '../util/clock.dart';
 import 'errors.dart';
 import 'middleware.dart';
 import 'routes/account.dart';
+import 'routes/admin.dart';
 import 'routes/auth.dart';
 import 'routes/devices.dart';
 import 'routes/folders.dart';
@@ -204,7 +205,23 @@ Handler buildHandler(AppDeps deps) {
     ..post(
       '/folders/<folder>/rotation/done',
       (Request r, String folder) => _org((r) => rotationDone(r, folder))(r),
-    );
+    )
+    ..get('/admin/users', requireAuth(listUsers))
+    ..put(
+      '/admin/users/<id>',
+      (Request r, String id) => requireAuth((r) => setDisabled(r, id))(r),
+    )
+    ..delete(
+      '/admin/users/<id>',
+      (Request r, String id) => requireAuth((r) => deleteUserRoute(r, id))(r),
+    )
+    ..get('/admin/orgs', requireAuth(listOrgs))
+    ..delete(
+      '/admin/orgs/<id>',
+      (Request r, String id) => requireAuth((r) => adminDeleteOrg(r, id))(r),
+    )
+    ..post('/admin/invites', requireAuth(createInstanceInvite))
+    ..get('/admin/invites', requireAuth(listInstanceInvites));
   final root = Router(notFoundHandler: _notFound)
     ..get('/healthz', healthz)
     ..get('/api/info', info)
