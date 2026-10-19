@@ -1163,5 +1163,23 @@
     }
   },
   "activitySshNote": "SSH sessions, forwards and shown secrets are reported by the app: a modified app can leave them out.",
-  "activityEmpty": "No activity yet."
+  "activityEmpty": "No activity yet.",
+  "itemHistory": "History",
+  "historyVersion": "Version {revision}, {date}",
+  "@historyVersion": {
+    "placeholders": {
+      "revision": {
+        "type": "int"
+      },
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "historyFirst": "Oldest stored version",
+  "historyUnreadable": "This version cannot be read on this device.",
+  "historySecretHidden": "Secret fields are hidden.",
+  "historyReveal": "Show secrets",
+  "historyRestore": "Restore this version",
+  "historyRestoreConfirm": "Write this version back as the newest one? The current one stays in the history."
 }
