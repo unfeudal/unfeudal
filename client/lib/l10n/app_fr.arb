@@ -276,5 +276,15 @@
   "snippetDelete": "Supprimer",
   "snippetDeleteConfirm": "Mettre {name} à la corbeille ?",
   "snippetInsert": "Insérer",
-  "snippetNoTerminal": "Ouvrir un terminal pour insérer un snippet."
+  "snippetNoTerminal": "Ouvrir un terminal pour insérer un snippet.",
+  "termReconnect": "Reconnecter",
+  "termClosed": "Session fermée.",
+  "termSearch": "Rechercher dans le terminal",
+  "termSearchCount": "{current}/{total}",
+  "termSearchNone": "Aucun résultat",
+  "termSearchPrev": "Résultat précédent",
+  "termSearchNext": "Résultat suivant",
+  "termSearchClose": "Fermer la recherche",
+  "termCopy": "Copier",
+  "termPaste": "Coller"
 }
