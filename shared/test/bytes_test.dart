@@ -20,7 +20,17 @@ void main() {
   });
 
   test('unb64 rejects other alphabets, bad lengths and non-canonical text', () {
-    for (final s in ['+/8', 'ab c', 'A', 'AAAAA', 'AB', 'A===', '%%']) {
+    for (final s in [
+      '+/8',
+      'ab c',
+      'A',
+      'AAAAA',
+      'AB',
+      'A===',
+      '%%',
+      '-_8==',
+      'AAAA=',
+    ]) {
       expect(() => unb64(s), throwsFormatException, reason: s);
     }
   });
