@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import 'package:flutter/material.dart';
+import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../session/lock_machine.dart';
 
@@ -89,4 +90,40 @@ final class DeviceAdded extends AppEvent {
 
 final class LoquetClicked extends AppEvent {
   const LoquetClicked();
+}
+
+final class JumpUsed extends AppEvent {
+  const JumpUsed({required this.hostId, required this.hopIds});
+  final String hostId;
+
+  /// Outermost first.
+  final List<String> hopIds;
+}
+
+final class ForwardStarted extends AppEvent {
+  const ForwardStarted({required this.hostId, required this.forward});
+  final String hostId;
+  final PortForward forward;
+}
+
+final class ForwardStopped extends AppEvent {
+  const ForwardStopped({required this.hostId, required this.localPort});
+  final String hostId;
+  final int localPort;
+}
+
+final class ForwardFailed extends AppEvent {
+  const ForwardFailed({
+    required this.hostId,
+    required this.localPort,
+    required this.error,
+  });
+  final String hostId;
+  final int localPort;
+  final Object error;
+}
+
+final class SnippetInserted extends AppEvent {
+  const SnippetInserted({required this.snippetId});
+  final String snippetId;
 }

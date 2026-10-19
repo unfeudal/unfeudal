@@ -239,5 +239,9 @@
   "windowRestore": "Restaurer",
   "windowClose": "Fermer",
   "treeRolePersonal": "Coffre personnel",
-  "passwordChecking": "Vérification…"
+  "passwordChecking": "Vérification…",
+  "errorJumpLoop": "Ces hôtes de rebond renvoient l'un vers l'autre. En modifier un.",
+  "errorJumpTooDeep": "Plus de 8 hôtes de rebond à la suite. Raccourcir la chaîne.",
+  "errorJumpMissing": "Un hôte de rebond de cette chaîne n'existe plus. En choisir un autre.",
+  "errorJumpHop": "Hôte de rebond {host} : {reason}"
 }

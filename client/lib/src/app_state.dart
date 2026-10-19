@@ -18,6 +18,7 @@ import 'session/auto_lock.dart';
 import 'session/lock_machine.dart';
 import 'session/session_store.dart';
 import 'settings/settings.dart';
+import 'ssh/jump_connector.dart';
 import 'ssh/ssh_connector.dart';
 import 'storage/local_mirror.dart';
 import 'sync/ledger_store.dart';
@@ -421,6 +422,26 @@ class AppState extends ChangeNotifier implements SshCallbacks {
     return rotated.recoveryKey;
   }
 
+  /// Null for a missing, trashed or unreadable host: the chain reports JumpHostMissing.
+  ResolvedHost? _jumpLookup(String id) =>
+      vault!.isTrashed(id) ? null : vault!.hostLookup(id)?.resolved;
+
+  Future<ConnectTarget> _targetFor(String id) async {
+    final found = vault!.hostLookup(id)!;
+    final user = found.resolved.user ?? (throw const MissingUser());
+    final identityId = found.resolved.identityId;
+    return ConnectTarget(
+      hostId: id,
+      hostName: found.meta.name,
+      address: found.meta.address,
+      port: found.resolved.port,
+      user: user,
+      identity: identityId == null
+          ? null
+          : await vault!.identitySecret(identityId),
+    );
+  }
+
   /// Failures stay in the tab (seal and message), never thrown to the UI.
   Future<TerminalSession> connect(String hostId) async {
     final found =
@@ -431,24 +452,30 @@ class AppState extends ChangeNotifier implements SshCallbacks {
     notifyListeners();
     emit(ConnectStarted(hostId: hostId));
     try {
-      final user = found.resolved.user ?? (throw const MissingUser());
-      final identityId = found.resolved.identityId;
-      final identity = identityId == null
-          ? null
-          : await vault!.identitySecret(identityId);
-      final shell = await _ssh.connect(
-        ConnectTarget(
-          hostId: hostId,
-          hostName: found.meta.name,
-          address: found.meta.address,
-          port: found.resolved.port,
-          user: user,
-          identity: identity,
-        ),
-        this,
-      );
+      // loops, depth, missing: no socket opened
+      final hopIds = resolveJumpChain(hostId, _jumpLookup);
+      final hops = <ConnectTarget>[];
+      for (final (i, id) in hopIds.indexed) {
+        try {
+          hops.add(await _targetFor(id));
+        } on Exception catch (e) {
+          throw JumpChainFailed(id, vault!.hostLookup(id)!.meta.name, i, e);
+        }
+      }
+      final target = await _targetFor(hostId);
+      final JumpConnection conn;
+      try {
+        conn = await JumpConnector(sshHopOpener(_ssh, this))
+            .connect(hops, target);
+      } on JumpChainFailed catch (e) {
+        if (e.hopIndex == hops.length && e.cause is Exception) {
+          throw e.cause; // the target's own error keeps its handling
+        }
+        rethrow;
+      }
+      tab.connection = conn;
       tab.attach(
-        shell,
+        await conn.target.shell(),
         startupCommand: await startupCommandToSend(
           hostId: hostId,
           hostName: found.meta.name,
@@ -458,7 +485,14 @@ class AppState extends ChangeNotifier implements SshCallbacks {
           dialogs: dialogs,
         ),
       );
-      emit(ConnectSucceeded(hostId: hostId, user: user, tags: found.meta.tags));
+      if (hopIds.isNotEmpty) emit(JumpUsed(hostId: hostId, hopIds: hopIds));
+      emit(
+        ConnectSucceeded(
+          hostId: hostId,
+          user: target.user,
+          tags: found.meta.tags,
+        ),
+      );
     } on HostKeyRejected catch (e) {
       tab.fail(
         e,
@@ -468,6 +502,9 @@ class AppState extends ChangeNotifier implements SshCallbacks {
       );
       emit(ConnectFailed(hostId: hostId, error: e));
     } on Exception catch (e) {
+      await tab.connection?.close();
+      tab.connection = null;
+      // a jump host's failure, key included, leaves the target seal offline
       tab.fail(e);
       emit(ConnectFailed(hostId: hostId, error: e));
     }

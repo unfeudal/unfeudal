@@ -5,6 +5,7 @@ import '../../l10n/app_localizations.dart';
 import '../api/api_client.dart';
 import '../app_state.dart';
 import '../keys/key_tools.dart';
+import '../ssh/jump_connector.dart';
 import '../ssh/ssh_connector.dart';
 import '../storage/local_mirror.dart';
 
@@ -27,6 +28,13 @@ String describeError(AppLocalizations l, Object e) => switch (e) {
   SshAuthFailed() => l.errorSshAuth,
   SshConnectionFailed() => l.errorSshConnection,
   MissingUser() => l.errorMissingUser,
+  JumpLoop() => l.errorJumpLoop,
+  JumpTooDeep() => l.errorJumpTooDeep,
+  JumpHostMissing() => l.errorJumpMissing,
+  JumpChainFailed(:final hostName, :final cause) => l.errorJumpHop(
+    hostName,
+    describeError(l, cause),
+  ),
   InvalidKey() => l.errorInvalidKey,
   MirrorTooNew() => l.errorMirrorTooNew,
   InsecureServer() => l.errorInsecureServer,
