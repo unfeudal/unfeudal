@@ -636,5 +636,63 @@
   "orgJoinSubmit": "Join",
   "joinInvalid": "Not an invitation link or file.",
   "treeNewFolderOnline": "Creating an org folder needs the server.",
-  "treeAwaitingKey": "Waiting for a key from an admin"
+  "treeAwaitingKey": "Waiting for a key from an admin",
+  "membersTitle": "Members",
+  "memberAwaiting": "Awaiting confirmation",
+  "memberVerified": "Key compared",
+  "memberNotVerified": "Key not compared",
+  "memberUnpinned": "Confirm on this device to share keys",
+  "memberKeyChanged": "Key changed: verify before sharing",
+  "memberConfirm": "Confirm",
+  "memberVerify": "Verify",
+  "memberRemove": "Remove",
+  "memberRemoveConfirm": "Remove {email} from the organization?",
+  "@memberRemoveConfirm": {
+    "placeholders": {
+      "email": {
+        "type": "String"
+      }
+    }
+  },
+  "orgLeave": "Leave organization",
+  "orgLeaveConfirm": "Leave {org}? Its shared hosts disappear from this device.",
+  "@orgLeaveConfirm": {
+    "placeholders": {
+      "org": {
+        "type": "String"
+      }
+    }
+  },
+  "safetyTitle": "Safety code of {email}",
+  "@safetyTitle": {
+    "placeholders": {
+      "email": {
+        "type": "String"
+      }
+    }
+  },
+  "safetyHint": "Compare with the code {email} reads in their settings, by phone or in person.",
+  "@safetyHint": {
+    "placeholders": {
+      "email": {
+        "type": "String"
+      }
+    }
+  },
+  "safetyCompared": "I compared this code with them (call, chat or in person)",
+  "safetyConfirm": "Confirm",
+  "safetyNoMatch": "Codes differ",
+  "inviteTitle": "Invite",
+  "inviteEmail": "Email",
+  "inviteRole": "Role",
+  "inviteCreate": "Create invitation",
+  "inviteMailSent": "Invitation sent by email.",
+  "inviteShare": "No email sent: share the link or the file.",
+  "inviteCopyLink": "Copy link",
+  "inviteSaveFile": "Save file",
+  "invitePending": "Pending invitations",
+  "inviteRevoke": "Revoke",
+  "roleOwner": "Owner",
+  "roleAdmin": "Admin",
+  "roleMember": "Member"
 }
