@@ -32,17 +32,22 @@ class Argon2Gate {
   int _running = 0;
   final _waiting = Queue<Completer<void>>();
 
+  /// The 429 [run] would throw now; lets a caller refuse before it counts the attempt.
+  void refuseIfFull() {
+    if (_running >= slots && _waiting.length >= 4 * slots) {
+      throw ApiError(
+        ApiErrorCode.rateLimited,
+        'Server busy. Try again.',
+        retryAfter: 1,
+      );
+    }
+  }
+
   Future<T> run<T>(Future<T> Function() work) async {
     if (_running < slots) {
       _running++;
     } else {
-      if (_waiting.length >= 4 * slots) {
-        throw ApiError(
-          ApiErrorCode.rateLimited,
-          'Server busy. Try again.',
-          retryAfter: 1,
-        );
-      }
+      refuseIfFull();
       final turn = Completer<void>();
       _waiting.add(turn);
       // The finishing hash hands its slot over.
@@ -62,6 +67,9 @@ class Argon2Gate {
 
 // ponytail: one process-wide gate sized by cores; split it per route if sign-ins starve behind other hashes.
 final _gate = Argon2Gate(Platform.numberOfProcessors);
+
+/// A full Argon2 queue is a 429 that counts nothing: credential checks call this before the rate limiter.
+void refuseIfArgon2Busy() => _gate.refuseIfFull();
 
 /// Argon2id in another isolate: the pure-Dart hash would otherwise block every request.
 Future<Uint8List> _argon2id(
