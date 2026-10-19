@@ -60,6 +60,16 @@ class MissingUser implements Exception {
   const MissingUser();
 }
 
+/// The host refused every credential offered.
+class SshAuthFailed implements Exception {
+  const SshAuthFailed();
+}
+
+/// The SSH connection failed outside authentication: handshake, closed socket, timeout.
+class SshConnectionFailed implements Exception {
+  const SshConnectionFailed();
+}
+
 class ConnectTarget {
   const ConnectTarget({
     required this.hostId,
@@ -132,7 +142,8 @@ class SshConnector {
     return true;
   }
 
-  /// A shell with an 80×24 PTY. A refused host key throws [HostKeyRejected].
+  /// A shell with an 80×24 PTY. A refused host key throws [HostKeyRejected]; dartssh2 errors, which are
+  /// not [Exception]s, become [SshAuthFailed] or [SshConnectionFailed].
   Future<SshShell> connect(ConnectTarget target, SshCallbacks callbacks) async {
     final identity = target.identity;
     HostKeyDecision? refused;
@@ -175,9 +186,11 @@ class SshConnector {
         client,
         await client.shell(pty: const SSHPtyConfig(width: 80, height: 24)),
       );
-    } catch (_) {
+    } catch (e) {
       await client.close();
       if (refused case final decision?) throw HostKeyRejected(decision);
+      if (e is SSHAuthFailError) throw const SshAuthFailed();
+      if (e is SSHError) throw const SshConnectionFailed();
       rethrow;
     }
   }
