@@ -93,7 +93,7 @@ class LoquetPainter extends CustomPainter {
     ];
     final shapes = <_Shape>[
       ...switch (pose.eyes) {
-        LoquetEyes.open => eyes(0, 0),
+        LoquetEyes.open => eyes(pose.lookX, 0),
         LoquetEyes.follow => eyes(pose.lookX, 5),
         LoquetEyes.up => eyes(2, -3),
         LoquetEyes.aside => eyes(5, 0),
@@ -130,9 +130,9 @@ class LoquetPainter extends CustomPainter {
           line('M31 44 Q36 39.5 43 42.5 M69 44 Q64 39.5 57 42.5', 2.8),
         ],
         LoquetEyes.cheerful => [
-          ...eyes(0, 0),
-          _circle(38.5, 39.5, 1.6, body),
-          _circle(64.5, 39.5, 1.6, body),
+          ...eyes(pose.lookX, 0),
+          _circle(38.5 + pose.lookX, 39.5, 1.6, body),
+          _circle(64.5 + pose.lookX, 39.5, 1.6, body),
         ],
         LoquetEyes.glance => [
           line('M30 38 L41 33 M70 38 L59 33', 3),
