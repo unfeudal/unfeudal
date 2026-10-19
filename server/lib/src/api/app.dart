@@ -14,6 +14,7 @@ import '../config/features.dart';
 import '../db/db.dart';
 import '../db/maintenance.dart';
 import '../log/logger.dart';
+import '../mail/mailer.dart';
 import '../util/clock.dart';
 import 'errors.dart';
 import 'middleware.dart';
@@ -40,6 +41,7 @@ class AppDeps {
     required this.limiter,
     required this.secretHash,
     required this.allowTestingKdf,
+    required this.mailer,
   });
 
   static Future<AppDeps> create(
@@ -49,6 +51,7 @@ class AppDeps {
     Logger? log,
     SecretHashParams secretHash = SecretHashParams.server,
     bool allowTestingKdf = false,
+    Mailer mailer = const NoMailer(),
   }) async {
     final serverSecret = await loadServerSecret(config.secretFile);
     return AppDeps._(
@@ -63,6 +66,7 @@ class AppDeps {
       limiter: RateLimiter(db, clock, config),
       secretHash: secretHash,
       allowTestingKdf: allowTestingKdf,
+      mailer: mailer,
     );
   }
 
@@ -78,6 +82,7 @@ class AppDeps {
   final RefreshTokens refresh;
   final RateLimiter limiter;
   final SecretHashParams secretHash;
+  final Mailer mailer;
 
   /// Tests only.
   final bool allowTestingKdf;
