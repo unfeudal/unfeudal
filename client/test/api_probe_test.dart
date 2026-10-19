@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
-import 'dart:typed_data';
 
 import 'package:cryptography/cryptography.dart';
 import 'package:dartssh2/dartssh2.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pdf/pdf.dart';
@@ -87,4 +87,99 @@ void main() {
     await deriveMasterKeys('probe-password', Uint8List(16), KdfParams.defaults);
     expect(sw.elapsed, lessThan(const Duration(seconds: 3)));
   }, tags: 'slow');
+
+  test(
+    'dartssh2: a forwarded channel is an SSHSocket another client can run over',
+    () {
+      Future<SSHSocket> forward(SSHClient c) =>
+          c.forwardLocal('target.lan', 22);
+      SSHClient over(SSHSocket channel) => SSHClient(
+        channel,
+        username: 'u',
+        onVerifyHostKey: (type, fp) => false,
+      );
+      expect([forward, over], hasLength(2));
+    },
+  );
+
+  test('xterm2: paste follows the remote bracketed-paste mode', () {
+    final term = Terminal();
+    final out = <String>[];
+    term.onOutput = out.add;
+    expect(term.bracketedPasteMode, isFalse);
+    term.paste('a\nb');
+    term.write('\x1b[?2004h');
+    expect(term.bracketedPasteMode, isTrue);
+    term.paste('c');
+    expect(out, [
+      'a\rb',
+      '\x1b[200~c\x1b[201~',
+    ]); // paste sends a line break as \r
+  });
+
+  test('xterm2: selection, highlights and buffer text', () {
+    final term = Terminal()..write('hello world\r\nsecond');
+    final c = TerminalController();
+    c.setSelection(
+      term.buffer.createAnchor(0, 0),
+      term.buffer.createAnchor(5, 0),
+    );
+    expect(term.buffer.getText(c.selection), 'hello');
+    final h = c.highlight(
+      p1: term.buffer.createAnchor(6, 0),
+      p2: term.buffer.createAnchor(11, 0),
+      color: Colors.yellow,
+    );
+    expect(c.highlights, hasLength(1));
+    h.dispose();
+    c.clearSelection();
+    expect(c.selection, isNull);
+    expect(c.highlights, isEmpty);
+    expect(term.buffer.lines[1].getText(), startsWith('second'));
+  });
+
+  testWidgets(
+    'xterm2: onKeyEvent runs before the terminal; empty shortcuts drop the built-in copy',
+    (t) async {
+      final term = Terminal();
+      final sent = <String>[];
+      term.onOutput = sent.add;
+      final seen = <LogicalKeyboardKey>[];
+      await t.pumpWidget(
+        MaterialApp(
+          home: TerminalView(
+            term,
+            controller: TerminalController(),
+            scrollController: ScrollController(),
+            autofocus: true,
+            shortcuts: const {},
+            textStyle: const TerminalStyle(
+              fontFamily: 'JetBrainsMono',
+              fontSize: 13,
+            ),
+            onSecondaryTapDown: (details, offset) {},
+            onKeyEvent: (node, e) {
+              if (e is KeyDownEvent &&
+                  e.logicalKey == LogicalKeyboardKey.keyF &&
+                  HardwareKeyboard.instance.isShiftPressed) {
+                seen.add(e.logicalKey);
+                return KeyEventResult.handled;
+              }
+              return KeyEventResult.ignored;
+            },
+          ),
+        ),
+      );
+      await t.pump();
+      await t.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await t.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await t.sendKeyEvent(LogicalKeyboardKey.keyF);
+      await t.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      expect(seen, [LogicalKeyboardKey.keyF]);
+      expect(sent, isEmpty);
+      await t.sendKeyEvent(LogicalKeyboardKey.keyC);
+      await t.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      expect(sent, ['\x03']);
+    },
+  );
 }
