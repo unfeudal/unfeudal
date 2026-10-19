@@ -171,7 +171,9 @@ Handler buildHandler(AppDeps deps) {
     ..delete(
       '/invites/<id>',
       (Request r, String id) => requireAuth((r) => revokeInvite(r, id))(r),
-    );
+    )
+    ..post('/invites/accept', acceptInvite)
+    ..post('/invites/join', requireAuth(joinInvite));
   final root = Router(notFoundHandler: _notFound)
     ..get('/healthz', healthz)
     ..get('/api/info', info)
