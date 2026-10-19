@@ -2,6 +2,7 @@
 library;
 
 export 'src/audit/audit_event.dart';
+export 'src/audit/chain.dart';
 export 'src/bytes.dart';
 export 'src/crypto/account.dart';
 export 'src/crypto/cipher.dart';
