@@ -2,6 +2,7 @@
 import 'package:shelf/shelf.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
+import '../../audit/audit_log.dart';
 import '../../db/db.dart';
 import '../../db/deletion.dart';
 import '../../orgs/org_access.dart';
@@ -77,7 +78,9 @@ Future<Response> createTeam(Request request, String org) async {
     );
     await _seat(tx, org, teamId, ids);
     await bumpOrgSeq(tx);
-    // Audit hook: team.created [teamId]
+    await auditWriter(request, tx)(AuditScope.org(org), 'team.created', [
+      teamId,
+    ]);
     return ids;
   });
   return jsonResponse({
@@ -117,7 +120,7 @@ Future<Response> updateTeam(Request request, String org, String team) async {
       'team_change',
     );
     await bumpOrgSeq(tx);
-    // Audit hook: team.updated [teamId]
+    await auditWriter(request, tx)(AuditScope.org(org), 'team.updated', [team]);
   });
   return noContent();
 }
@@ -134,7 +137,7 @@ Future<Response> deleteTeamRoute(
     await requireMember(tx, org, auth.userId, admin: true); // 1.
     await _requireTeam(tx, org, team); // 2.
     await deleteTeam(tx, org, team);
-    // Audit hook: team.deleted [teamId]
+    await auditWriter(request, tx)(AuditScope.org(org), 'team.deleted', [team]);
   });
   return noContent();
 }

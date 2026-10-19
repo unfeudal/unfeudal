@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:shelf/shelf.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
+import '../../audit/audit_log.dart';
 import '../../config/config.dart';
 import '../../db/deletion.dart';
 import '../../orgs/org_access.dart';
@@ -36,7 +37,9 @@ Future<Response> createOrg(Request request) async {
       {'o': orgId, 'u': auth.userId},
     );
     await bumpOrgSeq(tx);
-    // Audit hook: org.created [orgId] (org scope)
+    await auditWriter(request, tx)(AuditScope.org(orgId), 'org.created', [
+      orgId,
+    ]);
   });
   return jsonResponse({
     'org': {'id': orgId, 'name': name, 'role': 'owner'},
@@ -98,7 +101,7 @@ Future<Response> updateOrg(Request request, String org) async {
     );
     // org_seq versions the block: name and mascot only
     if (blockChanged) await bumpOrgSeq(tx);
-    // Audit hook: org.updated [orgId]
+    await auditWriter(request, tx)(AuditScope.org(org), 'org.updated', [org]);
   });
   return noContent();
 }
@@ -131,7 +134,7 @@ Future<Response> deleteOrgRoute(Request request, String org) async {
   await deps.db.transaction((tx) async {
     await requireMember(tx, org, auth.userId, owner: true); // 1. 404 · 2. 403
     await deleteOrg(tx, org);
-    // Audit hook: org.deleted [orgId] (instance scope)
+    await auditWriter(request, tx)(AuditScope.instance, 'org.deleted', [org]);
   });
   return noContent();
 }
@@ -177,7 +180,9 @@ Future<Response> setRole(Request request, String org, String user) async {
       'role_change',
     );
     await bumpOrgSeq(tx);
-    // Audit hook: member.role_changed [userId]
+    await auditWriter(request, tx)(AuditScope.org(org), 'member.role_changed', [
+      user,
+    ]);
   });
   return noContent();
 }
@@ -221,7 +226,10 @@ Future<Response> removeMemberRoute(
       self ? 'member_left' : 'member_removed',
       before: before,
     );
-    // Audit hook: member.removed [userId] (actor = the member when they leave)
+    // the caller is the actor, so the member when they leave
+    await auditWriter(request, tx)(AuditScope.org(org), 'member.removed', [
+      user,
+    ]);
   });
   return noContent();
 }
@@ -245,7 +253,9 @@ Future<Response> confirmMember(Request request, String org, String user) async {
       {'o': org, 'u': user},
     );
     await bumpOrgSeq(tx);
-    // Audit hook: member.confirmed [userId]
+    await auditWriter(request, tx)(AuditScope.org(org), 'member.confirmed', [
+      user,
+    ]);
   });
   return noContent();
 }
