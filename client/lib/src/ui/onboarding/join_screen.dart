@@ -6,7 +6,7 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
 import '../../app_state.dart';
-import '../../design/tokens.dart';
+import '../../design/icons.dart';
 import '../describe_error.dart';
 import '../fields.dart';
 import '../lock/lock_frame.dart';
@@ -103,16 +103,31 @@ class _JoinScreenState extends State<JoinScreen> {
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
+    final invite = _invite;
     return Scaffold(
       body: LockFrame(
+        step: l.stepOf(invite == null ? 1 : 2, 2),
+        title: l.joinTitle,
+        subtitle: invite == null
+            ? l.joinSubtitle
+            : l.joinInviteSubtitle(invite.server.host),
         children: [
-          Text(l.joinTitle, style: Theme.of(context).textTheme.headlineMedium),
-          if (_invite == null) ...[
-            keyedField('join-link', _link, l.joinLink),
-            OutlinedButton(
-              key: const Key('join-open-file'),
-              onPressed: _pickFile,
-              child: Text(l.joinOpenFile),
+          if (invite == null) ...[
+            keyedField(
+              'join-link',
+              _link,
+              l.joinLink,
+              mono: true,
+              hint: 'unfeudal://enroll?…',
+            ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                key: const Key('join-open-file'),
+                onPressed: _pickFile,
+                icon: const Icon(UfIcons.fileArrowUp, size: 16),
+                label: Text(l.joinOpenFile),
+              ),
             ),
             keyedField(
               'join-passphrase',
@@ -121,7 +136,12 @@ class _JoinScreenState extends State<JoinScreen> {
               secret: true,
             ),
           ] else ...[
-            keyedField('join-email', _email, l.setupEmail),
+            keyedField(
+              'join-email',
+              _email,
+              l.setupEmail,
+              keyboard: TextInputType.emailAddress,
+            ),
             keyedField(
               'join-password',
               _password,
@@ -129,17 +149,18 @@ class _JoinScreenState extends State<JoinScreen> {
               secret: true,
             ),
             keyedField('join-confirm', _confirm, l.setupConfirm, secret: true),
-            Text(
-              l.setupWarning,
-              style: TextStyle(color: UfColors.of(context).warn),
-            ),
+            LockNotice(l.setupWarning),
           ],
-          if (_problem case final problem?)
-            Text(problem, style: TextStyle(color: UfColors.of(context).danger)),
-          FilledButton(
-            key: Key(_invite == null ? 'join-submit' : 'join-accept'),
-            onPressed: _busy ? null : (_invite == null ? _submit : _accept),
-            child: Text(_invite == null ? l.joinSubmit : l.setupSubmit),
+          if (_problem case final problem?) LockError(problem),
+          LockActions(
+            primary: FilledButton(
+              key: Key(invite == null ? 'join-submit' : 'join-accept'),
+              onPressed: _busy ? null : (invite == null ? _submit : _accept),
+              child: BusyLabel(
+                busy: _busy,
+                label: invite == null ? l.joinSubmit : l.setupSubmit,
+              ),
+            ),
           ),
         ],
       ),

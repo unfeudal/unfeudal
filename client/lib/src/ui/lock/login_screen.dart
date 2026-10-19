@@ -6,8 +6,8 @@ import '../../app_scope.dart';
 import '../../app_state.dart';
 import '../../design/banner.dart';
 import '../../design/motion.dart';
-import '../../design/tokens.dart';
 import '../describe_error.dart';
+import '../fields.dart';
 import '../onboarding/recovery_screen.dart';
 import 'lock_frame.dart';
 
@@ -68,60 +68,63 @@ class _LoginScreenState extends State<LoginScreen> {
     final state = AppScope.of(context);
     return Scaffold(
       body: LockFrame(
+        title: l.loginTitle,
+        subtitle: state.stored?.serverUrl.host,
         children: [
-          Text(l.loginTitle, style: Theme.of(context).textTheme.headlineMedium),
           if (state.deviceRevoked)
             StatusBanner(tone: BannerTone.danger, message: l.loginDeviceRevoked)
           else if (state.sessionExpired)
             StatusBanner(tone: BannerTone.warn, message: l.loginSessionExpired),
-          TextField(
-            key: const Key('login-server'),
-            controller: _server,
-            keyboardType: TextInputType.url,
-            decoration: InputDecoration(labelText: l.loginServer),
+          keyedField(
+            'login-server',
+            _server,
+            l.loginServer,
+            keyboard: TextInputType.url,
           ),
-          TextField(
-            key: const Key('login-email'),
-            controller: _email,
-            keyboardType: TextInputType.emailAddress,
-            decoration: InputDecoration(labelText: l.loginEmail),
+          keyedField(
+            'login-email',
+            _email,
+            l.loginEmail,
+            keyboard: TextInputType.emailAddress,
           ),
           ShakeOnError(
             trigger: _failures,
-            child: TextField(
-              key: const Key('login-password'),
-              controller: _password,
-              obscureText: true,
+            child: keyedField(
+              'login-password',
+              _password,
+              l.loginPassword,
+              secret: true,
               onSubmitted: (_) => _submit(),
-              decoration: InputDecoration(labelText: l.loginPassword),
             ),
           ),
-          if (_error case final error?)
-            Text(
-              describeError(l, error),
-              style: TextStyle(color: UfColors.of(context).danger),
+          if (_error case final error?) LockError(describeError(l, error)),
+          LockActions(
+            primary: FilledButton(
+              key: const Key('login-submit'),
+              onPressed: _busy ? null : _submit,
+              child: BusyLabel(busy: _busy, label: l.loginSubmit),
             ),
-          FilledButton(
-            key: const Key('login-submit'),
-            onPressed: _busy ? null : _submit,
-            child: Text(l.loginSubmit),
-          ),
-          TextButton(
-            onPressed: () => state.show(AppStage.setup),
-            child: Text(l.loginToSetup),
-          ),
-          TextButton(
-            onPressed: () => state.show(AppStage.join),
-            child: Text(l.loginToJoin),
-          ),
-          // shown unless the last known answer of this server says the recovery kit is off
-          if (state.stored == null || state.serverHas('recovery_kit'))
-            TextButton(
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(builder: (_) => const RecoveryScreen()),
+            links: [
+              TextButton(
+                onPressed: () => state.show(AppStage.setup),
+                child: Text(l.loginToSetup),
               ),
-              child: Text(l.loginToRecover),
-            ),
+              TextButton(
+                onPressed: () => state.show(AppStage.join),
+                child: Text(l.loginToJoin),
+              ),
+              // shown unless the last known answer of this server says the recovery kit is off
+              if (state.stored == null || state.serverHas('recovery_kit'))
+                TextButton(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const RecoveryScreen(),
+                    ),
+                  ),
+                  child: Text(l.loginToRecover),
+                ),
+            ],
+          ),
         ],
       ),
     );

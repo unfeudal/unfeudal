@@ -1,16 +1,19 @@
 // SPDX-License-Identifier: Apache-2.0
 import 'package:flutter/widgets.dart';
 
-/// The "U serrure" mark in the ambient icon colour, always square.
+/// The "U serrure" mark in [color], else the ambient icon colour; always square.
 class UfLogo extends StatelessWidget {
-  const UfLogo({super.key, this.size = 24});
+  const UfLogo({super.key, this.size = 24, this.color});
 
   final double size;
+  final Color? color;
 
   @override
   Widget build(BuildContext context) => SizedBox.square(
     dimension: size,
-    child: CustomPaint(painter: _LogoPainter(IconTheme.of(context).color!)),
+    child: CustomPaint(
+      painter: _LogoPainter(color ?? IconTheme.of(context).color!),
+    ),
   );
 }
 

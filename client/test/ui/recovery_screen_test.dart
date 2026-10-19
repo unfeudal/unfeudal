@@ -34,6 +34,8 @@ void main() {
       find.byKey(const Key('recover-key')),
       key.toLowerCase().replaceAll('-', ' '),
     );
+    await t.tap(find.byKey(const Key('recover-next')));
+    await t.pump();
     await t.enterText(
       find.byKey(const Key('recover-password')),
       'new-password-1',
@@ -63,18 +65,11 @@ void main() {
     );
     await t.enterText(find.byKey(const Key('recover-email')), testEmail);
     await t.enterText(find.byKey(const Key('recover-key')), 'AAAA-BBBB');
-    await t.enterText(
-      find.byKey(const Key('recover-password')),
-      'new-password-1',
-    );
-    await t.enterText(
-      find.byKey(const Key('recover-confirm')),
-      'new-password-1',
-    );
-    await t.tap(find.byKey(const Key('recover-submit')));
+    await t.tap(find.byKey(const Key('recover-next')));
     await pumpReal(t, rounds: 5);
     final l = AppLocalizations.of(t.element(find.byType(RecoveryScreen)));
     expect(find.text(l.errorInvalidRecoveryKey), findsOneWidget);
     expect(h.requests.where((r) => r.contains('/account/recover')), isEmpty);
+    expect(find.byKey(const Key('recover-password')), findsNothing);
   });
 }

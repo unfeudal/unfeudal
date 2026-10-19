@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:unfeudal_client/l10n/app_localizations.dart';
 import 'package:unfeudal_client/src/app_state.dart';
 
+import 'package:unfeudal_client/src/ui/keychain/keychain_screen.dart';
 import 'package:unfeudal_client/src/ui/shell/home_shell.dart';
 import 'package:unfeudal_client/src/version.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
@@ -24,6 +25,22 @@ AppLocalizations l10n(WidgetTester t) =>
     AppLocalizations.of(t.element(find.byType(HomeShell)));
 
 void main() {
+  testWidgets(
+    'the rail opens the keychain beside it; back returns to the vault',
+    (t) async {
+      await shell(t);
+      await t.tap(find.byTooltip(l10n(t).railKeychain));
+      await t.pump();
+      expect(find.byType(KeychainScreen), findsOneWidget);
+      expect(find.byKey(const Key('vault-rail')), findsOneWidget);
+      expect(find.byKey(const Key('tree-panel')), findsNothing);
+      await t.tap(find.byKey(const Key('manage-back')));
+      await t.pump();
+      expect(find.byType(KeychainScreen), findsNothing);
+      expect(find.byKey(const Key('tree-panel')), findsOneWidget);
+    },
+  );
+
   testWidgets(
     'layout: rail 60, tree 272 resizable within 220–400, saved per device',
     (t) async {
@@ -145,7 +162,7 @@ void main() {
     await shell(t, harness: SyncHarness(minClient: '9.0.0'));
     expect(find.byKey(const Key('banner-read-only')), findsOneWidget);
     expect(
-      t.widget<TextButton>(find.byKey(const Key('tree-new-host'))).onPressed,
+      t.widget<FilledButton>(find.byKey(const Key('tree-new-host'))).onPressed,
       isNull,
     );
   });

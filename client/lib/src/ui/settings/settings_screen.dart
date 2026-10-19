@@ -10,11 +10,14 @@ import '../../design/tokens.dart';
 import '../../settings/settings.dart';
 import '../../version.dart';
 import '../form_dialog.dart';
+import '../manage_frame.dart';
 import '../onboarding/recovery_kit_view.dart';
 
 /// Appearance, language and security of this device, the synced prefs, and the account's safety code.
 class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key});
+  const SettingsScreen({super.key, this.onBack});
+
+  final VoidCallback? onBack;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -72,10 +75,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final theme = Theme.of(context);
     void update(Settings next) => state.updateSettings(next);
     Widget section(String title, List<Widget> children) => Padding(
-      padding: const EdgeInsets.only(bottom: 24),
+      padding: const EdgeInsets.only(bottom: 26),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        spacing: 8,
+        spacing: 10,
         children: [
           Text(title, style: theme.textTheme.titleMedium),
           ...children,
@@ -99,9 +102,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
       ],
     );
-    return Scaffold(
-      appBar: AppBar(title: Text(l.settingsTitle)),
-      body: _TwoColumns(
+    return ManageFrame(
+      title: l.settingsTitle,
+      onBack: widget.onBack,
+      child: _TwoColumns(
         left: [
           section(l.settingsTheme, [
             choices(
@@ -203,6 +207,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   child: Text(l.settingsLockNow),
                 ),
                 TextButton(
+                  style: TextButton.styleFrom(
+                    foregroundColor: UfColors.of(context).danger,
+                  ),
                   onPressed: () async {
                     Navigator.of(context).popUntil((r) => r.isFirst);
                     await state.signOut();
@@ -233,11 +240,14 @@ class _TwoColumns extends StatelessWidget {
         children: children,
       );
       return SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
+        padding: EdgeInsets.only(
+          bottom: 40,
+          right: (constraints.maxWidth - 1100).clamp(0, double.infinity),
+        ),
         child: constraints.maxWidth >= 900
             ? Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                spacing: 32,
+                spacing: 40,
                 children: [
                   Expanded(child: column(left)),
                   Expanded(child: column(right)),

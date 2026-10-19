@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
+import '../debug_trace.dart';
+
 /// The OS keystore, behind an interface so tests use a map.
 abstract interface class SecureKv {
   Future<String?> read(String key);
@@ -15,14 +17,11 @@ abstract interface class SecureKv {
 /// macOS login keychain (no data-protection keychain: it needs an entitlement unsigned builds lack),
 /// Windows Credential Manager.
 class FlutterSecureKv implements SecureKv {
-  FlutterSecureKv([FlutterSecureStorage? storage])
-    : _storage =
-          storage ??
-          const FlutterSecureStorage(
-            mOptions: MacOsOptions(usesDataProtectionKeychain: false),
-          );
+  const FlutterSecureKv();
 
-  final FlutterSecureStorage _storage;
+  static const _storage = FlutterSecureStorage(
+    mOptions: MacOsOptions(usesDataProtectionKeychain: false),
+  );
 
   @override
   Future<String?> read(String key) => _storage.read(key: key);
@@ -54,7 +53,7 @@ class StoredSession {
       'userId': final String userId,
       'deviceId': final String deviceId,
       'email': final String email,
-      'refreshToken': final String refreshToken,
+      'refreshToken': final String? refreshToken,
       'isInstanceOwner': final bool isInstanceOwner,
     }
         when isUuid(userId) && isUuid(deviceId) =>
@@ -78,7 +77,9 @@ class StoredSession {
   final String userId;
   final String deviceId;
   final String email;
-  final String refreshToken;
+
+  /// Null once the server ended this device's session: server and e-mail stay for the login form.
+  final String? refreshToken;
   final bool isInstanceOwner;
   final String? displayName;
 
@@ -120,7 +121,11 @@ class SessionStore {
     try {
       final raw = await kv.read(key);
       return raw == null ? null : StoredSession.fromJson(jsonDecode(raw));
-    } on Exception {
+    } on Exception catch (e) {
+      trace(
+        TraceArea.session,
+        'session store: unreadable (${e.runtimeType}), treated as signed out',
+      );
       return null; // keystore error or malformed value: signed out, never a crash
     }
   }
@@ -131,6 +136,10 @@ class SessionStore {
   Future<void> saveRefreshToken(String refreshToken) =>
       _update((s) => {...s, 'refreshToken': refreshToken});
 
+  /// The server ended the session: the token is dead, replaying it would only fail again.
+  Future<void> forgetRefreshToken() =>
+      _update((s) => {...s, 'refreshToken': null});
+
   Future<void> saveDisplayName(String? displayName) =>
       _update((s) => {...s, 'displayName': displayName});
 
@@ -140,7 +149,13 @@ class SessionStore {
     Map<String, Object?> Function(Map<String, Object?>) change,
   ) async {
     final current = await load();
-    if (current == null) return;
+    if (current == null) {
+      trace(
+        TraceArea.session,
+        'session store: no session to update, change dropped',
+      );
+      return;
+    }
     await save(StoredSession.fromJson(change(current.toJson())));
   }
 }

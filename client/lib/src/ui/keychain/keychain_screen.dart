@@ -6,16 +6,20 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
 import '../../design/empty_state.dart';
+import '../../design/dialog.dart';
 import '../../design/icons.dart';
 import '../../design/motion.dart';
 import '../../design/tokens.dart';
 import '../../keys/key_tools.dart';
 import '../../vault/vault.dart';
 import '../form_dialog.dart';
+import '../manage_frame.dart';
 
 /// SSH keys and passwords of the vault: generate, import, add a password, copy a public key, rename, trash.
 class KeychainScreen extends StatelessWidget {
-  const KeychainScreen({super.key});
+  const KeychainScreen({super.key, this.onBack});
+
+  final VoidCallback? onBack;
 
   @override
   Widget build(BuildContext context) {
@@ -46,116 +50,117 @@ class KeychainScreen extends StatelessWidget {
         initial: initial,
       ),
     );
-    return Scaffold(
-      appBar: AppBar(title: Text(l.keychainTitle)),
-      body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          spacing: 16,
-          children: [
-            Wrap(
-              spacing: 8,
-              children: [
-                FilledButton(
-                  key: const Key('key-generate'),
-                  onPressed: readOnly
-                      ? null
-                      : () => form(
-                          l.keyGenerate,
-                          [
-                            FormDialogField('gen-name', l.keyName),
-                            FormDialogField(
-                              'gen-passphrase',
-                              l.keyPassphrase,
-                              kind: FormFieldKind.secret,
-                            ),
-                            FormDialogField(
-                              'gen-type-rsa',
-                              l.keyTypeRsa,
-                              kind: FormFieldKind.toggle,
-                            ),
-                          ],
-                          'gen-save',
-                          (v) => _generate(vault, v),
-                        ),
-                  child: Text(l.keyGenerate),
-                ),
-                OutlinedButton(
-                  key: const Key('key-import'),
-                  onPressed: readOnly
-                      ? null
-                      : () => form(
-                          l.keyImport,
-                          [
-                            FormDialogField('import-name', l.keyName),
-                            FormDialogField(
-                              'import-pem',
-                              l.keyPem,
-                              lines: 6,
-                              mono: true,
-                            ),
-                            FormDialogField(
-                              'import-passphrase',
-                              l.keyPassphrase,
-                              kind: FormFieldKind.secret,
-                            ),
-                          ],
-                          'import-save',
-                          (v) => _import(vault, v),
-                        ),
-                  child: Text(l.keyImport),
-                ),
-                OutlinedButton(
-                  key: const Key('key-password'),
-                  onPressed: readOnly
-                      ? null
-                      : () => form(
-                          l.keyPassword,
-                          [
-                            FormDialogField('pw-name', l.keyName),
-                            FormDialogField(
-                              'pw-value',
-                              l.keyKindPassword,
-                              kind: FormFieldKind.secret,
-                            ),
-                          ],
-                          'pw-save',
-                          (v) => _password(vault, v),
-                        ),
-                  child: Text(l.keyPassword),
-                ),
-              ],
-            ),
-            Expanded(
-              child: identities.isEmpty
-                  ? EmptyState(title: l.keychainTitle, body: l.keychainEmpty)
-                  : ListView(
-                      children: [
-                        for (final e in identities)
-                          _IdentityRow(
-                            entry: e,
-                            readOnly: readOnly,
-                            onRename: () => form(
-                              l.keyRename,
-                              [FormDialogField('identity-name', l.keyName)],
-                              'identity-name-save',
-                              (v) => vault.updateIdentity(
-                                e.id,
-                                IdentityMeta.fromJson({
-                                  ...?e.meta,
-                                  'name': v['identity-name']!.trim(),
-                                }),
-                              ),
-                              initial: {'identity-name': e.name ?? ''},
-                            ),
-                            onDelete: () => _confirmTrash(context, vault, e),
+    return ManageFrame(
+      title: l.keychainTitle,
+      onBack: onBack,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        spacing: 16,
+        children: [
+          Wrap(
+            spacing: 8,
+            children: [
+              FilledButton.icon(
+                key: const Key('key-generate'),
+                icon: const Icon(UfIcons.plus, size: 15),
+                onPressed: readOnly
+                    ? null
+                    : () => form(
+                        l.keyGenerate,
+                        [
+                          FormDialogField('gen-name', l.keyName),
+                          FormDialogField(
+                            'gen-passphrase',
+                            l.keyPassphrase,
+                            kind: FormFieldKind.secret,
                           ),
-                      ],
-                    ),
-            ),
-          ],
-        ),
+                          FormDialogField(
+                            'gen-type-rsa',
+                            l.keyTypeRsa,
+                            kind: FormFieldKind.toggle,
+                            offLabel: l.keyTypeEd25519,
+                          ),
+                        ],
+                        'gen-save',
+                        (v) => _generate(vault, v),
+                      ),
+                label: Text(l.keyGenerate),
+              ),
+              OutlinedButton(
+                key: const Key('key-import'),
+                onPressed: readOnly
+                    ? null
+                    : () => form(
+                        l.keyImport,
+                        [
+                          FormDialogField('import-name', l.keyName),
+                          FormDialogField(
+                            'import-pem',
+                            l.keyPem,
+                            lines: 6,
+                            mono: true,
+                          ),
+                          FormDialogField(
+                            'import-passphrase',
+                            l.keyPassphrase,
+                            kind: FormFieldKind.secret,
+                          ),
+                        ],
+                        'import-save',
+                        (v) => _import(vault, v),
+                      ),
+                child: Text(l.keyImport),
+              ),
+              OutlinedButton(
+                key: const Key('key-password'),
+                onPressed: readOnly
+                    ? null
+                    : () => form(
+                        l.keyPassword,
+                        [
+                          FormDialogField('pw-name', l.keyName),
+                          FormDialogField(
+                            'pw-value',
+                            l.keyKindPassword,
+                            kind: FormFieldKind.secret,
+                          ),
+                        ],
+                        'pw-save',
+                        (v) => _password(vault, v),
+                      ),
+                child: Text(l.keyPassword),
+              ),
+            ],
+          ),
+          Expanded(
+            child: identities.isEmpty
+                ? EmptyState(title: l.keychainTitle, body: l.keychainEmpty)
+                : ListView(
+                    padding: const EdgeInsets.only(bottom: 40),
+                    children: [
+                      for (final e in identities)
+                        _IdentityRow(
+                          entry: e,
+                          readOnly: readOnly,
+                          onRename: () => form(
+                            l.keyRename,
+                            [FormDialogField('identity-name', l.keyName)],
+                            'identity-name-save',
+                            (v) => vault.updateIdentity(
+                              e.id,
+                              IdentityMeta.fromJson({
+                                ...?e.meta,
+                                'name': v['identity-name']!.trim(),
+                              }),
+                            ),
+                            initial: {'identity-name': e.name ?? ''},
+                          ),
+                          onDelete: () => _confirmTrash(context, vault, e),
+                        ),
+                    ],
+                  ),
+          ),
+        ],
       ),
     );
   }
@@ -232,24 +237,12 @@ class KeychainScreen extends StatelessWidget {
     VaultEntry e,
   ) async {
     final l = AppLocalizations.of(context);
-    final yes = await showUfDialog<bool>(
+    final yes = await confirmDanger(
       context,
-      (dialog) => AlertDialog(
-        content: Text(l.keyDeleteConfirm(e.name ?? '')),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialog, false),
-            child: Text(l.cancel),
-          ),
-          FilledButton(
-            key: const Key('confirm-yes'),
-            onPressed: () => Navigator.pop(dialog, true),
-            child: Text(l.keyDelete),
-          ),
-        ],
-      ),
+      question: l.keyDeleteConfirm(e.name ?? ''),
+      action: l.keyDelete,
     );
-    if (yes == true) await vault.trashItem(e.id);
+    if (yes) await vault.trashItem(e.id);
   }
 }
 
@@ -271,44 +264,83 @@ class _IdentityRow extends StatelessWidget {
     final l = AppLocalizations.of(context);
     final publicKey = entry.meta?['publicKey'] as String?;
     final isKey = entry.meta?['kind'] == IdentityKind.privateKey.name;
-    return ListTile(
-      leading: Icon(isKey ? UfIcons.key : UfIcons.lock),
-      title: Text(entry.name ?? ''),
-      subtitle: publicKey == null
-          ? Text(isKey ? l.keyKindPrivateKey : l.keyKindPassword)
-          : Text(
-              publicKey,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: monoStyle,
-            ),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (publicKey != null)
-            IconButton(
-              key: Key('identity-copy-${entry.id}'),
-              tooltip: l.keyCopyPublic,
-              onPressed: () async {
-                final messenger = ScaffoldMessenger.of(context);
-                await Clipboard.setData(ClipboardData(text: publicKey));
-                messenger.showSnackBar(SnackBar(content: Text(l.keyCopied)));
-              },
-              icon: const Icon(UfIcons.copy),
-            ),
-          IconButton(
-            key: Key('identity-rename-${entry.id}'),
-            tooltip: l.keyRename,
-            onPressed: readOnly ? null : onRename,
-            icon: const Icon(UfIcons.pencil),
+    final colors = UfColors.of(context);
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 960),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            spacing: 14,
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: colors.field,
+                  borderRadius: const BorderRadius.all(Radius.circular(10)),
+                ),
+                child: Icon(
+                  isKey ? UfIcons.key : UfIcons.lock,
+                  size: 18,
+                  color: colors.accent,
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      entry.name ?? '',
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    if (publicKey == null)
+                      Text(
+                        isKey ? l.keyKindPrivateKey : l.keyKindPassword,
+                        style: TextStyle(color: colors.muted, fontSize: 13),
+                      )
+                    else
+                      Text(
+                        publicKey,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: monoStyle.copyWith(
+                          color: colors.muted,
+                          fontSize: 12,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              if (publicKey != null)
+                IconButton(
+                  key: Key('identity-copy-${entry.id}'),
+                  tooltip: l.keyCopyPublic,
+                  onPressed: () async {
+                    final messenger = ScaffoldMessenger.of(context);
+                    await Clipboard.setData(ClipboardData(text: publicKey));
+                    messenger.showSnackBar(
+                      SnackBar(content: Text(l.keyCopied)),
+                    );
+                  },
+                  icon: const Icon(UfIcons.copy, size: 17),
+                ),
+              IconButton(
+                key: Key('identity-rename-${entry.id}'),
+                tooltip: l.keyRename,
+                onPressed: readOnly ? null : onRename,
+                icon: const Icon(UfIcons.pencil, size: 17),
+              ),
+              IconButton(
+                key: Key('identity-delete-${entry.id}'),
+                tooltip: l.keyDelete,
+                onPressed: readOnly ? null : onDelete,
+                icon: const Icon(UfIcons.trash, size: 17),
+              ),
+            ],
           ),
-          IconButton(
-            key: Key('identity-delete-${entry.id}'),
-            tooltip: l.keyDelete,
-            onPressed: readOnly ? null : onDelete,
-            icon: const Icon(UfIcons.trash),
-          ),
-        ],
+        ),
       ),
     );
   }

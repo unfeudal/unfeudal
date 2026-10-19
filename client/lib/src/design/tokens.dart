@@ -18,10 +18,28 @@ class UfColors extends ThemeExtension<UfColors> {
     required this.warn,
     required this.danger,
     required this.onDanger,
+    required this.term,
+    required this.scrim,
+    required this.dangerSoft,
+    required this.dangerText,
+    required this.warnSoft,
+    required this.warnText,
+    required this.okSoft,
+    required this.infoSoft,
   });
 
   final Color bg, rail, side, panel, field, select, text, muted;
   final Color accent, accentBg, accentFg, ok, warn, danger, onDanger;
+
+  /// Terminal background, dialog scrim, and the soft fills of banners and notices.
+  final Color term,
+      scrim,
+      dangerSoft,
+      dangerText,
+      warnSoft,
+      warnText,
+      okSoft,
+      infoSoft;
 
   static const light = UfColors(
     bg: Color(0xFFE7ECEA),
@@ -39,6 +57,14 @@ class UfColors extends ThemeExtension<UfColors> {
     warn: Color(0xFF8A6A1F),
     danger: Color(0xFFA23B32),
     onDanger: Color(0xFFFFFFFF),
+    term: Color(0xFFF8FAF9),
+    scrim: Color(0x73252B31),
+    dangerSoft: Color(0xFFF6E3E0),
+    dangerText: Color(0xFFA23B32),
+    warnSoft: Color(0xFFF3ECD9),
+    warnText: Color(0xFF7A5D17),
+    okSoft: Color(0xFFE3EADB),
+    infoSoft: Color(0xFFDCE6F0),
   );
 
   static const dark = UfColors(
@@ -57,6 +83,14 @@ class UfColors extends ThemeExtension<UfColors> {
     warn: Color(0xFFC9A54E),
     danger: Color(0xFFD9645A),
     onDanger: Color(0xFF171B1F),
+    term: Color(0xFF1F2429),
+    scrim: Color(0x9E0A0C0E),
+    dangerSoft: Color(0xFF3A2624),
+    dangerText: Color(0xFFE07A70),
+    warnSoft: Color(0xFF2E2A1E),
+    warnText: Color(0xFFC9A54E),
+    okSoft: Color(0xFF26301F),
+    infoSoft: Color(0xFF1F2B38),
   );
 
   static UfColors of(BuildContext context) =>
@@ -78,6 +112,14 @@ class UfColors extends ThemeExtension<UfColors> {
     warn,
     danger,
     onDanger,
+    term,
+    scrim,
+    dangerSoft,
+    dangerText,
+    warnSoft,
+    warnText,
+    okSoft,
+    infoSoft,
   ];
 
   @override
@@ -97,6 +139,14 @@ class UfColors extends ThemeExtension<UfColors> {
     Color? warn,
     Color? danger,
     Color? onDanger,
+    Color? term,
+    Color? scrim,
+    Color? dangerSoft,
+    Color? dangerText,
+    Color? warnSoft,
+    Color? warnText,
+    Color? okSoft,
+    Color? infoSoft,
   }) => UfColors(
     bg: bg ?? this.bg,
     rail: rail ?? this.rail,
@@ -113,6 +163,14 @@ class UfColors extends ThemeExtension<UfColors> {
     warn: warn ?? this.warn,
     danger: danger ?? this.danger,
     onDanger: onDanger ?? this.onDanger,
+    term: term ?? this.term,
+    scrim: scrim ?? this.scrim,
+    dangerSoft: dangerSoft ?? this.dangerSoft,
+    dangerText: dangerText ?? this.dangerText,
+    warnSoft: warnSoft ?? this.warnSoft,
+    warnText: warnText ?? this.warnText,
+    okSoft: okSoft ?? this.okSoft,
+    infoSoft: infoSoft ?? this.infoSoft,
   );
 
   @override
@@ -135,6 +193,14 @@ class UfColors extends ThemeExtension<UfColors> {
       warn: mix(warn, other.warn),
       danger: mix(danger, other.danger),
       onDanger: mix(onDanger, other.onDanger),
+      term: mix(term, other.term),
+      scrim: mix(scrim, other.scrim),
+      dangerSoft: mix(dangerSoft, other.dangerSoft),
+      dangerText: mix(dangerText, other.dangerText),
+      warnSoft: mix(warnSoft, other.warnSoft),
+      warnText: mix(warnText, other.warnText),
+      okSoft: mix(okSoft, other.okSoft),
+      infoSoft: mix(infoSoft, other.infoSoft),
     );
   }
 
@@ -166,6 +232,7 @@ ThemeData ufTheme(Brightness brightness) {
     fontFamily: _titles,
     fontSize: size,
     fontWeight: FontWeight.w700,
+    height: 1.1,
     color: c.text,
   );
   TextStyle ui(double size, [FontWeight weight = FontWeight.w400]) => TextStyle(
@@ -176,9 +243,11 @@ ThemeData ufTheme(Brightness brightness) {
     color: c.text,
   );
   final text = TextTheme(
+    displaySmall: title(34),
     headlineLarge: title(40),
     headlineMedium: title(26),
     headlineSmall: title(21),
+    titleLarge: title(22),
     titleMedium: ui(15, FontWeight.w600),
     titleSmall: ui(13, FontWeight.w600),
     bodyLarge: ui(15),
@@ -188,6 +257,13 @@ ThemeData ufTheme(Brightness brightness) {
     labelMedium: ui(13, FontWeight.w600),
     labelSmall: ui(12, FontWeight.w600),
   );
+  const buttonPadding = EdgeInsets.symmetric(horizontal: 18, vertical: 14);
+  const buttonShape = RoundedRectangleBorder(borderRadius: _controlRadius);
+  // fromMap compares by value: a closure would make every ufTheme() unequal and animate theme changes
+  final selectedFill = WidgetStateProperty<Color>.fromMap({
+    WidgetState.selected: c.accentBg,
+    WidgetState.any: c.field,
+  });
   return ThemeData(
     useMaterial3: true,
     brightness: brightness,
@@ -208,17 +284,53 @@ ThemeData ufTheme(Brightness brightness) {
     ),
     scaffoldBackgroundColor: c.bg,
     textTheme: text,
+    visualDensity: VisualDensity.standard,
+    hoverColor: c.accent.withValues(alpha: 0.10),
+    focusColor: c.accent.withValues(alpha: 0.14),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
         backgroundColor: c.accentBg,
         foregroundColor: c.accentFg,
-        shape: const RoundedRectangleBorder(borderRadius: _controlRadius),
+        disabledBackgroundColor: c.accentBg.withValues(alpha: 0.5),
+        disabledForegroundColor: c.accentFg.withValues(alpha: 0.8),
+        padding: buttonPadding,
+        shape: buttonShape,
         textStyle: text.labelLarge,
       ),
+    ),
+    // secondary actions: a flat `field` fill, no outline (fills over borders)
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: OutlinedButton.styleFrom(
+        backgroundColor: c.field,
+        foregroundColor: c.text,
+        side: BorderSide.none,
+        padding: buttonPadding,
+        shape: buttonShape,
+        textStyle: text.bodyMedium,
+      ),
+    ),
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(
+        foregroundColor: c.accent,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        shape: buttonShape,
+        textStyle: text.labelLarge,
+      ),
+    ),
+    iconButtonTheme: IconButtonThemeData(
+      style: IconButton.styleFrom(foregroundColor: c.muted, shape: buttonShape),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: c.field,
+      isDense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
+      hintStyle: text.bodyMedium!.copyWith(color: c.muted),
+      helperStyle: text.labelSmall!.copyWith(
+        color: c.muted,
+        fontWeight: FontWeight.w400,
+      ),
+      errorStyle: text.labelSmall!.copyWith(color: c.danger),
       border: const OutlineInputBorder(
         borderRadius: _controlRadius,
         borderSide: BorderSide.none,
@@ -228,14 +340,53 @@ ThemeData ufTheme(Brightness brightness) {
         borderRadius: _controlRadius,
         borderSide: BorderSide(color: c.accent, width: 2),
       ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: _controlRadius,
+        borderSide: BorderSide(color: c.danger, width: 2),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: _controlRadius,
+        borderSide: BorderSide(color: c.danger, width: 2),
+      ),
+    ),
+    chipTheme: ChipThemeData(
+      color: selectedFill,
+      labelStyle: text.bodyMedium,
+      secondaryLabelStyle: text.labelLarge!.copyWith(color: c.accentFg),
+      side: BorderSide.none,
+      shape: const StadiumBorder(),
+      showCheckmark: false,
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+    ),
+    checkboxTheme: CheckboxThemeData(
+      fillColor: selectedFill,
+      checkColor: WidgetStatePropertyAll(c.accentFg),
+      side: BorderSide.none,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+    ),
+    switchTheme: SwitchThemeData(
+      trackColor: selectedFill,
+      thumbColor: WidgetStateProperty<Color>.fromMap({
+        WidgetState.selected: c.accentFg,
+        WidgetState.any: c.muted,
+      }),
+      trackOutlineColor: const WidgetStatePropertyAll(Colors.transparent),
+    ),
+    tooltipTheme: TooltipThemeData(
+      decoration: BoxDecoration(color: c.text, borderRadius: _controlRadius),
+      textStyle: text.bodySmall!.copyWith(color: c.bg),
+    ),
+    snackBarTheme: SnackBarThemeData(
+      backgroundColor: c.text,
+      contentTextStyle: text.bodyMedium!.copyWith(color: c.bg),
+      behavior: SnackBarBehavior.floating,
+      shape: const RoundedRectangleBorder(borderRadius: _controlRadius),
     ),
     cardTheme: const CardThemeData(elevation: 0),
     dialogTheme: DialogThemeData(
       backgroundColor: c.panel,
-      elevation: 8,
-      shadowColor: Colors.black,
+      elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      titleTextStyle: text.headlineSmall,
     ),
   );
 }

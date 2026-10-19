@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:xterm2/xterm.dart';
 
+import '../debug_trace.dart';
 import '../design/seal.dart';
 import '../ssh/ssh_connector.dart';
 
@@ -39,7 +40,12 @@ class TerminalSession extends ChangeNotifier {
     if (startupCommand != null) shell.write(utf8.encode('$startupCommand\n'));
     state = SealState.connected;
     notifyListeners();
-    unawaited(shell.done.then((_) => fail(null)));
+    unawaited(
+      shell.done.then((_) {
+        trace(TraceArea.ssh, 'shell closed ${shortId(hostId)}');
+        fail(null);
+      }),
+    );
   }
 
   void fail(Object? error, {SealState state = SealState.offline}) {

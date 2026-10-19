@@ -2,8 +2,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:unfeudal_client/l10n/app_localizations.dart';
+import 'package:unfeudal_client/src/design/field.dart';
 import 'package:unfeudal_client/src/events/app_events.dart';
 import 'package:unfeudal_client/src/ui/hosts/folder_editor_panel.dart';
+import 'package:unfeudal_client/src/ui/hosts/editor_frame.dart';
 import 'package:unfeudal_client/src/ui/hosts/host_editor_panel.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
@@ -11,7 +13,13 @@ import '../support/fakes.dart';
 import '../support/pump_app.dart';
 
 AppLocalizations l10n(WidgetTester t) =>
-    AppLocalizations.of(t.element(find.byType(Scaffold).first));
+    AppLocalizations.of(t.element(find.byType(EditorFrame).first));
+
+/// The text under a field: its source line or error.
+Finder underField(String key, String text) => find.descendant(
+  of: find.ancestor(of: find.byKey(Key(key)), matching: find.byType(UfField)),
+  matching: find.text(text),
+);
 
 void main() {
   testWidgets(
@@ -57,12 +65,12 @@ void main() {
       child: HostEditorPanel(hostId: host),
     );
     final port = t.widget<TextField>(find.byKey(const Key('host-port')));
+    expect(port.decoration!.hintText, '2222');
     expect(
-      (port.decoration!.hintText, port.decoration!.helperText),
-      ('2222', l10n(t).hostInherited('top')),
+      underField('host-port', l10n(t).hostInherited('top')),
+      findsOneWidget,
     );
-    final user = t.widget<TextField>(find.byKey(const Key('host-user')));
-    expect(user.decoration!.helperText, l10n(t).hostDefault);
+    expect(underField('host-user', l10n(t).hostDefault), findsOneWidget);
   });
 
   testWidgets('saving keeps the fields this editor does not show', (t) async {

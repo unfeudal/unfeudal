@@ -7,6 +7,8 @@ import 'package:dartssh2/dartssh2.dart';
 
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
+import '../debug_trace.dart';
+
 enum HostKeyDecision { trusted, unknown, changed }
 
 /// No pin → unknown; same type and fingerprint → trusted; anything else → changed.
@@ -146,6 +148,10 @@ class SshConnector {
   /// not [Exception]s, become [SshAuthFailed] or [SshConnectionFailed].
   Future<SshShell> connect(ConnectTarget target, SshCallbacks callbacks) async {
     final identity = target.identity;
+    trace(
+      TraceArea.ssh,
+      'connect ${shortId(target.hostId)} port ${target.port}, auth ${identity?.kind.name ?? 'asked'}',
+    );
     HostKeyDecision? refused;
     final client = SSHClient(
       await _openSocket(target.address, target.port),
@@ -153,14 +159,21 @@ class SshConnector {
       identities: identity?.kind == IdentityKind.privateKey
           ? SSHKeyPair.fromPem(identity!.privateKeyPem!, identity.passphrase)
           : null,
-      onPasswordRequest: () => identity?.kind == IdentityKind.password
-          ? identity!.password
-          : callbacks.askPassword('${target.user}@${target.hostName}'),
-      onUserInfoRequest: (request) => callbacks.answerPrompts(
-        request.name,
-        request.instruction,
-        [for (final p in request.prompts) SshPrompt(p.promptText, p.echo)],
-      ),
+      onPasswordRequest: () {
+        trace(TraceArea.ssh, 'server asks for a password');
+        return identity?.kind == IdentityKind.password
+            ? identity!.password
+            : callbacks.askPassword('${target.user}@${target.hostName}');
+      },
+      onUserInfoRequest: (request) {
+        trace(
+          TraceArea.ssh,
+          'keyboard-interactive: ${request.prompts.length} prompts',
+        );
+        return callbacks.answerPrompts(request.name, request.instruction, [
+          for (final p in request.prompts) SshPrompt(p.promptText, p.echo),
+        ]);
+      },
       onVerifyHostKey: (type, fingerprintBytes) async {
         final fingerprint = utf8.decode(
           fingerprintBytes,
@@ -177,16 +190,26 @@ class SshConnector {
           fingerprint: fingerprint,
           callbacks: callbacks,
         );
+        trace(
+          TraceArea.ssh,
+          'host key $type: ${decision.name}${ok ? '' : ', refused'}',
+        );
         if (!ok) refused = decision;
         return ok;
       },
     );
     try {
-      return _DartSshShell(
+      final shell = _DartSshShell(
         client,
         await client.shell(pty: const SSHPtyConfig(width: 80, height: 24)),
       );
+      trace(TraceArea.ssh, 'shell open ${shortId(target.hostId)}');
+      return shell;
     } catch (e) {
+      trace(
+        TraceArea.ssh,
+        'connect ${shortId(target.hostId)} failed: ${e.runtimeType}',
+      );
       await client.close();
       if (refused case final decision?) throw HostKeyRejected(decision);
       if (e is SSHAuthFailError) throw const SshAuthFailed();

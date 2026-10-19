@@ -2,6 +2,8 @@
 import 'package:flutter/material.dart';
 
 import '../../l10n/app_localizations.dart';
+import '../design/dialog.dart';
+import '../design/field.dart';
 import '../design/tokens.dart';
 import 'describe_error.dart';
 
@@ -15,6 +17,7 @@ class FormDialogField {
     this.kind = FormFieldKind.text,
     this.lines = 1,
     this.mono = false,
+    this.offLabel,
   });
 
   final String key;
@@ -22,6 +25,9 @@ class FormDialogField {
   final FormFieldKind kind;
   final int lines;
   final bool mono;
+
+  /// For a toggle: the label of its 'false' side, drawn as a two-choice switch (Ed25519 | RSA 4096).
+  final String? offLabel;
 }
 
 /// A small form in a dialog. [onSave] gets the values by field key (a toggle is "true" or "false");
@@ -91,49 +97,99 @@ class _FormDialogState extends State<FormDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final l = AppLocalizations.of(context);
-    return AlertDialog(
-      title: Text(widget.title),
-      content: SizedBox(
-        width: 420,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          spacing: 12,
-          children: [
-            for (final f in widget.fields)
-              if (f.kind == FormFieldKind.toggle)
-                SwitchListTile(
-                  key: Key(f.key),
-                  value: _toggles[f.key]!,
-                  onChanged: (v) => setState(() => _toggles[f.key] = v),
-                  title: Text(f.label),
-                )
-              else
-                TextField(
-                  key: Key(f.key),
-                  controller: _text[f.key],
-                  obscureText: f.kind == FormFieldKind.secret,
-                  maxLines: f.kind == FormFieldKind.secret ? 1 : f.lines,
-                  style: f.mono ? monoStyle : null,
-                  decoration: InputDecoration(labelText: f.label),
-                ),
-            if (_error case final error?)
-              Text(error, style: TextStyle(color: UfColors.of(context).danger)),
-          ],
-        ),
-      ),
+    final colors = UfColors.of(context);
+    return UfDialog(
+      width: 440,
+      title: widget.title,
       actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context, false),
-          child: Text(l.cancel),
-        ),
+        CancelButton(onPressed: () => Navigator.pop(context, false)),
         FilledButton(
           key: Key(widget.saveKey),
           onPressed: _busy ? null : _save,
           child: Text(widget.saveLabel),
         ),
       ],
+      children: [
+        for (final f in widget.fields)
+          if (f.kind == FormFieldKind.toggle)
+            _TwoChoices(
+              key: Key(f.key),
+              off: f.offLabel ?? '',
+              on: f.label,
+              value: _toggles[f.key]!,
+              onChanged: (v) => setState(() => _toggles[f.key] = v),
+            )
+          else
+            UfField(
+              label: f.label,
+              child: TextField(
+                key: Key(f.key),
+                controller: _text[f.key],
+                obscureText: f.kind == FormFieldKind.secret,
+                maxLines: f.kind == FormFieldKind.secret ? 1 : f.lines,
+                style: f.mono ? monoStyle.copyWith(fontSize: 12) : null,
+              ),
+            ),
+        if (_error case final error?)
+          Text(
+            error,
+            style: TextStyle(color: colors.danger, fontWeight: FontWeight.w600),
+          ),
+      ],
+    );
+  }
+}
+
+/// Two side-by-side choices in a filled track; the chosen one takes the accent.
+class _TwoChoices extends StatelessWidget {
+  const _TwoChoices({
+    super.key,
+    required this.off,
+    required this.on,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String off;
+  final String on;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = UfColors.of(context);
+    Widget side(String label, bool selected, bool target) => Expanded(
+      child: Semantics(
+        selected: selected,
+        button: true,
+        child: Material(
+          color: selected ? colors.accentBg : Colors.transparent,
+          borderRadius: const BorderRadius.all(Radius.circular(8)),
+          child: InkWell(
+            borderRadius: const BorderRadius.all(Radius.circular(8)),
+            onTap: () => onChanged(target),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+              child: Text(
+                label,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: selected ? colors.accentFg : colors.text,
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: colors.field,
+        borderRadius: const BorderRadius.all(Radius.circular(10)),
+      ),
+      child: Row(children: [side(off, !value, false), side(on, value, true)]),
     );
   }
 }

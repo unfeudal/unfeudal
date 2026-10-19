@@ -4,12 +4,13 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
+import '../../design/dialog.dart';
 import '../../design/motion.dart';
 import '../../design/tokens.dart';
 import '../../vault/vault.dart';
 import '../describe_error.dart';
+import '../fields.dart';
 import 'editor_frame.dart';
-import 'host_editor_panel.dart';
 
 /// Edits a folder: name, parent (never itself or inside itself) and defaults for the hosts inside.
 class FolderEditorPanel extends StatefulWidget {
@@ -131,24 +132,12 @@ class _FolderEditorPanelState extends State<FolderEditorPanel> {
   Future<void> _delete() async {
     final l = AppLocalizations.of(context);
     final vault = AppScope.read(context).vault!;
-    final yes = await showUfDialog<bool>(
+    final yes = await confirmDanger(
       context,
-      (dialog) => AlertDialog(
-        content: Text(l.folderDeleteConfirm(_name.text)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialog, false),
-            child: Text(MaterialLocalizations.of(dialog).cancelButtonLabel),
-          ),
-          FilledButton(
-            key: const Key('confirm-yes'),
-            onPressed: () => Navigator.pop(dialog, true),
-            child: Text(l.folderDelete),
-          ),
-        ],
-      ),
+      question: l.folderDeleteConfirm(_name.text),
+      action: l.folderDelete,
     );
-    if (yes != true) return;
+    if (!yes) return;
     await vault.deleteFolder(widget.folderId!);
     widget.onClose?.call();
   }
@@ -168,77 +157,63 @@ class _FolderEditorPanelState extends State<FolderEditorPanel> {
         .ofKind(ItemKind.identity)
         .where((e) => e.state == EntryState.ok)
         .toList();
-    InputDecoration decoration(String label, String field) =>
-        InputDecoration(labelText: label, errorText: _problems[field]);
+    final parentName = vault.entry(_parentId ?? '')?.name;
     return EditorFrame(
-      width: HostEditorPanel.width,
+      title: widget.folderId == null
+          ? l.treeNewFolder
+          : vault.entry(widget.folderId!)?.name ?? l.treeNewFolder,
+      crumb: [l.vaultPersonal, ?parentName].join(' / '),
       onClose: widget.onClose,
+      save: FilledButton(
+        key: const Key('folder-save'),
+        onPressed: readOnly ? null : _save,
+        child: Text(l.folderSave),
+      ),
+      trash: widget.folderId != null && !readOnly
+          ? TextButton(
+              key: const Key('folder-delete'),
+              onPressed: _delete,
+              child: Text(l.folderDelete),
+            )
+          : null,
       children: [
         ShakeOnError(
           trigger: _failures,
-          child: TextField(
-            key: const Key('folder-name'),
-            controller: _name,
-            decoration: decoration(l.folderName, 'name'),
+          child: keyedField(
+            'folder-name',
+            _name,
+            l.folderName,
+            error: _problems['name'],
           ),
         ),
-        DropdownButtonFormField<String?>(
-          key: const Key('folder-parent'),
-          initialValue: parents.any((e) => e.id == _parentId)
-              ? _parentId
-              : null,
-          decoration: InputDecoration(labelText: l.folderParent),
-          items: [
-            DropdownMenuItem(
-              key: const Key('folder-parent-root'),
-              child: Text(l.folderRoot),
-            ),
-            for (final e in parents)
-              DropdownMenuItem(
-                key: Key('folder-parent-${e.id}'),
-                value: e.id,
-                child: Text(e.name ?? ''),
-              ),
-          ],
+        entryPicker(
+          key: 'folder-parent',
+          label: l.folderParent,
+          none: l.folderRoot,
+          entries: parents,
+          value: _parentId,
           onChanged: (v) => setState(() => _parentId = v),
         ),
-        Text(l.folderDefaults, style: Theme.of(context).textTheme.titleSmall),
-        TextField(
-          key: const Key('folder-port'),
-          controller: _port,
-          decoration: decoration(l.hostPort, 'port'),
+        Padding(
+          padding: const EdgeInsets.only(top: 6),
+          child: Text(
+            l.folderDefaults,
+            style: Theme.of(context).textTheme.titleMedium!
+                .copyWith(fontSize: 14),
+          ),
         ),
-        TextField(
-          key: const Key('folder-user'),
-          controller: _user,
-          decoration: decoration(l.hostUser, 'user'),
-        ),
-        DropdownButtonFormField<String?>(
-          key: const Key('folder-identity'),
-          initialValue: identities.any((e) => e.id == _identityId)
-              ? _identityId
-              : null,
-          decoration: InputDecoration(labelText: l.hostIdentity),
-          items: [
-            DropdownMenuItem(child: Text(l.hostDefault)),
-            for (final e in identities)
-              DropdownMenuItem(value: e.id, child: Text(e.name ?? '')),
-          ],
+        keyedField('folder-port', _port, l.hostPort, error: _problems['port']),
+        keyedField('folder-user', _user, l.hostUser, error: _problems['user']),
+        entryPicker(
+          key: 'folder-identity',
+          label: l.hostIdentity,
+          none: l.hostDefault,
+          entries: identities,
+          value: _identityId,
           onChanged: (v) => setState(() => _identityId = v),
         ),
         if (_error case final error?)
           Text(error, style: TextStyle(color: UfColors.of(context).danger)),
-        FilledButton(
-          key: const Key('folder-save'),
-          onPressed: readOnly ? null : _save,
-          child: Text(l.folderSave),
-        ),
-        if (widget.folderId != null && !readOnly)
-          TextButton(
-            key: const Key('folder-delete'),
-            onPressed: _delete,
-            child: Text(l.folderDelete),
-          ),
       ],
     );
   }

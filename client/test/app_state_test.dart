@@ -200,6 +200,11 @@ void main() {
         (AppStage.login, true, false),
       );
       expect(mirrors.values.single.outbox(), hasLength(1));
+      await pumpEventQueue(); // the session ends behind the sync round
+      final kept = (await s.sessions.load())!;
+      expect((kept.refreshToken, kept.email), (null, s.stored!.email));
+      await s.boot(); // a relaunch skips the unlock a dead token would fail
+      expect(s.stage, AppStage.login);
       final (h2, s2, _, _) = await loggedIn();
       h2.expireSessions();
       await s2.sync!.syncNow();
@@ -207,6 +212,8 @@ void main() {
         (s2.stage, s2.deviceRevoked, s2.sessionExpired),
         (AppStage.login, false, true),
       );
+      await pumpEventQueue();
+      expect((await s2.sessions.load())!.refreshToken, isNull);
     },
   );
 

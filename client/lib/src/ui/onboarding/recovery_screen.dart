@@ -4,7 +4,6 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
-import '../../design/tokens.dart';
 import '../describe_error.dart';
 import '../fields.dart';
 import '../lock/lock_frame.dart';
@@ -29,6 +28,9 @@ class _RecoveryScreenState extends State<RecoveryScreen> {
   String? _problem;
   ({String key, Uri server, String email})? _done;
 
+  /// 1: server, e-mail and key; 2: the new password.
+  int _step = 1;
+
   @override
   void initState() {
     super.initState();
@@ -45,14 +47,22 @@ class _RecoveryScreenState extends State<RecoveryScreen> {
     super.dispose();
   }
 
-  Future<void> _submit() async {
+  /// A mistyped key is refused here, before any request.
+  void _next() {
     final l = AppLocalizations.of(context);
-    // a mistyped key is refused before any request
     try {
       RecoveryKey.decode(_key.text);
     } on InvalidRecoveryKey catch (e) {
       return setState(() => _problem = describeError(l, e));
     }
+    setState(() {
+      _problem = null;
+      _step = 2;
+    });
+  }
+
+  Future<void> _submit() async {
+    final l = AppLocalizations.of(context);
     final local = checkNewPassword(l, _password.text, _confirm.text);
     if (local != null) return setState(() => _problem = local);
     setState(() {
@@ -96,40 +106,82 @@ class _RecoveryScreenState extends State<RecoveryScreen> {
         onDone: _finish,
       );
     }
+    final first = _step == 1;
     return Scaffold(
       body: LockFrame(
+        step: l.stepOf(_step, 2),
+        title: first ? l.recoverTitle : l.recoverPasswordTitle,
+        subtitle: first ? l.recoverSubtitle : l.recoverPasswordSubtitle,
         children: [
-          Text(
-            l.recoverTitle,
-            style: Theme.of(context).textTheme.headlineMedium,
-          ),
-          keyedField(
-            'recover-server',
-            _server,
-            l.loginServer,
-            keyboard: TextInputType.url,
-          ),
-          keyedField(
-            'recover-email',
-            _email,
-            l.loginEmail,
-            keyboard: TextInputType.emailAddress,
-          ),
-          keyedField('recover-key', _key, l.recoverKey),
-          keyedField(
-            'recover-password',
-            _password,
-            l.recoverNewPassword,
-            secret: true,
-          ),
-          keyedField('recover-confirm', _confirm, l.setupConfirm, secret: true),
-          if (_problem case final problem?)
-            Text(problem, style: TextStyle(color: UfColors.of(context).danger)),
-          FilledButton(
-            key: const Key('recover-submit'),
-            onPressed: _busy ? null : _submit,
-            child: Text(l.recoverSubmit),
-          ),
+          if (first) ...[
+            keyedField(
+              'recover-server',
+              _server,
+              l.loginServer,
+              keyboard: TextInputType.url,
+            ),
+            keyedField(
+              'recover-email',
+              _email,
+              l.loginEmail,
+              keyboard: TextInputType.emailAddress,
+            ),
+            keyedField(
+              'recover-key',
+              _key,
+              l.recoverKey,
+              mono: true,
+              hint: 'XXXX-XXXX-XXXX-XXXX-…',
+              onSubmitted: (_) => _next(),
+            ),
+          ] else ...[
+            keyedField(
+              'recover-password',
+              _password,
+              l.recoverNewPassword,
+              secret: true,
+            ),
+            keyedField(
+              'recover-confirm',
+              _confirm,
+              l.setupConfirm,
+              secret: true,
+            ),
+            LockNotice(l.setupWarning),
+          ],
+          if (_problem case final problem?) LockError(problem),
+          if (first)
+            LockActions(
+              primary: FilledButton(
+                key: const Key('recover-next'),
+                onPressed: _next,
+                child: Text(l.stepNext),
+              ),
+              links: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).maybePop(),
+                  child: Text(l.cancel),
+                ),
+              ],
+            )
+          else
+            LockActions(
+              primary: FilledButton(
+                key: const Key('recover-submit'),
+                onPressed: _busy ? null : _submit,
+                child: BusyLabel(busy: _busy, label: l.recoverSubmit),
+              ),
+              links: [
+                TextButton(
+                  key: const Key('recover-back'),
+                  onPressed: () => setState(() {
+                    _problem = null;
+                    _step = 1;
+                  }),
+                  child: Text(l.recoverBack),
+                ),
+              ],
+            ),
         ],
       ),
     );
