@@ -214,6 +214,12 @@ void main() {
       {
         'settings': {'unknown': 1},
       },
+      {
+        'settings': {'mascot': null}, // only the retention values clear with null
+      },
+      {
+        'settings': {'mascot': 'yes'},
+      },
     ]) {
       expect(
         (await s.put(path, token: w['olivia'].accessToken, body: bad)).status,
