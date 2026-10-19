@@ -5,18 +5,13 @@ import 'package:flutter/foundation.dart';
 
 /// Locks after [timeout] without activity (zero: never) and reports idleness after [idleAfter].
 class AutoLock {
-  AutoLock({
-    required this.timeout,
-    required this.onLock,
-    this.onIdle,
-    this.idleAfter = const Duration(minutes: 5),
-  });
+  AutoLock({required this.timeout, required this.onLock, this.onIdle});
 
   /// Read at every restart, so a settings change applies from the next activity.
   final Duration Function() timeout;
   final VoidCallback onLock;
   final VoidCallback? onIdle;
-  final Duration idleAfter;
+  static const idleAfter = Duration(minutes: 5);
   Timer? _lock;
   Timer? _idle;
   bool _running = false;

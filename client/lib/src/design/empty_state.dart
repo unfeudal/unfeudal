@@ -27,8 +27,8 @@ class EmptyState extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const UfLogo(size: 88),
-          const SizedBox(height: 20),
+          UfLogo(size: 88, color: colors.text),
+          const SizedBox(height: 18),
           Text(
             title,
             style: theme.textTheme.headlineMedium,
@@ -49,7 +49,7 @@ class EmptyState extends StatelessWidget {
                 if (primary case (final label, final onPressed))
                   FilledButton(onPressed: onPressed, child: Text(label)),
                 if (secondary case (final label, final onPressed))
-                  TextButton(onPressed: onPressed, child: Text(label)),
+                  OutlinedButton(onPressed: onPressed, child: Text(label)),
               ],
             ),
           ],

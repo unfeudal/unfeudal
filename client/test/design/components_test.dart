@@ -54,7 +54,7 @@ void main() {
     expect(find.text('T'), findsOneWidget);
     expect(find.byType(UfLogo), findsOneWidget);
     expect(find.byType(FilledButton), findsOneWidget);
-    expect(find.byType(TextButton), findsOneWidget);
+    expect(find.byType(OutlinedButton), findsOneWidget);
   });
 
   testWidgets('banner tones use the token colours and keep one action', (
@@ -78,7 +78,7 @@ void main() {
           )
           .first,
     );
-    expect(box.color, UfColors.light.danger.withValues(alpha: 0.12));
+    expect(box.color, UfColors.light.dangerSoft);
     await t.tap(find.text('Retry'));
     expect(tapped, 1);
   });

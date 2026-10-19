@@ -5,19 +5,30 @@ import 'package:flutter/material.dart';
 import '../l10n/app_localizations.dart';
 import 'app_scope.dart';
 import 'app_state.dart';
-import 'design/empty_state.dart';
+import 'debug_trace.dart';
+import 'design/dialog.dart';
+import 'design/icons.dart';
 import 'design/motion.dart';
 import 'design/tokens.dart';
 import 'settings/settings.dart';
+import 'ui/lock/lock_frame.dart';
 import 'ui/lock/login_screen.dart';
 import 'ui/onboarding/join_screen.dart';
 import 'ui/onboarding/setup_screen.dart';
 import 'ui/shell/home_shell.dart';
+import 'ui/title_bar.dart';
 import 'ui/lock/unlock_screen.dart';
+import 'window/window_chrome.dart';
 
 /// Theme, language and motion from the cached settings (usable before unlock), then the screen of the stage.
 class UnfeudalApp extends StatefulWidget {
-  const UnfeudalApp({super.key, required this.state, this.locale, this.home});
+  const UnfeudalApp({
+    super.key,
+    required this.state,
+    this.locale,
+    this.home,
+    this.chrome,
+  });
 
   final AppState state;
 
@@ -26,6 +37,9 @@ class UnfeudalApp extends StatefulWidget {
 
   /// Shown instead of the stage screens (widget tests).
   final Widget? home;
+
+  /// The OS window when the system title bar is replaced by ours; null in tests.
+  final WindowChrome? chrome;
 
   @override
   State<UnfeudalApp> createState() => _UnfeudalAppState();
@@ -52,6 +66,9 @@ class _UnfeudalAppState extends State<UnfeudalApp> {
   /// Leaving home closes every dialog and pushed screen (lock, sign-out, revoked device).
   void _onState() {
     final stage = widget.state.stage;
+    if (stage != _stage) {
+      trace(TraceArea.ui, 'screen ${_stage.name} → ${stage.name}');
+    }
     if (_stage == AppStage.home && stage != AppStage.home) {
       _navigator.currentState?.popUntil((route) => route.isFirst);
     }
@@ -64,16 +81,20 @@ class _UnfeudalAppState extends State<UnfeudalApp> {
     final l = AppLocalizations.of(context);
     return await showUfDialog<bool>(context, alert: true, (dialog) {
           void answer(bool value) => Navigator.pop(dialog, value);
-          return AlertDialog(
-            title: Text(l.plainHttpTitle),
-            content: Text(l.plainHttpBody('$server')),
+          final colors = UfColors.of(dialog);
+          return UfDialog(
+            leading: Icon(
+              UfIcons.warningOctagon,
+              size: 28,
+              color: colors.danger,
+            ),
+            title: l.plainHttpTitle,
+            message: l.plainHttpBody('$server'),
             actions: [
-              TextButton(
-                onPressed: () => answer(false),
-                child: Text(MaterialLocalizations.of(dialog).cancelButtonLabel),
-              ),
+              CancelButton(onPressed: () => answer(false)),
               FilledButton(
                 key: const Key('plain-http-continue'),
+                style: dangerButtonStyle(colors),
                 onPressed: () => answer(true),
                 child: Text(l.plainHttpContinue),
               ),
@@ -81,6 +102,26 @@ class _UnfeudalAppState extends State<UnfeudalApp> {
           );
         }) ??
         false;
+  }
+
+  /// Puts the custom title bar over the screens: `rail` over the vault, `bg` over the access screens.
+  Widget _framed(BuildContext context, Widget screen) {
+    final chrome = widget.chrome;
+    if (chrome == null) return screen;
+    final colors = UfColors.of(context);
+    final l = AppLocalizations.of(context);
+    final home = widget.state.stage == AppStage.home;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        UfTitleBar(
+          chrome: chrome,
+          title: home ? '${l.appName} — ${l.vaultPersonal}' : l.appName,
+          background: home ? colors.rail : LockFrame.background(context),
+        ),
+        Expanded(child: screen),
+      ],
+    );
   }
 
   @override
@@ -113,7 +154,7 @@ class _UnfeudalAppState extends State<UnfeudalApp> {
                   widget.state.activity();
                   return KeyEventResult.ignored;
                 },
-                child: child!,
+                child: _framed(context, child!),
               ),
             ),
           ),
@@ -153,9 +194,10 @@ class _StageScreen extends StatelessWidget {
           AppStage.login => const LoginScreen(),
           AppStage.unlock => const UnlockScreen(),
           AppStage.mirrorTooNew => Scaffold(
-            body: EmptyState(
+            body: LockFrame(
               title: l.mirrorTooNewTitle,
-              body: l.mirrorTooNewBody,
+              subtitle: l.mirrorTooNewBody,
+              children: const [],
             ),
           ),
           AppStage.setup => const SetupScreen(),

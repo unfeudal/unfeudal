@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../api/api_client.dart';
+import '../debug_trace.dart';
 import '../storage/local_mirror.dart';
 import '../sync/ledger_store.dart';
 
@@ -53,10 +54,15 @@ class Vault extends ChangeNotifier {
     final key = _key = Uint8List.fromList(userKey);
     final ledgerOpened = await ledger.load(key);
     await reload();
+    trace(
+      TraceArea.vault,
+      'unlocked, ledger ${ledgerOpened ? 'opened' : 'unreadable, reset'}',
+    );
     return ledgerOpened;
   }
 
   void lock() {
+    trace(TraceArea.vault, 'locked');
     _key?.fillRange(0, _key!.length, 0);
     _key = null;
     ledger.close();
@@ -232,6 +238,7 @@ class Vault extends ChangeNotifier {
     String keyType,
     String fingerprint,
   ) async {
+    trace(TraceArea.vault, 'pin host key of ${shortId(hostId)}');
     final pin = KnownHostMeta(
       hostItemId: hostId,
       keyType: keyType,
@@ -400,6 +407,13 @@ class Vault extends ChangeNotifier {
                 )); // replay: keep what was shown, take the new revision
     }
     _entries = next;
+    if (tracing(TraceArea.vault)) {
+      final odd = next.values.where((e) => e.state != EntryState.ok).length;
+      trace(
+        TraceArea.vault,
+        'reload: ${next.length} entries, $odd not ok, outbox ${queued.length}',
+      );
+    }
     await _seedPins();
     await ledger.save();
     notifyListeners();
@@ -505,6 +519,10 @@ class Vault extends ChangeNotifier {
       mirror.outbox().any((e) => e.item.id == id && e.item.secret != null);
 
   Future<void> _write(Item item) async {
+    trace(
+      TraceArea.vault,
+      'write ${item.type} ${shortId(item.id)}${item.deleted ? ' (trash)' : ''}',
+    );
     await _send(item);
     await reload();
   }

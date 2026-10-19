@@ -83,7 +83,7 @@
   "loginToRecover": "Forgotten password: use the recovery key",
   "loginDeviceRevoked": "This device was signed out from another device. Log in again to continue.",
   "loginSessionExpired": "The session expired. Log in again; local data is kept.",
-  "unlockTitle": "Unlock",
+  "unlockTitle": "Vault locked",
   "unlockPassword": "Master password",
   "unlockSubmit": "Unlock",
   "unlockPeek": "Show the password",
@@ -361,5 +361,60 @@
         "type": "String"
       }
     }
-  }
+  },
+  "stepOf": "Step {step} of {total}",
+  "@stepOf": {
+    "placeholders": {
+      "step": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "stepNext": "Continue",
+  "setupSubtitle": "The first account of this instance becomes its owner.",
+  "setupAccountTitle": "Create the account",
+  "setupAccountSubtitle": "Owner of {server}",
+  "@setupAccountSubtitle": {
+    "placeholders": {
+      "server": {
+        "type": "String"
+      }
+    }
+  },
+  "setupBack": "Back to the server and token",
+  "joinSubtitle": "Paste the link you received, or open the enrollment file.",
+  "joinInviteSubtitle": "Invitation for {server}",
+  "@joinInviteSubtitle": {
+    "placeholders": {
+      "server": {
+        "type": "String"
+      }
+    }
+  },
+  "recoverSubtitle": "The key is checked on this device before anything is sent.",
+  "recoverPasswordTitle": "New password",
+  "recoverPasswordSubtitle": "Every device will be signed out after the reset.",
+  "recoverBack": "Back to the recovery key",
+  "tabErrorTitle": "Cannot connect to {host}",
+  "@tabErrorTitle": {
+    "placeholders": {
+      "host": {
+        "type": "String"
+      }
+    }
+  },
+  "tabRetry": "Retry",
+  "tabEditHost": "Edit host",
+  "manageBack": "Back to the vault",
+  "treeHide": "Hide folders",
+  "treeShow": "Show folders",
+  "windowMinimize": "Minimize",
+  "windowMaximize": "Maximize",
+  "windowRestore": "Restore",
+  "windowClose": "Close",
+  "treeRolePersonal": "Personal vault",
+  "passwordChecking": "Checking…"
 }

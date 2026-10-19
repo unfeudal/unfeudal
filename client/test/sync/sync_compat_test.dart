@@ -48,10 +48,10 @@ void main() {
     final h = SyncHarness(latestClient: '0.2.0');
     final (e, _, _) = await h.engine();
     await e.syncNow();
-    expect(e.updateNotice!.version, '0.2.0');
+    expect(e.updateVersion, '0.2.0');
     h.latestClient = '0.1.0';
     await e.syncNow();
-    expect(e.updateNotice, isNull);
+    expect(e.updateVersion, isNull);
   });
 
   test('a compatible server again lifts read-only', () async {

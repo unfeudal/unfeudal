@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:unfeudal_client/l10n/app_localizations.dart';
 import 'package:unfeudal_client/src/design/seal.dart';
+import 'package:unfeudal_client/src/ssh/ssh_connector.dart';
 import 'package:unfeudal_client/src/ui/hosts/host_key_dialog.dart';
 import 'package:unfeudal_client/src/ui/shell/home_shell.dart';
 
@@ -67,5 +68,32 @@ void main() {
     await t.tap(find.byKey(const Key('tab-close-0')));
     await t.pump();
     expect(s.tabs, isEmpty);
+  });
+
+  testWidgets('refused credentials: the tab shows why, retry reconnects', (
+    t,
+  ) async {
+    final ssh = FakeSshConnector()..failWith = const SshAuthFailed();
+    final s = await signedInState(t, ssh: ssh);
+    late String id;
+    await t.runAsync(
+      () async => id = await s.vault!.upsertItem(
+        type: 'host',
+        meta: hostJson('web', user: 'root'),
+      ),
+    );
+    await pumpApp(t, state: s);
+    await pumpReal(t, rounds: 5);
+    await t.tap(find.byKey(Key('host-$id')));
+    await t.sendKeyEvent(LogicalKeyboardKey.enter);
+    await pumpReal(t, rounds: 5);
+    final l = AppLocalizations.of(t.element(find.byType(HomeShell)));
+    expect(find.text(l.errorSshAuth), findsOneWidget);
+    expect(find.text(l.tabErrorTitle('web')), findsOneWidget);
+    expect(find.byKey(const Key('tab-edit-host')), findsOneWidget);
+    await t.tap(find.byKey(const Key('tab-retry')));
+    await pumpReal(t, rounds: 5);
+    expect(ssh.targets, hasLength(2));
+    expect(s.tabs, hasLength(1));
   });
 }

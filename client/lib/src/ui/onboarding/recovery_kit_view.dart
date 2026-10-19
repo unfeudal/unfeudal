@@ -13,40 +13,33 @@ import 'package:printing/printing.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
 import '../../design/tokens.dart';
+import '../lock/lock_frame.dart';
+
+/// What a recovery kit prints.
+typedef RecoveryKit = ({
+  Uri server,
+  String email,
+  DateTime created,
+  String recoveryKey,
+  String instructions,
+});
 
 /// The text kit. The `Server:`, `Account:`, `Created:` labels are fixed (not translated); the instructions are.
-String recoveryKitText({
-  required Uri server,
-  required String email,
-  required DateTime created,
-  required String recoveryKey,
-  required String instructions,
-}) {
+String recoveryKitText(RecoveryKit kit) {
+  final (:server, :email, :created, :recoveryKey, :instructions) = kit;
   final day = created.toUtc().toIso8601String().substring(0, 10);
   return 'Server: $server\nAccount: $email\nCreated: $day\n\n$recoveryKey\n\n$instructions\n';
 }
 
 /// One A4 page rendering the lines of [recoveryKitText] under [title]; the key in JetBrains Mono, four groups per line.
-Future<Uint8List> buildRecoveryKitPdf({
-  required Uri server,
-  required String email,
-  required DateTime created,
-  required String recoveryKey,
-  required String instructions,
-  String? title,
-}) async {
+Future<Uint8List> buildRecoveryKitPdf(RecoveryKit kit, {String? title}) async {
+  final recoveryKey = kit.recoveryKey;
   Future<pw.Font> font(String file) async =>
       pw.Font.ttf(await rootBundle.load('assets/fonts/$file'));
   final body = await font('HankenGrotesk-Regular.ttf');
   final titleFont = await font('Alegreya-Bold.ttf');
   final mono = await font('JetBrainsMono-Regular.ttf');
-  final lines = recoveryKitText(
-    server: server,
-    email: email,
-    created: created,
-    recoveryKey: recoveryKey,
-    instructions: instructions,
-  ).trimRight().split('\n');
+  final lines = recoveryKitText(kit).trimRight().split('\n');
   final groups = recoveryKey.split('-');
   final keyLines = [
     for (var i = 0; i < groups.length; i += 4)
@@ -121,14 +114,7 @@ class _RecoveryKitViewState extends State<RecoveryKitView> {
   bool _confirmed = false;
   Timer? _clear;
 
-  ({
-    Uri server,
-    String email,
-    DateTime created,
-    String recoveryKey,
-    String instructions,
-  })
-  _kit() {
+  RecoveryKit _kit() {
     final stored = AppScope.read(context).stored;
     return (
       server: widget.server ?? stored!.serverUrl,
@@ -140,13 +126,8 @@ class _RecoveryKitViewState extends State<RecoveryKitView> {
   }
 
   Future<Uint8List> _pdf() {
-    final k = _kit();
     return buildRecoveryKitPdf(
-      server: k.server,
-      email: k.email,
-      created: k.created,
-      recoveryKey: k.recoveryKey,
-      instructions: k.instructions,
+      _kit(),
       title: AppLocalizations.of(context).kitTitle,
     );
   }
@@ -155,17 +136,8 @@ class _RecoveryKitViewState extends State<RecoveryKitView> {
     final pick = widget.savePath ?? _pickSaveLocation;
     final path = await pick('unfeudal-recovery-kit.pdf');
     if (path == null) return;
-    final k = _kit();
     final bytes = path.toLowerCase().endsWith('.txt')
-        ? utf8.encode(
-            recoveryKitText(
-              server: k.server,
-              email: k.email,
-              created: k.created,
-              recoveryKey: k.recoveryKey,
-              instructions: k.instructions,
-            ),
-          )
+        ? utf8.encode(recoveryKitText(_kit()))
         : await _pdf();
     await (widget.writeFile ?? (p, b) => File(p).writeAsBytes(b, flush: true))(
       path,
@@ -214,58 +186,70 @@ class _RecoveryKitViewState extends State<RecoveryKitView> {
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
     final theme = Theme.of(context);
+    final colors = UfColors.of(context);
     return Scaffold(
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 520),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              spacing: 12,
-              children: [
-                Text(l.kitTitle, style: theme.textTheme.headlineMedium),
-                Text(l.kitBody),
-                SelectableText(
-                  widget.recoveryKey,
-                  key: const Key('recovery-key'),
-                  style: monoStyle.copyWith(fontSize: 18),
-                ),
-                Wrap(
-                  spacing: 8,
-                  children: [
-                    OutlinedButton(
-                      key: const Key('recovery-copy'),
-                      onPressed: _copy,
-                      child: Text(l.kitCopy),
-                    ),
-                    OutlinedButton(
-                      key: const Key('recovery-save'),
-                      onPressed: _save,
-                      child: Text(l.kitSave),
-                    ),
-                    OutlinedButton(
-                      key: const Key('recovery-print'),
-                      onPressed: _print,
-                      child: Text(l.kitPrint),
-                    ),
-                  ],
-                ),
-                CheckboxListTile(
-                  key: const Key('recovery-confirm'),
-                  value: _confirmed,
-                  onChanged: (v) => setState(() => _confirmed = v ?? false),
-                  title: Text(l.kitConfirm),
-                ),
-                FilledButton(
-                  key: const Key('recovery-continue'),
-                  onPressed: _confirmed ? widget.onDone : null,
-                  child: Text(l.kitContinue),
-                ),
-              ],
+      body: LockFrame(
+        title: l.kitTitle,
+        subtitle: l.kitBody,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+            decoration: BoxDecoration(
+              color: colors.field,
+              borderRadius: const BorderRadius.all(Radius.circular(10)),
+            ),
+            child: SelectableText(
+              widget.recoveryKey,
+              key: const Key('recovery-key'),
+              style: monoStyle.copyWith(
+                fontSize: 18,
+                height: 1.7,
+                letterSpacing: 0.4,
+              ),
             ),
           ),
-        ),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton(
+                key: const Key('recovery-copy'),
+                onPressed: _copy,
+                child: Text(l.kitCopy),
+              ),
+              OutlinedButton(
+                key: const Key('recovery-save'),
+                onPressed: _save,
+                child: Text(l.kitSave),
+              ),
+              OutlinedButton(
+                key: const Key('recovery-print'),
+                onPressed: _print,
+                child: Text(l.kitPrint),
+              ),
+            ],
+          ),
+          Text(
+            l.kitInstructions,
+            style: theme.textTheme.bodyMedium!.copyWith(color: colors.muted),
+          ),
+          CheckboxListTile(
+            key: const Key('recovery-confirm'),
+            value: _confirmed,
+            onChanged: (v) => setState(() => _confirmed = v ?? false),
+            controlAffinity: ListTileControlAffinity.leading,
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            title: Text(l.kitConfirm, style: theme.textTheme.bodyLarge),
+          ),
+          LockActions(
+            primary: FilledButton(
+              key: const Key('recovery-continue'),
+              onPressed: _confirmed ? widget.onDone : null,
+              child: Text(l.kitContinue),
+            ),
+          ),
+        ],
       ),
     );
   }

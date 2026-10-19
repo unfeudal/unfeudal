@@ -5,13 +5,16 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
 import '../../design/icons.dart';
-import '../../design/motion.dart';
 import '../../design/tokens.dart';
+import '../../design/dialog.dart';
 import '../describe_error.dart';
+import '../manage_frame.dart';
 
 /// The devices of the account; revoking this one signs out (asked first). Allowed in read-only mode.
 class DevicesScreen extends StatefulWidget {
-  const DevicesScreen({super.key});
+  const DevicesScreen({super.key, this.onBack});
+
+  final VoidCallback? onBack;
 
   @override
   State<DevicesScreen> createState() => _DevicesScreenState();
@@ -25,24 +28,12 @@ class _DevicesScreenState extends State<DevicesScreen> {
     final l = AppLocalizations.of(context);
     final state = AppScope.read(context);
     if (device.id == state.stored?.deviceId) {
-      final yes = await showUfDialog<bool>(
+      final yes = await confirmDanger(
         context,
-        (dialog) => AlertDialog(
-          content: Text(l.deviceRevokeSelf),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialog, false),
-              child: Text(l.cancel),
-            ),
-            FilledButton(
-              key: const Key('confirm-yes'),
-              onPressed: () => Navigator.pop(dialog, true),
-              child: Text(l.deviceRevoke),
-            ),
-          ],
-        ),
+        question: l.deviceRevokeSelf,
+        action: l.deviceRevoke,
       );
-      if (yes != true) return;
+      if (!yes) return;
     }
     try {
       await state.revokeDevice(device.id);
@@ -63,9 +54,10 @@ class _DevicesScreenState extends State<DevicesScreen> {
     final l = AppLocalizations.of(context);
     final colors = UfColors.of(context);
     final dates = MaterialLocalizations.of(context);
-    return Scaffold(
-      appBar: AppBar(title: Text(l.devicesTitle)),
-      body: FutureBuilder(
+    return ManageFrame(
+      title: l.devicesTitle,
+      onBack: widget.onBack,
+      child: FutureBuilder(
         future: _devices,
         builder: (context, snapshot) {
           if (snapshot.error case final Exception e) {
@@ -76,46 +68,114 @@ class _DevicesScreenState extends State<DevicesScreen> {
             return const Center(child: CircularProgressIndicator());
           }
           return ListView(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.only(bottom: 40),
             children: [
               if (_error case final error?)
                 Text(error, style: TextStyle(color: colors.danger)),
               for (final d in devices)
-                ListTile(
-                  enabled: d.revokedAt == null,
-                  leading: const Icon(UfIcons.devices),
-                  title: Text(d.name),
-                  subtitle: Text(
-                    l.deviceLastSeen(
-                      dates.formatMediumDate(d.lastSeenAt.toLocal()),
-                    ),
+                _DeviceRow(
+                  key: ValueKey(d.id),
+                  device: d,
+                  lastSeen: l.deviceLastSeen(
+                    dates.formatMediumDate(d.lastSeenAt.toLocal()),
                   ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    spacing: 8,
-                    children: [
-                      if (d.current)
-                        Chip(
-                          key: Key('device-current-${d.id}'),
-                          label: Text(l.deviceCurrent),
-                        ),
-                      if (d.revokedAt != null)
-                        Text(
-                          l.deviceRevoked,
-                          style: TextStyle(color: colors.muted),
-                        )
-                      else
-                        TextButton(
-                          key: Key('revoke-${d.id}'),
-                          onPressed: () => _revoke(d),
-                          child: Text(l.deviceRevoke),
-                        ),
-                    ],
-                  ),
+                  onRevoke: () => _revoke(d),
                 ),
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+class _DeviceRow extends StatelessWidget {
+  const _DeviceRow({
+    super.key,
+    required this.device,
+    required this.lastSeen,
+    required this.onRevoke,
+  });
+
+  final Device device;
+  final String lastSeen;
+  final VoidCallback onRevoke;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    final colors = UfColors.of(context);
+    final revoked = device.revokedAt != null;
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 960),
+        child: Opacity(
+          opacity: revoked ? 0.55 : 1,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              spacing: 14,
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: colors.field,
+                    borderRadius: const BorderRadius.all(Radius.circular(10)),
+                  ),
+                  child: Icon(UfIcons.devices, size: 18, color: colors.accent),
+                ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        device.name,
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      Text(
+                        lastSeen,
+                        style: TextStyle(color: colors.muted, fontSize: 13),
+                      ),
+                    ],
+                  ),
+                ),
+                if (device.current)
+                  Container(
+                    key: Key('device-current-${device.id}'),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: colors.okSoft,
+                      borderRadius: const BorderRadius.all(
+                        Radius.circular(999),
+                      ),
+                    ),
+                    child: Text(
+                      l.deviceCurrent,
+                      style: TextStyle(
+                        color: colors.ok,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                if (revoked)
+                  Text(l.deviceRevoked, style: TextStyle(color: colors.muted))
+                else
+                  TextButton(
+                    key: Key('revoke-${device.id}'),
+                    style: TextButton.styleFrom(foregroundColor: colors.danger),
+                    onPressed: onRevoke,
+                    child: Text(l.deviceRevoke),
+                  ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

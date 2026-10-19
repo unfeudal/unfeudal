@@ -4,6 +4,7 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
+import '../../design/field.dart';
 import '../../design/motion.dart';
 import '../../design/tokens.dart';
 import '../../events/app_events.dart';
@@ -14,8 +15,6 @@ import 'editor_frame.dart';
 /// Edits a host; empty port, user and key show the inherited value and where it comes from.
 class HostEditorPanel extends StatefulWidget {
   const HostEditorPanel({super.key, this.hostId, this.folderId, this.onClose});
-
-  static const width = 420.0;
 
   /// Null for a new host.
   final String? hostId;
@@ -168,19 +167,35 @@ class _HostEditorPanelState extends State<HostEditorPanel> {
       final String folder => l.hostInherited(vault.entry(folder)?.name ?? ''),
     };
 
-    /// An empty inheritable field shows the resolved value and its source.
-    InputDecoration decoration(
+    /// An empty inheritable field shows the resolved value as a hint and its source under it.
+    Widget field(
+      String key,
+      TextEditingController controller,
       String label,
-      String field, {
-      TextEditingController? inheritable,
+      String problemKey, {
       Object? resolvedValue,
+      bool inheritable = false,
+      int lines = 1,
+      bool mono = false,
     }) {
-      final inherits = inheritable != null && inheritable.text.trim().isEmpty;
-      return InputDecoration(
-        labelText: label,
-        errorText: _problems[field],
-        hintText: inherits ? _hint(resolvedValue) : null,
-        helperText: inherits ? source(field) : null,
+      final inherits = inheritable && controller.text.trim().isEmpty;
+      return UfField(
+        label: label,
+        source: inherits ? source(problemKey) : null,
+        error: _problems[problemKey],
+        child: TextField(
+          key: Key(key),
+          controller: controller,
+          readOnly: !editable,
+          maxLines: lines,
+          onChanged: inheritable ? (_) => setState(() {}) : null,
+          style: mono ? monoStyle.copyWith(fontSize: 13) : null,
+          decoration: InputDecoration(
+            hintText: inherits && resolvedValue != null
+                ? '$resolvedValue'
+                : null,
+          ),
+        ),
       );
     }
 
@@ -192,133 +207,100 @@ class _HostEditorPanelState extends State<HostEditorPanel> {
         .ofKind(ItemKind.folder)
         .where((e) => e.state == EntryState.ok)
         .toList();
+    final folderName = vault.entry(_folderId ?? '')?.name;
+    final readOnly = state.sync?.readOnly ?? true;
     return EditorFrame(
-      width: HostEditorPanel.width,
+      title: entry?.name ?? l.treeNewHost,
+      crumb: [l.vaultPersonal, ?folderName].join(' / '),
+      notice: notice,
       onClose: widget.onClose,
+      save: editable
+          ? FilledButton(
+              key: const Key('host-save'),
+              onPressed: readOnly ? null : _save,
+              child: Text(l.hostSave),
+            )
+          : null,
+      trash: editable && entry != null && !readOnly
+          ? TextButton(
+              key: const Key('host-delete'),
+              onPressed: _trash,
+              child: Text(l.hostDelete),
+            )
+          : null,
       children: [
-        if (notice != null)
-          Text(notice, style: TextStyle(color: UfColors.of(context).warn)),
         ShakeOnError(
           trigger: _failures,
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             spacing: 12,
             children: [
-              _text(
-                'host-name',
-                _name,
-                decoration(l.hostName, 'name'),
-                editable,
+              field('host-name', _name, l.hostName, 'name'),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                spacing: 10,
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: field(
+                      'host-address',
+                      _address,
+                      l.hostAddress,
+                      'address',
+                    ),
+                  ),
+                  Expanded(
+                    child: field(
+                      'host-port',
+                      _port,
+                      l.hostPort,
+                      'port',
+                      inheritable: true,
+                      resolvedValue: resolved?.port,
+                    ),
+                  ),
+                ],
               ),
-              _text(
-                'host-address',
-                _address,
-                decoration(l.hostAddress, 'address'),
-                editable,
-              ),
-              _text(
-                'host-port',
-                _port,
-                decoration(
-                  l.hostPort,
-                  'port',
-                  inheritable: _port,
-                  resolvedValue: resolved?.port,
-                ),
-                editable,
-              ),
-              _text(
+              field(
                 'host-user',
                 _user,
-                decoration(
-                  l.hostUser,
-                  'user',
-                  inheritable: _user,
-                  resolvedValue: resolved?.user,
-                ),
-                editable,
+                l.hostUser,
+                'user',
+                inheritable: true,
+                resolvedValue: resolved?.user,
               ),
             ],
           ),
         ),
-        DropdownButtonFormField<String?>(
-          key: const Key('host-identity'),
-          initialValue: identities.any((e) => e.id == _identityId)
-              ? _identityId
-              : null,
-          decoration: InputDecoration(
-            labelText: l.hostIdentity,
-            helperText: _identityId == null ? source('identityId') : null,
-          ),
-          items: [
-            DropdownMenuItem(child: Text(l.hostDefault)),
-            for (final e in identities)
-              DropdownMenuItem(value: e.id, child: Text(e.name ?? '')),
-          ],
+        entryPicker(
+          key: 'host-identity',
+          label: l.hostIdentity,
+          none: l.hostDefault,
+          entries: identities,
+          value: _identityId,
+          source: _identityId == null ? source('identityId') : null,
           onChanged: editable ? (v) => setState(() => _identityId = v) : null,
         ),
-        DropdownButtonFormField<String?>(
-          key: const Key('host-folder'),
-          initialValue: folders.any((e) => e.id == _folderId)
-              ? _folderId
-              : null,
-          decoration: InputDecoration(labelText: l.hostFolder),
-          items: [
-            DropdownMenuItem(child: Text(l.folderRoot)),
-            for (final e in folders)
-              DropdownMenuItem(value: e.id, child: Text(e.name ?? '')),
-          ],
+        entryPicker(
+          key: 'host-folder',
+          label: l.hostFolder,
+          none: l.folderRoot,
+          entries: folders,
+          value: _folderId,
           onChanged: editable ? (v) => setState(() => _folderId = v) : null,
         ),
-        _text('host-tags', _tags, decoration(l.hostTags, 'tags'), editable),
-        _text(
-          'host-notes',
-          _notes,
-          decoration(l.hostNotes, 'notes'),
-          editable,
-          lines: 3,
-        ),
-        _text(
+        field('host-tags', _tags, l.hostTags, 'tags'),
+        field('host-notes', _notes, l.hostNotes, 'notes', lines: 3),
+        field(
           'host-startup',
           _startup,
-          decoration(l.hostStartup, 'startupCommand'),
-          editable,
+          l.hostStartup,
+          'startupCommand',
           mono: true,
         ),
         if (_error case final error?)
           Text(error, style: TextStyle(color: UfColors.of(context).danger)),
-        if (editable) ...[
-          FilledButton(
-            key: const Key('host-save'),
-            onPressed: (state.sync?.readOnly ?? true) ? null : _save,
-            child: Text(l.hostSave),
-          ),
-          if (entry != null && !(state.sync?.readOnly ?? true))
-            TextButton(
-              key: const Key('host-delete'),
-              onPressed: _trash,
-              child: Text(l.hostDelete),
-            ),
-        ],
       ],
     );
   }
-
-  static String? _hint(Object? inherited) =>
-      inherited == null ? null : '$inherited';
-
-  static Widget _text(
-    String key,
-    TextEditingController controller,
-    InputDecoration decoration,
-    bool editable, {
-    int lines = 1,
-    bool mono = false,
-  }) => TextField(
-    key: Key(key),
-    controller: controller,
-    readOnly: !editable,
-    maxLines: lines,
-    style: mono ? monoStyle : null,
-    decoration: decoration,
-  );
 }

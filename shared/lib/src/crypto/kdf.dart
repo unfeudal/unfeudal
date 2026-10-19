@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import 'dart:convert';
+import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'package:cryptography/cryptography.dart';
@@ -77,17 +78,17 @@ Future<Uint8List> argon2id(
 ) async {
   kdf.ensureAcceptable(allowTesting: true);
   if (salt.length != 16) throw const FormatException('salt must be 16 bytes');
-  final key =
-      await Argon2id(
-        memory: kdf.m,
-        iterations: kdf.t,
-        parallelism: kdf.p,
-        hashLength: 32,
-      ).deriveKey(
-        secretKey: SecretKey(utf8.encode(normalizePassword(password))),
-        nonce: salt,
-      );
-  return Uint8List.fromList(await key.extractBytes());
+  final secret = utf8.encode(normalizePassword(password));
+  // seconds of CPU and up to the memory ceiling: off the caller's isolate, so a UI thread keeps painting
+  return Isolate.run(() async {
+    final key = await Argon2id(
+      memory: kdf.m,
+      iterations: kdf.t,
+      parallelism: kdf.p,
+      hashLength: 32,
+    ).deriveKey(secretKey: SecretKey(secret), nonce: salt);
+    return Uint8List.fromList(await key.extractBytes());
+  });
 }
 
 Future<Uint8List> hkdf32(List<int> ikm, String info) async {

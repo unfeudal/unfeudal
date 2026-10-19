@@ -11,6 +11,7 @@ import '../../api/api_client.dart';
 import '../../app_scope.dart';
 import '../../app_state.dart';
 import '../../design/banner.dart';
+import '../../debug_trace.dart';
 import '../../design/motion.dart';
 import '../../storage/local_mirror.dart';
 import '../../sync/sync_engine.dart';
@@ -52,6 +53,9 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
   /// The floating host or folder editor over the terminal, if open.
   Widget? _editor;
 
+  /// The management screen in place of the tree and terminals, if open.
+  ShellPage? _page;
+
   static const _minTree = 220.0, _maxTree = 400.0, _resizeStep = 16.0;
 
   @override
@@ -82,14 +86,12 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
       meta: keyboard.isMetaPressed,
       inTerminal: _terminalFocus.hasFocus,
     );
+    if (shortcut != null) trace(TraceArea.ui, 'shortcut ${shortcut.name}');
     switch (shortcut) {
       case UfShortcut.toggleTree:
         setState(() => _treeVisible = !_treeVisible);
       case UfShortcut.focusSearch || UfShortcut.newTab:
-        setState(() => _treeVisible = true);
-        WidgetsBinding.instance.addPostFrameCallback(
-          (_) => _searchFocus.requestFocus(),
-        );
+        _focusSearch();
       case UfShortcut.closeTab:
         if (_state.tabs.isNotEmpty) {
           unawaited(_state.closeTab(_state.tabs[_state.activeTab]));
@@ -98,6 +100,16 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
         return false;
     }
     return true;
+  }
+
+  void _focusSearch() {
+    setState(() {
+      _page = null;
+      _treeVisible = true;
+    });
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _searchFocus.requestFocus(),
+    );
   }
 
   @override
@@ -149,12 +161,24 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
         )
       : null;
 
-  void _push(Widget screen) => unawaited(
-    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => screen)),
+  void _show(ShellPage? page) {
+    trace(TraceArea.ui, 'page ${page?.name ?? 'vault'}');
+    setState(() => _page = page);
+  }
+
+  void _editHost(String hostId) => _openEditor(
+    (close) =>
+        HostEditorPanel(key: ValueKey(hostId), hostId: hostId, onClose: close),
   );
 
-  void _openEditor(Widget Function(VoidCallback close) build) =>
-      setState(() => _editor = build(() => setState(() => _editor = null)));
+  void _openEditor(Widget Function(VoidCallback close) build) {
+    final editor = build(() {
+      trace(TraceArea.ui, 'editor closed');
+      setState(() => _editor = null);
+    });
+    trace(TraceArea.ui, 'editor open: ${editor.runtimeType}');
+    setState(() => _editor = editor);
+  }
 
   void _resize(double delta) => setState(
     () => _treeWidth = (_treeWidth + delta).clamp(_minTree, _maxTree),
@@ -167,69 +191,88 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
   @override
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
+    final banners = _banners(context, state);
+    void back() => _show(null);
     return Scaffold(
       body: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          VaultRail(
-            onLock: state.lock,
-            onKeychain: () => _push(const KeychainScreen()),
-            onDevices: () => _push(const DevicesScreen()),
-            onSettings: () => _push(const SettingsScreen()),
-          ),
-          if (_treeVisible) ...[
-            AnimatedContainer(
-              key: const Key('tree-panel'),
-              duration: UfMotion.of(context).base,
-              curve: UfMotion.curve,
-              width: _treeWidth,
-              child: TreePanel(
-                searchFocus: _searchFocus,
-                onNewHost: () =>
-                    _openEditor((close) => HostEditorPanel(onClose: close)),
-                onNewFolder: () =>
-                    _openEditor((close) => FolderEditorPanel(onClose: close)),
-                onEdit: (e) => _openEditor(
-                  (close) => e.kind == ItemKind.folder
-                      ? FolderEditorPanel(
-                          key: ValueKey(e.id),
-                          folderId: e.id,
-                          onClose: close,
+          VaultRail(page: _page, onLock: state.lock, onShow: _show),
+          if (_page case final page?)
+            Expanded(
+              child: switch (page) {
+                ShellPage.keychain => KeychainScreen(onBack: back),
+                ShellPage.devices => DevicesScreen(onBack: back),
+                ShellPage.settings => SettingsScreen(onBack: back),
+              },
+            )
+          else ...[
+            if (_treeVisible) ...[
+              AnimatedContainer(
+                key: const Key('tree-panel'),
+                duration: UfMotion.of(context).base,
+                curve: UfMotion.curve,
+                width: _treeWidth,
+                child: TreePanel(
+                  searchFocus: _searchFocus,
+                  onHide: () => setState(() => _treeVisible = false),
+                  onNewHost: () =>
+                      _openEditor((close) => HostEditorPanel(onClose: close)),
+                  onNewFolder: () =>
+                      _openEditor((close) => FolderEditorPanel(onClose: close)),
+                  onEdit: (e) => e.kind == ItemKind.folder
+                      ? _openEditor(
+                          (close) => FolderEditorPanel(
+                            key: ValueKey(e.id),
+                            folderId: e.id,
+                            onClose: close,
+                          ),
                         )
-                      : HostEditorPanel(
-                          key: ValueKey(e.id),
-                          hostId: e.id,
-                          onClose: close,
-                        ),
+                      : _editHost(e.id),
                 ),
               ),
-            ),
-            _resizer(),
-          ],
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                ..._banners(context, state),
-                Expanded(
-                  child: Stack(
-                    children: [
-                      Focus(
-                        focusNode: _terminalFocus,
-                        child: const TerminalTabs(),
+              _resizer(),
+            ],
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (banners.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(10, 8, 10, 0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        spacing: 6,
+                        children: banners,
                       ),
-                      if (_editor case final editor?)
-                        Positioned(
-                          top: 12,
-                          right: 12,
-                          bottom: 12,
-                          child: editor,
+                    ),
+                  Expanded(
+                    child: Stack(
+                      children: [
+                        Focus(
+                          focusNode: _terminalFocus,
+                          child: TerminalTabs(
+                            onNewTab: _focusSearch,
+                            onShowTree: _treeVisible
+                                ? null
+                                : () => setState(() => _treeVisible = true),
+                            onEditHost: _editHost,
+                          ),
                         ),
-                    ],
+                        if (_editor case final editor?)
+                          Positioned(
+                            top: 10,
+                            right: 10,
+                            bottom: 10,
+                            child: editor,
+                          ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );
@@ -298,10 +341,10 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
           action: download,
           actionKey: const Key('update-download'),
         ),
-      if (sync?.updateNotice case final notice? when !(sync!.readOnly))
+      if (sync?.updateVersion case final version? when !(sync!.readOnly))
         StatusBanner(
           tone: BannerTone.info,
-          message: l.bannerUpdate(notice.version),
+          message: l.bannerUpdate(version),
           action: download,
           actionKey: const Key('update-download'),
         ),

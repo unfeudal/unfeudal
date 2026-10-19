@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 
 import '../../l10n/app_localizations.dart';
 import 'icons.dart';
-import 'logo.dart';
 import 'tokens.dart';
 
 enum BannerTone { info, warn, danger }
@@ -38,33 +37,45 @@ class StatusBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = UfColors.of(context);
     // status never by colour alone: each tone has its own icon shape
-    final (color, icon) = switch (tone) {
-      BannerTone.info => (colors.accent, UfIcons.info),
-      BannerTone.warn => (colors.warn, UfIcons.warning),
-      BannerTone.danger => (colors.danger, UfIcons.warningOctagon),
+    final (color, fill, icon) = switch (tone) {
+      BannerTone.info => (colors.accent, colors.infoSoft, UfIcons.info),
+      BannerTone.warn => (colors.warn, colors.warnSoft, UfIcons.warning),
+      BannerTone.danger => (
+        colors.danger,
+        colors.dangerSoft,
+        UfIcons.warningOctagon,
+      ),
     };
+    const compact = EdgeInsets.symmetric(horizontal: 12, vertical: 10);
     return Material(
-      color: color.withValues(alpha: 0.12),
+      color: fill,
+      borderRadius: const BorderRadius.all(Radius.circular(10)),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.fromLTRB(14, 8, 10, 8),
         child: Row(
-          spacing: 8,
+          spacing: 12,
           children: [
-            IconTheme.merge(
-              data: IconThemeData(color: color),
-              child: const UfLogo(size: 40),
-            ),
             Icon(icon, color: color, size: 20),
-            Expanded(child: Text(message)),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Text(message),
+              ),
+            ),
             if (action case (final label, final onPressed))
-              TextButton(
+              FilledButton(
                 key: actionKey,
+                style: FilledButton.styleFrom(padding: compact),
                 onPressed: onPressed,
                 child: Text(label),
               ),
             if (secondAction case (final label, final onPressed))
               TextButton(
                 key: secondActionKey,
+                style: TextButton.styleFrom(
+                  foregroundColor: colors.text,
+                  padding: compact,
+                ),
                 onPressed: onPressed,
                 child: Text(label),
               ),
@@ -75,7 +86,7 @@ class StatusBanner extends StatelessWidget {
                 tooltip:
                     dismissTooltip ??
                     AppLocalizations.of(context).bannerDismiss,
-                icon: const Icon(UfIcons.x, size: 18),
+                icon: const Icon(UfIcons.x, size: 16),
               ),
           ],
         ),

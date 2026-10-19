@@ -30,6 +30,8 @@ void main() {
         find.byKey(const Key('setup-token')),
         'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
       );
+      await t.tap(find.byKey(const Key('setup-next')));
+      await t.pump();
       await t.enterText(find.byKey(const Key('setup-email')), testEmail);
       await t.enterText(find.byKey(const Key('setup-password')), testPassword);
       await t.enterText(find.byKey(const Key('setup-confirm')), testPassword);

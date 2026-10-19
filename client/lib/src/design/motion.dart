@@ -4,6 +4,9 @@ import 'dart:ui' show SemanticsRole;
 
 import 'package:flutter/material.dart';
 
+import '../debug_trace.dart';
+import 'tokens.dart';
+
 class UfMotion {
   const UfMotion._(this.fast, this.base, this.slow, this.shake);
 
@@ -100,13 +103,15 @@ Future<T?> showUfDialog<T>(
   bool alert = false,
 }) {
   final motion = UfMotion.of(context);
+  trace(TraceArea.ui, 'dialog open');
   return Navigator.of(context, rootNavigator: true).push<T>(
     _UfDialogRoute<T>(
       reverse: motion.fast,
       transitionDuration: motion.base,
       barrierDismissible: dismissible && !alert,
       barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
-      barrierColor: Colors.black54,
+      barrierColor:
+          Theme.of(context).extension<UfColors>()?.scrim ?? Colors.black54,
       pageBuilder: (context, _, _) {
         final content = builder(context);
         if (!alert) return content;
