@@ -484,5 +484,22 @@
   "actFolderKeysRotated": "Changement des clés de {t}",
   "actFolderKeysShared": "Partage des clés de {t}",
   "actFolderRotationDone": "Tous les éléments de {t} utilisent les nouvelles clés",
-  "activityRoot": "racine"
+  "activityRoot": "racine",
+  "activityTitle": "Activité",
+  "railActivity": "Activité",
+  "activityScopeMe": "Mes actions",
+  "activityScopeAccount": "Mon compte",
+  "activityScopeInstance": "Ce serveur",
+  "activityScopeFolder": "Dossier {name}",
+  "activityYou": "Moi",
+  "activityMore": "Charger la suite",
+  "activityVerify": "Vérifier la chaîne",
+  "activityVerified": "Chaîne vérifiée : {count} événements.",
+  "activityBroken": "La chaîne est rompue à l'événement {seq}.",
+  "activityExport": "Exporter",
+  "activityExported": "Enregistré dans {path}.",
+  "activityRewritten": "Le serveur a modifié un historique déjà vu par cet appareil ({scope}, événement {seq}).",
+  "activityVanished": "Des événements déjà vus par cet appareil ont disparu sans point de contrôle ({scope}, événement {seq}).",
+  "activitySshNote": "Les sessions SSH, redirections et secrets affichés sont déclarés par l'application : une application modifiée peut les omettre.",
+  "activityEmpty": "Aucune activité pour l'instant."
 }
