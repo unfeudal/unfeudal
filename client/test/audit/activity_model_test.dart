@@ -49,7 +49,9 @@ void main() {
         hasLength(3),
         reason: 'verify reads the user chain at 500 a page',
       );
-      expect(jsonDecode(await m.exportJson()) as List, hasLength(150));
+      final exported = await m.exportJson();
+      expect(jsonDecode(exported.json) as List, hasLength(150));
+      expect(exported.report.ok, isTrue);
       expect(
         [
           ActivityModel.exportFileName('org:$testOrgId'),

@@ -134,11 +134,14 @@ class _ActivityScreenState extends State<ActivityScreen> {
         ActivityModel.exportFileName(chain),
       );
       if (path == null) return;
-      await (widget.writeFile ?? _write)(
-        path,
-        utf8.encode(await _model.exportJson()),
+      final out = await _model.exportJson();
+      await (widget.writeFile ?? _write)(path, utf8.encode(out.json));
+      if (!mounted) return;
+      setState(
+        () => _notice = out.report.ok
+            ? l.activityExported(path)
+            : l.activityExportedBroken(path, out.report.brokenAt!),
       );
-      if (mounted) setState(() => _notice = l.activityExported(path));
     } on Exception catch (e) {
       if (mounted) setState(() => _notice = describeError(l, e));
     }
