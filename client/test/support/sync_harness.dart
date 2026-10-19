@@ -78,6 +78,20 @@ class SyncHarness {
   void Function(String itemId)?
   onPut; // runs when a PUT arrives, before it is applied
   OrgBlock? orgBlock;
+  final orgCalls =
+      <
+        ({String route, Map<String, Object?> body})
+      >[]; // every org, invite-join, folder and admin call
+  final orgReplies =
+      <
+        String,
+        http.Response Function(Map<String, Object?> body)
+      >{}; // 'PUT /folders/<id>/keys' → answer
+  final orgMembers =
+      <
+        String,
+        Set<String>
+      >{}; // orgId → userIds who read (sync) and write that org's items
   String? syncBodyOverride; // raw 200 body for malformed answers
   int itemsSeq = 0;
   final _items = <String, (Item, String, int)>{}; // id → (item, owner, seq)
@@ -162,6 +176,18 @@ class SyncHarness {
     );
   }
 
+  static http.Response reply(Object? body, [int status = 200]) =>
+      _json(body, status);
+
+  /// Another member writes an org item.
+  Item serverPutOrg(Item item, {String? userId}) => _store(
+    item,
+    (serverItem(item.id)?.revision ?? 0) + 1,
+    'org:${item.orgId}',
+    newId(),
+    by: userId ?? newId(),
+  );
+
   void purge(String id) {
     final (item, owner, _) = _items[id]!;
     final j = item.toJson()
@@ -216,6 +242,7 @@ class SyncHarness {
     int revision,
     String owner,
     String deviceId, {
+    String? by,
     Envelope? keepSecret,
   }) {
     final j = body.toJson()
@@ -226,7 +253,7 @@ class SyncHarness {
             _items[body.id]?.$1.createdAt ?? now,
           ) // set on insert, kept on update
       ..['updatedAt'] = iso(now)
-      ..['updatedBy'] = owner
+      ..['updatedBy'] = by ?? owner
       ..['updatedDevice'] = deviceId;
     if (j['secret'] == null && keepSecret != null) {
       j['secret'] = keepSecret.toJson();
@@ -462,7 +489,8 @@ class SyncHarness {
       }
       final mine =
           _items.values
-              .where((e) => e.$2 == me.userId && e.$3 > cursor)
+              .where((e) => e.$2 == me.userId || _readsOrg(me.userId, e.$2))
+              .where((e) => e.$3 > cursor)
               .toList()
             ..sort((a, b) => a.$3.compareTo(b.$3));
       final page = mine.take(pageSize).toList();
@@ -489,6 +517,13 @@ class SyncHarness {
         );
       }
       final input = Item.fromJson({...body, 'id': id});
+      final owner = input.scope == ItemScope.org
+          ? 'org:${input.orgId}'
+          : me.userId;
+      if (input.scope == ItemScope.org &&
+          !(orgMembers[input.orgId]?.contains(me.userId) ?? false)) {
+        return _error(404, 'not_found');
+      }
       final current = _items[id];
       if (current != null && current.$1.purged) {
         return _json({
@@ -497,7 +532,7 @@ class SyncHarness {
           'item': current.$1.toJson(),
         }, 409);
       }
-      if (current != null && current.$2 != me.userId) {
+      if (current != null && current.$2 != owner) {
         return _error(403, 'forbidden');
       }
       if (current != null && current.$1.type != input.type) {
@@ -520,14 +555,27 @@ class SyncHarness {
         _store(
           input,
           (current?.$1.revision ?? 0) + 1,
-          me.userId,
+          owner,
           me.id,
+          by: me.userId,
           keepSecret: current?.$1.secret,
         ).toJson(),
       );
     }
+    final orgRoute =
+        RegExp(r'^/api/v1/(orgs|folders|admin)(/|$)').hasMatch(path) ||
+        route == 'POST /invites/join' ||
+        (r.method == 'DELETE' && path.startsWith('/api/v1/invites/'));
+    if (orgRoute) {
+      orgCalls.add((route: route, body: body));
+      return orgReplies[route]?.call(body) ?? http.Response('', 204);
+    }
     return _error(404, 'not_found');
   }
+
+  bool _readsOrg(String userId, String owner) =>
+      owner.startsWith('org:') &&
+      (orgMembers[owner.substring(4)]?.contains(userId) ?? false);
 
   static const _jsonHeaders = {
     'content-type': 'application/json; charset=utf-8',
