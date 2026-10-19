@@ -14,6 +14,7 @@ import '../../version.dart';
 import '../form_dialog.dart';
 import '../manage_frame.dart';
 import '../onboarding/recovery_kit_view.dart';
+import 'export_screen.dart';
 import 'password_change_screen.dart';
 
 /// Appearance, language and security of this device, the synced prefs, and the account's safety code.
@@ -333,6 +334,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           const PasswordChangeScreen(securityReset: true),
                         ),
                   child: Text(l.securityResetTitle),
+                ),
+                OutlinedButton(
+                  key: const Key('settings-export'),
+                  onPressed: () => _push(const ExportScreen()),
+                  child: Text(l.settingsExport),
                 ),
               ],
             ),
