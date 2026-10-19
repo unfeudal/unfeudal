@@ -1228,5 +1228,16 @@
       }
     }
   },
-  "orgRetentionUnlimited": "Server: unlimited"
+  "orgRetentionUnlimited": "Server: unlimited",
+  "settingsChangePassword": "Change master password",
+  "pwCurrent": "Current master password",
+  "pwNext": "New master password",
+  "pwConfirm": "Repeat the new password",
+  "pwSubmit": "Change",
+  "passwordCurrentWrong": "The current password is wrong.",
+  "passwordChanged": "Master password changed. Other devices are signed out.",
+  "securityResetTitle": "Security reset",
+  "securityResetBody": "For a lost device or an exposed recovery kit: new master password, every other device signed out, new recovery kit.",
+  "securityResetNoKit": "Password changed. This server does not allow a new recovery kit.",
+  "settingsSecurity": "Security"
 }

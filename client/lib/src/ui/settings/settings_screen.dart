@@ -14,6 +14,7 @@ import '../../version.dart';
 import '../form_dialog.dart';
 import '../manage_frame.dart';
 import '../onboarding/recovery_kit_view.dart';
+import 'password_change_screen.dart';
 
 /// Appearance, language and security of this device, the synced prefs, and the account's safety code.
 class SettingsScreen extends StatefulWidget {
@@ -35,6 +36,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _displayName.dispose();
     super.dispose();
   }
+
+  Future<void> _push(Widget screen) =>
+      Navigator.of(context)
+          .push(MaterialPageRoute<void>(builder: (_) => screen));
 
   Future<void> _newRecoveryKit() async {
     final l = AppLocalizations.of(context);
@@ -74,6 +79,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final l = AppLocalizations.of(context);
     final state = AppScope.of(context);
     final settings = state.settings;
+    final offline = !(state.sync?.online ?? false);
     final theme = Theme.of(context);
     void update(Settings next) => state.updateSettings(next);
     final forcedOff =
@@ -275,6 +281,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 child: Text(l.settingsRecoveryKit),
               ),
             ]),
+          section(l.settingsSecurity, [
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                OutlinedButton(
+                  key: const Key('settings-change-password'),
+                  onPressed: offline
+                      ? null
+                      : () => _push(const PasswordChangeScreen()),
+                  child: Text(l.settingsChangePassword),
+                ),
+                OutlinedButton(
+                  key: const Key('settings-security-reset'),
+                  onPressed: offline
+                      ? null
+                      : () => _push(
+                          const PasswordChangeScreen(securityReset: true),
+                        ),
+                  child: Text(l.securityResetTitle),
+                ),
+              ],
+            ),
+          ]),
           section(l.settingsServer, [
             Text(state.stored?.serverUrl.toString() ?? ''),
             Text(l.settingsVersion(clientVersion, state.serverVersion ?? '?')),
