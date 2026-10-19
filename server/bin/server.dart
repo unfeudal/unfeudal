@@ -8,7 +8,7 @@ import 'package:unfeudal_server/src/db/migrate.dart';
 import 'package:unfeudal_server/src/run_server.dart';
 
 const _usage =
-    'usage: unfeudal-server [healthcheck | backup <path> | new-epoch]';
+    'usage: unfeudal-server [healthcheck | backup <path> | new-epoch | transfer-owner <email>]';
 
 Future<void> main(List<String> args) async {
   final Config config;
@@ -39,6 +39,8 @@ Future<void> main(List<String> args) async {
         await db.close();
       }
       exit(0);
+    case ['transfer-owner', final email]:
+      exit(await _transferOwner(config, email));
     default:
       stderr.writeln(_usage);
       exit(64);
@@ -69,6 +71,21 @@ Future<int> _backup(Config config, String path) async {
     return 1;
   } on FileSystemException catch (e) {
     stderr.writeln('backup failed: ${e.message}');
+    return 1;
+  } finally {
+    await db.close();
+  }
+}
+
+Future<int> _transferOwner(Config config, String email) async {
+  final db = await openDb(config.databaseUrl);
+  try {
+    await migrate(db);
+    await transferOwner(db, email);
+    stdout.writeln('Instance Owner is now ${email.trim().toLowerCase()}.');
+    return 0;
+  } on StateError catch (e) {
+    stderr.writeln(e.message);
     return 1;
   } finally {
     await db.close();
