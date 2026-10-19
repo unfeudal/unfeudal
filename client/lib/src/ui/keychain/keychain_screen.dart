@@ -30,7 +30,7 @@ class KeychainScreen extends StatelessWidget {
     final identities =
         vault
             .ofKind(ItemKind.identity)
-            .where((e) => e.state == EntryState.ok)
+            .where((e) => e.state == EntryState.ok && e.orgId == null)
             .toList()
           ..sort((a, b) => (a.name ?? '').compareTo(b.name ?? ''));
     Future<void> form(
