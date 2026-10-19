@@ -11,6 +11,7 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../l10n/app_localizations.dart';
 import 'api/api_client.dart';
+import 'audit/event_reporter.dart';
 import 'debug_trace.dart';
 import 'design/seal.dart';
 import 'events/app_events.dart';
@@ -107,7 +108,9 @@ class AppState extends ChangeNotifier implements SshCallbacks {
            memory: loquetMemory ?? LoquetMemory(),
            now: loquetClock,
          ),
-       );
+       ) {
+    reporter.start();
+  }
 
   final SessionStore sessions;
   final SettingsStore settingsStore;
@@ -118,6 +121,16 @@ class AppState extends ChangeNotifier implements SshCallbacks {
 
   final AccountCrypto _crypto;
   final DateTime Function() _loquetClock;
+
+  /// Sessions, forwards and shown secrets for the server's audit, when it asks for them.
+  late final reporter = EventReporter(
+    events: events,
+    api: () => api,
+    enabled: () => serverHas('client_events'),
+  );
+
+  /// Tabs whose shell opened: each leaves once, with a [SessionClosed].
+  final _live = <TerminalSession>{};
 
   /// The mascot: local only, nothing about it is synced or logged.
   final LoquetController loquet;
@@ -555,6 +568,11 @@ class AppState extends ChangeNotifier implements SshCallbacks {
         ),
       );
       if (hopIds.isNotEmpty) emit(JumpUsed(hostId: hostId, hopIds: hopIds));
+      _live.add(tab);
+      tab.addListener(() {
+        // the host ended the shell
+        if (tab.state == SealState.offline) _sessionClosed(tab);
+      });
       emit(
         ConnectSucceeded(
           hostId: hostId,
@@ -621,7 +639,14 @@ class AppState extends ChangeNotifier implements SshCallbacks {
     for (final port in tab.forwarder?.active.keys ?? const <int>[]) {
       emit(ForwardStopped(hostId: tab.hostId, localPort: port));
     }
+    _sessionClosed(
+      tab,
+    ); // before the first await: lock clears the tabs right after
     await tab.close();
+  }
+
+  void _sessionClosed(TerminalSession tab) {
+    if (_live.remove(tab)) emit(SessionClosed(hostId: tab.hostId));
   }
 
   Future<void> startForward(TerminalSession tab, PortForward f) async {
