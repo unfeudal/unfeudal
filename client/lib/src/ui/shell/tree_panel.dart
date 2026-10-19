@@ -10,6 +10,9 @@ import '../../app_state.dart';
 import '../../design/icons.dart';
 import '../../design/seal.dart';
 import '../../design/tokens.dart';
+import '../../loquet/line_bank.dart';
+import '../../loquet/loquet_pose.dart';
+import '../../loquet/loquet_spot.dart';
 import '../../vault/vault.dart';
 import 'shortcuts.dart';
 
@@ -117,7 +120,10 @@ class _TreePanelState extends State<TreePanel> {
               key: const Key('tree-search'),
               controller: _query,
               focusNode: widget.searchFocus,
-              onChanged: (_) => setState(() {}),
+              onChanged: (q) {
+                setState(() {});
+                state.loquet.watch((q.length / 30).clamp(0, 1));
+              },
               decoration: InputDecoration(
                 hintText: l.treeSearch(
                   UfShortcuts.label(UfShortcut.focusSearch),
@@ -141,6 +147,24 @@ class _TreePanelState extends State<TreePanel> {
                     ),
                   )
                 : ListView(children: rows),
+          ),
+          // the tree's empty states give their face and line to the card instead of a second Loquet
+          Padding(
+            key: const Key('loquet-spot-tree'),
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            child: LoquetSpot(
+              placement: LoquetPlacement.tree,
+              mood: rows.isNotEmpty
+                  ? null
+                  : query.isEmpty
+                  ? LoquetMood.idle
+                  : LoquetMood.search,
+              line: rows.isNotEmpty
+                  ? null
+                  : query.isEmpty
+                  ? LineKey.emptyVault
+                  : LineKey.emptySearch,
+            ),
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 2),

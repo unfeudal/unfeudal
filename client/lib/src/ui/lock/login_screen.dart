@@ -6,6 +6,7 @@ import '../../app_scope.dart';
 import '../../app_state.dart';
 import '../../design/banner.dart';
 import '../../design/motion.dart';
+import '../../session/lock_machine.dart';
 import '../describe_error.dart';
 import '../fields.dart';
 import '../onboarding/recovery_screen.dart';
@@ -25,6 +26,7 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _busy = false;
   Object? _error;
   int _failures = 0;
+  double _eyeX = 0.5;
 
   @override
   void initState() {
@@ -32,6 +34,16 @@ class _LoginScreenState extends State<LoginScreen> {
     final stored = AppScope.read(context).stored;
     _server = TextEditingController(text: stored?.serverUrl.toString());
     _email = TextEditingController(text: stored?.email);
+    for (final c in [_email, _password]) {
+      c.addListener(() => _typed(c));
+    }
+  }
+
+  LockMachine get _machine => AppScope.read(context).lockMachine;
+
+  void _typed(TextEditingController field) {
+    _machine.input();
+    setState(() => _eyeX = (field.text.length / 30).clamp(0, 1));
   }
 
   @override
@@ -44,13 +56,16 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _submit() async {
     setState(() => _busy = true);
+    final machine = _machine..submit();
     try {
       await AppScope.read(context).login(
         server: Uri.parse(_server.text.trim()),
         email: _email.text.trim(),
         password: _password.text,
       );
+      machine.succeed();
     } on Exception catch (e) {
+      machine.fail();
       if (mounted) {
         setState(() {
           _error = e;
@@ -70,6 +85,7 @@ class _LoginScreenState extends State<LoginScreen> {
       body: LockFrame(
         title: l.loginTitle,
         subtitle: state.stored?.serverUrl.host,
+        eyeX: _eyeX,
         children: [
           if (state.deviceRevoked)
             StatusBanner(tone: BannerTone.danger, message: l.loginDeviceRevoked)
@@ -81,20 +97,30 @@ class _LoginScreenState extends State<LoginScreen> {
             l.loginServer,
             keyboard: TextInputType.url,
           ),
-          keyedField(
-            'login-email',
-            _email,
-            l.loginEmail,
-            keyboard: TextInputType.emailAddress,
+          Focus(
+            onFocusChange: (on) {
+              if (on) _machine.focusEmail();
+            },
+            child: keyedField(
+              'login-email',
+              _email,
+              l.loginEmail,
+              keyboard: TextInputType.emailAddress,
+            ),
           ),
           ShakeOnError(
             trigger: _failures,
-            child: keyedField(
-              'login-password',
-              _password,
-              l.loginPassword,
-              secret: true,
-              onSubmitted: (_) => _submit(),
+            child: Focus(
+              onFocusChange: (on) {
+                if (on) _machine.focusPassword();
+              },
+              child: keyedField(
+                'login-password',
+                _password,
+                l.loginPassword,
+                secret: true,
+                onSubmitted: (_) => _submit(),
+              ),
             ),
           ),
           if (_error case final error?) LockError(describeError(l, error)),

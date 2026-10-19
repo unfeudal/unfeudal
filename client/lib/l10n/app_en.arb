@@ -616,5 +616,10 @@
         "type": "String"
       }
     }
-  }
+  },
+  "settingsLoquet": "Loquet",
+  "settingsLoquetOn": "On",
+  "settingsLoquetSober": "Sober",
+  "settingsLoquetOff": "Off",
+  "settingsLoquetForcedOff": "Turned off by the server or an organisation."
 }

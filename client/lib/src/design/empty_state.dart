@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 import 'package:flutter/material.dart';
 
-import 'logo.dart';
+import '../loquet/line_bank.dart';
+import '../loquet/loquet_pose.dart';
+import '../loquet/loquet_spot.dart';
 import 'tokens.dart';
 
 /// A title, one sentence and at most two actions.
@@ -12,12 +14,16 @@ class EmptyState extends StatelessWidget {
     required this.body,
     this.primary,
     this.secondary,
+    this.mood = LoquetMood.idle,
+    this.line,
   });
 
   final String title;
   final String body;
   final (String, VoidCallback)? primary;
   final (String, VoidCallback)? secondary;
+  final LoquetMood mood;
+  final LineKey? line;
 
   @override
   Widget build(BuildContext context) {
@@ -27,7 +33,7 @@ class EmptyState extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          UfLogo(size: 88, color: colors.text),
+          LoquetSpot(placement: LoquetPlacement.empty, mood: mood, line: line),
           const SizedBox(height: 18),
           Text(
             title,

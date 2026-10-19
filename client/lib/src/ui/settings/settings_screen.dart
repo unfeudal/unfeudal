@@ -76,6 +76,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final settings = state.settings;
     final theme = Theme.of(context);
     void update(Settings next) => state.updateSettings(next);
+    final forcedOff =
+        state.loquet.mode == LoquetMode.off &&
+        settings.loquetMode != LoquetMode.off;
     Widget section(String title, List<Widget> children) => Padding(
       padding: const EdgeInsets.only(bottom: 26),
       child: Column(
@@ -91,7 +94,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       String prefix,
       List<(T, String, String)> options,
       T selected,
-      void Function(T) pick,
+      void Function(T)? pick,
     ) => Wrap(
       spacing: 8,
       children: [
@@ -100,7 +103,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             key: Key('$prefix-$key'),
             label: Text(label),
             selected: value == selected,
-            onSelected: (_) => pick(value),
+            onSelected: pick == null ? null : (_) => pick(value),
           ),
       ],
     );
@@ -189,6 +192,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ],
             ),
+          ]),
+          section(l.settingsLoquet, [
+            choices<LoquetMode>(
+              'loquet-mode',
+              [
+                (LoquetMode.on, 'on', l.settingsLoquetOn),
+                (LoquetMode.sober, 'sober', l.settingsLoquetSober),
+                (LoquetMode.off, 'off', l.settingsLoquetOff),
+              ],
+              settings.loquetMode,
+              forcedOff
+                  ? null
+                  : (v) => update(settings.copyWith(loquetMode: v)),
+            ),
+            if (forcedOff)
+              Text(
+                l.settingsLoquetForcedOff,
+                style: theme.textTheme.bodySmall!.copyWith(
+                  color: UfColors.of(context).muted,
+                ),
+              ),
           ]),
           section(l.settingsLanguage, [
             choices<String?>(
