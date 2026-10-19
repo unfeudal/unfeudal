@@ -8,6 +8,7 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../api/errors.dart';
 import '../api/session.dart';
+import '../audit/audit_log.dart';
 import '../db/db.dart';
 import '../util/clock.dart';
 import '../util/random.dart';
@@ -97,12 +98,15 @@ Future<void> revokeDevice(Tx tx, String deviceId, DateTime now) async {
 typedef Rotated = ({String userId, String deviceId, String refreshToken});
 
 class RefreshTokens {
-  RefreshTokens(this.db, this.clock, this.ttl, this._secret);
+  RefreshTokens(this.db, this.clock, this.ttl, this._secret, {this.audit});
 
   final Db db;
   final Clock clock;
   final Duration ttl;
   final List<int> _secret;
+
+  /// Records a replay in the revocation's transaction; optional for tests that only rotate.
+  final AuditLog? audit;
 
   /// A lost response is answered again with the same successor within this window.
   static const grace = Duration(seconds: 30);
@@ -120,7 +124,7 @@ class RefreshTokens {
 
   /// One transaction. Failures are returned, then thrown after commit, so a
   /// replay's revocation is never rolled back.
-  Future<Rotated> rotate(String token) async {
+  Future<Rotated> rotate(String token, {String? ip}) async {
     final outcome = await db.transaction<Object>((tx) async {
       final now = clock.now();
       final next = refreshSuccessor(_secret, token);
@@ -151,6 +155,14 @@ class RefreshTokens {
           }
           // Replay: revoked and committed, then 401.
           await revokeDevice(tx, deviceId, now);
+          // no actor: whoever presented the token is unknown
+          await audit?.append(
+            tx,
+            scope: AuditScope.user(userId),
+            action: 'auth.refresh_replay',
+            ip: ip,
+            targetIds: [deviceId],
+          );
           return UnauthorizedReason.deviceRevoked;
         }
         if (!live) return UnauthorizedReason.deviceRevoked;

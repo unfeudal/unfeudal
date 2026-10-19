@@ -5,6 +5,7 @@ import 'package:cryptography/helpers.dart' show constantTimeBytesEquality;
 import 'package:shelf/shelf.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
+import '../../audit/audit_log.dart';
 import '../../auth/rate_limit.dart';
 import '../../auth/secret_hash.dart';
 import '../../auth/tokens.dart';
@@ -86,7 +87,14 @@ Future<Response> setup(Request request) async {
       bundleVersion: 0,
       device: device,
     );
-    // Audit hook: setup.completed (instance), then device.added (user), after the session exists.
+    // after the session exists: its device is the actor
+    final audit = auditWriter(
+      request,
+      tx,
+      actor: (user: userId, device: session.deviceId),
+    );
+    await audit(AuditScope.instance, 'setup.completed', [userId]);
+    await audit(AuditScope.user(userId), 'device.added', [session.deviceId]);
     return session;
   });
   return jsonResponse(session.toJson(), status: 201);
