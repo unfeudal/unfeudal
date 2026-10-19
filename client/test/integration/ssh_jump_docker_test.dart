@@ -108,6 +108,16 @@ void main() {
       ]);
     }
     final deadline = DateTime.now().add(const Duration(seconds: 90));
+    // the target is reached only through the bastion: wait for its sshd too, not just the bastion's banner
+    for (final name in [bastionName, targetName]) {
+      while (!((await Process.run('docker', ['logs', name])).stdout as String)
+          .contains('[ls.io-init] done.')) {
+        if (DateTime.now().isAfter(deadline)) {
+          throw StateError('$name did not start');
+        }
+        await Future<void>.delayed(const Duration(seconds: 2));
+      }
+    }
     while (true) {
       try {
         final s = await Socket.connect(InternetAddress.loopbackIPv4, 22220);
