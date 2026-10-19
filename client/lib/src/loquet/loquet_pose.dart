@@ -74,10 +74,24 @@ class LoquetPose {
     this.extras = const {},
     this.tone = LoquetTone.normal,
     this.lookX = 0,
+    this.mood = LoquetMood.idle,
   });
 
   /// [eyeX] (0 left … 1 right) only moves the eyes of [LoquetMood.watching].
-  factory LoquetPose.of(LoquetMood mood, {double eyeX = 0.5}) => switch (mood) {
+  factory LoquetPose.of(LoquetMood mood, {double eyeX = 0.5}) {
+    final p = _parts(mood, eyeX);
+    return LoquetPose(
+      p.eyes,
+      p.mouth,
+      hands: p.hands,
+      extras: p.extras,
+      tone: p.tone,
+      lookX: p.lookX,
+      mood: mood,
+    );
+  }
+
+  static LoquetPose _parts(LoquetMood mood, double eyeX) => switch (mood) {
     LoquetMood.idle => const LoquetPose(LoquetEyes.open, LoquetMouth.smile),
     LoquetMood.watching => LoquetPose(
       LoquetEyes.follow,
@@ -153,6 +167,20 @@ class LoquetPose {
 
   /// Horizontal eye offset in viewBox units (−6 … 6).
   final double lookX;
+
+  /// The mood it was built from; not drawn.
+  final LoquetMood mood;
+
+  /// The same pose looking [lookX] units aside (idle life).
+  LoquetPose lookingAt(double lookX) => LoquetPose(
+    eyes,
+    mouth,
+    hands: hands,
+    extras: extras,
+    tone: tone,
+    lookX: lookX,
+    mood: mood,
+  );
 
   /// The drawn parts, without the eye offset.
   ({
