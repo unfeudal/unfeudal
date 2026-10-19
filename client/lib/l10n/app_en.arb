@@ -1269,5 +1269,18 @@
         "type": "int"
       }
     }
+  },
+  "settingsDeleteAccount": "Delete the account",
+  "deleteAccountBody": "The account, its devices and every personal item are deleted from the server and from this device. Shared vaults stay with their organisation.",
+  "deletePassword": "Master password",
+  "deleteConfirmEmail": "Type the account email",
+  "deleteSubmit": "Delete for good",
+  "deleteLastOwner": "Only owner of: {orgs}. Hand over ownership or delete these organisations first.",
+  "@deleteLastOwner": {
+    "placeholders": {
+      "orgs": {
+        "type": "String"
+      }
+    }
   }
 }

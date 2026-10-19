@@ -14,6 +14,7 @@ import '../../version.dart';
 import '../form_dialog.dart';
 import '../manage_frame.dart';
 import '../onboarding/recovery_kit_view.dart';
+import 'delete_account_screen.dart';
 import 'export_screen.dart';
 import 'password_change_screen.dart';
 
@@ -340,6 +341,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onPressed: () => _push(const ExportScreen()),
                   child: Text(l.settingsExport),
                 ),
+                if (!(state.stored?.isInstanceOwner ?? true))
+                  TextButton(
+                    key: const Key('settings-delete-account'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: UfColors.of(context).danger,
+                    ),
+                    onPressed: offline
+                        ? null
+                        : () => _push(const DeleteAccountScreen()),
+                    child: Text(l.settingsDeleteAccount),
+                  ),
               ],
             ),
           ]),
