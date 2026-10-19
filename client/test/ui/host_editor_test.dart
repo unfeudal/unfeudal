@@ -107,6 +107,9 @@ void main() {
     expect(meta['colorLabel'], 'red');
     expect((meta['forwards'] as List).length, 1);
     expect(meta['jumpHostId'], isNotNull);
+    // inherited port and a personal host's identity mode are left out, not written as null / shared
+    expect(meta.containsKey('port'), isFalse);
+    expect(meta.containsKey('identityMode'), isFalse);
   });
 
   testWidgets('newer payload and trashed host are read-only', (t) async {
