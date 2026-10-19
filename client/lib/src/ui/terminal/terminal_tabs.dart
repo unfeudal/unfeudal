@@ -9,11 +9,12 @@ import '../../design/motion.dart';
 import '../../design/seal.dart';
 import '../../design/tokens.dart';
 import '../shell/shortcuts.dart';
+import '../snippets/snippets_panel.dart';
 import 'forwards_badge.dart';
 import 'terminal_pane.dart';
 
 /// The tab strip over the terminals; the active tab shares the terminal's background.
-class TerminalTabs extends StatelessWidget {
+class TerminalTabs extends StatefulWidget {
   const TerminalTabs({
     super.key,
     this.onNewTab,
@@ -29,7 +30,15 @@ class TerminalTabs extends StatelessWidget {
   final void Function(String hostId)? onEditHost;
 
   @override
+  State<TerminalTabs> createState() => _TerminalTabsState();
+}
+
+class _TerminalTabsState extends State<TerminalTabs> {
+  bool _snippets = false;
+
+  @override
   Widget build(BuildContext context) {
+    final onShowTree = widget.onShowTree;
     final l = AppLocalizations.of(context);
     final state = AppScope.of(context);
     final colors = UfColors.of(context);
@@ -100,8 +109,20 @@ class TerminalTabs extends StatelessWidget {
                   key: const Key('tab-new'),
                   tooltip: l.treeSearch(UfShortcuts.label(UfShortcut.newTab)),
                   iconSize: 15,
-                  onPressed: onNewTab,
+                  onPressed: widget.onNewTab,
                   icon: const Icon(UfIcons.plus),
+                ),
+              ),
+              const Spacer(),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: IconButton(
+                  key: const Key('snippets-button'),
+                  tooltip: l.snippetsTitle,
+                  iconSize: 15,
+                  isSelected: _snippets,
+                  onPressed: () => setState(() => _snippets = !_snippets),
+                  icon: const Icon(UfIcons.copySimple),
                 ),
               ),
             ],
@@ -110,14 +131,27 @@ class TerminalTabs extends StatelessWidget {
         Expanded(
           child: ColoredBox(
             color: colors.term,
-            child: IndexedStack(
-              index: active,
+            child: Stack(
               children: [
-                for (final tab in state.tabs)
-                  TerminalPane(
-                    key: ObjectKey(tab),
-                    session: tab,
-                    onEditHost: onEditHost,
+                IndexedStack(
+                  index: active,
+                  children: [
+                    for (final tab in state.tabs)
+                      TerminalPane(
+                        key: ObjectKey(tab),
+                        session: tab,
+                        onEditHost: widget.onEditHost,
+                      ),
+                  ],
+                ),
+                if (_snippets)
+                  Positioned(
+                    top: 10,
+                    right: 10,
+                    bottom: 10,
+                    child: SnippetsPanel(
+                      onClose: () => setState(() => _snippets = false),
+                    ),
                   ),
               ],
             ),
