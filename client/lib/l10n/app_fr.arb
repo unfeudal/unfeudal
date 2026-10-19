@@ -341,5 +341,6 @@
   "loquetReasonVerify": "{count, plural, =1{1 empreinte à vérifier depuis plus de 7 jours} other{{count} empreintes à vérifier depuis plus de 7 jours}}",
   "loquetReasonConflicts": "{count, plural, =1{1 copie en conflit à trier} other{{count} copies en conflit à trier}}",
   "loquetReasonOldKeys": "{count, plural, =1{1 clé de plus de 5 ans} other{{count} clés de plus de 5 ans}}",
-  "loquetReasonStaleSync": "Aucune synchronisation depuis plus de 7 jours"
+  "loquetReasonStaleSync": "Aucune synchronisation depuis plus de 7 jours",
+  "loquetBubbleLabel": "Loquet : {line}"
 }

@@ -33,6 +33,9 @@ class LoquetController extends ChangeNotifier {
   LoquetAccessory? get accessory =>
       mood.serious ? null : _current?.accessory ?? engine.sessionAccessory;
 
+  /// The reaction showing now; spots pick its text once.
+  Reaction? get current => _current;
+
   LineKey? get line => _bubble ? _current?.line : null;
   Map<String, String> get params => _current?.params ?? const {};
   bool get reasons => _current?.reasons ?? false;
