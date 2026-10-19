@@ -111,6 +111,41 @@ void main() {
     expect(h.orgCalls, isEmpty);
   });
 
+  testWidgets(
+    'an owner changes their own role only while another owner remains',
+    (t) async {
+      final s = await admin(t, role: 'owner');
+      final me = s.stored!.userId;
+      DropdownButton<OrgRole> mine() =>
+          t.widget<DropdownButton<OrgRole>>(find.byKey(Key('member-role-$me')));
+      expect(mine().onChanged, isNull, reason: 'the last owner');
+      await t.runAsync(() async {
+        h.orgBlock = orgBlock(
+          cursor: 2,
+          role: 'owner',
+          members: [
+            memberRow(
+              me,
+              role: 'owner',
+              status: 'confirmed',
+              publicKey: h.accounts.values.first.bundle.publicKey,
+            ),
+            memberRow(
+              mia,
+              role: 'owner',
+              status: 'confirmed',
+              publicKey: miaKey,
+              email: 'mia@example.org',
+            ),
+          ],
+        );
+        await s.sync!.syncNow();
+      });
+      await pumpReal(t);
+      expect(mine().onChanged, isNotNull);
+    },
+  );
+
   testWidgets('an admin cannot pick admin or owner, nor touch another admin', (
     t,
   ) async {

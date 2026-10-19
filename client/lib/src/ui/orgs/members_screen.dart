@@ -149,6 +149,14 @@ class _MembersScreenState extends State<MembersScreen> {
         if (m.orgId == widget.orgId) m,
     ]..sort((a, b) => a.email.compareTo(b.email));
     final unconfirmed = orgs.lastHandoff?.unconfirmed ?? const <String>{};
+    // an owner may change their own role while another confirmed owner remains
+    final anotherOwner = members.any(
+      (m) =>
+          m.userId != me &&
+          m.role == OrgRole.owner.name &&
+          m.status != MemberStatus.accepted.name &&
+          m.disabled != true,
+    );
     return ManageFrame(
       title: l.membersTitle,
       onBack: widget.onBack,
@@ -185,6 +193,7 @@ class _MembersScreenState extends State<MembersScreen> {
               isAdmin: isAdmin,
               isOwner: isOwner,
               unconfirmed: unconfirmed,
+              anotherOwner: anotherOwner,
             ),
         ],
       ),
@@ -198,6 +207,7 @@ class _MembersScreenState extends State<MembersScreen> {
     required bool isAdmin,
     required bool isOwner,
     required Set<String> unconfirmed,
+    required bool anotherOwner,
   }) {
     final l = AppLocalizations.of(context);
     final colors = UfColors.of(context);
@@ -248,7 +258,7 @@ class _MembersScreenState extends State<MembersScreen> {
             DropdownButton<OrgRole>(
               key: Key('member-role-${m.userId}'),
               value: role,
-              onChanged: touchable && !self
+              onChanged: touchable && (!self || (isOwner && anotherOwner))
                   ? (r) {
                       if (r == null || r == role) return;
                       _run((state) async {
