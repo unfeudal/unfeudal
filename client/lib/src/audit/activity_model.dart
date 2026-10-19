@@ -77,14 +77,15 @@ class ActivityModel extends ChangeNotifier {
     return all;
   }
 
-  Future<ChainReport> verify() async => verifyChain(await wholeChain());
+  /// The first seq that does not verify, null when the chain holds.
+  Future<int?> verify() async => verifyChain(await wholeChain());
 
   /// The whole chain as JSON, verified on the way: a broken chain is still saved (it is the evidence).
-  Future<({String json, ChainReport report})> exportJson() async {
+  Future<({String json, int? brokenAt})> exportJson() async {
     final chain = await wholeChain();
     return (
       json: jsonEncode([for (final e in chain) e.toJson()]),
-      report: verifyChain(chain),
+      brokenAt: verifyChain(chain),
     );
   }
 

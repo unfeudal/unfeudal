@@ -7,7 +7,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
 import '../../design/dialog.dart';
 import '../../design/tokens.dart';
-import '../describe_error.dart';
+import '../busy_action.dart';
 
 /// An existing account joins an org from an invitation link or file of its own server.
 class JoinOrgDialog extends StatefulWidget {
@@ -20,11 +20,9 @@ class JoinOrgDialog extends StatefulWidget {
   State<JoinOrgDialog> createState() => _JoinOrgDialogState();
 }
 
-class _JoinOrgDialogState extends State<JoinOrgDialog> {
+class _JoinOrgDialogState extends State<JoinOrgDialog> with BusyAction {
   final _link = TextEditingController();
   String? _file;
-  bool _busy = false;
-  String? _error;
 
   @override
   void dispose() {
@@ -53,23 +51,18 @@ class _JoinOrgDialogState extends State<JoinOrgDialog> {
               allowTestingKdf: state.allowTestingKdf,
             );
     } on Exception {
-      return setState(() => _error = l.joinInvalid);
+      return setState(() => problem = l.joinInvalid);
     }
     if (invite.kind != EnrollKind.invite ||
         invite.server != state.stored?.serverUrl) {
-      return setState(() => _error = l.joinInvalid);
+      return setState(() => problem = l.joinInvalid);
     }
-    setState(() => _busy = true);
-    try {
+    await run(() async {
       final orgId = await state.api!.joinInvite(invite.token);
       await state.sync!.syncNow();
       state.orgs!.select(orgId);
       if (mounted) Navigator.of(context).pop();
-    } on Exception catch (e) {
-      if (mounted) setState(() => _error = describeError(l, e));
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
+    });
   }
 
   @override
@@ -84,7 +77,7 @@ class _JoinOrgDialogState extends State<JoinOrgDialog> {
         ),
         FilledButton(
           key: const Key('join-submit'),
-          onPressed: _busy ? null : _join,
+          onPressed: busy ? null : _join,
           child: Text(l.orgJoinSubmit),
         ),
       ],
@@ -104,7 +97,7 @@ class _JoinOrgDialogState extends State<JoinOrgDialog> {
             child: Text(l.joinOpenFile),
           ),
         ),
-        if (_error case final error?)
+        if (problem case final error?)
           Text(error, style: TextStyle(color: UfColors.of(context).danger)),
       ],
     );

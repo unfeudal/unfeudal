@@ -203,8 +203,8 @@ void main() {
       );
       expect(
         (
-          s.vault!.resolve(bastion).jumpHostId,
-          s.vault!.resolve(web).jumpHostId,
+          s.vault!.hostLookup(bastion)!.resolved.jumpHostId,
+          s.vault!.hostLookup(web)!.resolved.jumpHostId,
         ),
         (null, bastion),
       );

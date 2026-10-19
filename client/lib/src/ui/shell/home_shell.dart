@@ -90,7 +90,10 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
     _searchFocus.dispose();
     _terminalFocus.dispose();
     _loquetKeys.dispose();
-    _chrome?.clear();
+    // unmounting locks the tree: the title bar may rebuild only once this frame is done
+    if (_chrome case final chrome?) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => chrome.clear(this));
+    }
     super.dispose();
   }
 
@@ -111,8 +114,8 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
       case UfShortcut.focusSearch || UfShortcut.newTab:
         _focusSearch();
       case UfShortcut.closeTab:
-        if (_state.tabs.isNotEmpty) {
-          unawaited(_state.closeTab(_state.tabs[_state.activeTab]));
+        if (_state.activeSession case final tab?) {
+          unawaited(_state.closeTab(tab));
         }
       // handled by the focused terminal
       case UfShortcut.copy ||
@@ -219,13 +222,12 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
     setState(() => _page = page);
   }
 
-  void _editHost(String hostId, {Rect? from}) => _openEditor(
+  void _editHost(String hostId) => _openEditor(
     (close) =>
         HostEditorPanel(key: ValueKey(hostId), hostId: hostId, onClose: close),
-    from: from,
   );
 
-  void _openEditor(Widget Function(VoidCallback close) build, {Rect? from}) {
+  void _openEditor(Widget Function(VoidCallback close) build) {
     final editor = build(() {
       trace(TraceArea.ui, 'editor closed');
       setState(() => _editor = null);
@@ -317,11 +319,7 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
                           ),
                         ),
                         if (_editor case final editor?)
-                          GrowFrom(
-                            key: ObjectKey(editor),
-                            from: null,
-                            child: editor,
-                          ),
+                          GrowIn(key: ObjectKey(editor), child: editor),
                       ],
                     ),
                   ),
@@ -340,9 +338,7 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
     if (chrome == null) return;
     final l = AppLocalizations.of(context);
     final vault = selectedOrg(state)?.name ?? l.vaultPersonal;
-    final tab = state.tabs.isEmpty
-        ? l.statusNoSession
-        : state.tabs[state.activeTab.clamp(0, state.tabs.length - 1)].title;
+    final tab = state.activeSession?.title ?? l.statusNoSession;
     final title = switch (page) {
       ShellPage.settings => l.railSettings,
       final page? => '$vault — ${pageTitle(l, page)}',
@@ -352,6 +348,7 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       chrome.show(
+        owner: this,
         sidebarWidth: width,
         title: title,
         toggleSidebar: () => setState(() => _treeVisible = !_treeVisible),
@@ -368,16 +365,15 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
       (close) =>
           FolderEditorPanel(orgId: _state.orgs?.selected, onClose: close),
     ),
-    onEdit: (e, from) => e.kind == ItemKind.folder
+    onEdit: (e) => e.kind == ItemKind.folder
         ? _openEditor(
             (close) => FolderEditorPanel(
               key: ValueKey(e.id),
               folderId: e.id,
               onClose: close,
             ),
-            from: from,
           )
-        : _editHost(e.id, from: from),
+        : _editHost(e.id),
   );
 
   Widget _resizer() => Focus(

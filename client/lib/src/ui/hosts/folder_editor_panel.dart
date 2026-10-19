@@ -17,19 +17,10 @@ import 'jump_host_picker.dart';
 
 /// Edits a folder: name, parent (never itself or inside itself) and defaults for the hosts inside.
 class FolderEditorPanel extends StatefulWidget {
-  const FolderEditorPanel({
-    super.key,
-    this.folderId,
-    this.parentId,
-    this.orgId,
-    this.onClose,
-  });
+  const FolderEditorPanel({super.key, this.folderId, this.orgId, this.onClose});
 
   /// Null for a new folder.
   final String? folderId;
-
-  /// Parent of a new folder.
-  final String? parentId;
 
   /// Org of a new folder; null for the personal vault.
   final String? orgId;
@@ -48,7 +39,6 @@ class _FolderEditorPanelState extends State<FolderEditorPanel> {
   String? _jumpHostId;
   final _problems = <String, String>{};
   String? _error;
-  int _failures = 0;
 
   @override
   void initState() {
@@ -64,7 +54,7 @@ class _FolderEditorPanelState extends State<FolderEditorPanel> {
     _user.text = (defaults['user'] as String?) ?? '';
     _identityId = defaults['identityId'] as String?;
     _jumpHostId = defaults['jumpHostId'] as String?;
-    _parentId = entry?.folderId ?? widget.parentId;
+    _parentId = entry?.folderId;
   }
 
   @override
@@ -133,7 +123,7 @@ class _FolderEditorPanelState extends State<FolderEditorPanel> {
         _problems['name'] = l.fieldInvalid;
       }
     }
-    if (meta == null) return setState(() => _failures++);
+    if (meta == null) return setState(() {});
     try {
       final orgId = _orgId;
       if (orgId == null) {
@@ -167,9 +157,7 @@ class _FolderEditorPanelState extends State<FolderEditorPanel> {
       action: l.folderDelete,
     );
     if (!yes) return;
-    _orgId == null
-        ? await state.vault!.deleteFolder(widget.folderId!)
-        : await state.orgs!.writer.trash(widget.folderId!);
+    await state.trashItem(widget.folderId!, orgId: _orgId);
     widget.onClose?.call();
   }
 

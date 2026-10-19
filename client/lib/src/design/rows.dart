@@ -10,13 +10,11 @@ class GroupNav<T> extends StatelessWidget {
     required this.groups,
     required this.current,
     required this.onPick,
-    this.width = 180,
   });
 
   final List<(T, String)> groups;
   final T current;
   final ValueChanged<T> onPick;
-  final double width;
 
   @override
   Widget build(BuildContext context) {
@@ -24,7 +22,7 @@ class GroupNav<T> extends StatelessWidget {
     final text = Theme.of(context).textTheme.bodyMedium!
         .copyWith(fontSize: 13.5);
     return SizedBox(
-      width: width,
+      width: 180,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         spacing: 1,
@@ -106,12 +104,9 @@ class SettingRow extends StatelessWidget {
 
 /// A small `line`-edged badge: a folder tag, a role, a state written out.
 class UfTag extends StatelessWidget {
-  const UfTag(this.label, {super.key, this.color});
+  const UfTag(this.label, {super.key});
 
   final String label;
-
-  /// The text colour; `muted` by default.
-  final Color? color;
 
   @override
   Widget build(BuildContext context) {
@@ -126,11 +121,8 @@ class UfTag extends StatelessWidget {
         label,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: Theme.of(context).textTheme.bodySmall!.copyWith(
-          fontSize: 11,
-          height: 16 / 11,
-          color: color ?? colors.muted,
-        ),
+        style: Theme.of(context).textTheme.bodySmall!
+            .copyWith(fontSize: 11, height: 16 / 11, color: colors.muted),
       ),
     );
   }
@@ -143,7 +135,6 @@ class ItemRow extends StatelessWidget {
     required this.title,
     this.subtitle,
     this.icon,
-    this.leading,
     this.trailing = const [],
     this.monoSubtitle = false,
     this.dimmed = false,
@@ -152,9 +143,6 @@ class ItemRow extends StatelessWidget {
   final String title;
   final String? subtitle;
   final IconData? icon;
-
-  /// Replaces the icon tile (an avatar letter, a seal).
-  final Widget? leading;
   final List<Widget> trailing;
   final bool monoSubtitle;
   final bool dimmed;
@@ -183,7 +171,7 @@ class ItemRow extends StatelessWidget {
         child: Row(
           spacing: 12,
           children: [
-            ?(leading ?? tile),
+            ?tile,
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,

@@ -102,10 +102,7 @@ class _TeamsScreenState extends State<TeamsScreen> {
       for (final t in block?.teams ?? const <OrgTeam>[])
         if (t.orgId == widget.orgId) t,
     ]..sort((a, b) => a.name.compareTo(b.name));
-    final members = [
-      for (final m in block?.members ?? const <OrgMember>[])
-        if (m.orgId == widget.orgId) m,
-    ]..sort((a, b) => a.email.compareTo(b.email));
+    final members = state.orgs!.membersOf(widget.orgId);
     final editing = _editing;
     final muted = Theme.of(context).textTheme.bodySmall!
         .copyWith(color: colors.muted);

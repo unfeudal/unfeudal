@@ -57,10 +57,10 @@ void main() {
     () {
       final m = LocalMirror.inMemory();
       final a = newId();
-      expect(m.upsertItems([wireItem(a, revision: 3)]), 0);
-      expect(m.upsertItems([wireItem(a, revision: 2)]), 1);
+      m.upsertItems([wireItem(a, revision: 3)]);
+      m.upsertItems([wireItem(a, revision: 2)]);
       expect(m.item(a)!.revision, 3);
-      expect(m.upsertItems([wireItem(a, revision: 3, deleted: true)]), 0);
+      m.upsertItems([wireItem(a, revision: 3, deleted: true)]);
       expect(m.item(a)!.deleted, isTrue);
       m.upsertItems([wireItem(a, revision: 1)], acceptOlder: true);
       expect(m.item(a)!.revision, 1);
@@ -119,38 +119,18 @@ void main() {
     expect(m.getKv(KvKey.cursor), isNull);
   });
 
-  test('full resync and accepted restore reset their keys', () {
-    LocalMirror filled() {
-      final m = LocalMirror.inMemory()
-        ..upsertItems([wireItem(newId())])
-        ..enqueue(wireItem(newId(), revision: 0), baseRevision: 0);
-      for (final k in KvKey.values) {
-        m.setKv(k, 'x');
-      }
-      return m;
+  test('accepted restore resets its keys', () {
+    final restore = LocalMirror.inMemory()
+      ..upsertItems([wireItem(newId())])
+      ..enqueue(wireItem(newId(), revision: 0), baseRevision: 0);
+    for (final k in KvKey.values) {
+      restore.setKv(k, 'x');
     }
-
-    final resync = filled()..resetForResync();
+    restore.resetForRestore();
     expect(
-      resync.items(),
+      restore.items(),
       hasLength(1),
     ); // replaced by the full pull, not wiped up front
-    expect(resync.outbox(), hasLength(1));
-    expect(
-      {for (final k in KvKey.values) k: resync.getKv(k)},
-      {
-        KvKey.cursor: null,
-        KvKey.orgCursor: null,
-        KvKey.orgBlock: null,
-        KvKey.bundle: 'x',
-        KvKey.apiInfo: 'x',
-        KvKey.refusedEpoch: 'x',
-        KvKey.ledger: 'x',
-        KvKey.keyring: 'x',
-        KvKey.anchors: 'x',
-      },
-    );
-    final restore = filled()..resetForRestore();
     expect(restore.outbox(), hasLength(1));
     expect(
       {for (final k in KvKey.values) k: restore.getKv(k)},

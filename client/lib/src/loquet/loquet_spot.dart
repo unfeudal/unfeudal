@@ -24,8 +24,7 @@ enum LoquetPlacement {
   /// The title bar while the sidebar is hidden.
   titleBar(24),
   dialog(40),
-  empty(88),
-  notice(28);
+  empty(88);
 
   const LoquetPlacement(this.size);
   final double size;

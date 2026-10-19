@@ -56,7 +56,6 @@ void main() {
       expect(LoquetPalette.of(LoquetTone.normal, c).body, c.accent);
       expect(LoquetPalette.of(LoquetTone.danger, c).body, c.danger);
       expect(LoquetPalette.of(LoquetTone.warn, c).body, c.warn);
-      expect(LoquetPalette.of(LoquetTone.danger, c).hand, c.danger);
       for (final tone in LoquetTone.values) {
         final p = LoquetPalette.of(tone, c);
         expect((p.face, p.feet, p.drop), (c.accentFg, c.text, c.accentText));

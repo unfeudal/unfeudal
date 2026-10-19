@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: Apache-2.0
-import 'package:animations/animations.dart';
 import 'package:flutter/material.dart';
 
 import '../l10n/app_localizations.dart';
@@ -183,13 +182,8 @@ class _StageScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
     final l = AppLocalizations.of(context);
-    return PageTransitionSwitcher(
+    return AnimatedSwitcher(
       duration: UfMotion.of(context).slow,
-      transitionBuilder: (child, animation, secondary) => FadeThroughTransition(
-        animation: animation,
-        secondaryAnimation: secondary,
-        child: child,
-      ),
       child: KeyedSubtree(
         key: ValueKey(state.stage),
         child: switch (state.stage) {

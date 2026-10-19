@@ -4,7 +4,7 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
-import '../describe_error.dart';
+import '../busy_action.dart';
 import '../fields.dart';
 import '../lock/lock_frame.dart';
 import 'recovery_kit_view.dart';
@@ -17,15 +17,13 @@ class SetupScreen extends StatefulWidget {
   State<SetupScreen> createState() => _SetupScreenState();
 }
 
-class _SetupScreenState extends State<SetupScreen> {
+class _SetupScreenState extends State<SetupScreen> with BusyAction {
   late final TextEditingController _server;
   late final TextEditingController _token;
   final _email = TextEditingController();
   final _password = TextEditingController();
   final _confirm = TextEditingController();
   final _name = TextEditingController();
-  bool _busy = false;
-  String? _problem;
 
   /// 1: server and token; 2: the owner account. A setup link fills step 1 and opens on step 2.
   late int _step = _token.text.isEmpty ? 1 : 2;
@@ -55,7 +53,7 @@ class _SetupScreenState extends State<SetupScreen> {
     }
     if (_token.text.trim().isEmpty) return _fail(l.fieldRequired);
     setState(() {
-      _problem = null;
+      problem = null;
       _step = 2;
     });
   }
@@ -65,8 +63,7 @@ class _SetupScreenState extends State<SetupScreen> {
     final state = AppScope.read(context);
     final local = checkNewPassword(l, _password.text, _confirm.text);
     if (local != null) return _fail(local);
-    setState(() => _busy = true);
-    try {
+    await run(() async {
       await state.setup(
         server: Uri.parse(_server.text.trim()),
         token: _token.text,
@@ -75,16 +72,10 @@ class _SetupScreenState extends State<SetupScreen> {
         displayName: _name.text.trim().isEmpty ? null : _name.text.trim(),
       );
       if (!state.serverHas('recovery_kit')) state.finishOnboarding();
-    } on Exception catch (e) {
-      if (mounted) _fail(describeError(l, e));
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
+    });
   }
 
-  void _fail(String problem) => setState(() {
-    _problem = problem;
-  });
+  void _fail(String text) => setState(() => problem = text);
 
   @override
   Widget build(BuildContext context) {
@@ -147,7 +138,7 @@ class _SetupScreenState extends State<SetupScreen> {
             keyedField('setup-name', _name, l.setupDisplayName),
             LockNotice(l.setupWarning),
           ],
-          if (_problem case final problem?) LockError(problem),
+          if (problem case final problem?) LockError(problem),
           if (first)
             LockActions(
               primary: FilledButton(
@@ -160,14 +151,14 @@ class _SetupScreenState extends State<SetupScreen> {
             LockActions(
               primary: FilledButton(
                 key: const Key('setup-submit'),
-                onPressed: _busy ? null : _submit,
-                child: BusyLabel(busy: _busy, label: l.setupSubmit),
+                onPressed: busy ? null : _submit,
+                child: BusyLabel(busy: busy, label: l.setupSubmit),
               ),
               links: [
                 TextButton(
                   key: const Key('setup-back'),
                   onPressed: () => setState(() {
-                    _problem = null;
+                    problem = null;
                     _step = 1;
                   }),
                   child: Text(l.setupBack),

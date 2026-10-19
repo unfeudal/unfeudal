@@ -192,7 +192,7 @@ void main() {
       ]);
     });
 
-    test('a port in use: ForwardFailed, the session stays connected', () async {
+    test('a port in use: not started, the session stays connected', () async {
       final (s, _, _) = await home();
       final blocker = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
       final events = <AppEvent>[];
@@ -203,7 +203,7 @@ void main() {
       expect(tab.state, SealState.connected);
       expect(tab.forwarder!.failed[blocker.port], isA<PortInUse>());
       await Future<void>.delayed(Duration.zero);
-      expect(events.whereType<ForwardFailed>().single.localPort, blocker.port);
+      expect(events.whereType<ForwardStarted>(), isEmpty);
       await blocker.close();
     });
 

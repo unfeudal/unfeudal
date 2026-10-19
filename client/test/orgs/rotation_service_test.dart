@@ -122,7 +122,7 @@ void main() {
       KeyIds.folder(f, 2, PayloadPart.meta),
     );
     expect(c.h.orgCalls.last.route, 'POST /folders/$f/rotation/done');
-    expect(c.events.whereType<KeyRotated>().single.folderId, f);
+    expect(c.events.whereType<KeyRotated>(), hasLength(1));
   });
 
   test(

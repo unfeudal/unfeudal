@@ -3,7 +3,6 @@ import 'package:dartssh2/dartssh2.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:unfeudal_client/src/ssh/jump_connector.dart';
 import 'package:unfeudal_client/src/ssh/ssh_connector.dart';
-import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../support/fakes.dart';
 
@@ -31,40 +30,17 @@ class _Hop implements HopClient {
   Future<void> close() async => log.add('close $id');
 }
 
-class _Refuse implements SshCallbacks {
-  final asked = <String>[];
-  @override
-  KnownHostMeta? pinnedKey(String hostId) => null;
-  @override
-  Future<bool> confirmHostKey(HostKeyCheck c) async {
-    asked.add(c.hostId);
-    return false;
-  }
-
-  @override
-  Future<void> pinHostKey(
-    String hostId,
-    String keyType,
-    String fingerprint,
-  ) async {}
-  @override
-  Future<String?> askPassword(String target) async => null;
-  @override
-  Future<List<String>?> answerPrompts(
-    String name,
-    String instruction,
-    List<SshPrompt> prompts,
-  ) async => null;
-}
-
 void main() {
   test('hops open outermost first, each over the previous forward; close runs innermost first', () async {
     final log = <String>[];
-    final c = JumpConnector((target, {over}) async {
-      log.add('open ${target.hostId} over ${(over as FakeChannel?)?.label}');
-      return _Hop(target.hostId, log);
-    });
-    final conn = await c.connect([t('j2'), t('j1')], t('web'));
+    final conn = await connectChain(
+      (target, {over}) async {
+        log.add('open ${target.hostId} over ${(over as FakeChannel?)?.label}');
+        return _Hop(target.hostId, log);
+      },
+      [t('j2'), t('j1')],
+      t('web'),
+    );
     expect(log, [
       'open j2 over null',
       'forward j2>j1.lan:22',
@@ -80,15 +56,16 @@ void main() {
     'failure at a hop closes the opened hops and never opens the next',
     () async {
       final log = <String>[];
-      final c = JumpConnector((target, {over}) async {
+      Future<HopClient> open(ConnectTarget target, {SSHSocket? over}) async {
         if (target.hostId == 'j1') {
           throw const HostKeyRejected(HostKeyDecision.changed, hostId: 'j1');
         }
         log.add('open ${target.hostId}');
         return _Hop(target.hostId, log);
-      });
+      }
+
       await expectLater(
-        c.connect([t('j2'), t('j1')], t('web')),
+        connectChain(open, [t('j2'), t('j1')], t('web')),
         throwsA(
           isA<JumpChainFailed>()
               .having((e) => e.hostId, 'hostId', 'j1')
@@ -102,10 +79,14 @@ void main() {
   );
 
   test('no hops: the target is opened directly', () async {
-    final conn = await JumpConnector((target, {over}) async {
-      expect(over, isNull);
-      return _Hop(target.hostId, []);
-    }).connect(const [], t('web'));
+    final conn = await connectChain(
+      (target, {over}) async {
+        expect(over, isNull);
+        return _Hop(target.hostId, []);
+      },
+      const [],
+      t('web'),
+    );
     expect(conn.hops, isEmpty);
   });
 
@@ -113,9 +94,9 @@ void main() {
     final ssh = FakeSshConnector()
       ..keyType = 'ssh-ed25519'
       ..fingerprint = 'SHA256:${'A' * 43}';
-    final cb = _Refuse();
+    final cb = FakeSshCallbacks();
     await expectLater(
-      JumpConnector(sshHopOpener(ssh, cb)).connect([t('bastion')], t('web')),
+      connectChain(sshHopOpener(ssh, cb), [t('bastion')], t('web')),
       throwsA(
         isA<JumpChainFailed>()
             .having((e) => e.hostId, 'hostId', 'bastion')
@@ -126,7 +107,7 @@ void main() {
             ),
       ),
     );
-    expect(cb.asked, ['bastion']);
+    expect(cb.asked.map((c) => c.hostId), ['bastion']);
     expect(ssh.targets.map((x) => x.hostId), ['bastion']);
   });
 }

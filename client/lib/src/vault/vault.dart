@@ -7,7 +7,9 @@ import '../api/api_client.dart';
 import '../debug_trace.dart';
 import '../orgs/folder_keyring.dart';
 import '../storage/local_mirror.dart';
+import '../storage/sealed_kv.dart';
 import '../sync/ledger_store.dart';
+import 'item_rewrite.dart';
 
 enum EntryState { ok, unreadable, unsupported, readOnly }
 
@@ -108,9 +110,6 @@ class Vault extends ChangeNotifier {
 
   Future<void> restoreItem(String id) => _setDeleted(id, false);
 
-  /// The subtree is trashed by definition: only the folder itself is written.
-  Future<void> deleteFolder(String id) => trashItem(id);
-
   Future<String> saveFolder(
     FolderMeta meta, {
     String? id,
@@ -175,11 +174,8 @@ class Vault extends ChangeNotifier {
       return secret.kind.name == e.meta?['kind'] ? secret : null;
     } on _ReplayedSecret {
       return null;
-    } on DecryptionFailed {
-      return null;
-    } on UnsupportedEnvelope {
-      return null;
-    } on FormatException {
+    } on Exception catch (e) {
+      if (!isUnreadable(e)) rethrow;
       return null;
     }
   }
@@ -227,12 +223,7 @@ class Vault extends ChangeNotifier {
     final secret = mine.secret == null
         ? null
         : (await open(mine, PayloadPart.secret, fromServer: false))!.json;
-    if (meta['name'] case final String name) {
-      final max = mine.kind == ItemKind.snippet
-          ? PayloadLimits.snippetName
-          : PayloadLimits.name;
-      meta['name'] = String.fromCharCodes('$name$suffix'.runes.take(max));
-    }
+    suffixName(meta, mine.kind, suffix);
     return seal(
       id: newId(),
       type: mine.type,
@@ -244,7 +235,8 @@ class Vault extends ChangeNotifier {
 
   /// The ledger pin wins over the synced item: a server cannot revert or delete a pin on this device.
   KnownHostMeta? trustedPin(String hostId) =>
-      ledger.hostPin(hostId) ?? _knownHostMeta(_knownHostWinner(hostId));
+      ledger.hostPin(hostId) ??
+      _knownHostMeta(_knownHostWinner(_entries.values, hostId));
 
   /// Ledger first (saved), then the winning knownHost item; read-only only skips the sync.
   Future<void> pinHostKey(
@@ -262,7 +254,7 @@ class Vault extends ChangeNotifier {
     try {
       await upsertItem(
         type: 'knownHost',
-        id: _knownHostWinner(hostId)?.id,
+        id: _knownHostWinner(_entries.values, hostId)?.id,
         meta: pin.toJson(),
       );
     } on ReadOnlyException {
@@ -272,39 +264,47 @@ class Vault extends ChangeNotifier {
 
   /// First sight of a synced pin seeds the ledger; an existing ledger pin is never replaced from the server.
   Future<void> _seedPins() async {
-    final synced = _knownHostWinners(_entries.values.where((e) => !e.pending));
-    for (final MapEntry(key: host, value: winner) in synced.entries) {
-      if (ledger.hostPin(host) == null) {
-        await ledger.setHostPin(host, _knownHostMeta(winner)!);
+    final synced = [
+      for (final e in _entries.values)
+        if (!e.pending && e.kind == ItemKind.knownHost) e,
+    ];
+    final hosts = {
+      for (final e in synced)
+        if (e.state == EntryState.ok) _knownHostMeta(e)!.hostItemId,
+    };
+    for (final host in hosts) {
+      if (ledger.hostPin(host) != null) continue;
+      if (_knownHostWinner(synced, host) case final pin?) {
+        await ledger.setHostPin(host, _knownHostMeta(pin)!);
       }
     }
   }
 
-  VaultEntry? _knownHostWinner(String hostId) =>
-      _knownHostWinners(_entries.values)[hostId];
-
-  /// One knownHost per host: the `ok` entry with the smallest id wins.
-  static Map<String, VaultEntry> _knownHostWinners(
+  /// One knownHost per host.
+  static VaultEntry? _knownHostWinner(
     Iterable<VaultEntry> entries,
-  ) {
-    final winners = <String, VaultEntry>{};
-    for (final e in entries) {
-      if (e.kind != ItemKind.knownHost ||
-          e.state != EntryState.ok ||
-          e.orgId != null) {
-        continue;
-      }
-      final host = _knownHostMeta(e)!.hostItemId;
-      final best = winners[host];
-      if (best == null || e.id.compareTo(best.id) < 0) winners[host] = e;
-    }
-    return winners;
-  }
+    String hostId,
+  ) => winner(
+    entries.where((e) => e.kind == ItemKind.knownHost),
+    (e) => _knownHostMeta(e)!.hostItemId == hostId,
+  );
 
   static KnownHostMeta? _knownHostMeta(VaultEntry? e) =>
       e == null ? null : KnownHostMeta.fromJson(e.meta);
 
-  ResolvedHost resolve(String hostId) => hostLookup(hostId)!.resolved;
+  /// The personal `ok` entry with the smallest id among [entries] that pass [where]: the same on every device.
+  static VaultEntry? winner(
+    Iterable<VaultEntry> entries, [
+    bool Function(VaultEntry e)? where,
+  ]) {
+    VaultEntry? best;
+    for (final e in entries) {
+      if (e.state != EntryState.ok || e.orgId != null) continue;
+      if (where != null && !where(e)) continue;
+      if (best == null || e.id.compareTo(best.id) < 0) best = e;
+    }
+    return best;
+  }
 
   /// An `ok` host with its inherited values; null for anything else.
   ({HostMeta meta, ResolvedHost resolved, bool org})? hostLookup(String id) {
@@ -333,21 +333,12 @@ class Vault extends ChangeNotifier {
         : null;
   }
 
-  VaultEntry? get _profileEntry {
-    final profiles = [
-      for (final e in _entries.values)
-        if (e.kind == ItemKind.profile &&
-            e.state == EntryState.ok &&
-            e.orgId == null)
-          e,
-    ]..sort((a, b) => a.id.compareTo(b.id));
-    return profiles.firstOrNull;
-  }
+  VaultEntry? get _profileEntry =>
+      winner(_entries.values.where((e) => e.kind == ItemKind.profile));
 
   Future<void> _writeProfile(ProfileMeta meta) =>
       upsertItem(type: 'profile', id: _profileEntry?.id, meta: meta.toJson());
 
-  /// Same envelopes with `deleted` flipped: `deleted` is not in the AAD, so nothing is re-sealed; `secret: null` keeps it.
   Future<void> _setDeleted(String id, bool deleted) async {
     _requireKey();
     final current =
@@ -356,23 +347,8 @@ class Vault extends ChangeNotifier {
     if (current.state != EntryState.ok) {
       throw StateError('${current.state.name} item is not rewritten');
     }
-    final json = current.item.toJson()
-      ..removeWhere((k, _) => _serverSet.contains(k))
-      ..['deleted'] = deleted;
-    if (!_queuedSecret(id)) {
-      json['secret'] =
-          null; // a queued secret not stored yet is sent again as is
-    }
-    await _write(Item.fromJson(json));
+    await _write(withDeleted(mirror, current.item, deleted));
   }
-
-  static const _serverSet = {
-    'purged',
-    'createdAt',
-    'updatedAt',
-    'updatedBy',
-    'updatedDevice',
-  };
 
   /// Opens one part. A server payload ([fromServer]) older than its mark is a replay: [onReplay], null.
   Future<OpenedPayload?> open(
@@ -520,7 +496,7 @@ class Vault extends ChangeNotifier {
     // of an item whose queued write still carries a secret the server has not stored yet.
     if (current != null &&
         secret == null &&
-        (current.folderId != folderId || _queuedSecret(itemId))) {
+        (current.folderId != folderId || hasQueuedSecret(mirror, itemId))) {
       secret = await _secretJson(itemId);
     }
     final item = await seal(
@@ -538,24 +514,16 @@ class Vault extends ChangeNotifier {
 
   /// The current secret: the queued one if it carries a secret, else the server row's (each opened with its own AAD).
   Future<Map<String, Object?>?> _secretJson(String id) async {
-    final queued = mirror
-        .outbox()
-        .where((e) => e.item.id == id)
-        .firstOrNull
-        ?.item;
-    final holder = queued?.secret != null ? queued! : mirror.item(id);
-    if (holder?.secret == null) return null;
+    final holder = secretHolder(mirror, id);
+    if (holder == null) return null;
     final opened = await open(
-      holder!,
+      holder.item,
       PayloadPart.secret,
-      fromServer: holder != queued,
+      fromServer: !holder.queued,
     );
     if (opened == null) throw const _ReplayedSecret();
     return opened.json;
   }
-
-  bool _queuedSecret(String id) =>
-      mirror.outbox().any((e) => e.item.id == id && e.item.secret != null);
 
   Future<void> _write(Item item) async {
     trace(
@@ -606,11 +574,8 @@ class Vault extends ChangeNotifier {
         pending: !fromServer,
         awaitingKey: true,
       );
-    } on DecryptionFailed {
-      return VaultEntry(item, EntryState.unreadable, pending: !fromServer);
-    } on UnsupportedEnvelope {
-      return VaultEntry(item, EntryState.unreadable, pending: !fromServer);
-    } on FormatException {
+    } on Exception catch (e) {
+      if (!isUnreadable(e)) rethrow;
       return VaultEntry(item, EntryState.unreadable, pending: !fromServer);
     }
   }

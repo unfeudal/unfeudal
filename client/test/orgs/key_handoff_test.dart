@@ -59,7 +59,6 @@ void main() {
 
   test('an unpinned member gets nothing and is listed to confirm; once confirmed, the wrap opens to the folder keys', () async {
     final first = await handoff.run(block());
-    expect(first.sent, isEmpty);
     expect(first.unconfirmed, {miaId});
     expect(uploads(), isEmpty);
     expect(c.pins.pinOf(miaId), isNull);
@@ -68,7 +67,7 @@ void main() {
       mia.publicKey,
       verified: false,
     ); // confirmed without comparing codes
-    expect((await handoff.run(block())).sent, {(f, miaId)});
+    await handoff.run(block());
     final body = uploads().single;
     expect((body['version'], body['history']), (1, null));
     final wrap = WrappedFolderKeys.fromJson((body['wrapped']! as List).single);
@@ -80,8 +79,7 @@ void main() {
   });
 
   test('a disabled member never gets a wrap', () async {
-    final report = await handoff.run(block(disabled: true));
-    expect(report.sent, isEmpty);
+    await handoff.run(block(disabled: true));
     expect(uploads(), isEmpty);
     expect(c.pins.pinOf(miaId), isNull);
   });
@@ -101,7 +99,6 @@ void main() {
       await c.pins.pin(miaId, mia.publicKey, verified: true);
       final swapped = (await memberKeys()).publicKey;
       final report = await handoff.run(block(key: swapped));
-      expect(report.sent, isEmpty);
       expect(report.alerts, {miaId});
       expect(uploads(), isEmpty);
       expect(c.pins.check(miaId, swapped), PinCheck.changed);
@@ -109,8 +106,9 @@ void main() {
   );
 
   test('skips requests for a version this device does not hold, non-admin blocks, and groups wraps per folder', () async {
-    expect((await handoff.run(block(version: 2))).sent, isEmpty);
-    expect((await handoff.run(block(role: 'member'))).sent, isEmpty);
+    await handoff.run(block(version: 2));
+    await handoff.run(block(role: 'member'));
+    expect(uploads(), isEmpty);
     final other = newId(), otherKeys = await memberKeys();
     await c.pins.pin(miaId, mia.publicKey, verified: true);
     await c.pins.pin(other, otherKeys.publicKey, verified: false);
@@ -139,7 +137,10 @@ void main() {
         },
       ],
     );
-    expect((await handoff.run(two)).sent, {(f, miaId), (f, other)});
-    expect((uploads().single['wrapped']! as List), hasLength(2));
+    await handoff.run(two);
+    expect([
+      for (final w in uploads().single['wrapped']! as List)
+        WrappedFolderKeys.fromJson(w).userId,
+    ], unorderedEquals([miaId, other]));
   });
 }

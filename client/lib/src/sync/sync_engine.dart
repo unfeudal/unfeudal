@@ -45,7 +45,6 @@ class SyncEngine extends ChangeNotifier {
   bool online = true;
   Object? lastError;
   DateTime? lastSyncAt;
-  int ignoredRollbacks = 0;
   Compat? compat;
 
   /// A newer client's version: only its text is shown, the link is compiled in.
@@ -216,10 +215,7 @@ class SyncEngine extends ChangeNotifier {
         cursor: cursor,
         orgCursor: orgCursor,
       ); // parsed whole before anything is applied
-      ignoredRollbacks += mirror.upsertItems(
-        page.items,
-        acceptOlder: acceptOlder,
-      );
+      mirror.upsertItems(page.items, acceptOlder: acceptOlder);
       seen.addAll(page.items.map((i) => i.id));
       if (arrived != null) later.addAll(page.items.map((i) => i.id));
       if (page.org case final org?) {

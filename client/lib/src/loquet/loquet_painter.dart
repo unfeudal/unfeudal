@@ -19,8 +19,6 @@ const _shapesOnly = LoquetPalette(
   body: _none,
   face: _none,
   feet: _none,
-  hand: _none,
-  handLine: _none,
   zzz: _none,
   accent: _none,
   drop: _none,
@@ -198,8 +196,8 @@ class LoquetPainter extends CustomPainter {
         (12.0, 25.0, -23.0),
         (88.0, covering ? -25.0 : -12.0, covering ? -23.0 : -2.0),
       ]) ...[
-        _ellipse(cx + dx, 66 + dy, 9, 7.5, palette.hand),
-        _ellipseRing(cx + dx, 66 + dy, 9, 7.5, palette.handLine, 1.6),
+        _ellipse(cx + dx, 66 + dy, 9, 7.5, palette.body),
+        _ellipseRing(cx + dx, 66 + dy, 9, 7.5, palette.face, 1.6),
       ],
     ];
   }

@@ -5,7 +5,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
 import '../../design/dialog.dart';
 import '../../design/tokens.dart';
-import '../describe_error.dart';
+import '../busy_action.dart';
 
 /// Creates an org with the caller as owner, then shows it.
 class CreateOrgDialog extends StatefulWidget {
@@ -15,10 +15,8 @@ class CreateOrgDialog extends StatefulWidget {
   State<CreateOrgDialog> createState() => _CreateOrgDialogState();
 }
 
-class _CreateOrgDialogState extends State<CreateOrgDialog> {
+class _CreateOrgDialogState extends State<CreateOrgDialog> with BusyAction {
   final _name = TextEditingController();
-  bool _busy = false;
-  String? _error;
 
   @override
   void dispose() {
@@ -30,18 +28,13 @@ class _CreateOrgDialogState extends State<CreateOrgDialog> {
     final l = AppLocalizations.of(context);
     final state = AppScope.read(context);
     final name = _name.text.trim();
-    if (name.isEmpty) return setState(() => _error = l.fieldRequired);
-    setState(() => _busy = true);
-    try {
+    if (name.isEmpty) return setState(() => problem = l.fieldRequired);
+    await run(() async {
       final org = await state.api!.createOrg(name);
       await state.sync!.syncNow();
       state.orgs!.select(org.id);
       if (mounted) Navigator.of(context).pop();
-    } on Exception catch (e) {
-      if (mounted) setState(() => _error = describeError(l, e));
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
+    });
   }
 
   @override
@@ -56,7 +49,7 @@ class _CreateOrgDialogState extends State<CreateOrgDialog> {
         ),
         FilledButton(
           key: const Key('org-create'),
-          onPressed: _busy ? null : _create,
+          onPressed: busy ? null : _create,
           child: Text(l.orgCreate),
         ),
       ],
@@ -69,7 +62,7 @@ class _CreateOrgDialogState extends State<CreateOrgDialog> {
           decoration: InputDecoration(labelText: l.orgName),
           onSubmitted: (_) => _create(),
         ),
-        if (_error case final error?)
+        if (problem case final error?)
           Text(error, style: TextStyle(color: UfColors.of(context).danger)),
       ],
     );

@@ -122,7 +122,7 @@ void main() {
         ),
       );
       expect(c.accessory, LoquetAccessory.hardHat);
-      c.show(c.engine.handle(const HostKeyChanged(hostId: 'h')));
+      c.show(c.engine.handle(const HostKeyChanged()));
       expect((c.mood, c.accessory), (LoquetMood.alert, null));
       c.detach();
     });

@@ -7,7 +7,6 @@ import '../../app_scope.dart';
 import '../../design/field.dart';
 import '../../design/tokens.dart';
 import '../../events/app_events.dart';
-import '../../vault/org_writer.dart';
 import '../../vault/vault.dart';
 import '../describe_error.dart';
 import '../history/item_history_panel.dart';
@@ -19,19 +18,10 @@ import 'jump_host_picker.dart';
 
 /// Edits a host; empty port, user and key show the inherited value and where it comes from.
 class HostEditorPanel extends StatefulWidget {
-  const HostEditorPanel({
-    super.key,
-    this.hostId,
-    this.folderId,
-    this.orgId,
-    this.onClose,
-  });
+  const HostEditorPanel({super.key, this.hostId, this.orgId, this.onClose});
 
   /// Null for a new host.
   final String? hostId;
-
-  /// Folder of a new host.
-  final String? folderId;
 
   /// Org of a new host; null for the personal vault.
   final String? orgId;
@@ -58,7 +48,6 @@ class _HostEditorPanelState extends State<HostEditorPanel> {
   List<PortForward>? _forwards = const [];
   final _problems = <String, String>{};
   String? _error;
-  int _failures = 0;
 
   @override
   void initState() {
@@ -79,7 +68,7 @@ class _HostEditorPanelState extends State<HostEditorPanel> {
     _notes.text = text('notes');
     _startup.text = text('startupCommand');
     _identityId = meta['identityId'] as String?;
-    _folderId = _entry?.folderId ?? widget.folderId;
+    _folderId = _entry?.folderId;
     _jumpHostId = meta['jumpHostId'] as String?;
     if (meta['identityMode'] == IdentityMode.perMember.name) {
       _identityMode = IdentityMode.perMember;
@@ -108,7 +97,6 @@ class _HostEditorPanelState extends State<HostEditorPanel> {
   Future<void> _save() async {
     final l = AppLocalizations.of(context);
     final state = AppScope.read(context);
-    final vault = state.vault!;
     _problems.clear();
     if (_name.text.trim().isEmpty) _problems['name'] = l.fieldRequired;
     if (_address.text.trim().isEmpty) _problems['address'] = l.fieldRequired;
@@ -155,32 +143,17 @@ class _HostEditorPanelState extends State<HostEditorPanel> {
         _problems[_fieldOf(e)] = l.fieldInvalid;
       }
     }
-    if (_problems.isNotEmpty) return setState(() => _failures++);
+    if (_problems.isNotEmpty) return setState(() {});
     try {
       final isNew = widget.hostId == null;
-      final orgId = _orgId;
-      final id = orgId == null
-          ? await vault.upsertItem(
-              type: 'host',
-              id: widget.hostId,
-              folderId: _folderId,
-              meta: meta,
-            )
-          : await state.orgs!.writer.upsert(
-              type: 'host',
-              id: widget.hostId,
-              target: OrgTarget(orgId, _folderId),
-              meta: meta,
-            );
-      if (isNew) {
-        state.emit(
-          HostCreated(
-            hostId: id,
-            name: _name.text.trim(),
-            total: vault.ofKind(ItemKind.host).length,
-          ),
-        );
-      }
+      await state.saveItem(
+        type: 'host',
+        id: widget.hostId,
+        orgId: _orgId,
+        folderId: _folderId,
+        meta: meta,
+      );
+      if (isNew) state.emit(HostCreated(name: _name.text.trim()));
       widget.onClose?.call();
     } on Exception catch (e) {
       if (mounted) setState(() => _error = describeError(l, e));
@@ -193,9 +166,7 @@ class _HostEditorPanelState extends State<HostEditorPanel> {
 
   Future<void> _trash() async {
     final state = AppScope.read(context);
-    _orgId == null
-        ? await state.vault!.trashItem(widget.hostId!)
-        : await state.orgs!.writer.trash(widget.hostId!);
+    await state.trashItem(widget.hostId!, orgId: _orgId);
     widget.onClose?.call();
   }
 

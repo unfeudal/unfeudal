@@ -12,7 +12,7 @@ import '../../design/field.dart';
 import '../../design/empty_state.dart';
 import '../../design/tokens.dart';
 import '../../import/ssh_config_import.dart';
-import '../describe_error.dart';
+import '../busy_action.dart';
 import '../hosts/editor_frame.dart';
 import '../manage_frame.dart';
 
@@ -33,14 +33,13 @@ class ImportPreviewScreen extends StatefulWidget {
   State<ImportPreviewScreen> createState() => _ImportPreviewScreenState();
 }
 
-class _ImportPreviewScreenState extends State<ImportPreviewScreen> {
+class _ImportPreviewScreenState extends State<ImportPreviewScreen>
+    with BusyAction {
   late final SshConfigImporter _importer;
   ImportPlan? _plan;
   final _selected = <String>{};
   final _passphrases = <String, TextEditingController>{};
   String? _folderId;
-  bool _busy = false;
-  String? _problem;
 
   @override
   void initState() {
@@ -92,11 +91,7 @@ class _ImportPreviewScreenState extends State<ImportPreviewScreen> {
 
   Future<void> _submit() async {
     final l = AppLocalizations.of(context);
-    setState(() {
-      _busy = true;
-      _problem = null;
-    });
-    try {
+    await run(() async {
       final count = await _importer.apply(
         _plan!,
         aliases: _selected,
@@ -110,11 +105,7 @@ class _ImportPreviewScreenState extends State<ImportPreviewScreen> {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(l.importDone(count))));
       Navigator.of(context).maybePop();
-    } on Exception catch (e) {
-      if (mounted) setState(() => _problem = describeError(l, e));
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
+    });
   }
 
   static String _problemLabel(AppLocalizations l, SshConfigWarningKind kind) =>
@@ -195,14 +186,14 @@ class _ImportPreviewScreenState extends State<ImportPreviewScreen> {
                     value: _folderId,
                     onChanged: (v) => setState(() => _folderId = v),
                   ),
-                  if (_problem case final problem?)
+                  if (problem case final problem?)
                     Text(problem, style: TextStyle(color: colors.danger)),
                   Align(
                     alignment: Alignment.centerRight,
                     child: FilledButton(
                       key: const Key('import-submit'),
                       onPressed:
-                          _busy ||
+                          busy ||
                               _selected.isEmpty ||
                               (state.sync?.readOnly ?? false)
                           ? null

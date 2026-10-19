@@ -47,7 +47,11 @@ void main() {
     });
     h.orgReplies['GET /admin/invites'] = (_) =>
         SyncHarness.reply({'invites': <Object?>[]});
-    await pumpApp(t, state: s, child: const InstanceAdminScreen());
+    await pumpApp(
+      t,
+      state: s,
+      child: const Scaffold(body: InstanceAdminPanel()),
+    );
     await pumpReal(t);
     return s;
   }

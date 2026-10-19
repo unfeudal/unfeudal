@@ -9,13 +9,12 @@ import '../../app_state.dart';
 import '../../design/field.dart';
 import '../../design/icons.dart';
 import '../../design/tokens.dart';
-import '../../events/app_events.dart';
 import '../../session/lock_machine.dart';
 import '../describe_error.dart';
 import '../onboarding/recovery_screen.dart';
 import 'lock_frame.dart';
 
-/// Driven by [LockMachine]; every state change is reported as a [LockScreenStateChanged] event.
+/// Driven by [LockMachine].
 class UnlockScreen extends StatefulWidget {
   const UnlockScreen({super.key});
 
@@ -61,10 +60,7 @@ class _UnlockScreenState extends State<UnlockScreen> {
     super.dispose();
   }
 
-  void _onMachine() {
-    _state.emit(LockScreenStateChanged(_machine.state));
-    setState(() {});
-  }
+  void _onMachine() => setState(() {});
 
   Future<void> _submit() async {
     if (_busy) return;

@@ -31,7 +31,7 @@ class Settings {
     if (json is! Map<String, Object?>) return const Settings();
     const d = Settings();
     T? byName<T extends Enum>(List<T> values, Object? v) =>
-        values.where((e) => e.name == v).firstOrNull;
+        values.asNameMap()[v];
     return Settings(
       themeMode: byName(ThemeMode.values, json['themeMode']) ?? d.themeMode,
       terminalTheme:
@@ -155,21 +155,13 @@ class Settings {
 
 /// `settings.json` on this machine: missing or unreadable gives defaults, writes are atomic.
 class SettingsStore {
-  SettingsStore(File file) : _file = file;
+  SettingsStore(this._file);
 
-  /// No file: [load] returns the last value saved (tests).
-  SettingsStore.memory([Settings initial = const Settings()])
-    : _file = null,
-      _saved = initial;
-
-  final File? _file;
-  Settings _saved = const Settings();
+  final File _file;
 
   Future<Settings> load() async {
-    final file = _file;
-    if (file == null) return _saved;
     try {
-      return Settings.fromJson(jsonDecode(await file.readAsString()));
+      return Settings.fromJson(jsonDecode(await _file.readAsString()));
     } on FileSystemException {
       return const Settings();
     } on FormatException {
@@ -178,13 +170,8 @@ class SettingsStore {
   }
 
   Future<void> save(Settings settings) async {
-    final file = _file;
-    if (file == null) {
-      _saved = settings;
-      return;
-    }
-    final tmp = File('${file.path}.tmp');
+    final tmp = File('${_file.path}.tmp');
     await tmp.writeAsString(jsonEncode(settings.toJson()), flush: true);
-    await tmp.rename(file.path);
+    await tmp.rename(_file.path);
   }
 }

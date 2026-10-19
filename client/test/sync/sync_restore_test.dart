@@ -117,18 +117,15 @@ void main() {
     );
   });
 
-  test(
-    'outside an accepted restore an older revision is ignored and counted',
-    () async {
-      final h = SyncHarness();
-      final (e, m, _) = await h.engine();
-      final id = newId();
-      final v1 = h.serverPut(wireItem(id, revision: 0));
-      h.serverPut(wireItem(id));
-      await e.syncNow();
-      h.serveOlder(v1);
-      await e.syncNow();
-      expect((m.item(id)!.revision, e.ignoredRollbacks), (2, 1));
-    },
-  );
+  test('outside an accepted restore an older revision is ignored', () async {
+    final h = SyncHarness();
+    final (e, m, _) = await h.engine();
+    final id = newId();
+    final v1 = h.serverPut(wireItem(id, revision: 0));
+    h.serverPut(wireItem(id));
+    await e.syncNow();
+    h.serveOlder(v1);
+    await e.syncNow();
+    expect(m.item(id)!.revision, 2);
+  });
 }

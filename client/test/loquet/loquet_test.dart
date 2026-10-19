@@ -46,7 +46,7 @@ void main() {
     );
     await t.pump();
     expect(t.hasRunningAnimations, isFalse);
-    expect(painterOf(t).pose.mood, LoquetMood.happy);
+    expect(painterOf(t).pose, LoquetPose.of(LoquetMood.happy));
   });
 
   testWidgets(
@@ -61,7 +61,7 @@ void main() {
       await t.pump(const Duration(milliseconds: 50));
       expect(t.hasRunningAnimations, isTrue);
       await t.pumpAndSettle();
-      expect(painterOf(t).pose.mood, LoquetMood.happy);
+      expect(painterOf(t).pose, LoquetPose.of(LoquetMood.happy));
     },
   );
 

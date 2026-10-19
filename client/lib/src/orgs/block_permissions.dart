@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
+extension OrgAdmin on OrgSummary {
+  /// A confirmed owner or admin: rotates, hands keys out and writes at the org root.
+  bool get isAdmin =>
+      status == 'confirmed' && (role == 'owner' || role == 'admin');
+}
+
 /// Resolution of [userId] on [folderId] from a block. Role from `members`; status from the member row (admins
 /// see it) or, for the caller's own row, from `orgs`. Unknown permission names are skipped.
 Explanation explainFromBlock(
@@ -21,13 +27,11 @@ Explanation explainFromBlock(
     return const Explanation({}, []);
   }
   Set<Permission> perms(List<String> names) => {
-    for (final n in names) ...Permission.values.where((p) => p.name == n),
+    for (final n in names) ?Permission.values.asNameMap()[n],
   };
   return resolvePermissions(
-    role: OrgRole.values.where((r) => r.name == m.role).firstOrNull,
-    status: MemberStatus.values
-        .where((s) => s.name == (m.status ?? org.status))
-        .firstOrNull,
+    role: OrgRole.values.asNameMap()[m.role],
+    status: MemberStatus.values.asNameMap()[m.status ?? org.status],
     disabled: m.disabled ?? false, // admins see it; a member's own row never says disabled (a disabled user gets 401)
     userId: userId,
     teamIds: {

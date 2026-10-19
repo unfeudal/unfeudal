@@ -2,8 +2,6 @@
 import 'package:flutter/material.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
-import '../session/lock_machine.dart';
-
 /// What happened in the app, for observers (Loquet, audit). Consumers switch with a default case.
 sealed class AppEvent {
   const AppEvent();
@@ -12,11 +10,6 @@ sealed class AppEvent {
 final class Unlocked extends AppEvent {
   const Unlocked({this.displayName});
   final String? displayName;
-}
-
-final class LockScreenStateChanged extends AppEvent {
-  const LockScreenStateChanged(this.state);
-  final LockScreenState state;
 }
 
 final class UnlockFailed extends AppEvent {
@@ -47,8 +40,7 @@ final class ConnectFailed extends AppEvent {
 }
 
 final class HostKeyChanged extends AppEvent {
-  const HostKeyChanged({required this.hostId});
-  final String hostId;
+  const HostKeyChanged();
 }
 
 final class WentOffline extends AppEvent {
@@ -73,14 +65,8 @@ final class ThemeChanged extends AppEvent {
 }
 
 final class HostCreated extends AppEvent {
-  const HostCreated({
-    required this.hostId,
-    required this.name,
-    required this.total,
-  });
-  final String hostId;
+  const HostCreated({required this.name});
   final String name;
-  final int total;
 }
 
 final class DeviceAdded extends AppEvent {
@@ -112,31 +98,12 @@ final class ForwardStopped extends AppEvent {
   final int localPort;
 }
 
-final class ForwardFailed extends AppEvent {
-  const ForwardFailed({
-    required this.hostId,
-    required this.localPort,
-    required this.error,
-  });
-  final String hostId;
-  final int localPort;
-  final Object error;
-}
-
-final class SnippetInserted extends AppEvent {
-  const SnippetInserted({required this.snippetId});
-  final String snippetId;
-}
-
 final class SharedVaultCreated extends AppEvent {
-  const SharedVaultCreated({required this.orgId});
-  final String orgId;
+  const SharedVaultCreated();
 }
 
 final class KeyRotated extends AppEvent {
-  const KeyRotated({required this.orgId, required this.folderId});
-  final String orgId;
-  final String folderId;
+  const KeyRotated();
 }
 
 final class SessionClosed extends AppEvent {

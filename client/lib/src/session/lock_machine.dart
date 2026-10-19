@@ -58,8 +58,7 @@ class LockMachine extends ChangeNotifier {
   void helloCancelled() =>
       _move({LockScreenState.hello}, LockScreenState.locked);
 
-  void reset([LockScreenState state = LockScreenState.locked]) =>
-      _move(LockScreenState.values.toSet(), state);
+  void reset() => _move(LockScreenState.values.toSet(), LockScreenState.locked);
 
   void startIdleWatch() {
     _idle?.cancel();

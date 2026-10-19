@@ -78,27 +78,14 @@ void main() {
   });
 
   test('hosts: first, localhost, 42nd', () {
+    expect(e.handle(const HostCreated(name: 'web'))!.line, LineKey.firstHost);
     expect(
-      e.handle(const HostCreated(hostId: 'a', name: 'web', total: 1))!.line,
-      LineKey.firstHost,
-    );
-    expect(
-      e
-          .handle(const HostCreated(hostId: 'b', name: 'localhost', total: 2))!
-          .line,
+      e.handle(const HostCreated(name: 'localhost'))!.line,
       LineKey.localhost,
     );
-    expect(
-      e
-          .handle(const HostCreated(hostId: 'c', name: 'localhost', total: 3))!
-          .line,
-      isNull,
-    );
+    expect(e.handle(const HostCreated(name: 'localhost'))!.line, isNull);
     memory.hostsCreated = 41;
-    expect(
-      e.handle(const HostCreated(hostId: 'd', name: 'db', total: 42))!.line,
-      LineKey.host42,
-    );
+    expect(e.handle(const HostCreated(name: 'db'))!.line, LineKey.host42);
     expect(memory.hostsCreated, 42);
   });
 

@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
@@ -14,6 +13,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
 import '../../design/tokens.dart';
 import '../lock/lock_frame.dart';
+import '../save_file.dart';
 
 /// What a recovery kit prints.
 typedef RecoveryKit = ({
@@ -153,16 +153,14 @@ class _RecoveryKitViewState extends State<RecoveryKitView> {
   }
 
   Future<void> _save() async {
-    final pick = widget.savePath ?? _pickSaveLocation;
-    final path = await pick('unfeudal-recovery-kit.pdf');
+    final path = await (widget.savePath ?? _pickSaveLocation)(
+      'unfeudal-recovery-kit.pdf',
+    );
     if (path == null) return;
     final bytes = path.toLowerCase().endsWith('.txt')
         ? utf8.encode(recoveryKitText(_kit()))
         : await _pdf();
-    await (widget.writeFile ?? (p, b) => File(p).writeAsBytes(b, flush: true))(
-      path,
-      bytes,
-    );
+    await (widget.writeFile ?? writeFileBytes)(path, bytes);
   }
 
   Future<void> _print() async {
@@ -171,14 +169,14 @@ class _RecoveryKitViewState extends State<RecoveryKitView> {
         (b) => Printing.layoutPdf(onLayout: (_) async => b))(bytes);
   }
 
-  static Future<String?> _pickSaveLocation(String suggestedName) async =>
-      (await getSaveLocation(
-        suggestedName: suggestedName,
-        acceptedTypeGroups: const [
+  static Future<String?> _pickSaveLocation(String suggestedName) =>
+      pickSaveLocation(
+        suggestedName,
+        types: const [
           XTypeGroup(label: 'PDF', extensions: ['pdf']),
           XTypeGroup(label: 'TXT', extensions: ['txt']),
         ],
-      ))?.path;
+      );
 
   Future<void> _copy() async {
     await Clipboard.setData(ClipboardData(text: widget.recoveryKey));

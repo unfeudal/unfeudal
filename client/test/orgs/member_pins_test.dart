@@ -32,25 +32,15 @@ void main() {
     expect(c.pins.check(mia, (await memberKeys()).publicKey), PinCheck.changed);
   });
 
-  test(
-    'markVerified refuses another key; a matching key is marked verified',
-    () async {
-      final k = await memberKeys();
-      await c.pins.pin(mia, k.publicKey, verified: false);
-      await expectLater(
-        c.pins.markVerified(mia, (await memberKeys()).publicKey),
-        throwsStateError,
-      );
-      expect(c.pins.pinOf(mia)!.verified, isFalse);
-      await c.pins.markVerified(mia, k.publicKey);
-      expect(c.pins.pinOf(mia)!.verified, isTrue);
-      await c.vault.reload();
-      expect(
-        c.vault.ofKind(ItemKind.memberPin).single.meta!['verified'],
-        isTrue,
-      );
-    },
-  );
+  test('pinning the same key again as verified marks it verified', () async {
+    final k = await memberKeys();
+    await c.pins.pin(mia, k.publicKey, verified: false);
+    expect(c.pins.pinOf(mia)!.verified, isFalse);
+    await c.pins.pin(mia, k.publicKey, verified: true);
+    expect(c.pins.pinOf(mia)!.verified, isTrue);
+    await c.vault.reload();
+    expect(c.vault.ofKind(ItemKind.memberPin).single.meta!['verified'], isTrue);
+  });
 
   test(
     'the ledger pin wins over a deleted or reverted memberPin item',

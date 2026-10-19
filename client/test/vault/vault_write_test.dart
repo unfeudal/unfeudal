@@ -168,7 +168,7 @@ void main() {
         ),
         throwsArgumentError,
       );
-      await v.deleteFolder(top);
+      await v.trashItem(top);
       expect(
         (v.isTrashed(top), v.isTrashed(sub), v.isTrashed(host)),
         (true, true, true),
@@ -299,7 +299,7 @@ void main() {
       folderId: sub,
       meta: hostJson('web'),
     );
-    final r = v.resolve(host);
+    final r = v.hostLookup(host)!.resolved;
     expect((r.port, r.user, r.identityId), (2222, 'deploy', null));
     expect(r.sources, {
       'port': top,

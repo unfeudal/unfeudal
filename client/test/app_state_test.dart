@@ -5,7 +5,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:unfeudal_client/src/app_state.dart';
 import 'package:unfeudal_client/src/events/app_events.dart';
 import 'package:unfeudal_client/src/session/session_store.dart';
-import 'package:unfeudal_client/src/settings/settings.dart';
 import 'package:unfeudal_client/src/storage/local_mirror.dart';
 import 'package:unfeudal_client/src/terminal/terminal_session.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
@@ -118,7 +117,7 @@ void main() {
     ); // KdfParams.testing: below the floor in production
     final s = AppState(
       sessions: SessionStore(FakeSecureKv()),
-      settingsStore: SettingsStore.memory(),
+      settingsStore: FakeSettingsStore(),
       openMirror: (_) async => LocalMirror.inMemory(),
       httpClient: h.client,
     );

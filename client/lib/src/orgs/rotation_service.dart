@@ -43,12 +43,7 @@ class RotationService {
     final done = <String>{};
     final blocked = _blocked = {};
     for (final p in block.pendingRotations) {
-      final org = block.orgs.where((o) => o.id == p.orgId).firstOrNull;
-      if (org == null ||
-          org.status != 'confirmed' ||
-          (org.role != 'owner' && org.role != 'admin')) {
-        continue;
-      }
+      if (!block.orgs.any((o) => o.id == p.orgId && o.isAdmin)) continue;
       try {
         if (await rotate(block, p.orgId, p.folderId)) done.add(p.folderId);
       } on ApiException {
@@ -61,12 +56,7 @@ class RotationService {
   }
 
   // ponytail: re-seals one folder at a time; batch when a folder holds thousands of items.
-  Future<bool> rotate(
-    OrgBlock block,
-    String orgId,
-    String folderId, {
-    Set<String> exclude = const {},
-  }) async {
+  Future<bool> rotate(OrgBlock block, String orgId, String folderId) async {
     final pending = block.pendingRotations
         .where((p) => p.folderId == folderId)
         .firstOrNull;
@@ -75,7 +65,7 @@ class RotationService {
     var keys = held;
     if (pending?.rotatedVersion == null ||
         held.version < pending!.rotatedVersion!) {
-      final removed = {...exclude, ...?pending?.removedUserIds};
+      final removed = {...?pending?.removedUserIds};
       final wraps = <WrappedFolderKeys>[];
       final next = FolderKeys.generate(held.version + 1);
       for (final m in block.members.where(
@@ -141,7 +131,7 @@ class RotationService {
       return false;
     }
     await api.rotationDone(folderId);
-    emit(KeyRotated(orgId: orgId, folderId: folderId));
+    emit(const KeyRotated());
     return true;
   }
 }

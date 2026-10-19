@@ -18,10 +18,10 @@ import '../../design/tokens.dart';
 import '../../events/app_events.dart';
 import '../../keys/key_tools.dart';
 import '../../orgs/host_binding.dart';
-import '../../vault/org_writer.dart';
 import '../../vault/vault.dart';
 import '../form_dialog.dart';
 import '../history/item_history_panel.dart';
+import '../hosts/editor_frame.dart';
 import '../manage_frame.dart';
 
 /// Where the keychain reads and writes: the personal vault, or one org folder (shared identities).
@@ -34,9 +34,11 @@ class _Place {
   VaultEntry? get _folder =>
       folderId == null ? null : state.vault!.entry(folderId!);
 
+  String? get _orgId => folderId == null ? null : _folder!.orgId!;
+
   bool get editable =>
       folderId == null ||
-      (state.orgs?.writer.canEdit(_folder!.orgId!, folderId) ?? false);
+      (state.orgs?.writer.canEdit(_orgId!, folderId) ?? false);
 
   bool holds(VaultEntry e) =>
       folderId == null ? e.orgId == null : e.folderId == folderId;
@@ -45,24 +47,14 @@ class _Place {
     Map<String, Object?> meta, {
     Map<String, Object?>? secret,
     String? id,
-  }) async {
-    if (folderId == null) {
-      await state.vault!.upsertItem(
-        type: 'identity',
-        id: id,
-        meta: meta,
-        secret: secret,
-      );
-    } else {
-      await state.orgs!.writer.upsert(
-        type: 'identity',
-        id: id,
-        target: OrgTarget(_folder!.orgId!, folderId),
-        meta: meta,
-        secret: secret,
-      );
-    }
-  }
+  }) => state.saveItem(
+    type: 'identity',
+    id: id,
+    orgId: _orgId,
+    folderId: folderId,
+    meta: meta,
+    secret: secret,
+  );
 
   Future<void> trash(String id) => folderId == null
       ? state.vault!.trashItem(id)
@@ -91,10 +83,7 @@ class _KeychainScreenState extends State<KeychainScreen> {
     final colors = UfColors.of(context);
     final vault = state.vault!;
     final orgId = state.orgs?.selected;
-    final orgName = state.orgs?.orgs
-        .where((o) => o.id == orgId)
-        .firstOrNull
-        ?.name;
+    final vaultName = vaultNameOf(l, state, orgId);
     final orgFolders = [
       if (orgId != null)
         for (final e in vault.ofKind(ItemKind.folder))
@@ -175,7 +164,7 @@ class _KeychainScreenState extends State<KeychainScreen> {
         .copyWith(color: colors.muted);
     return ManageFrame(
       title: l.keychainTitle,
-      subtitle: orgName ?? l.vaultPersonal,
+      subtitle: vaultName,
       onBack: widget.onBack,
       actions: [
         FilledButton.icon(
@@ -249,85 +238,78 @@ class _KeychainScreenState extends State<KeychainScreen> {
           child: Text(l.keyPassword),
         ),
       ],
+      maxWidth: identities.isEmpty && linked.isEmpty && orgFolders.isEmpty
+          ? null
+          : 980,
       child: identities.isEmpty && linked.isEmpty && orgFolders.isEmpty
           ? EmptyState(title: l.keychainTitle, body: l.keychainEmpty)
-          : Align(
-              alignment: Alignment.topLeft,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 980),
-                child: ListView(
-                  padding: const EdgeInsets.only(bottom: 40),
-                  children: [
-                    if (orgFolders.isNotEmpty)
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: SizedBox(
-                          width: 320,
-                          child: UfField(
-                            label: l.keychainPlace,
-                            child: DropdownButtonFormField<String>(
-                              key: const Key('keychain-place'),
-                              initialValue: _folderId,
-                              items: [
-                                for (final f in orgFolders)
-                                  DropdownMenuItem(
-                                    key: Key('keychain-place-${f.id}'),
-                                    value: f.id,
-                                    child: Text(f.name ?? ''),
-                                  ),
-                              ],
-                              onChanged: (v) => setState(() => _folderId = v),
-                            ),
-                          ),
+          : ListView(
+              padding: const EdgeInsets.only(bottom: 40),
+              children: [
+                if (orgFolders.isNotEmpty)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: SizedBox(
+                      width: 320,
+                      child: UfField(
+                        label: l.keychainPlace,
+                        child: DropdownButtonFormField<String>(
+                          key: const Key('keychain-place'),
+                          initialValue: _folderId,
+                          items: [
+                            for (final f in orgFolders)
+                              DropdownMenuItem(
+                                key: Key('keychain-place-${f.id}'),
+                                value: f.id,
+                                child: Text(f.name ?? ''),
+                              ),
+                          ],
+                          onChanged: (v) => setState(() => _folderId = v),
                         ),
-                      ),
-                    Padding(
-                      padding: const EdgeInsets.only(top: 18, bottom: 4),
-                      child: Text(
-                        l.keychainOf(
-                          orgFolders
-                                  .where((f) => f.id == _folderId)
-                                  .firstOrNull
-                                  ?.name ??
-                              orgName ??
-                              l.vaultPersonal,
-                        ),
-                        style: caption,
                       ),
                     ),
-                    if (identities.isEmpty)
-                      Text(
-                        l.keychainEmpty,
-                        style: Theme.of(context).textTheme.bodySmall!
-                            .copyWith(color: colors.muted),
-                      ),
-                    for (final e in identities)
-                      row(e, editable: !serverReadOnly && place.editable),
-                    if (linked.isNotEmpty) ...[
-                      Padding(
-                        padding: const EdgeInsets.only(top: 18, bottom: 4),
-                        child: Text(
-                          l.keychainLinked(orgName ?? ''),
-                          style: caption,
-                        ),
-                      ),
-                      for (final e in linked)
-                        KeyedSubtree(
-                          key: Key('identity-linked-${e.id}'),
-                          child: _IdentityRow(entry: e, readOnly: true),
-                        ),
-                      Padding(
-                        padding: const EdgeInsets.only(top: 12),
-                        child: Text(
-                          l.keychainLinkedNote,
-                          style: Theme.of(context).textTheme.bodySmall!
-                              .copyWith(color: colors.muted),
-                        ),
-                      ),
-                    ],
-                  ],
+                  ),
+                Padding(
+                  padding: const EdgeInsets.only(top: 18, bottom: 4),
+                  child: Text(
+                    l.keychainOf(
+                      orgFolders
+                              .where((f) => f.id == _folderId)
+                              .firstOrNull
+                              ?.name ??
+                          vaultName,
+                    ),
+                    style: caption,
+                  ),
                 ),
-              ),
+                if (identities.isEmpty)
+                  Text(
+                    l.keychainEmpty,
+                    style: Theme.of(context).textTheme.bodySmall!
+                        .copyWith(color: colors.muted),
+                  ),
+                for (final e in identities)
+                  row(e, editable: !serverReadOnly && place.editable),
+                if (linked.isNotEmpty) ...[
+                  Padding(
+                    padding: const EdgeInsets.only(top: 18, bottom: 4),
+                    child: Text(l.keychainLinked(vaultName), style: caption),
+                  ),
+                  for (final e in linked)
+                    KeyedSubtree(
+                      key: Key('identity-linked-${e.id}'),
+                      child: _IdentityRow(entry: e, readOnly: true),
+                    ),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: Text(
+                      l.keychainLinkedNote,
+                      style: Theme.of(context).textTheme.bodySmall!
+                          .copyWith(color: colors.muted),
+                    ),
+                  ),
+                ],
+              ],
             ),
     );
   }

@@ -1,49 +1,26 @@
 // SPDX-License-Identifier: Apache-2.0
-import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../storage/local_mirror.dart';
+import '../storage/sealed_kv.dart';
 
 /// The sealed per-device ledger in `kv.ledger`: replay marks, host and member pins, startup approvals.
 class LedgerStore {
-  LedgerStore(this._mirror);
+  LedgerStore(LocalMirror mirror)
+    : _store = SealedKv(mirror, KvKey.ledger, ledgerAad);
 
-  final LocalMirror _mirror;
-  Uint8List? _key;
+  final SealedKv _store;
   Ledger _ledger = Ledger.empty();
   final _handedOut = <String, int>{};
-  int _writes = 0;
 
   /// False when a stored ledger could not be opened: it restarts empty and the caller reports it.
-  Future<bool> load(Uint8List userKey) async {
-    _key = userKey;
+  Future<bool> load(Uint8List userKey) {
     _handedOut.clear();
-    final stored = _mirror.getKv(KvKey.ledger);
-    if (stored == null) {
-      _ledger = Ledger.empty();
-      _writes = 0;
-      return true;
-    }
-    try {
-      final opened = await PayloadCrypto.open(
-        ledgerAad,
-        Envelope.fromJson(jsonDecode(stored)),
-        userKey,
-      );
-      _ledger = Ledger.fromJson(opened.json);
-      _writes = opened.seq ?? 0;
-      return true;
-    } on DecryptionFailed {
-      _startEmpty();
-    } on UnsupportedEnvelope {
-      _startEmpty();
-    } on FormatException {
-      _startEmpty();
-    }
-    return false;
+    _ledger = Ledger.empty();
+    return _store.load(userKey, (json) => _ledger = Ledger.fromJson(json));
   }
 
   int mark(String id, PayloadPart part) => _ledger.seq[_seqKey(id, part)] ?? 0;
@@ -96,18 +73,7 @@ class LedgerStore {
     return save();
   }
 
-  Future<void> save() async {
-    final key = _key;
-    if (key == null) throw StateError('ledger is not loaded');
-    final sealed = await PayloadCrypto.seal(
-      ledgerAad,
-      _ledger.toJson(),
-      key,
-      KeyIds.user,
-      seq: ++_writes,
-    );
-    _mirror.setKv(KvKey.ledger, jsonEncode(sealed.toJson()));
-  }
+  Future<void> save() => _store.save(_ledger.toJson());
 
   /// Accepted server restore: replay marks go, pins and approvals stay.
   Future<void> reset() {
@@ -124,14 +90,9 @@ class LedgerStore {
 
   /// On lock: forgets the key and everything held in memory.
   void close() {
-    _key = null;
-    _startEmpty();
-    _handedOut.clear();
-  }
-
-  void _startEmpty() {
+    _store.close();
     _ledger = Ledger.empty();
-    _writes = 0;
+    _handedOut.clear();
   }
 
   static String _seqKey(String id, PayloadPart part) => '$id/${part.name}';

@@ -54,5 +54,8 @@ abstract final class UfShortcuts {
     return _mac ? '⌘$letter' : 'Ctrl+Shift+$letter';
   }
 
+  /// The vault switch for position [n] (1…9).
+  static String vaultLabel(int n) => _mac ? '⌘$n' : 'Ctrl $n';
+
   static bool get _mac => defaultTargetPlatform == TargetPlatform.macOS;
 }

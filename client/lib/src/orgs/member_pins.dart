@@ -50,13 +50,6 @@ class MemberPins {
     );
   }
 
-  Future<void> markVerified(String userId, List<int> publicKey) async {
-    if (check(userId, publicKey) != PinCheck.matches) {
-      throw StateError('the pinned key is another key');
-    }
-    return pin(userId, publicKey, verified: true);
-  }
-
   /// Copies a synced pin into the ledger only for a user the ledger has none for.
   void seed() {
     for (final e in vault.ofKind(ItemKind.memberPin)) {
@@ -75,14 +68,10 @@ class MemberPins {
 
   /// The `ok` memberPin entry of [userId] with the smallest id.
   (VaultEntry, MemberPinMeta)? _entryOf(String userId) {
-    final pins = [
-      for (final e in vault.ofKind(ItemKind.memberPin))
-        if (e.state == EntryState.ok &&
-            e.orgId == null &&
-            MemberPinMeta.fromJson(e.meta).userId == userId)
-          e,
-    ]..sort((a, b) => a.id.compareTo(b.id));
-    final e = pins.firstOrNull;
+    final e = Vault.winner(
+      vault.ofKind(ItemKind.memberPin),
+      (e) => MemberPinMeta.fromJson(e.meta).userId == userId,
+    );
     return e == null ? null : (e, MemberPinMeta.fromJson(e.meta));
   }
 }

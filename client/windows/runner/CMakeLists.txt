@@ -38,7 +38,7 @@ target_compile_definitions(${BINARY_NAME} PRIVATE "NOMINMAX")
 target_link_libraries(${BINARY_NAME} PRIVATE flutter flutter_wrapper_app)
 target_link_libraries(${BINARY_NAME} PRIVATE "dwmapi.lib")
 # Windows Hello (C++/WinRT) and SHA-256 for the biometric secret
-target_link_libraries(${BINARY_NAME} PRIVATE "WindowsApp.lib" "bcrypt.lib")
+target_link_libraries(${BINARY_NAME} PRIVATE "WindowsApp.lib")
 target_include_directories(${BINARY_NAME} PRIVATE "${CMAKE_SOURCE_DIR}")
 
 # Run the Flutter tool portions of the build. This must not be removed.

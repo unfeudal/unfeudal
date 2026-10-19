@@ -26,41 +26,6 @@ Future<void> docker(List<String> args) async {
   if (r.exitCode != 0) throw StateError('docker ${args.first}: ${r.stderr}');
 }
 
-class Pins implements SshCallbacks {
-  final pins = <String, (String, String)>{};
-  bool trustNew = true;
-  @override
-  KnownHostMeta? pinnedKey(String hostId) {
-    final p = pins[hostId];
-    return p == null
-        ? null
-        : KnownHostMeta.fromJson({
-            'schemaVersion': 1,
-            'hostItemId': hostId,
-            'keyType': p.$1,
-            'sha256Fingerprint': p.$2,
-          });
-  }
-
-  @override
-  Future<bool> confirmHostKey(HostKeyCheck c) async =>
-      trustNew && c.decision == HostKeyDecision.unknown;
-  @override
-  Future<void> pinHostKey(
-    String hostId,
-    String keyType,
-    String fingerprint,
-  ) async => pins[hostId] = (keyType, fingerprint);
-  @override
-  Future<String?> askPassword(String target) async => null;
-  @override
-  Future<List<String>?> answerPrompts(
-    String name,
-    String instruction,
-    List<SshPrompt> prompts,
-  ) async => null;
-}
-
 void main() {
   late GeneratedKey key;
   final bastion = newId(), target = newId();
@@ -76,9 +41,11 @@ void main() {
       privateKeyPem: key.privateKeyPem,
     ),
   );
-  Future<JumpConnection> chain(Pins pins) => JumpConnector(
+  Future<JumpConnection> chain(FakeSshCallbacks pins) => connectChain(
     sshHopOpener(SshConnector(), pins),
-  ).connect([hop(bastion, '127.0.0.1', 22220)], hop(target, targetName, 2222));
+    [hop(bastion, '127.0.0.1', 22220)],
+    hop(target, targetName, 2222),
+  );
 
   setUpAll(() async {
     key = await generateEd25519();
@@ -142,7 +109,7 @@ void main() {
   test(
     'shell on the target through the bastion; each hop pinned separately',
     () async {
-      final pins = Pins();
+      final pins = FakeSshCallbacks(answer: true);
       final conn = await chain(pins);
       final shell = await conn.target.shell();
       shell.write(utf8.encode('hostname\n'));
@@ -158,7 +125,7 @@ void main() {
   test(
     'a local forward reaches the target through the chain, on loopback only',
     () async {
-      final conn = await chain(Pins());
+      final conn = await chain(FakeSshCallbacks(answer: true));
       final port = await freePort();
       final forwarder = PortForwarder(conn.target.forwardLocal);
       final handle = await forwarder.start(
@@ -177,8 +144,12 @@ void main() {
   );
 
   test('a tampered bastion pin stops the chain before the target', () async {
-    final pins = Pins()..trustNew = false;
-    pins.pins[bastion] = ('ssh-ed25519', 'SHA256:${'A' * 43}');
+    final pins = FakeSshCallbacks();
+    pins.pins[bastion] = KnownHostMeta(
+      hostItemId: bastion,
+      keyType: 'ssh-ed25519',
+      sha256Fingerprint: 'SHA256:${'A' * 43}',
+    );
     await expectLater(
       chain(pins),
       throwsA(

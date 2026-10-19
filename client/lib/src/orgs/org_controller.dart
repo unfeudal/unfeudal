@@ -70,8 +70,6 @@ class OrgController extends ChangeNotifier {
   final alerts = <String>{}; // refused folder keys and changed member keys
   HandoffReport? lastHandoff;
   RotationReport? lastRotation;
-  Object? lastError;
-  bool keyringReported = false;
 
   /// The org shown in the shell; null is the personal vault.
   String? selected;
@@ -84,11 +82,10 @@ class OrgController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// The cached block serves offline orgs until the next one arrives. False: kv.keyring did not open.
-  Future<bool> unlock(UnlockedAccount account) async {
+  /// The cached block serves offline orgs until the next one arrives.
+  Future<void> unlock(UnlockedAccount account) async {
     _keyPair = account.keyPair;
-    final opened = await keyring.load(account.userKey);
-    keyringReported = !opened;
+    await keyring.load(account.userKey);
     vault.keyring = keyring;
     if (mirror.getKv(KvKey.orgBlock) case final raw?) {
       block = OrgBlock.fromJson(jsonDecode(raw));
@@ -96,7 +93,6 @@ class OrgController extends ChangeNotifier {
     await vault.reload();
     pins.seed();
     notifyListeners();
-    return opened;
   }
 
   void lock() {
@@ -114,16 +110,15 @@ class OrgController extends ChangeNotifier {
     alerts.addAll(await keyring.apply(b, keyPair));
     await vault.reload();
     pins.seed();
-    if (b.orgs.any((o) => _isAdminOf(o))) {
+    if (b.orgs.any((o) => o.isAdmin)) {
       try {
         final report = lastHandoff = await handoff.run(b);
         alerts.addAll(report.alerts);
         lastRotation = await rotation.run(b);
-        lastError = null;
-      } on ApiException catch (e) {
-        lastError = e; // retried on the next block
-      } on NetworkException catch (e) {
-        lastError = e;
+      } on ApiException {
+        // retried on the next block
+      } on NetworkException {
+        // retried on the next block
       }
     }
     notifyListeners();
@@ -152,8 +147,17 @@ class OrgController extends ChangeNotifier {
         : explainFromBlock(b, orgId, userId, folderId);
   }
 
-  bool isAdmin(String orgId) => orgs.any((o) => o.id == orgId && _isAdminOf(o));
+  OrgSummary? byId(String? orgId) =>
+      orgs.where((o) => o.id == orgId).firstOrNull;
 
-  static bool _isAdminOf(OrgSummary o) =>
-      o.status == 'confirmed' && (o.role == 'owner' || o.role == 'admin');
+  /// The org's members, by email.
+  List<OrgMember> membersOf(String orgId) => [
+    for (final m in block?.members ?? const <OrgMember>[])
+      if (m.orgId == orgId) m,
+  ]..sort((a, b) => a.email.compareTo(b.email));
+
+  bool isAdmin(String orgId) => byId(orgId)?.isAdmin ?? false;
+
+  /// The role alone, confirmed or not.
+  bool isOwner(String orgId) => byId(orgId)?.role == OrgRole.owner.name;
 }

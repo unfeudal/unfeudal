@@ -111,10 +111,6 @@ void main() {
     expect(File('${file.path}.tmp').existsSync(), isFalse);
     file.writeAsStringSync('not json');
     expect(await store.load(), const Settings());
-    final memory = SettingsStore.memory(const Settings(autoLockMinutes: 5));
-    expect((await memory.load()).autoLockMinutes, 5);
-    await memory.save(const Settings());
-    expect(await memory.load(), const Settings());
   });
 
   test('settings.json holds no profile item and no secret', () async {

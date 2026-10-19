@@ -40,21 +40,13 @@ void main() {
     expect(t.hasRunningAnimations, isFalse);
   });
 
-  testWidgets('empty state: title, one line, at most two actions', (t) async {
+  testWidgets('empty state: title, one line, one action', (t) async {
     await t.pumpWidget(
-      host(
-        EmptyState(
-          title: 'T',
-          body: 'B',
-          primary: ('Go', () {}),
-          secondary: ('Later', () {}),
-        ),
-      ),
+      host(EmptyState(title: 'T', body: 'B', primary: ('Go', () {}))),
     );
     expect(find.text('T'), findsOneWidget);
     expect(find.byType(UfLogo), findsOneWidget);
     expect(find.byType(FilledButton), findsOneWidget);
-    expect(find.byType(OutlinedButton), findsOneWidget);
   });
 
   testWidgets('banner tones use the token colours and keep one action', (

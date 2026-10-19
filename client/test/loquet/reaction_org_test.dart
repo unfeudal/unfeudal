@@ -13,14 +13,11 @@ void main() {
         memory: LoquetMemory(),
         now: () => DateTime(2026, 10, 15, 12),
       );
-      final shared = e.handle(const SharedVaultCreated(orgId: 'o'));
+      final shared = e.handle(const SharedVaultCreated());
       expect((shared!.line, shared.important), (LineKey.sharedVault, true));
-      expect(e.handle(const SharedVaultCreated(orgId: 'o2')), isNull);
-      expect(
-        e.handle(const KeyRotated(orgId: 'o', folderId: 'f'))!.line,
-        LineKey.firstKeyRotation,
-      );
-      expect(e.handle(const KeyRotated(orgId: 'o', folderId: 'g')), isNull);
+      expect(e.handle(const SharedVaultCreated()), isNull);
+      expect(e.handle(const KeyRotated())!.line, LineKey.firstKeyRotation);
+      expect(e.handle(const KeyRotated()), isNull);
     },
   );
 }

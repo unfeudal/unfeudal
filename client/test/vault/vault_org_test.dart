@@ -51,7 +51,7 @@ void main() {
       ),
       (EntryState.ok, testOrgId, 'db'),
     );
-    expect(v.resolve(host.id).port, 22);
+    expect(v.hostLookup(host.id)!.resolved.port, 22);
   });
 
   test(

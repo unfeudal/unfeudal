@@ -6,7 +6,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
 import '../../design/field.dart';
 import '../../design/tokens.dart';
-import '../describe_error.dart';
+import '../busy_action.dart';
 import '../manage_frame.dart';
 import '../onboarding/recovery_kit_view.dart';
 import '../onboarding/setup_screen.dart' show checkNewPassword;
@@ -21,12 +21,11 @@ class PasswordChangeScreen extends StatefulWidget {
   State<PasswordChangeScreen> createState() => _PasswordChangeScreenState();
 }
 
-class _PasswordChangeScreenState extends State<PasswordChangeScreen> {
+class _PasswordChangeScreenState extends State<PasswordChangeScreen>
+    with BusyAction {
   final _current = TextEditingController();
   final _next = TextEditingController();
   final _confirm = TextEditingController();
-  bool _busy = false;
-  String? _problem;
 
   /// Reset mode, after the change: the new kit, or null when the server allows none.
   String? _kit;
@@ -44,44 +43,32 @@ class _PasswordChangeScreenState extends State<PasswordChangeScreen> {
     final l = AppLocalizations.of(context);
     final state = AppScope.read(context);
     final local = checkNewPassword(l, _next.text, _confirm.text);
-    if (local != null) return setState(() => _problem = local);
-    setState(() {
-      _busy = true;
-      _problem = null;
-    });
-    try {
-      if (widget.securityReset) {
-        final kit = await state.securityReset(_current.text, _next.text);
+    if (local != null) return setState(() => problem = local);
+    await run(() async {
+      try {
+        if (widget.securityReset) {
+          final kit = await state.securityReset(_current.text, _next.text);
+          if (mounted) {
+            setState(() {
+              _kit = kit;
+              _done = true;
+            });
+          }
+        } else {
+          await state.changeMasterPassword(_current.text, _next.text);
+          if (!mounted) return;
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text(l.passwordChanged)));
+          Navigator.of(context).maybePop();
+        }
+      } on WrongPassword {
         if (mounted) {
           setState(() {
-            _kit = kit;
-            _done = true;
+            problem = l.passwordCurrentWrong;
           });
         }
-      } else {
-        await state.changeMasterPassword(_current.text, _next.text);
-        if (!mounted) return;
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(l.passwordChanged)));
-        Navigator.of(context).maybePop();
       }
-    } on WrongPassword {
-      if (mounted) {
-        setState(() {
-          _problem = l.passwordCurrentWrong;
-        });
-      }
-    } on WeakPassword {
-      if (mounted) {
-        setState(
-          () => _problem = l.errorWeakPassword(AccountCrypto.minPasswordLength),
-        );
-      }
-    } on Exception catch (e) {
-      if (mounted) setState(() => _problem = describeError(l, e));
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
+    });
   }
 
   @override
@@ -110,33 +97,28 @@ class _PasswordChangeScreenState extends State<PasswordChangeScreen> {
         title: widget.securityReset
             ? l.securityResetTitle
             : l.settingsChangePassword,
-        child: Align(
-          alignment: Alignment.topLeft,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 480),
-            child: ListView(
-              shrinkWrap: true,
-              children: [
-                if (widget.securityReset) Text(l.securityResetBody),
-                field('pw-current', _current, l.pwCurrent),
-                field('pw-next', _next, l.pwNext),
-                field('pw-confirm', _confirm, l.pwConfirm),
-                if (_problem case final problem?)
-                  Text(problem, style: TextStyle(color: colors.danger)),
-                if (_done)
-                  Text(l.securityResetNoKit)
-                else
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: FilledButton(
-                      key: const Key('pw-submit'),
-                      onPressed: _busy ? null : _submit,
-                      child: Text(l.pwSubmit),
-                    ),
-                  ),
-              ],
-            ),
-          ),
+        maxWidth: 480,
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            if (widget.securityReset) Text(l.securityResetBody),
+            field('pw-current', _current, l.pwCurrent),
+            field('pw-next', _next, l.pwNext),
+            field('pw-confirm', _confirm, l.pwConfirm),
+            if (problem case final problem?)
+              Text(problem, style: TextStyle(color: colors.danger)),
+            if (_done)
+              Text(l.securityResetNoKit)
+            else
+              Align(
+                alignment: Alignment.centerRight,
+                child: FilledButton(
+                  key: const Key('pw-submit'),
+                  onPressed: busy ? null : _submit,
+                  child: Text(l.pwSubmit),
+                ),
+              ),
+          ],
         ),
       ),
     );

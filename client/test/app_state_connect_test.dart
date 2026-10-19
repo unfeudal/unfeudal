@@ -152,7 +152,7 @@ void main() {
   test(
     'synced prefs: profile applied and cached; device fields stay local',
     () async {
-      final store = SettingsStore.memory();
+      final store = FakeSettingsStore();
       final (h, s, _) = await home(store: store);
       await s.updateSettings(
         s.settings.copyWith(themeMode: ThemeMode.dark, autoLockMinutes: 5),

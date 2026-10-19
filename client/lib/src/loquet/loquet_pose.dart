@@ -74,24 +74,10 @@ class LoquetPose {
     this.extras = const {},
     this.tone = LoquetTone.normal,
     this.lookX = 0,
-    this.mood = LoquetMood.idle,
   });
 
   /// [eyeX] (0 left … 1 right) only moves the eyes of [LoquetMood.watching].
-  factory LoquetPose.of(LoquetMood mood, {double eyeX = 0.5}) {
-    final p = _parts(mood, eyeX);
-    return LoquetPose(
-      p.eyes,
-      p.mouth,
-      hands: p.hands,
-      extras: p.extras,
-      tone: p.tone,
-      lookX: p.lookX,
-      mood: mood,
-    );
-  }
-
-  static LoquetPose _parts(LoquetMood mood, double eyeX) => switch (mood) {
+  factory LoquetPose.of(LoquetMood mood, {double eyeX = 0.5}) => switch (mood) {
     LoquetMood.idle => const LoquetPose(LoquetEyes.open, LoquetMouth.smile),
     LoquetMood.watching => LoquetPose(
       LoquetEyes.follow,
@@ -168,9 +154,6 @@ class LoquetPose {
   /// Horizontal eye offset in viewBox units (−6 … 6).
   final double lookX;
 
-  /// The mood it was built from; not drawn.
-  final LoquetMood mood;
-
   /// The same pose looking [lookX] units aside (idle life).
   LoquetPose lookingAt(double lookX) => LoquetPose(
     eyes,
@@ -179,7 +162,6 @@ class LoquetPose {
     extras: extras,
     tone: tone,
     lookX: lookX,
-    mood: mood,
   );
 
   /// The drawn parts, without the eye offset.
@@ -215,8 +197,6 @@ class LoquetPalette {
     required this.body,
     required this.face,
     required this.feet,
-    required this.hand,
-    required this.handLine,
     required this.zzz,
     required this.accent,
     required this.drop,
@@ -232,15 +212,13 @@ class LoquetPalette {
       body: body,
       face: c.accentFg,
       feet: c.text,
-      hand: body,
-      handLine: c.accentFg,
       zzz: c.muted,
       accent: c.accent,
       drop: c.accentText,
     );
   }
 
-  final Color body, face, feet, hand, handLine, zzz, accent, drop;
+  final Color body, face, feet, zzz, accent, drop;
 
   @override
   bool operator ==(Object other) =>
@@ -248,13 +226,10 @@ class LoquetPalette {
       other.body == body &&
       other.face == face &&
       other.feet == feet &&
-      other.hand == hand &&
-      other.handLine == handLine &&
       other.zzz == zzz &&
       other.accent == accent &&
       other.drop == drop;
 
   @override
-  int get hashCode =>
-      Object.hash(body, face, feet, hand, handLine, zzz, accent, drop);
+  int get hashCode => Object.hash(body, face, feet, zzz, accent, drop);
 }

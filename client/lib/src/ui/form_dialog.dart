@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 import 'package:flutter/material.dart';
 
-import '../../l10n/app_localizations.dart';
 import '../design/dialog.dart';
 import '../design/field.dart';
 import '../design/tokens.dart';
-import 'describe_error.dart';
+import 'busy_action.dart';
 
 enum FormFieldKind { text, secret, toggle }
 
@@ -54,7 +53,7 @@ class FormDialog extends StatefulWidget {
   State<FormDialog> createState() => _FormDialogState();
 }
 
-class _FormDialogState extends State<FormDialog> {
+class _FormDialogState extends State<FormDialog> with BusyAction {
   late final _text = {
     for (final f in widget.fields)
       if (f.kind != FormFieldKind.toggle)
@@ -65,8 +64,6 @@ class _FormDialogState extends State<FormDialog> {
       if (f.kind == FormFieldKind.toggle)
         f.key: widget.initial[f.key] == 'true',
   };
-  bool _busy = false;
-  String? _error;
 
   @override
   void dispose() {
@@ -76,24 +73,13 @@ class _FormDialogState extends State<FormDialog> {
     super.dispose();
   }
 
-  Future<void> _save() async {
-    final l = AppLocalizations.of(context);
-    setState(() {
-      _busy = true;
-      _error = null;
+  Future<void> _save() => run(() async {
+    await widget.onSave({
+      for (final MapEntry(:key, :value) in _text.entries) key: value.text,
+      for (final MapEntry(:key, :value) in _toggles.entries) key: '$value',
     });
-    try {
-      await widget.onSave({
-        for (final MapEntry(:key, :value) in _text.entries) key: value.text,
-        for (final MapEntry(:key, :value) in _toggles.entries) key: '$value',
-      });
-      if (mounted) Navigator.pop(context, true);
-    } on Exception catch (e) {
-      if (mounted) setState(() => _error = describeError(l, e));
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
+    if (mounted) Navigator.pop(context, true);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -105,19 +91,24 @@ class _FormDialogState extends State<FormDialog> {
         CancelButton(onPressed: () => Navigator.pop(context, false)),
         FilledButton(
           key: Key(widget.saveKey),
-          onPressed: _busy ? null : _save,
+          onPressed: busy ? null : _save,
           child: Text(widget.saveLabel),
         ),
       ],
       children: [
         for (final f in widget.fields)
           if (f.kind == FormFieldKind.toggle)
-            _TwoChoices(
+            SegmentedButton<bool>(
               key: Key(f.key),
-              off: f.offLabel ?? '',
-              on: f.label,
-              value: _toggles[f.key]!,
-              onChanged: (v) => setState(() => _toggles[f.key] = v),
+              showSelectedIcon: false,
+              expandedInsets: EdgeInsets.zero,
+              segments: [
+                ButtonSegment(value: false, label: Text(f.offLabel ?? '')),
+                ButtonSegment(value: true, label: Text(f.label)),
+              ],
+              selected: {_toggles[f.key]!},
+              onSelectionChanged: (s) =>
+                  setState(() => _toggles[f.key] = s.first),
             )
           else
             UfField(
@@ -130,70 +121,12 @@ class _FormDialogState extends State<FormDialog> {
                 style: f.mono ? monoStyle.copyWith(fontSize: 12) : null,
               ),
             ),
-        if (_error case final error?)
+        if (problem case final error?)
           Text(
             error,
             style: TextStyle(color: colors.danger, fontWeight: FontWeight.w600),
           ),
       ],
-    );
-  }
-}
-
-/// Two side-by-side choices in a filled track; the chosen one takes the accent.
-class _TwoChoices extends StatelessWidget {
-  const _TwoChoices({
-    super.key,
-    required this.off,
-    required this.on,
-    required this.value,
-    required this.onChanged,
-  });
-
-  final String off;
-  final String on;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = UfColors.of(context);
-    Widget side(String label, bool selected, bool target) => Expanded(
-      child: Semantics(
-        selected: selected,
-        button: true,
-        child: Material(
-          color: selected ? colors.panel : Colors.transparent,
-          shape: RoundedRectangleBorder(
-            borderRadius: UfRadius.control,
-            side: selected ? BorderSide(color: colors.line) : BorderSide.none,
-          ),
-          child: InkWell(
-            borderRadius: UfRadius.control,
-            onTap: () => onChanged(target),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
-              child: Text(
-                label,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: selected ? colors.text : colors.muted,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-    return Container(
-      padding: const EdgeInsets.all(2),
-      decoration: BoxDecoration(
-        color: colors.neutral,
-        borderRadius: UfRadius.card,
-      ),
-      child: Row(children: [side(off, !value, false), side(on, value, true)]),
     );
   }
 }

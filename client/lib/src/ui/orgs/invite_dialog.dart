@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
-import 'dart:io';
+import 'dart:convert';
 
-import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
@@ -15,7 +14,8 @@ import '../../design/field.dart';
 import '../../design/icons.dart';
 import '../../design/rows.dart';
 import '../../design/tokens.dart';
-import '../describe_error.dart';
+import '../busy_action.dart';
+import '../save_file.dart';
 import 'members_screen.dart';
 
 /// Invites someone to the org: the link and file are shown once.
@@ -31,12 +31,10 @@ class InviteDialog extends StatefulWidget {
   State<InviteDialog> createState() => _InviteDialogState();
 }
 
-class _InviteDialogState extends State<InviteDialog> {
+class _InviteDialogState extends State<InviteDialog> with BusyAction {
   final _email = TextEditingController();
   OrgRole _role = OrgRole.member;
   InviteCreated? _created;
-  bool _busy = false;
-  String? _error;
 
   @override
   void dispose() {
@@ -48,25 +46,15 @@ class _InviteDialogState extends State<InviteDialog> {
     final l = AppLocalizations.of(context);
     final api = AppScope.read(context).api!;
     final email = _email.text.trim();
-    if (email.isEmpty) return setState(() => _error = l.fieldRequired);
-    setState(() => _busy = true);
-    try {
+    if (email.isEmpty) return setState(() => problem = l.fieldRequired);
+    await run(() async {
       final created = await api.createInvite(
         widget.orgId,
         email: email,
         role: _role,
       );
-      if (mounted) {
-        setState(() {
-          _created = created;
-          _error = null;
-        });
-      }
-    } on Exception catch (e) {
-      if (mounted) setState(() => _error = describeError(l, e));
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
+      if (mounted) setState(() => _created = created);
+    });
   }
 
   @override
@@ -74,11 +62,7 @@ class _InviteDialogState extends State<InviteDialog> {
     final l = AppLocalizations.of(context);
     final colors = UfColors.of(context);
     final state = AppScope.of(context);
-    final isOwner =
-        state.orgs?.orgs.any(
-          (o) => o.id == widget.orgId && o.role == OrgRole.owner.name,
-        ) ??
-        false;
+    final isOwner = state.orgs?.isOwner(widget.orgId) ?? false;
     final created = _created;
     return UfDialog(
       title: l.inviteTitle,
@@ -87,7 +71,7 @@ class _InviteDialogState extends State<InviteDialog> {
         CancelButton(onPressed: () => Navigator.of(context).maybePop()),
         FilledButton(
           key: const Key('invite-create'),
-          onPressed: _busy ? null : _create,
+          onPressed: busy ? null : _create,
           child: Text(l.inviteCreate),
         ),
       ],
@@ -117,7 +101,7 @@ class _InviteDialogState extends State<InviteDialog> {
             onChanged: (r) => setState(() => _role = r ?? OrgRole.member),
           ),
         ),
-        if (_error case final error?)
+        if (problem case final error?)
           Text(error, style: TextStyle(color: colors.danger)),
         if (created != null)
           InviteResult(created: created, saveLocation: widget.saveLocation),
@@ -137,12 +121,9 @@ class InviteResult extends StatelessWidget {
 
   Future<void> _saveFile() async {
     const name = 'unfeudal-invite.unfeudal-enroll';
-    final path = await (saveLocation ?? _pickSaveLocation)(name);
-    if (path != null) await File(path).writeAsString(created.file);
+    final path = await (saveLocation ?? pickSaveLocation)(name);
+    if (path != null) await writeFileBytes(path, utf8.encode(created.file));
   }
-
-  static Future<String?> _pickSaveLocation(String suggestedName) async =>
-      (await getSaveLocation(suggestedName: suggestedName))?.path;
 
   @override
   Widget build(BuildContext context) {

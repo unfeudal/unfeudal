@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:unfeudal_client/l10n/app_localizations.dart';
 import 'package:unfeudal_client/src/app_state.dart';
-import 'package:unfeudal_client/src/events/app_events.dart';
 import 'package:unfeudal_client/src/session/lock_machine.dart';
 import 'package:unfeudal_client/src/session/session_store.dart';
 import 'package:unfeudal_client/src/settings/settings.dart';
@@ -81,9 +80,9 @@ void main() {
     final s = await signedInState(t);
     await t.runAsync(s.lock);
     final checks = <LockScreenState>[];
-    s.events.listen((e) {
-      if (e is LockScreenStateChanged && e.state == LockScreenState.checking) {
-        checks.add(e.state);
+    s.lockMachine.addListener(() {
+      if (s.lockMachine.state == LockScreenState.checking) {
+        checks.add(s.lockMachine.state);
       }
     });
     await pumpApp(t, state: s);
@@ -107,9 +106,7 @@ void main() {
       final s = await signedInState(t);
       await t.runAsync(s.lock);
       final states = <LockScreenState>[];
-      s.events.listen((e) {
-        if (e is LockScreenStateChanged) states.add(e.state);
-      });
+      s.lockMachine.addListener(() => states.add(s.lockMachine.state));
       await pumpApp(t, state: s);
       expect(
         find.text(testEmail),
@@ -161,7 +158,7 @@ void main() {
       t,
       state: AppState(
         sessions: SessionStore(FakeSecureKv()),
-        settingsStore: SettingsStore.memory(),
+        settingsStore: FakeSettingsStore(),
         openMirror: (_) async => throw const MirrorTooNew(2),
       )..stage = AppStage.mirrorTooNew,
     );

@@ -93,10 +93,7 @@ class _TrashScreenState extends State<TrashScreen> {
     final days = state.trashDays;
     final dates = MaterialLocalizations.of(context);
     final orgId = state.orgs?.selected;
-    final orgName = state.orgs?.orgs
-        .where((o) => o.id == orgId)
-        .firstOrNull
-        ?.name;
+    final vaultName = vaultNameOf(l, state, orgId);
     DateTime deletedAt(VaultEntry e) => e.item.updatedAt ?? DateTime(0);
     final trashed = [
       for (final e in vault.entries)
@@ -117,66 +114,61 @@ class _TrashScreenState extends State<TrashScreen> {
         readOnly || e.state != EntryState.ok || !canEditEntry(state, e);
     return ManageFrame(
       title: l.trashTitle,
-      subtitle: orgName ?? l.vaultPersonal,
+      subtitle: vaultName,
       onBack: widget.onBack,
+      maxWidth: trashed.isEmpty ? null : 980,
       child: trashed.isEmpty
           ? EmptyState(title: l.trashTitle, body: l.trashEmpty)
-          : Align(
-              alignment: Alignment.topLeft,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 980),
-                child: ListView(
-                  padding: const EdgeInsets.only(bottom: 40),
-                  children: [
-                    if (_error case final error?)
-                      Text(error, style: TextStyle(color: colors.danger)),
-                    for (final e in trashed) ...[
-                      ItemRow(
-                        key: Key('trash-${e.id}'),
-                        icon: _icon(e.item.kind),
-                        title: e.state == EntryState.ok
-                            ? e.name ?? ''
-                            : l.treeUnreadable,
-                        dimmed: e.state != EntryState.ok,
-                        subtitle: when(e),
-                        trailing: [
-                          OutlinedButton(
-                            key: Key('trash-restore-${e.id}'),
-                            style: smallButton,
-                            onPressed: blocked(e) ? null : () => _restore(e),
-                            child: Text(l.trashRestore),
-                          ),
-                        ],
+          : ListView(
+              padding: const EdgeInsets.only(bottom: 40),
+              children: [
+                if (_error case final error?)
+                  Text(error, style: TextStyle(color: colors.danger)),
+                for (final e in trashed) ...[
+                  ItemRow(
+                    key: Key('trash-${e.id}'),
+                    icon: _icon(e.item.kind),
+                    title: e.state == EntryState.ok
+                        ? e.name ?? ''
+                        : l.treeUnreadable,
+                    dimmed: e.state != EntryState.ok,
+                    subtitle: when(e),
+                    trailing: [
+                      OutlinedButton(
+                        key: Key('trash-restore-${e.id}'),
+                        style: smallButton,
+                        onPressed: blocked(e) ? null : () => _restore(e),
+                        child: Text(l.trashRestore),
                       ),
-                      // a trashed org folder stays readable: what is inside can be moved out before the purge
-                      if (e.orgId != null && e.item.kind == ItemKind.folder)
-                        for (final c in vault.entries)
-                          if (c.folderId == e.id && !c.item.deleted)
-                            Padding(
-                              padding: const EdgeInsets.only(left: 44),
-                              child: ItemRow(
-                                key: Key('trash-inside-${c.id}'),
-                                icon: _icon(c.item.kind),
-                                title: c.state == EntryState.ok
-                                    ? c.name ?? ''
-                                    : l.treeUnreadable,
-                                dimmed: c.state != EntryState.ok,
-                                trailing: [
-                                  OutlinedButton(
-                                    key: Key('trash-move-out-${c.id}'),
-                                    style: smallButton,
-                                    onPressed: blocked(c)
-                                        ? null
-                                        : () => _moveOut(c),
-                                    child: Text(l.trashMoveOut),
-                                  ),
-                                ],
-                              ),
-                            ),
                     ],
-                  ],
-                ),
-              ),
+                  ),
+                  // a trashed org folder stays readable: what is inside can be moved out before the purge
+                  if (e.orgId != null && e.item.kind == ItemKind.folder)
+                    for (final c in vault.entries)
+                      if (c.folderId == e.id && !c.item.deleted)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 44),
+                          child: ItemRow(
+                            key: Key('trash-inside-${c.id}'),
+                            icon: _icon(c.item.kind),
+                            title: c.state == EntryState.ok
+                                ? c.name ?? ''
+                                : l.treeUnreadable,
+                            dimmed: c.state != EntryState.ok,
+                            trailing: [
+                              OutlinedButton(
+                                key: Key('trash-move-out-${c.id}'),
+                                style: smallButton,
+                                onPressed: blocked(c)
+                                    ? null
+                                    : () => _moveOut(c),
+                                child: Text(l.trashMoveOut),
+                              ),
+                            ],
+                          ),
+                        ),
+                ],
+              ],
             ),
     );
   }

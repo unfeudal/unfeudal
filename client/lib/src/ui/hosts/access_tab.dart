@@ -40,12 +40,7 @@ class AccessTab extends StatelessWidget {
       for (final a in block?.acl ?? const <AclRow>[])
         if (a.orgId == orgId && a.folderId == folderId) a,
     ];
-    final manage = orgs
-        .permissions(orgId, folderId)
-        .contains(Permission.manage);
-    void push(Widget screen) =>
-        Navigator.of(context)
-            .push(MaterialPageRoute<void>(builder: (_) => screen));
+    final (:access, :why) = orgFolderAccessActions(context, orgId, folderId);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       spacing: 12,
@@ -70,24 +65,17 @@ class AccessTab extends StatelessWidget {
           spacing: 8,
           runSpacing: 8,
           children: [
-            if (manage)
+            if (access != null)
               OutlinedButton(
                 key: const Key('access-edit'),
                 style: smallButton,
-                onPressed: () =>
-                    push(AclEditor(orgId: orgId, folderId: folderId)),
+                onPressed: access,
                 child: Text(l.accessEdit),
               ),
             TextButton(
               key: const Key('access-why'),
               style: smallButton,
-              onPressed: () => push(
-                WhyRightsView(
-                  orgId: orgId,
-                  folderId: folderId,
-                  userId: state.stored!.userId,
-                ),
-              ),
+              onPressed: why,
               child: Text(l.whyTitle),
             ),
           ],

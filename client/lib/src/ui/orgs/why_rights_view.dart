@@ -9,6 +9,34 @@ import '../manage_frame.dart';
 import 'acl_editor.dart';
 import 'members_screen.dart';
 
+/// What an org folder's access buttons open: its access editor (null without `manage`), and why this account
+/// holds its rights there.
+({VoidCallback? access, VoidCallback why}) orgFolderAccessActions(
+  BuildContext context,
+  String orgId,
+  String folderId,
+) {
+  final state = AppScope.read(context);
+  void push(Widget screen) =>
+      Navigator.of(context)
+          .push(MaterialPageRoute<void>(builder: (_) => screen));
+  final manage = state.orgs!
+      .permissions(orgId, folderId)
+      .contains(Permission.manage);
+  return (
+    access: manage
+        ? () => push(AclEditor(orgId: orgId, folderId: folderId))
+        : null,
+    why: () => push(
+      WhyRightsView(
+        orgId: orgId,
+        folderId: folderId,
+        userId: state.stored!.userId,
+      ),
+    ),
+  );
+}
+
 /// The steps of the resolution for one member on one folder; admins pick any member.
 class WhyRightsView extends StatefulWidget {
   const WhyRightsView({
@@ -16,13 +44,11 @@ class WhyRightsView extends StatefulWidget {
     required this.orgId,
     required this.folderId,
     required this.userId,
-    this.onBack,
   });
 
   final String orgId;
   final String folderId;
   final String userId;
-  final VoidCallback? onBack;
 
   @override
   State<WhyRightsView> createState() => _WhyRightsViewState();
@@ -38,10 +64,7 @@ class _WhyRightsViewState extends State<WhyRightsView> {
     final state = AppScope.of(context);
     final orgs = state.orgs!;
     final block = orgs.block;
-    final members = [
-      for (final m in block?.members ?? const <OrgMember>[])
-        if (m.orgId == widget.orgId) m,
-    ];
+    final members = orgs.membersOf(widget.orgId);
     String principal(ExplanationStep s) => switch (s.principalType) {
       PrincipalType.team =>
         block?.teams.where((t) => t.id == s.principalId).firstOrNull?.name ??
@@ -76,7 +99,6 @@ class _WhyRightsViewState extends State<WhyRightsView> {
     ].nonNulls;
     return ManageFrame(
       title: l.whyTitle,
-      onBack: widget.onBack,
       child: ListView(
         children: [
           if (orgs.isAdmin(widget.orgId))

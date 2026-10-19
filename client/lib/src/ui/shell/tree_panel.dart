@@ -12,12 +12,10 @@ import '../../design/icons.dart';
 import '../../design/rows.dart';
 import '../../design/seal.dart';
 import '../../design/tokens.dart';
-import '../../events/app_events.dart';
 import '../../terminal/snippet_insertion.dart';
 import '../../vault/snippet_store.dart';
 import '../../vault/vault.dart';
 import '../terminal/multiline_dialog.dart';
-import '../orgs/acl_editor.dart';
 import '../orgs/members_screen.dart' show confirmAndLeaveOrg;
 import '../orgs/why_rights_view.dart';
 import 'shortcuts.dart';
@@ -39,8 +37,7 @@ class TreePanel extends StatefulWidget {
   final VoidCallback? onNewFolder;
 
   /// Opens the editor of a host or folder (the pencil of its row).
-  /// [from] is the global rect of the control that asked: the editor grows out of it.
-  final void Function(VaultEntry entry, Rect? from)? onEdit;
+  final void Function(VaultEntry entry)? onEdit;
 
   @override
   State<TreePanel> createState() => _TreePanelState();
@@ -69,7 +66,7 @@ class _TreePanelState extends State<TreePanel> {
     final readOnly = state.sync?.readOnly ?? true;
     final orgs = state.orgs;
     final orgId = orgs?.selected;
-    final org = orgs?.orgs.where((o) => o.id == orgId).firstOrNull;
+    final org = orgs?.byId(orgId);
     final awaiting = org != null && org.status != 'confirmed';
     final online = state.sync?.online ?? false;
     // an org vault: folders need the server, and both buttons need edit somewhere in the cached block
@@ -207,9 +204,7 @@ class _TreePanelState extends State<TreePanel> {
     if (found.isEmpty) return const [];
     final l = AppLocalizations.of(context);
     final colors = UfColors.of(context);
-    final tab = state.tabs.isEmpty
-        ? null
-        : state.tabs[state.activeTab.clamp(0, state.tabs.length - 1)];
+    final tab = state.activeSession;
     final canInsert = tab?.state == SealState.connected;
     final text = Theme.of(context).textTheme;
     return [
@@ -228,14 +223,11 @@ class _TreePanelState extends State<TreePanel> {
             borderRadius: UfRadius.control,
             hoverColor: colors.panelHover,
             onTap: canInsert
-                ? () async {
-                    final sent = await insertSnippet(
-                      tab!,
-                      s.meta.command,
-                      confirm: () => confirmUnsafeMultiline(context),
-                    );
-                    if (sent) state.emit(SnippetInserted(snippetId: s.id));
-                  }
+                ? () => insertSnippet(
+                    tab!,
+                    s.meta.command,
+                    confirm: () => confirmUnsafeMultiline(context),
+                  )
                 : null,
             child: Container(
               constraints: const BoxConstraints(minHeight: UfHeight.small),
@@ -263,10 +255,6 @@ class _TreePanelState extends State<TreePanel> {
   }
 
   /// Org screens open over the shell; their back arrow pops them.
-  static void _push(BuildContext context, Widget screen) =>
-      Navigator.of(context)
-          .push(MaterialPageRoute<void>(builder: (_) => screen));
-
   /// Hosts, folders, and the entries the tree must label (unreadable, newer type).
   static bool _shown(VaultEntry e) =>
       e.kind == ItemKind.host ||
@@ -330,56 +318,30 @@ class _TreePanelState extends State<TreePanel> {
     return out;
   }
 
-  Widget _editButton(BuildContext context, VaultEntry e) => Builder(
-    builder: (button) => IconButton(
-      key: Key('edit-${e.id}'),
-      tooltip: AppLocalizations.of(context).itemEdit,
-      onPressed: widget.onEdit == null
-          ? null
-          : () => widget.onEdit!(e, _globalRect(button)),
-      icon: const Icon(UfIcons.pencil),
-    ),
+  Widget _editButton(BuildContext context, VaultEntry e) => IconButton(
+    key: Key('edit-${e.id}'),
+    tooltip: AppLocalizations.of(context).itemEdit,
+    onPressed: widget.onEdit == null ? null : () => widget.onEdit!(e),
+    icon: const Icon(UfIcons.pencil),
   );
-
-  static Rect? _globalRect(BuildContext context) =>
-      switch (context.findRenderObject()) {
-        final RenderBox box when box.hasSize =>
-          box.localToGlobal(Offset.zero) & box.size,
-        _ => null,
-      };
 
   /// Access (with manage) and why, for an org folder.
   List<Widget> _orgFolderButtons(BuildContext context, VaultEntry e) {
     final l = AppLocalizations.of(context);
-    final state = AppScope.read(context);
-    final orgId = e.orgId!;
-    final manage = state.orgs!
-        .permissions(orgId, e.id)
-        .contains(Permission.manage);
-    Widget button(String key, String tooltip, IconData icon, Widget screen) =>
-        IconButton(
-          key: Key(key),
-          tooltip: tooltip,
-          onPressed: () => _push(context, screen),
-          icon: Icon(icon),
-        );
+    final (:access, :why) = orgFolderAccessActions(context, e.orgId!, e.id);
     return [
-      if (manage)
-        button(
-          'folder-access-${e.id}',
-          l.aclTitle(e.name ?? ''),
-          UfIcons.users,
-          AclEditor(orgId: orgId, folderId: e.id),
+      if (access != null)
+        IconButton(
+          key: Key('folder-access-${e.id}'),
+          tooltip: l.aclTitle(e.name ?? ''),
+          onPressed: access,
+          icon: const Icon(UfIcons.users),
         ),
-      button(
-        'folder-why-${e.id}',
-        l.whyTitle,
-        UfIcons.info,
-        WhyRightsView(
-          orgId: orgId,
-          folderId: e.id,
-          userId: state.stored!.userId,
-        ),
+      IconButton(
+        key: Key('folder-why-${e.id}'),
+        tooltip: l.whyTitle,
+        onPressed: why,
+        icon: const Icon(UfIcons.info),
       ),
     ];
   }
@@ -462,7 +424,7 @@ class _TreePanelState extends State<TreePanel> {
   }) {
     final l = AppLocalizations.of(context);
     final colors = UfColors.of(context);
-    final padding = EdgeInsets.fromLTRB(26.0 + depth * 14, 6, 4, 6);
+    final padding = EdgeInsets.fromLTRB(8.0 + depth * 14, 6, 4, 6);
     final muted = Theme.of(context).textTheme.bodySmall!
         .copyWith(color: colors.muted);
     if (e.state == EntryState.unreadable || e.state == EntryState.unsupported) {

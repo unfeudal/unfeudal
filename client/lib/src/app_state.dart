@@ -34,6 +34,7 @@ import 'storage/local_mirror.dart';
 import 'sync/ledger_store.dart';
 import 'sync/sync_engine.dart';
 import 'terminal/terminal_session.dart';
+import 'vault/org_writer.dart';
 import 'vault/vault.dart';
 
 enum AppStage { booting, login, setup, join, unlock, home, mirrorTooNew }
@@ -102,7 +103,6 @@ class AppState extends ChangeNotifier implements SshCallbacks {
     DateTime Function() loquetClock = DateTime.now,
     BiometricBackend? biometrics,
   }) : _http = httpClient ?? http.Client(),
-       _biometrics = biometrics,
        biometric = biometrics == null
            ? null
            : BiometricUnlock(sessions.kv, biometrics),
@@ -126,7 +126,6 @@ class AppState extends ChangeNotifier implements SshCallbacks {
   final SshConnector _ssh;
 
   final AccountCrypto _crypto;
-  final BiometricBackend? _biometrics;
 
   /// The vault key sealed by the device's secure hardware; null on a platform without it.
   final BiometricUnlock? biometric;
@@ -159,6 +158,10 @@ class AppState extends ChangeNotifier implements SshCallbacks {
   final lockMachine = LockMachine();
   final tabs = <TerminalSession>[];
   int activeTab = 0;
+
+  /// The tab shown; null without tabs.
+  TerminalSession? get activeSession =>
+      tabs.isEmpty ? null : tabs[activeTab.clamp(0, tabs.length - 1)];
   SshDialogs? dialogs;
   bool deviceRevoked = false;
   bool sessionExpired = false;
@@ -433,14 +436,14 @@ class AppState extends ChangeNotifier implements SshCallbacks {
     await _startVault(api, unlocked);
     stage = AppStage.home;
     notifyListeners();
-    emit(Unlocked(displayName: _displayName));
+    emit(Unlocked(displayName: displayName));
   }
 
   /// Hardware present, the server allows it, and the OS offers it.
   Future<bool> biometricAvailable() async =>
       biometric != null &&
       serverHas('biometric_unlock') &&
-      await _biometrics!.available();
+      await biometric!.backend.available();
 
   Future<bool> enableBiometrics() async {
     final account = _account;
@@ -690,8 +693,7 @@ class AppState extends ChangeNotifier implements SshCallbacks {
       final target = await _targetFor(hostId);
       final JumpConnection conn;
       try {
-        conn = await JumpConnector(sshHopOpener(_ssh, this))
-            .connect(hops, target);
+        conn = await connectChain(sshHopOpener(_ssh, this), hops, target);
       } on JumpChainFailed catch (e) {
         if (e.hopIndex == hops.length && e.cause is Exception) {
           throw e.cause; // the target's own error keeps its handling
@@ -793,12 +795,7 @@ class AppState extends ChangeNotifier implements SshCallbacks {
   }
 
   Future<void> startForward(TerminalSession tab, PortForward f) async {
-    try {
-      await tab.forwarder!.start(f);
-    } on Exception catch (e) {
-      emit(ForwardFailed(hostId: tab.hostId, localPort: f.localPort, error: e));
-      rethrow;
-    }
+    await tab.forwarder!.start(f);
     emit(ForwardStarted(hostId: tab.hostId, forward: f));
   }
 
@@ -822,7 +819,7 @@ class AppState extends ChangeNotifier implements SshCallbacks {
   @override
   Future<bool> confirmHostKey(HostKeyCheck check) async {
     if (check.decision == HostKeyDecision.changed) {
-      emit(HostKeyChanged(hostId: check.hostId));
+      emit(const HostKeyChanged());
     }
     return await dialogs?.confirmHostKey(check) ?? false;
   }
@@ -841,6 +838,34 @@ class AppState extends ChangeNotifier implements SshCallbacks {
     String instruction,
     List<SshPrompt> prompts,
   ) async => dialogs?.answerPrompts(name, instruction, prompts);
+
+  /// Writes an item to the personal vault, or to [orgId]'s [folderId] through the org writer.
+  Future<String> saveItem({
+    required String type,
+    String? id,
+    String? orgId,
+    String? folderId,
+    required Map<String, Object?> meta,
+    Map<String, Object?>? secret,
+  }) => orgId == null
+      ? vault!.upsertItem(
+          type: type,
+          id: id,
+          folderId: folderId,
+          meta: meta,
+          secret: secret,
+        )
+      : orgs!.writer.upsert(
+          type: type,
+          id: id,
+          target: OrgTarget(orgId, folderId),
+          meta: meta,
+          secret: secret,
+        );
+
+  /// Moves an item of the personal vault, or of [orgId], to the trash.
+  Future<void> trashItem(String id, {String? orgId}) =>
+      orgId == null ? vault!.trashItem(id) : orgs!.writer.trash(id);
 
   /// Saved on this machine; synced prefs also go to the profile item (removed keys as null), one write at a time.
   Future<void> updateSettings(Settings next) async {
@@ -930,10 +955,8 @@ class AppState extends ChangeNotifier implements SshCallbacks {
     notifyListeners();
   }
 
-  String? get _displayName => vault?.profile.displayName ?? stored?.displayName;
-
   /// The name shown beside Loquet in the sidebar.
-  String? get accountName => _displayName;
+  String? get displayName => vault?.profile.displayName ?? stored?.displayName;
 
   /// The language of the security mails; best effort, retried at the next sign-in or change.
   Future<void> _sendLocale() async {
@@ -998,7 +1021,7 @@ class AppState extends ChangeNotifier implements SshCallbacks {
     await _mirrorFor(session.userId);
     _saveBundle(session.bundle, session.bundleVersion);
     await _startVault(api, unlocked);
-    emit(Unlocked(displayName: _displayName));
+    emit(Unlocked(displayName: displayName));
   }
 
   Future<void> _startVault(ApiClient api, UnlockedAccount unlocked) async {

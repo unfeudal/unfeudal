@@ -231,7 +231,7 @@ void main() {
       b64((await wrap.unwrap(id, c.keyPair)).metaKey),
       b64(c.keyring.current(id)!.metaKey),
     );
-    expect(c.events.whereType<SharedVaultCreated>().single.orgId, testOrgId);
+    expect(c.events.whereType<SharedVaultCreated>(), hasLength(1));
   });
 
   test('trash, restore and a conflict copy stay in the org folder', () async {

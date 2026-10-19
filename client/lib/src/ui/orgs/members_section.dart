@@ -46,7 +46,7 @@ class _MembersSectionState extends State<MembersSection> {
     final l = AppLocalizations.of(context);
     final state = AppScope.of(context);
     final orgs = state.orgs!;
-    final org = orgs.orgs.where((o) => o.id == widget.orgId).firstOrNull;
+    final org = orgs.byId(widget.orgId);
     final isAdmin = orgs.isAdmin(widget.orgId);
     final groups = [
       (MembersGroup.members, l.membersTitle),
@@ -180,9 +180,7 @@ class _PendingInvitesState extends State<PendingInvites> {
     final l = AppLocalizations.of(context);
     final colors = UfColors.of(context);
     final state = AppScope.of(context);
-    final isOwner = state.orgs!.orgs.any(
-      (o) => o.id == widget.orgId && o.role == OrgRole.owner.name,
-    );
+    final isOwner = state.orgs!.isOwner(widget.orgId);
     final emails = {
       for (final m in state.orgs!.block?.members ?? const <OrgMember>[])
         m.userId: m.email,
@@ -229,9 +227,6 @@ class FolderAccessList extends StatelessWidget {
         if (n.orgId == orgId)
           (id: n.folderId, name: state.vault?.entry(n.folderId)?.name ?? ''),
     ]..sort((a, b) => a.name.compareTo(b.name));
-    void push(Widget screen) =>
-        Navigator.of(context)
-            .push(MaterialPageRoute<void>(builder: (_) => screen));
     if (folders.isEmpty) {
       return Text(
         l.folderAccessEmpty,
@@ -239,42 +234,37 @@ class FolderAccessList extends StatelessWidget {
             .copyWith(color: colors.muted),
       );
     }
+    Widget row(({String id, String name}) f) {
+      final (:access, :why) = orgFolderAccessActions(context, orgId, f.id);
+      return ItemRow(
+        key: Key('members-folder-${f.id}'),
+        icon: UfIcons.folderSimple,
+        title: f.name,
+        subtitle: switch (orgs.permissions(orgId, f.id)) {
+          final rights when rights.isEmpty => l.whyNone,
+          final rights => permissionList(l, rights),
+        },
+        trailing: [
+          if (access != null)
+            OutlinedButton(
+              key: Key('members-folder-access-${f.id}'),
+              style: smallButton,
+              onPressed: access,
+              child: Text(l.aclTitle(f.name)),
+            ),
+          TextButton(
+            key: Key('members-folder-why-${f.id}'),
+            style: smallButton,
+            onPressed: why,
+            child: Text(l.whyTitle),
+          ),
+        ],
+      );
+    }
+
     return ListView(
       padding: const EdgeInsets.only(bottom: 40),
-      children: [
-        for (final f in folders)
-          ItemRow(
-            key: Key('members-folder-${f.id}'),
-            icon: UfIcons.folderSimple,
-            title: f.name,
-            subtitle: switch (orgs.permissions(orgId, f.id)) {
-              final rights when rights.isEmpty => l.whyNone,
-              final rights => permissionList(l, rights),
-            },
-            trailing: [
-              if (orgs.permissions(orgId, f.id).contains(Permission.manage))
-                OutlinedButton(
-                  key: Key('members-folder-access-${f.id}'),
-                  style: smallButton,
-                  onPressed: () =>
-                      push(AclEditor(orgId: orgId, folderId: f.id)),
-                  child: Text(l.aclTitle(f.name)),
-                ),
-              TextButton(
-                key: Key('members-folder-why-${f.id}'),
-                style: smallButton,
-                onPressed: () => push(
-                  WhyRightsView(
-                    orgId: orgId,
-                    folderId: f.id,
-                    userId: state.stored!.userId,
-                  ),
-                ),
-                child: Text(l.whyTitle),
-              ),
-            ],
-          ),
-      ],
+      children: [for (final f in folders) row(f)],
     );
   }
 }

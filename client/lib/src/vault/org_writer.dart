@@ -8,6 +8,7 @@ import '../events/app_events.dart';
 import '../orgs/block_permissions.dart';
 import '../orgs/folder_keyring.dart';
 import '../storage/local_mirror.dart';
+import 'item_rewrite.dart';
 import 'vault.dart';
 
 /// Where an org item goes: [folderId] null is the org root (only for a folder item).
@@ -69,7 +70,9 @@ class OrgWriter {
     }
     final itemId = id ?? newId();
     // A move re-seals both parts, and so does an edit whose queued write still carries an unsent secret.
-    if (current != null && secret == null && (moved || _queuedSecret(itemId))) {
+    if (current != null &&
+        secret == null &&
+        (moved || hasQueuedSecret(mirror, itemId))) {
       secret = await _currentSecret(itemId);
     }
     await _send(
@@ -124,7 +127,7 @@ class OrgWriter {
     );
     await keyring.put(id, keys);
     await vault.reload();
-    _emit(SharedVaultCreated(orgId: orgId));
+    _emit(const SharedVaultCreated());
     return id;
   }
 
@@ -158,12 +161,7 @@ class OrgWriter {
     final secret = mine.secret == null
         ? null
         : await _open(mine, PayloadPart.secret);
-    if (meta['name'] case final String name) {
-      final max = mine.kind == ItemKind.snippet
-          ? PayloadLimits.snippetName
-          : PayloadLimits.name;
-      meta['name'] = String.fromCharCodes('$name$suffix'.runes.take(max));
-    }
+    suffixName(meta, mine.kind, suffix);
     return _seal(
       id: newId(),
       type: mine.type,
@@ -181,10 +179,7 @@ class OrgWriter {
     final block = _block();
     if (block == null) return false;
     if (folderId == null) {
-      final org = block.orgs.where((o) => o.id == orgId).firstOrNull;
-      return org != null &&
-          org.status == 'confirmed' &&
-          (org.role == 'owner' || org.role == 'admin');
+      return block.orgs.any((o) => o.id == orgId && o.isAdmin);
     }
     return explainFromBlock(
       block,
@@ -194,7 +189,6 @@ class OrgWriter {
     ).effective.contains(Permission.edit);
   }
 
-  /// Same envelopes with `deleted` flipped; `secret: null` keeps the stored one.
   Future<void> _setDeleted(String id, bool deleted) async {
     final current =
         vault.entry(id) ??
@@ -205,33 +199,12 @@ class OrgWriter {
     if (!canEdit(current.orgId!, current.folderId)) {
       throw const OrgWriteRefused(OrgWriteRefusal.noEdit);
     }
-    final json = current.item.toJson()
-      ..removeWhere((k, _) => _serverSet.contains(k))
-      ..['deleted'] = deleted;
-    if (!_queuedSecret(id)) json['secret'] = null;
-    await _send(Item.fromJson(json));
+    await _send(withDeleted(mirror, current.item, deleted));
   }
 
-  static const _serverSet = {
-    'purged',
-    'createdAt',
-    'updatedAt',
-    'updatedBy',
-    'updatedDevice',
-  };
-
-  bool _queuedSecret(String id) =>
-      mirror.outbox().any((e) => e.item.id == id && e.item.secret != null);
-
   Future<Map<String, Object?>?> _currentSecret(String id) async {
-    final queued = mirror
-        .outbox()
-        .where((e) => e.item.id == id)
-        .firstOrNull
-        ?.item;
-    final holder = queued?.secret != null ? queued! : mirror.item(id);
-    if (holder?.secret == null) return null;
-    return _open(holder!, PayloadPart.secret);
+    final holder = secretHolder(mirror, id);
+    return holder == null ? null : _open(holder.item, PayloadPart.secret);
   }
 
   /// Opens one part with the keyring key its keyId names; [OrgWriteRefusal.noSecretKey] or `noKey` when not held.

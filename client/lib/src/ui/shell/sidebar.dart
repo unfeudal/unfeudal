@@ -13,6 +13,7 @@ import '../../loquet/loquet_pose.dart';
 import '../../loquet/loquet_spot.dart';
 import '../orgs/create_org_dialog.dart';
 import '../orgs/join_org_dialog.dart';
+import 'shortcuts.dart';
 import 'tree_panel.dart';
 
 /// A section screen that replaces the sessions while the sidebar stays; all but settings follow the vault.
@@ -114,7 +115,7 @@ class Sidebar extends StatelessWidget {
                     child: LoquetSpot(
                       key: const Key('loquet-spot-sidebar'),
                       placement: LoquetPlacement.sidebar,
-                      name: state.accountName,
+                      name: state.displayName,
                       // an empty vault gives him its line
                       mood: empty ? LoquetMood.idle : null,
                       line: empty ? LineKey.emptyVault : null,
@@ -148,8 +149,7 @@ class Sidebar extends StatelessWidget {
 /// The org the sidebar shows, or null for the personal vault.
 OrgSummary? selectedOrg(AppState state) {
   final orgs = state.serverHas('orgs') ? state.orgs : null;
-  final id = orgs?.selected;
-  return orgs?.orgs.where((o) => o.id == id).firstOrNull;
+  return orgs?.byId(orgs.selected);
 }
 
 String pageTitle(AppLocalizations l, ShellPage page) => switch (page) {
@@ -240,14 +240,15 @@ class VaultSelector extends StatelessWidget {
     final orgs = state.serverHas('orgs') ? state.orgs : null;
     final current = selectedOrg(state);
     final text = Theme.of(context).textTheme;
-    final hosts = (state.vault?.entries ?? const [])
+    int hostsIn(String? orgId) => (state.vault?.entries ?? const [])
         .where(
           (e) =>
-              e.orgId == null &&
+              e.orgId == orgId &&
               e.kind == ItemKind.host &&
               !state.vault!.isTrashed(e.id),
         )
         .length;
+    final hosts = hostsIn(null);
     String role(OrgSummary o) => switch (o.role) {
       'owner' => l.roleOwner,
       'admin' => l.roleAdmin,
@@ -258,34 +259,82 @@ class VaultSelector extends StatelessWidget {
       onPicked();
     }
 
+    // Menu rows: 32 px minimum, 4/8 padding, radius 6, the selected one on panelHover.
+    ButtonStyle rowStyle({bool selected = false}) => MenuItemButton.styleFrom(
+      minimumSize: const Size(0, 32),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      shape: const RoundedRectangleBorder(borderRadius: UfRadius.control),
+      backgroundColor: selected ? colors.panelHover : null,
+      textStyle: text.bodyMedium!.copyWith(fontSize: 13.5),
+    );
+    // set by the LayoutBuilder below: the menu is as wide as the selector
+    late double menuWidth;
+    Widget row(int index, Widget child) => Padding(
+      padding: EdgeInsets.only(top: index == 0 ? 0 : 1),
+      child: SizedBox(width: menuWidth - 8, child: child),
+    );
+
     Widget item({
+      required int index,
       required Key key,
       required String name,
       required String subtitle,
       required bool selected,
       required VoidCallback? onPressed,
       required Widget tile,
-    }) => MenuItemButton(
-      key: key,
-      onPressed: onPressed,
-      leadingIcon: tile,
-      trailingIcon: selected
-          ? Icon(UfIcons.check, size: 14, color: colors.accentText)
-          : null,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(name),
-            Text(
-              subtitle,
-              style: text.bodySmall!.copyWith(color: colors.muted),
-            ),
-          ],
+      bool dim = false,
+    }) => row(
+      index,
+      MenuItemButton(
+        key: key,
+        onPressed: onPressed,
+        style: rowStyle(selected: selected),
+        overflowAxis: Axis.vertical,
+        leadingIcon: tile,
+        trailingIcon: selected
+            ? Icon(UfIcons.check, size: 14, color: colors.accentText)
+            : index < 9
+            ? Text(
+                UfShortcuts.vaultLabel(index + 1),
+                style: monoStyle.copyWith(fontSize: 11, color: colors.muted),
+              )
+            : null,
+        child: Padding(
+          padding: const EdgeInsetsDirectional.only(start: 2, end: 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(name, style: dim ? TextStyle(color: colors.muted) : null),
+              Text(
+                subtitle,
+                style: text.bodySmall!.copyWith(
+                  fontSize: 12,
+                  color: colors.muted,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
+    // An action row keeps its glyph in a 28 px slot, aligned with the vault tiles.
+    Widget action(Key key, IconData icon, String label, VoidCallback onTap) =>
+        row(
+          1,
+          MenuItemButton(
+            key: key,
+            style: rowStyle(),
+            leadingIcon: SizedBox.square(
+              dimension: 28,
+              child: Icon(icon, size: 16, color: colors.muted),
+            ),
+            onPressed: onTap,
+            child: Padding(
+              padding: const EdgeInsetsDirectional.only(start: 2),
+              child: Text(label),
+            ),
+          ),
+        );
 
     final name = current?.name ?? l.vaultPersonal;
     final subtitle = current == null
@@ -293,56 +342,100 @@ class VaultSelector extends StatelessWidget {
         : current.status == 'confirmed'
         ? l.vaultOrgSubtitle(role(current))
         : l.orgAwaiting;
-    return MenuAnchor(
-      alignmentOffset: const Offset(0, 4),
-      style: MenuStyle(
-        minimumSize: const WidgetStatePropertyAll(Size(252, 0)),
-        shadowColor: WidgetStatePropertyAll(colors.scrim),
-      ),
-      menuChildren: [
-        item(
-          key: const Key('vault-personal'),
-          name: l.vaultPersonal,
-          subtitle: l.vaultPersonalSubtitle(hosts),
-          selected: current == null,
-          onPressed: () => pick(null),
-          tile: VaultTile(letter: l.vaultPersonal, personal: true),
+    final vaults = orgs?.orgs ?? const <OrgSummary>[];
+    return LayoutBuilder(
+      builder: (context, box) => MenuAnchor(
+        alignmentOffset: const Offset(0, 4),
+        style: MenuStyle(
+          minimumSize: WidgetStatePropertyAll(
+            Size(menuWidth = box.maxWidth, 0),
+          ),
+          maximumSize: WidgetStatePropertyAll(Size(box.maxWidth, 480)),
+          shadowColor: WidgetStatePropertyAll(colors.scrim),
         ),
-        for (final org in orgs?.orgs ?? const <OrgSummary>[])
+        menuChildren: [
           item(
-            key: Key('vault-org-${org.id}'),
-            name: org.name,
-            subtitle: org.status == 'confirmed'
-                ? l.vaultOrgSubtitle(role(org))
-                : l.orgAwaiting,
-            selected: current?.id == org.id,
-            onPressed: () => pick(org.id),
-            tile: VaultTile(
-              letter: org.name,
-              awaiting: org.status != 'confirmed',
+            index: 0,
+            key: const Key('vault-personal'),
+            name: l.vaultPersonal,
+            subtitle: l.vaultMenuHosts(hosts),
+            selected: current == null,
+            onPressed: () => pick(null),
+            tile: VaultTile(letter: l.vaultPersonal, personal: true),
+          ),
+          for (final (i, org) in vaults.indexed)
+            item(
+              index: i + 1,
+              key: Key('vault-org-${org.id}'),
+              name: org.name,
+              subtitle: org.status == 'confirmed'
+                  ? l.vaultMenuOrgHosts(role(org), hostsIn(org.id))
+                  : l.orgAwaiting,
+              selected: current?.id == org.id,
+              dim: org.status != 'confirmed',
+              onPressed: () => pick(org.id),
+              tile: VaultTile(
+                letter: org.name,
+                awaiting: org.status != 'confirmed',
+              ),
             ),
-          ),
-        if (orgs != null) ...[
-          const Divider(height: 9),
-          MenuItemButton(
-            key: const Key('vault-new-org'),
-            leadingIcon: const Icon(UfIcons.plus, size: 16),
-            onPressed: () =>
-                showUfDialog<void>(context, (_) => const CreateOrgDialog()),
-            child: Text(l.railNewOrg),
-          ),
-          MenuItemButton(
-            key: const Key('vault-join-org'),
-            leadingIcon: const Icon(UfIcons.signIn, size: 16),
-            onPressed: () =>
-                showUfDialog<void>(context, (_) => const JoinOrgDialog()),
-            child: Text(l.railJoinOrg),
-          ),
+          if (orgs != null) ...[
+            Container(
+              width: menuWidth - 8,
+              height: 1,
+              margin: const EdgeInsets.all(4),
+              color: colors.line,
+            ),
+            action(
+              const Key('vault-new-org'),
+              UfIcons.plus,
+              l.railNewOrg,
+              () => showUfDialog<void>(context, (_) => const CreateOrgDialog()),
+            ),
+            action(
+              const Key('vault-join-org'),
+              UfIcons.signIn,
+              l.railJoinOrg,
+              () => showUfDialog<void>(context, (_) => const JoinOrgDialog()),
+            ),
+          ],
         ],
-      ],
-      builder: (context, menu, _) => Semantics(
-        button: true,
-        label: l.sidebarVaults,
+        builder: (context, menu, _) => _trigger(
+          context,
+          menu,
+          name: name,
+          subtitle: subtitle,
+          current: current,
+        ),
+      ),
+    );
+  }
+
+  Widget _trigger(
+    BuildContext context,
+    MenuController menu, {
+    required String name,
+    required String subtitle,
+    required OrgSummary? current,
+  }) {
+    final l = AppLocalizations.of(context);
+    final colors = UfColors.of(context);
+    final text = Theme.of(context).textTheme;
+    return Semantics(
+      button: true,
+      label: l.sidebarVaults,
+      child: AnimatedContainer(
+        duration: UfMotion.of(context).fast,
+        decoration: BoxDecoration(
+          borderRadius: UfRadius.card,
+          // open: the 2 px focus ring outside a 2 px gap, as on keyboard focus
+          boxShadow: menu.isOpen
+              ? [
+                  BoxShadow(color: colors.bg, spreadRadius: 2),
+                  BoxShadow(color: colors.focus, spreadRadius: 4),
+                ]
+              : null,
+        ),
         child: Material(
           color: colors.panel,
           shape: RoundedRectangleBorder(

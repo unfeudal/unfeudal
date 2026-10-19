@@ -5,7 +5,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:unfeudal_client/src/api/api_client.dart';
 import 'package:unfeudal_client/src/app_state.dart';
 import 'package:unfeudal_client/src/session/session_store.dart';
-import 'package:unfeudal_client/src/settings/settings.dart';
 import 'package:unfeudal_client/src/storage/local_mirror.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
@@ -23,7 +22,7 @@ Future<(SyncHarness, AppState, FakeSecureKv, Directory)> signedIn() async {
   final kv = FakeSecureKv();
   final s = AppState(
     sessions: SessionStore(kv),
-    settingsStore: SettingsStore.memory(),
+    settingsStore: FakeSettingsStore(),
     openMirror: (id) async => LocalMirror.open('${dir.path}/mirror-$id.sqlite'),
     httpClient: h.client,
     biometrics: FakeBiometricBackend(),

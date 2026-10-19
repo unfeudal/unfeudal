@@ -804,7 +804,6 @@
     }
   },
   "orgMenu": "Organization",
-  "railAdmin": "Administration",
   "adminAccounts": "Accounts",
   "adminInvites": "Invitations",
   "adminOrgs": "Organizations",
@@ -1457,6 +1456,25 @@
     "placeholders": {
       "rights": {
         "type": "String"
+      }
+    }
+  },
+  "vaultMenuHosts": "{count, plural, =1{1 host} other{{count} hosts}}",
+  "@vaultMenuHosts": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "vaultMenuOrgHosts": "{role} · {count, plural, =1{1 host} other{{count} hosts}}",
+  "@vaultMenuOrgHosts": {
+    "placeholders": {
+      "role": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
       }
     }
   }

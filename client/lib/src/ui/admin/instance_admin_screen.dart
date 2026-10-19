@@ -9,7 +9,6 @@ import '../../design/dialog.dart';
 import '../../design/motion.dart';
 import '../../design/tokens.dart';
 import '../describe_error.dart';
-import '../manage_frame.dart';
 import '../orgs/invite_dialog.dart';
 import '../orgs/org_settings_screen.dart';
 
@@ -19,21 +18,6 @@ String sizeLabel(AppLocalizations l, int bytes) => switch (bytes) {
   >= 1 << 20 => l.sizeMb(bytes >> 20),
   _ => l.sizeKb(bytes >> 10),
 };
-
-/// The Instance Owner's screen: accounts, instance invitations, org metadata (never their content).
-/// The instance's accounts, invitations and organisations in a section frame, for a screen pushed on its own.
-class InstanceAdminScreen extends StatelessWidget {
-  const InstanceAdminScreen({super.key, this.onBack});
-
-  final VoidCallback? onBack;
-
-  @override
-  Widget build(BuildContext context) => ManageFrame(
-    title: AppLocalizations.of(context).railAdmin,
-    onBack: onBack,
-    child: const InstanceAdminPanel(),
-  );
-}
 
 /// Accounts, invitations and organisations of the instance, for its owner; Réglages › Serveur.
 class InstanceAdminPanel extends StatefulWidget {

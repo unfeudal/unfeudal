@@ -4,7 +4,6 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:unfeudal_client/l10n/app_localizations.dart';
-import 'package:unfeudal_client/src/events/app_events.dart';
 import 'package:unfeudal_client/src/ui/snippets/snippets_screen.dart';
 import 'package:unfeudal_client/src/vault/snippet_store.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
@@ -133,58 +132,51 @@ void main() {
     },
   );
 
-  testWidgets(
-    'insert into the active tab without Enter; multi-line asks; SnippetInserted',
-    (t) async {
-      final ssh = FakeSshConnector()
-        ..keyType = 'ssh-ed25519'
-        ..fingerprint = 'SHA256:${'A' * 43}';
-      final s = await signedInState(t, ssh: ssh);
-      late String disk, deploy;
-      await t.runAsync(() async {
-        final web = await s.vault!.upsertItem(
-          type: 'host',
-          meta: hostJson('web', user: 'root'),
-        );
-        await s.vault!.pinHostKey(web, 'ssh-ed25519', 'SHA256:${'A' * 43}');
-        await s.connect(web);
-        final store = SnippetStore(s.vault!);
-        disk = await store.save(
-          SnippetMeta(name: 'Disk', command: 'df -h\n', tags: []),
-        );
-        deploy = await store.save(
-          SnippetMeta(name: 'Deploy', command: 'cd /srv\nmake', tags: ['ops']),
-        );
-      });
-      final events = <AppEvent>[];
-      s.events.listen(events.add);
-      await pumpApp(t, state: s);
-      await pumpReal(t, rounds: 5);
-      await t.tap(find.byKey(const Key('section-snippets')));
-      await t.pumpAndSettle();
-      await t.enterText(find.byKey(const Key('snippets-search')), 'ops');
-      await t.pump();
-      expect(find.byKey(Key('snippet-insert-$disk')), findsNothing);
-      await t.enterText(find.byKey(const Key('snippets-search')), '');
-      await t.pump();
-      final shell = ssh.shells.single;
-      await t.tap(find.byKey(Key('snippet-insert-$disk')));
-      await pumpReal(t, rounds: 3);
-      expect(utf8.decode(shell.written.last), 'df -h');
-      await t.tap(find.byKey(Key('snippet-insert-$deploy')));
-      await t.pumpAndSettle();
-      await t.tap(find.byKey(const Key('multiline-send')));
-      await pumpReal(t, rounds: 3);
-      expect(
-        utf8.decode(shell.written.last),
-        'cd /srv\rmake',
-      ); // paste sends a line break as \r
-      expect(events.whereType<SnippetInserted>().map((e) => e.snippetId), [
-        disk,
-        deploy,
-      ]);
-    },
-  );
+  testWidgets('insert into the active tab without Enter; multi-line asks', (
+    t,
+  ) async {
+    final ssh = FakeSshConnector()
+      ..keyType = 'ssh-ed25519'
+      ..fingerprint = 'SHA256:${'A' * 43}';
+    final s = await signedInState(t, ssh: ssh);
+    late String disk, deploy;
+    await t.runAsync(() async {
+      final web = await s.vault!.upsertItem(
+        type: 'host',
+        meta: hostJson('web', user: 'root'),
+      );
+      await s.vault!.pinHostKey(web, 'ssh-ed25519', 'SHA256:${'A' * 43}');
+      await s.connect(web);
+      final store = SnippetStore(s.vault!);
+      disk = await store.save(
+        SnippetMeta(name: 'Disk', command: 'df -h\n', tags: []),
+      );
+      deploy = await store.save(
+        SnippetMeta(name: 'Deploy', command: 'cd /srv\nmake', tags: ['ops']),
+      );
+    });
+    await pumpApp(t, state: s);
+    await pumpReal(t, rounds: 5);
+    await t.tap(find.byKey(const Key('section-snippets')));
+    await t.pumpAndSettle();
+    await t.enterText(find.byKey(const Key('snippets-search')), 'ops');
+    await t.pump();
+    expect(find.byKey(Key('snippet-insert-$disk')), findsNothing);
+    await t.enterText(find.byKey(const Key('snippets-search')), '');
+    await t.pump();
+    final shell = ssh.shells.single;
+    await t.tap(find.byKey(Key('snippet-insert-$disk')));
+    await pumpReal(t, rounds: 3);
+    expect(utf8.decode(shell.written.last), 'df -h');
+    await t.tap(find.byKey(Key('snippet-insert-$deploy')));
+    await t.pumpAndSettle();
+    await t.tap(find.byKey(const Key('multiline-send')));
+    await pumpReal(t, rounds: 3);
+    expect(
+      utf8.decode(shell.written.last),
+      'cd /srv\rmake',
+    ); // paste sends a line break as \r
+  });
 
   testWidgets(
     'no connected tab: insert disabled; read-only: new, edit and delete disabled',

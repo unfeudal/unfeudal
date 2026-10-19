@@ -75,11 +75,11 @@ void main() {
   );
 
   test('events are plain values', () {
-    const AppEvent e = HostCreated(hostId: 'h', name: 'localhost', total: 42);
+    const AppEvent e = HostCreated(name: 'localhost');
     expect(switch (e) {
-      HostCreated(:final total) => total,
-      _ => 0,
-    }, 42);
+      HostCreated(:final name) => name,
+      _ => '',
+    }, 'localhost');
     expect(
       const ConnectSucceeded(hostId: 'h', user: 'root', tags: ['prod']).user,
       'root',

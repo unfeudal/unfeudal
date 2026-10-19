@@ -101,17 +101,15 @@ CREATE TABLE kv (
     return rows.isEmpty ? null : _item(rows.single);
   }
 
-  /// Server items. Returns how many were ignored as older than the stored revision (rollback guard);
+  /// Server items. One older than the stored revision is ignored (rollback guard);
   /// `acceptOlder` only for the full pull of an accepted server restore.
-  int upsertItems(Iterable<Item> items, {bool acceptOlder = false}) {
-    var ignored = 0;
+  void upsertItems(Iterable<Item> items, {bool acceptOlder = false}) {
     _transaction(() {
       for (final it in items) {
         final current = item(it.id);
         if (!acceptOlder &&
             current != null &&
             (it.revision ?? 0) < (current.revision ?? 0)) {
-          ignored++;
           continue;
         }
         _db.execute(
@@ -120,7 +118,6 @@ CREATE TABLE kv (
         );
       }
     });
-    return ignored;
   }
 
   void deleteItems(Iterable<String> ids) => _transaction(() {
@@ -188,12 +185,8 @@ CREATE TABLE kv (
   void removeOutbox(String itemId) =>
       _db.execute('DELETE FROM outbox WHERE item_id = ?', [itemId]);
 
-  /// Full resync: items stay until the full pull replaces them; outbox kept.
-  void resetForResync() =>
-      _deleteKv([KvKey.cursor, KvKey.orgCursor, KvKey.orgBlock]);
-
-  /// Accepted server restore: as a resync, and the audit anchors go. Pins and keyring stay; the
-  /// anti-replay marks are emptied by `LedgerStore.reset`.
+  /// Accepted server restore: the cursors, the cached org block and the audit anchors go; items stay until the
+  /// full pull replaces them, outbox kept. Pins and keyring stay; the anti-replay marks are emptied by `LedgerStore.reset`.
   void resetForRestore() =>
       _deleteKv([KvKey.cursor, KvKey.orgCursor, KvKey.orgBlock, KvKey.anchors]);
 

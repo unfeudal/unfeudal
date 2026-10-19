@@ -8,14 +8,14 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:sqlite3/sqlite3.dart' hide Version;
+import 'package:sqlite3/sqlite3.dart';
 import 'package:unfeudal_client/src/version.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 import 'package:xterm2/xterm.dart';
 
 void main() {
   test('version constants', () {
-    expect(Version.parse(clientVersion).toString(), clientVersion);
+    expect(canonicalVersion(clientVersion), clientVersion);
     expect(clientApis, [1]);
     expect(Uri.parse(officialReleasesUrl).scheme, 'https');
   });

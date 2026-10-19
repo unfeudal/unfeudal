@@ -7,7 +7,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
 import '../../app_state.dart';
 import '../../design/icons.dart';
-import '../describe_error.dart';
+import '../busy_action.dart';
 import '../fields.dart';
 import '../lock/lock_frame.dart';
 import 'setup_screen.dart';
@@ -23,7 +23,7 @@ class JoinScreen extends StatefulWidget {
   State<JoinScreen> createState() => _JoinScreenState();
 }
 
-class _JoinScreenState extends State<JoinScreen> {
+class _JoinScreenState extends State<JoinScreen> with BusyAction {
   final _link = TextEditingController();
   final _passphrase = TextEditingController();
   final _email = TextEditingController();
@@ -31,8 +31,6 @@ class _JoinScreenState extends State<JoinScreen> {
   final _confirm = TextEditingController();
   String? _file;
   Enrollment? _invite;
-  bool _busy = false;
-  String? _problem;
 
   @override
   void dispose() {
@@ -50,7 +48,7 @@ class _JoinScreenState extends State<JoinScreen> {
   static Future<String?> _openFileDialog() async =>
       (await openFile())?.readAsString();
 
-  Future<void> _submit() => _run(() async {
+  Future<void> _submit() => run(() async {
     final state = AppScope.read(context);
     final file = _file;
     final enrollment = file == null
@@ -73,8 +71,8 @@ class _JoinScreenState extends State<JoinScreen> {
   Future<void> _accept() async {
     final l = AppLocalizations.of(context);
     final local = checkNewPassword(l, _password.text, _confirm.text);
-    if (local != null) return setState(() => _problem = local);
-    await _run(() async {
+    if (local != null) return setState(() => problem = local);
+    await run(() async {
       final state = AppScope.read(context);
       await state.acceptInvite(
         enrollment: _invite!,
@@ -83,21 +81,6 @@ class _JoinScreenState extends State<JoinScreen> {
       );
       if (!state.serverHas('recovery_kit')) state.finishOnboarding();
     });
-  }
-
-  Future<void> _run(Future<void> Function() action) async {
-    final l = AppLocalizations.of(context);
-    setState(() {
-      _busy = true;
-      _problem = null;
-    });
-    try {
-      await action();
-    } on Exception catch (e) {
-      if (mounted) setState(() => _problem = describeError(l, e));
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
   }
 
   @override
@@ -151,13 +134,13 @@ class _JoinScreenState extends State<JoinScreen> {
             keyedField('join-confirm', _confirm, l.setupConfirm, secret: true),
             LockNotice(l.setupWarning),
           ],
-          if (_problem case final problem?) LockError(problem),
+          if (problem case final problem?) LockError(problem),
           LockActions(
             primary: FilledButton(
               key: Key(invite == null ? 'join-submit' : 'join-accept'),
-              onPressed: _busy ? null : (invite == null ? _submit : _accept),
+              onPressed: busy ? null : (invite == null ? _submit : _accept),
               child: BusyLabel(
-                busy: _busy,
+                busy: busy,
                 label: invite == null ? l.joinSubmit : l.setupSubmit,
               ),
             ),

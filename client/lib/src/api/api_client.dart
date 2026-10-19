@@ -521,7 +521,6 @@ class ApiClient {
       (method == 'DELETE' && path.startsWith('/devices/')) ||
       path == '/prelogin' ||
       path == '/login' ||
-      path == '/token/refresh' ||
       path == '/account/password' ||
       path.startsWith('/events/');
 
@@ -613,14 +612,14 @@ class ApiClient {
         '$method $path → ${res.statusCode} (${watch.elapsedMilliseconds} ms)',
       );
       return res;
-    } on http.ClientException catch (e) {
-      trace(TraceArea.http, '$method $path → network error');
-      throw NetworkException(e);
-    } on IOException catch (e) {
-      trace(TraceArea.http, '$method $path → network error');
-      throw NetworkException(e);
-    } on TimeoutException catch (e) {
-      trace(TraceArea.http, '$method $path → timeout');
+    } on Exception catch (e) {
+      if (e is! http.ClientException &&
+          e is! IOException &&
+          e is! TimeoutException) {
+        rethrow;
+      }
+      final what = e is TimeoutException ? 'timeout' : 'network error';
+      trace(TraceArea.http, '$method $path → $what');
       throw NetworkException(e);
     }
   }

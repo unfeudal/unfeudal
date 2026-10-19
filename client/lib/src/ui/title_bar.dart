@@ -44,6 +44,46 @@ class UfTitleBar extends StatelessWidget {
         final home = shell.title != null;
         final sidebar = shell.sidebarWidth;
         final toggle = shell.toggleSidebar;
+        // no tooltips: the bar sits above the Navigator, outside any Overlay
+        Widget barButton(String key, String label, VoidCallback onPressed) =>
+            IconButton(
+              key: Key(key),
+              onPressed: onPressed,
+              style: ButtonStyle(
+                foregroundColor: _glyph(colors.muted, colors.text),
+                iconColor: _glyph(colors.muted, colors.text),
+              ),
+              icon: Icon(UfIcons.sidebarSimple, semanticLabel: label),
+            );
+        // Close: `danger` fill and `onDanger` glyph; the others take `neutral`
+        Widget caption(
+          String label,
+          IconData icon,
+          VoidCallback onPressed, {
+          Color? hoverFill,
+          Color? hoverGlyph,
+        }) {
+          final rest = colors.muted.withValues(alpha: colors.muted.a * dim);
+          final glyph = _glyph(rest, hoverGlyph ?? colors.text);
+          return IconButton(
+            onPressed: onPressed,
+            style: ButtonStyle(
+              fixedSize: const WidgetStatePropertyAll(Size(46, 38)),
+              minimumSize: const WidgetStatePropertyAll(Size(46, 38)),
+              maximumSize: const WidgetStatePropertyAll(Size(46, 38)),
+              shape: const WidgetStatePropertyAll(RoundedRectangleBorder()),
+              iconSize: const WidgetStatePropertyAll(12),
+              backgroundColor: WidgetStateProperty<Color>.fromMap({
+                WidgetState.hovered: hoverFill ?? colors.neutral,
+                WidgetState.any: Colors.transparent,
+              }),
+              foregroundColor: glyph,
+              iconColor: glyph,
+            ),
+            icon: Icon(icon, semanticLabel: label),
+          );
+        }
+
         final Widget left;
         if (sidebar != null) {
           left = Container(
@@ -68,12 +108,7 @@ class UfTitleBar extends StatelessWidget {
                   ),
                   const Spacer(),
                   if (toggle != null)
-                    _BarButton(
-                      key: const Key('tree-hide'),
-                      label: l.treeHide,
-                      icon: UfIcons.sidebarSimple,
-                      onPressed: toggle,
-                    ),
+                    barButton('tree-hide', l.treeHide, toggle),
                 ],
               ),
             ),
@@ -87,12 +122,7 @@ class UfTitleBar extends StatelessWidget {
                 spacing: 8,
                 children: [
                   if (toggle != null)
-                    _BarButton(
-                      key: const Key('tree-show'),
-                      label: l.treeShow,
-                      icon: UfIcons.sidebarSimple,
-                      onPressed: toggle,
-                    ),
+                    barButton('tree-show', l.treeShow, toggle),
                   const LoquetSpot(placement: LoquetPlacement.titleBar),
                 ],
               ),
@@ -144,25 +174,18 @@ class UfTitleBar extends StatelessWidget {
                   ),
                 ),
                 if (!mac) ...[
-                  _CaptionButton(
-                    tooltip: l.windowMinimize,
-                    icon: UfIcons.minus,
-                    dim: dim,
-                    onPressed: chrome.minimize,
+                  caption(l.windowMinimize, UfIcons.minus, chrome.minimize),
+                  caption(
+                    maximized ? l.windowRestore : l.windowMaximize,
+                    maximized ? UfIcons.copySimple : UfIcons.square,
+                    chrome.toggleMaximize,
                   ),
-                  _CaptionButton(
-                    tooltip: maximized ? l.windowRestore : l.windowMaximize,
-                    icon: maximized ? UfIcons.copySimple : UfIcons.square,
-                    dim: dim,
-                    onPressed: chrome.toggleMaximize,
-                  ),
-                  _CaptionButton(
-                    tooltip: l.windowClose,
-                    icon: UfIcons.x,
-                    dim: dim,
+                  caption(
+                    l.windowClose,
+                    UfIcons.x,
+                    chrome.close,
                     hoverFill: colors.danger,
                     hoverGlyph: colors.onDanger,
-                    onPressed: chrome.close,
                   ),
                 ],
               ],
@@ -174,112 +197,9 @@ class UfTitleBar extends StatelessWidget {
   }
 }
 
-/// A 28 px icon button for the bar; no Tooltip, the bar sits outside any Overlay.
-class _BarButton extends StatefulWidget {
-  const _BarButton({
-    super.key,
-    required this.label,
-    required this.icon,
-    required this.onPressed,
-  });
-
-  final String label;
-  final IconData icon;
-  final VoidCallback onPressed;
-
-  @override
-  State<_BarButton> createState() => _BarButtonState();
-}
-
-class _BarButtonState extends State<_BarButton> {
-  bool _hover = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = UfColors.of(context);
-    return Center(
-      child: MouseRegion(
-        onEnter: (_) => setState(() => _hover = true),
-        onExit: (_) => setState(() => _hover = false),
-        child: GestureDetector(
-          onTap: widget.onPressed,
-          child: Semantics(
-            button: true,
-            label: widget.label,
-            child: Container(
-              width: UfHeight.small,
-              height: UfHeight.small,
-              decoration: BoxDecoration(
-                color: _hover ? colors.neutral : Colors.transparent,
-                borderRadius: UfRadius.control,
-              ),
-              child: Icon(
-                widget.icon,
-                size: 16,
-                color: _hover ? colors.text : colors.muted,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// A 46 × 38 px caption button.
-class _CaptionButton extends StatefulWidget {
-  const _CaptionButton({
-    required this.tooltip,
-    required this.icon,
-    required this.dim,
-    required this.onPressed,
-    this.hoverFill,
-    this.hoverGlyph,
-  });
-
-  final String tooltip;
-  final IconData icon;
-  final double dim;
-  final VoidCallback onPressed;
-
-  /// Close: `danger` fill and `onDanger` glyph; the others take `neutral`.
-  final Color? hoverFill;
-  final Color? hoverGlyph;
-
-  @override
-  State<_CaptionButton> createState() => _CaptionButtonState();
-}
-
-class _CaptionButtonState extends State<_CaptionButton> {
-  bool _hover = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = UfColors.of(context);
-    final fill = !_hover
-        ? Colors.transparent
-        : widget.hoverFill ?? colors.neutral;
-    final glyph = _hover ? widget.hoverGlyph ?? colors.text : colors.muted;
-    // no Tooltip: the bar sits above the Navigator, outside any Overlay
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
-      child: GestureDetector(
-        onTap: widget.onPressed,
-        child: Semantics(
-          button: true,
-          label: widget.tooltip,
-          child: Container(
-            width: 46,
-            color: fill,
-            alignment: Alignment.center,
-            child: Opacity(
-              opacity: _hover ? 1 : widget.dim,
-              child: Icon(widget.icon, size: 12, color: glyph),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
+/// [rest] until hovered, then [hover].
+WidgetStateProperty<Color> _glyph(Color rest, Color hover) =>
+    WidgetStateProperty<Color>.fromMap({
+      WidgetState.hovered: hover,
+      WidgetState.any: rest,
+    });

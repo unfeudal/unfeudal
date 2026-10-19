@@ -36,10 +36,7 @@ class _OrgSettingsScreenState extends State<OrgSettingsScreen> {
   Map<String, int>? _server;
   String? _error;
 
-  OrgSummary? get _org =>
-      AppScope.read(context).orgs?.orgs
-          .where((o) => o.id == widget.orgId)
-          .firstOrNull;
+  OrgSummary? get _org => AppScope.read(context).orgs?.byId(widget.orgId);
 
   @override
   void initState() {
@@ -150,9 +147,9 @@ class _OrgSettingsScreenState extends State<OrgSettingsScreen> {
     final l = AppLocalizations.of(context);
     final colors = UfColors.of(context);
     final orgs = AppScope.of(context).orgs;
-    final org = orgs?.orgs.where((o) => o.id == widget.orgId).firstOrNull;
+    final org = orgs?.byId(widget.orgId);
     final isAdmin = orgs?.isAdmin(widget.orgId) ?? false;
-    final isOwner = org?.role == OrgRole.owner.name;
+    final isOwner = orgs?.isOwner(widget.orgId) ?? false;
     Widget number(String key, String settingKey, String label) => SettingRow(
       label: label,
       hint: switch (_server?[settingKey]) {

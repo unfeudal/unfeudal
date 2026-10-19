@@ -136,13 +136,9 @@ class _MembersScreenState extends State<MembersScreen> {
     final state = AppScope.of(context);
     final orgs = state.orgs!;
     final me = state.stored!.userId;
-    final org = orgs.orgs.where((o) => o.id == widget.orgId).firstOrNull;
     final isAdmin = orgs.isAdmin(widget.orgId);
-    final isOwner = isAdmin && org?.role == OrgRole.owner.name;
-    final members = [
-      for (final m in orgs.block?.members ?? const <OrgMember>[])
-        if (m.orgId == widget.orgId) m,
-    ]..sort((a, b) => a.email.compareTo(b.email));
+    final isOwner = isAdmin && orgs.isOwner(widget.orgId);
+    final members = orgs.membersOf(widget.orgId);
     final unconfirmed = orgs.lastHandoff?.unconfirmed ?? const <String>{};
     // an owner may change their own role while another confirmed owner remains
     final anotherOwner = members.any(

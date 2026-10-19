@@ -5,6 +5,7 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
+import '../busy_action.dart';
 import '../describe_error.dart';
 import '../fields.dart';
 import '../lock/lock_frame.dart';
@@ -22,14 +23,12 @@ class RecoveryScreen extends StatefulWidget {
   State<RecoveryScreen> createState() => _RecoveryScreenState();
 }
 
-class _RecoveryScreenState extends State<RecoveryScreen> {
+class _RecoveryScreenState extends State<RecoveryScreen> with BusyAction {
   late final TextEditingController _server;
   late final TextEditingController _email;
   final _key = TextEditingController();
   final _password = TextEditingController();
   final _confirm = TextEditingController();
-  bool _busy = false;
-  String? _problem;
   ({String key, Uri server, String email})? _done;
 
   /// 1: server, e-mail and key; 2: the new password.
@@ -74,10 +73,10 @@ class _RecoveryScreenState extends State<RecoveryScreen> {
     try {
       RecoveryKey.decode(_key.text);
     } on InvalidRecoveryKey catch (e) {
-      return setState(() => _problem = describeError(l, e));
+      return setState(() => problem = describeError(l, e));
     }
     setState(() {
-      _problem = null;
+      problem = null;
       _step = 2;
     });
   }
@@ -85,14 +84,10 @@ class _RecoveryScreenState extends State<RecoveryScreen> {
   Future<void> _submit() async {
     final l = AppLocalizations.of(context);
     final local = checkNewPassword(l, _password.text, _confirm.text);
-    if (local != null) return setState(() => _problem = local);
-    setState(() {
-      _busy = true;
-      _problem = null;
-    });
+    if (local != null) return setState(() => problem = local);
     final server = Uri.parse(_server.text.trim());
     final email = _email.text.trim();
-    try {
+    await run(() async {
       final key = await AppScope.read(context).recover(
         server: server,
         email: email,
@@ -102,11 +97,7 @@ class _RecoveryScreenState extends State<RecoveryScreen> {
       if (mounted) {
         setState(() => _done = (key: key, server: server, email: email));
       }
-    } on Exception catch (e) {
-      if (mounted) setState(() => _problem = describeError(l, e));
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
+    });
   }
 
   /// Signs in on this device with the new password; a failure leaves the login screen to do it.
@@ -190,7 +181,7 @@ class _RecoveryScreenState extends State<RecoveryScreen> {
             ),
             LockNotice(l.setupWarning),
           ],
-          if (_problem case final problem?) LockError(problem),
+          if (problem case final problem?) LockError(problem),
           if (first)
             LockActions(
               primary: FilledButton(
@@ -209,14 +200,14 @@ class _RecoveryScreenState extends State<RecoveryScreen> {
             LockActions(
               primary: FilledButton(
                 key: const Key('recover-submit'),
-                onPressed: _busy ? null : _submit,
-                child: BusyLabel(busy: _busy, label: l.recoverSubmit),
+                onPressed: busy ? null : _submit,
+                child: BusyLabel(busy: busy, label: l.recoverSubmit),
               ),
               links: [
                 TextButton(
                   key: const Key('recover-back'),
                   onPressed: () => setState(() {
-                    _problem = null;
+                    problem = null;
                     _step = 1;
                   }),
                   child: Text(l.recoverBack),

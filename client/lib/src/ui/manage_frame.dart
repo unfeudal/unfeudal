@@ -16,6 +16,7 @@ class ManageFrame extends StatelessWidget {
     this.onBack,
     this.subtitle,
     this.actions = const [],
+    this.maxWidth,
   });
 
   final String title;
@@ -27,6 +28,9 @@ class ManageFrame extends StatelessWidget {
 
   /// Buttons right of the title, primary first.
   final List<Widget> actions;
+
+  /// Keeps the content at most this wide, on the left.
+  final double? maxWidth;
 
   @override
   Widget build(BuildContext context) {
@@ -74,7 +78,18 @@ class ManageFrame extends StatelessWidget {
                     ...actions,
                   ],
                 ),
-                Expanded(child: child),
+                Expanded(
+                  child: switch (maxWidth) {
+                    null => child,
+                    final width => Align(
+                      alignment: Alignment.topLeft,
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(maxWidth: width),
+                        child: child,
+                      ),
+                    ),
+                  },
+                ),
               ],
             ),
           ),

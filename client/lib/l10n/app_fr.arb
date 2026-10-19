@@ -423,7 +423,6 @@
   "rotationCredentials": "Les membres retirés ont pu copier des secrets de ces dossiers : changer ces mots de passe et clés.",
   "keyAlert": "{count} clés ne correspondent pas à ce que connaît cet appareil. Rien n'a été partagé.",
   "orgMenu": "Organisation",
-  "railAdmin": "Administration",
   "adminAccounts": "Comptes",
   "adminInvites": "Invitations",
   "adminOrgs": "Organisations",
@@ -610,5 +609,7 @@
   "inspectorTabAccess": "Accès",
   "accessEdit": "Modifier les accès",
   "accessNone": "Aucun accès défini sur ce dossier : les admins seulement.",
-  "accessDenied": "Refusé : {rights}"
+  "accessDenied": "Refusé : {rights}",
+  "vaultMenuHosts": "{count, plural, =1{1 hôte} other{{count} hôtes}}",
+  "vaultMenuOrgHosts": "{role} · {count, plural, =1{1 hôte} other{{count} hôtes}}"
 }

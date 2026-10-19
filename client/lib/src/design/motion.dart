@@ -74,7 +74,6 @@ class MotionScope extends InheritedWidget {
 Future<T?> showUfDialog<T>(
   BuildContext context,
   WidgetBuilder builder, {
-  bool dismissible = true,
   bool alert = false,
 }) {
   final motion = UfMotion.of(context);
@@ -83,7 +82,7 @@ Future<T?> showUfDialog<T>(
     _UfDialogRoute<T>(
       reverse: motion.fast,
       transitionDuration: motion.base,
-      barrierDismissible: dismissible && !alert,
+      barrierDismissible: !alert,
       barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
       barrierColor:
           Theme.of(context).extension<UfColors>()?.scrim ?? Colors.black54,
@@ -139,62 +138,21 @@ class _UfDialogRoute<T> extends RawDialogRoute<T> {
   Duration get reverseTransitionDuration => reverse;
 }
 
-/// Container transform, light: the child grows out of [from] (a global point, the control that opened it)
-/// while it fades in; without [from] it only fades. Plays once, at [UfMotion.slow].
-class GrowFrom extends StatefulWidget {
-  const GrowFrom({super.key, required this.from, required this.child});
+/// The child fades in while it grows from 96 %; plays once, at [UfMotion.slow].
+class GrowIn extends StatelessWidget {
+  const GrowIn({super.key, required this.child});
 
-  final Offset? from;
   final Widget child;
 
   @override
-  State<GrowFrom> createState() => _GrowFromState();
-}
-
-class _GrowFromState extends State<GrowFrom>
-    with SingleTickerProviderStateMixin {
-  late final _controller = AnimationController(vsync: this);
-  late final _t = CurvedAnimation(parent: _controller, curve: UfMotion.enter);
-
-  /// [GrowFrom.from] relative to the child's centre, read once it is laid out.
-  Offset? _origin;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _controller.duration = UfMotion.of(context).slow;
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final box = context.findRenderObject();
-      if (widget.from case final from? when box is RenderBox && box.hasSize) {
-        _origin = box.globalToLocal(from) - box.size.center(Offset.zero);
-      }
-      _controller.forward();
-    });
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => AnimatedBuilder(
-    animation: _t,
-    builder: (context, child) => Opacity(
-      opacity: _t.value,
-      child: Transform.scale(
-        scale: 0.96 + 0.04 * _t.value,
-        origin: _origin,
-        child: child,
-      ),
+  Widget build(BuildContext context) => TweenAnimationBuilder<double>(
+    tween: Tween(begin: 0, end: 1),
+    duration: UfMotion.of(context).slow,
+    curve: UfMotion.enter,
+    builder: (context, t, child) => Opacity(
+      opacity: t,
+      child: Transform.scale(scale: 0.96 + 0.04 * t, child: child),
     ),
-    child: widget.child,
+    child: child,
   );
 }

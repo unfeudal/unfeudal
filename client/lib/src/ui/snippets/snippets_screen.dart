@@ -13,7 +13,6 @@ import '../../design/motion.dart';
 import '../../design/rows.dart';
 import '../../design/seal.dart';
 import '../../design/tokens.dart';
-import '../../events/app_events.dart';
 import '../../terminal/snippet_insertion.dart';
 import '../../vault/org_writer.dart';
 import '../../vault/snippet_store.dart';
@@ -51,14 +50,9 @@ class _SnippetsScreenState extends State<SnippetsScreen> {
     final vault = state.vault!;
     final store = SnippetStore(vault, writer: state.orgs?.writer);
     final orgId = state.orgs?.selected;
-    final orgName = state.orgs?.orgs
-        .where((o) => o.id == orgId)
-        .firstOrNull
-        ?.name;
+    final vaultName = vaultNameOf(l, state, orgId);
     final readOnly = state.sync?.readOnly ?? true;
-    final tab = state.tabs.isEmpty
-        ? null
-        : state.tabs[state.activeTab.clamp(0, state.tabs.length - 1)];
+    final tab = state.activeSession;
     final canInsert = tab?.state == SealState.connected;
     final snippets = [
       for (final s in store.list(query: _query.text))
@@ -67,13 +61,12 @@ class _SnippetsScreenState extends State<SnippetsScreen> {
     final muted = Theme.of(context).textTheme.bodySmall!
         .copyWith(color: colors.muted);
 
-    Future<void> insert(String id, SnippetMeta meta) async {
-      final sent = await insertSnippet(
+    Future<void> insert(SnippetMeta meta) async {
+      await insertSnippet(
         tab!,
         meta.command,
         confirm: () => confirmUnsafeMultiline(context),
       );
-      if (sent) state.emit(SnippetInserted(snippetId: id));
     }
 
     Future<void> delete(String id, SnippetMeta meta) async {
@@ -87,7 +80,7 @@ class _SnippetsScreenState extends State<SnippetsScreen> {
 
     return ManageFrame(
       title: l.snippetsTitle,
-      subtitle: orgName ?? l.vaultPersonal,
+      subtitle: vaultName,
       onBack: widget.onBack,
       actions: [
         FilledButton.icon(
@@ -97,104 +90,88 @@ class _SnippetsScreenState extends State<SnippetsScreen> {
           label: Text(l.snippetNew),
         ),
       ],
-      child: Align(
-        alignment: Alignment.topLeft,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 980),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            spacing: 8,
-            children: [
-              SizedBox(
-                width: 360,
-                child: TextField(
-                  key: const Key('snippets-search'),
-                  controller: _query,
-                  onChanged: (_) => setState(() {}),
-                  decoration: InputDecoration(
-                    hintText: l.snippetsSearch,
-                    prefixIcon: Icon(
-                      UfIcons.magnifyingGlass,
-                      size: 14,
-                      color: colors.muted,
-                    ),
-                    prefixIconConstraints: const BoxConstraints(minWidth: 32),
-                  ),
+      maxWidth: 980,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        spacing: 8,
+        children: [
+          SizedBox(
+            width: 360,
+            child: TextField(
+              key: const Key('snippets-search'),
+              controller: _query,
+              onChanged: (_) => setState(() {}),
+              decoration: InputDecoration(
+                hintText: l.snippetsSearch,
+                prefixIcon: Icon(
+                  UfIcons.magnifyingGlass,
+                  size: 14,
+                  color: colors.muted,
                 ),
+                prefixIconConstraints: const BoxConstraints(minWidth: 32),
               ),
-              Text(
-                canInsert ? l.snippetsNote : l.snippetNoTerminal,
-                style: muted,
-              ),
-              Expanded(
-                child: snippets.isEmpty && _query.text.isEmpty
-                    ? EmptyState(
-                        title: l.snippetsTitle,
-                        body: l.snippetsEmpty,
-                        primary: readOnly
-                            ? null
-                            : (
-                                l.snippetNew,
-                                () => _edit(context, store, orgId),
-                              ),
-                      )
-                    : ListView(
-                        padding: const EdgeInsets.only(bottom: 40),
-                        children: [
-                          for (final (:id, :meta) in snippets)
-                            if (!readOnly &&
-                                    canEditEntry(state, vault.entry(id)!)
-                                case final editable)
-                              ItemRow(
-                                key: Key('snippet-$id'),
-                                icon: UfIcons.terminal,
-                                title: meta.name,
-                                subtitle: meta.command
-                                    .trimLeft()
-                                    .split('\n')
-                                    .first,
-                                monoSubtitle: true,
-                                trailing: [
-                                  for (final tag in meta.tags.take(3))
-                                    UfTag(tag),
-                                  OutlinedButton(
-                                    key: Key('snippet-insert-$id'),
-                                    style: smallButton,
-                                    onPressed: canInsert
-                                        ? () => insert(id, meta)
-                                        : null,
-                                    child: Text(l.snippetInsert),
-                                  ),
-                                  IconButton(
-                                    key: Key('snippet-edit-$id'),
-                                    tooltip: l.snippetEdit,
-                                    onPressed: editable
-                                        ? () => _edit(
-                                            context,
-                                            store,
-                                            orgId,
-                                            id: id,
-                                            meta: meta,
-                                          )
-                                        : null,
-                                    icon: const Icon(UfIcons.pencil),
-                                  ),
-                                  IconButton(
-                                    key: Key('snippet-delete-$id'),
-                                    tooltip: l.snippetDelete,
-                                    onPressed: editable
-                                        ? () => delete(id, meta)
-                                        : null,
-                                    icon: const Icon(UfIcons.trash),
-                                  ),
-                                ],
-                              ),
-                        ],
-                      ),
-              ),
-            ],
+            ),
           ),
-        ),
+          Text(canInsert ? l.snippetsNote : l.snippetNoTerminal, style: muted),
+          Expanded(
+            child: snippets.isEmpty && _query.text.isEmpty
+                ? EmptyState(
+                    title: l.snippetsTitle,
+                    body: l.snippetsEmpty,
+                    primary: readOnly
+                        ? null
+                        : (l.snippetNew, () => _edit(context, store, orgId)),
+                  )
+                : ListView(
+                    padding: const EdgeInsets.only(bottom: 40),
+                    children: [
+                      for (final (:id, :meta) in snippets)
+                        if (!readOnly && canEditEntry(state, vault.entry(id)!)
+                            case final editable)
+                          ItemRow(
+                            key: Key('snippet-$id'),
+                            icon: UfIcons.terminal,
+                            title: meta.name,
+                            subtitle: meta.command.trimLeft().split('\n').first,
+                            monoSubtitle: true,
+                            trailing: [
+                              for (final tag in meta.tags.take(3)) UfTag(tag),
+                              OutlinedButton(
+                                key: Key('snippet-insert-$id'),
+                                style: smallButton,
+                                onPressed: canInsert
+                                    ? () => insert(meta)
+                                    : null,
+                                child: Text(l.snippetInsert),
+                              ),
+                              IconButton(
+                                key: Key('snippet-edit-$id'),
+                                tooltip: l.snippetEdit,
+                                onPressed: editable
+                                    ? () => _edit(
+                                        context,
+                                        store,
+                                        orgId,
+                                        id: id,
+                                        meta: meta,
+                                      )
+                                    : null,
+                                icon: const Icon(UfIcons.pencil),
+                              ),
+                              IconButton(
+                                key: Key('snippet-delete-$id'),
+                                tooltip: l.snippetDelete,
+                                onPressed: editable
+                                    ? () => delete(id, meta)
+                                    : null,
+                                icon: const Icon(UfIcons.trash),
+                              ),
+                            ],
+                          ),
+                    ],
+                  ),
+          ),
+        ],
       ),
     );
   }

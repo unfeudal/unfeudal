@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import 'dart:convert';
-import 'dart:io';
 
-import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
@@ -16,7 +14,9 @@ import '../../design/buttons.dart';
 import '../../design/empty_state.dart';
 import '../../design/tokens.dart';
 import '../describe_error.dart';
+import '../hosts/editor_frame.dart';
 import '../manage_frame.dart';
+import '../save_file.dart';
 
 /// The audit views this account may read: in a vault, its actions and the org chain it administers or the
 /// folders it manages; from Réglages, its account chain or the instance. Verify and export read the whole chain.
@@ -139,13 +139,13 @@ class _ActivityScreenState extends State<ActivityScreen> {
     final l = AppLocalizations.of(context);
     try {
       final chain = await _model.wholeChain();
-      final report = verifyChain(chain);
+      final brokenAt = verifyChain(chain);
       final count = chain.length;
       if (!mounted) return;
       setState(
-        () => _notice = report.ok
+        () => _notice = brokenAt == null
             ? l.activityVerified(count)
-            : l.activityBroken(report.brokenAt!),
+            : l.activityBroken(brokenAt),
       );
     } on Exception catch (e) {
       if (mounted) setState(() => _notice = describeError(l, e));
@@ -156,28 +156,23 @@ class _ActivityScreenState extends State<ActivityScreen> {
     final l = AppLocalizations.of(context);
     final chain = ActivityModel.chainOf(_scope)!;
     try {
-      final path = await (widget.savePath ?? _pickSaveLocation)(
+      final path = await (widget.savePath ?? pickSaveLocation)(
         ActivityModel.exportFileName(chain),
       );
       if (path == null) return;
       final out = await _model.exportJson();
-      await (widget.writeFile ?? _write)(path, utf8.encode(out.json));
+      await (widget.writeFile ?? writeFileBytes)(path, utf8.encode(out.json));
       if (!mounted) return;
+      final brokenAt = out.brokenAt;
       setState(
-        () => _notice = out.report.ok
+        () => _notice = brokenAt == null
             ? l.activityExported(path)
-            : l.activityExportedBroken(path, out.report.brokenAt!),
+            : l.activityExportedBroken(path, brokenAt),
       );
     } on Exception catch (e) {
       if (mounted) setState(() => _notice = describeError(l, e));
     }
   }
-
-  static Future<String?> _pickSaveLocation(String suggestedName) async =>
-      (await getSaveLocation(suggestedName: suggestedName))?.path;
-
-  static Future<void> _write(String path, List<int> bytes) =>
-      File(path).writeAsBytes(bytes);
 
   @override
   Widget build(BuildContext context) {
@@ -191,138 +186,125 @@ class _ActivityScreenState extends State<ActivityScreen> {
     final muted = Theme.of(context).textTheme.bodySmall!
         .copyWith(color: colors.muted);
     final orgId = state.orgs?.selected;
-    final vaultName =
-        state.orgs?.orgs.where((o) => o.id == orgId).firstOrNull?.name ??
-        l.vaultPersonal;
+    final vaultName = vaultNameOf(l, state, orgId);
     return ManageFrame(
       title: l.activityTitle,
       subtitle: _fromSettings ? null : vaultName,
       onBack: widget.onBack,
+      maxWidth: 980,
       child: ListenableBuilder(
         listenable: _model,
         builder: (context, _) {
           final m = _model;
           final alert = m.alerts.firstOrNull;
-          return Align(
-            alignment: Alignment.topLeft,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 980),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                spacing: 10,
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            spacing: 10,
+            children: [
+              Row(
+                spacing: 8,
                 children: [
-                  Row(
-                    spacing: 8,
-                    children: [
-                      if (scopes.length > 1)
-                        DropdownButton<String>(
-                          key: const Key('activity-scope'),
-                          value: scopes.any((s) => s.$1 == _scope)
-                              ? _scope
-                              : null,
-                          underline: const SizedBox.shrink(),
-                          items: [
-                            for (final (scope, label) in scopes)
-                              DropdownMenuItem(
-                                key: Key('activity-scope-$scope'),
-                                value: scope,
-                                child: Text(label),
-                              ),
-                          ],
-                          onChanged: (s) {
-                            if (s != null && s != _scope) _select(s);
-                          },
-                        )
-                      else
-                        Text(
-                          scopes.first.$2,
-                          key: Key('activity-scope-${scopes.first.$1}'),
-                          style: Theme.of(context).textTheme.labelLarge,
-                        ),
-                      const Spacer(),
-                      if (chain != null) ...[
-                        OutlinedButton(
-                          key: const Key('activity-verify'),
-                          style: smallButton,
-                          onPressed: _verify,
-                          child: Text(l.activityVerify),
-                        ),
-                        OutlinedButton(
-                          key: const Key('activity-export'),
-                          style: smallButton,
-                          onPressed: _export,
-                          child: Text(l.activityExport),
-                        ),
-                      ],
-                    ],
-                  ),
-                  if (alert != null)
-                    StatusBanner(
-                      key: const Key('activity-alert'),
-                      tone: BannerTone.danger,
-                      message: alert.kind == AnchorAlertKind.rewritten
-                          ? l.activityRewritten(alert.scope, alert.seq)
-                          : l.activityVanished(alert.scope, alert.seq),
-                    ),
-                  if (m.error case final Exception e)
-                    StatusBanner(
-                      tone: BannerTone.warn,
-                      message: describeError(l, e),
-                    ),
-                  if (_notice case final notice?) Text(notice, style: muted),
-                  Expanded(
-                    child: m.events.isEmpty && !m.loading
-                        ? EmptyState(
-                            title: l.activityTitle,
-                            body: l.activityEmpty,
-                          )
-                        : ListView.builder(
-                            itemCount: m.events.length,
-                            itemBuilder: (context, i) {
-                              final e = m.events[i];
-                              final ts = DateTime.parse(e.ts).toLocal();
-                              return EventRow(
-                                when:
-                                    '${dates.formatShortDate(ts)} ${dates.formatTimeOfDay(TimeOfDay.fromDateTime(ts))}',
-                                text: describeEvent(l, e, nameOf),
-                                who: [
-                                  if (e.actorUser case final actor?)
-                                    nameOf(actor),
-                                  ?e.ipAddress,
-                                ].join(' · '),
-                                trailing:
-                                    e.action == 'org.deleted' &&
-                                        state.stored!.isInstanceOwner &&
-                                        e.targetIds.isNotEmpty
-                                    ? OutlinedButton(
-                                        key: Key(
-                                          'activity-open-org-${e.targetIds.first}',
-                                        ),
-                                        style: smallButton,
-                                        onPressed: () =>
-                                            _select('org:${e.targetIds.first}'),
-                                        child: Text(l.activityOpenDeletedOrg),
-                                      )
-                                    : null,
-                              );
-                            },
+                  if (scopes.length > 1)
+                    DropdownButton<String>(
+                      key: const Key('activity-scope'),
+                      value: scopes.any((s) => s.$1 == _scope) ? _scope : null,
+                      underline: const SizedBox.shrink(),
+                      items: [
+                        for (final (scope, label) in scopes)
+                          DropdownMenuItem(
+                            key: Key('activity-scope-$scope'),
+                            value: scope,
+                            child: Text(label),
                           ),
-                  ),
-                  if (m.hasMore)
-                    Align(
-                      child: TextButton(
-                        key: const Key('activity-more'),
-                        onPressed: m.loading ? null : m.more,
-                        child: Text(l.activityMore),
-                      ),
+                      ],
+                      onChanged: (s) {
+                        if (s != null && s != _scope) _select(s);
+                      },
+                    )
+                  else
+                    Text(
+                      scopes.first.$2,
+                      key: Key('activity-scope-${scopes.first.$1}'),
+                      style: Theme.of(context).textTheme.labelLarge,
                     ),
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: Text(l.activitySshNote, style: muted),
-                  ),
+                  const Spacer(),
+                  if (chain != null) ...[
+                    OutlinedButton(
+                      key: const Key('activity-verify'),
+                      style: smallButton,
+                      onPressed: _verify,
+                      child: Text(l.activityVerify),
+                    ),
+                    OutlinedButton(
+                      key: const Key('activity-export'),
+                      style: smallButton,
+                      onPressed: _export,
+                      child: Text(l.activityExport),
+                    ),
+                  ],
                 ],
               ),
-            ),
+              if (alert != null)
+                StatusBanner(
+                  key: const Key('activity-alert'),
+                  tone: BannerTone.danger,
+                  message: alert.kind == AnchorAlertKind.rewritten
+                      ? l.activityRewritten(alert.scope, alert.seq)
+                      : l.activityVanished(alert.scope, alert.seq),
+                ),
+              if (m.error case final Exception e)
+                StatusBanner(
+                  tone: BannerTone.warn,
+                  message: describeError(l, e),
+                ),
+              if (_notice case final notice?) Text(notice, style: muted),
+              Expanded(
+                child: m.events.isEmpty && !m.loading
+                    ? EmptyState(title: l.activityTitle, body: l.activityEmpty)
+                    : ListView.builder(
+                        itemCount: m.events.length,
+                        itemBuilder: (context, i) {
+                          final e = m.events[i];
+                          final ts = DateTime.parse(e.ts).toLocal();
+                          return EventRow(
+                            when:
+                                '${dates.formatShortDate(ts)} ${dates.formatTimeOfDay(TimeOfDay.fromDateTime(ts))}',
+                            text: describeEvent(l, e, nameOf),
+                            who: [
+                              if (e.actorUser case final actor?) nameOf(actor),
+                              ?e.ipAddress,
+                            ].join(' · '),
+                            trailing:
+                                e.action == 'org.deleted' &&
+                                    state.stored!.isInstanceOwner &&
+                                    e.targetIds.isNotEmpty
+                                ? OutlinedButton(
+                                    key: Key(
+                                      'activity-open-org-${e.targetIds.first}',
+                                    ),
+                                    style: smallButton,
+                                    onPressed: () =>
+                                        _select('org:${e.targetIds.first}'),
+                                    child: Text(l.activityOpenDeletedOrg),
+                                  )
+                                : null,
+                          );
+                        },
+                      ),
+              ),
+              if (m.hasMore)
+                Align(
+                  child: TextButton(
+                    key: const Key('activity-more'),
+                    onPressed: m.loading ? null : m.more,
+                    child: Text(l.activityMore),
+                  ),
+                ),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Text(l.activitySshNote, style: muted),
+              ),
+            ],
           );
         },
       ),

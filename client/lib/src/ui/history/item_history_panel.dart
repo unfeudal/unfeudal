@@ -12,7 +12,6 @@ import '../../design/dialog.dart';
 import '../../design/tokens.dart';
 import '../../events/app_events.dart';
 import '../../orgs/block_permissions.dart';
-import '../../vault/org_writer.dart';
 import '../../vault/vault.dart';
 import '../describe_error.dart';
 
@@ -147,24 +146,14 @@ class _ItemHistoryPanelState extends State<ItemHistoryPanel> {
         // writing null would drop the secret: refuse instead
         return setState(() => _error = l.historySecretUnreadable);
       }
-      final orgId = entry.orgId;
-      if (orgId == null) {
-        await state.vault!.upsertItem(
-          id: widget.itemId,
-          type: entry.item.type,
-          folderId: entry.folderId,
-          meta: v.meta!,
-          secret: secret,
-        );
-      } else {
-        await state.orgs!.writer.upsert(
-          type: entry.item.type,
-          id: widget.itemId,
-          target: OrgTarget(orgId, entry.folderId),
-          meta: v.meta!,
-          secret: secret,
-        );
-      }
+      await state.saveItem(
+        type: entry.item.type,
+        id: widget.itemId,
+        orgId: entry.orgId,
+        folderId: entry.folderId,
+        meta: v.meta!,
+        secret: secret,
+      );
       if (!mounted) return;
       if (widget.embedded) {
         setState(() => _versions = null);

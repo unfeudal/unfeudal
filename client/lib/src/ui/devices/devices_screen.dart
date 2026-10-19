@@ -10,22 +10,6 @@ import '../../design/rows.dart';
 import '../../design/tokens.dart';
 import '../../design/dialog.dart';
 import '../describe_error.dart';
-import '../manage_frame.dart';
-
-/// The devices of the account; revoking this one signs out (asked first). Allowed in read-only mode.
-/// This account's devices in a section frame, for a screen pushed on its own.
-class DevicesScreen extends StatelessWidget {
-  const DevicesScreen({super.key, this.onBack});
-
-  final VoidCallback? onBack;
-
-  @override
-  Widget build(BuildContext context) => ManageFrame(
-    title: AppLocalizations.of(context).devicesTitle,
-    onBack: onBack,
-    child: const DeviceList(),
-  );
-}
 
 /// This account's devices, the current one marked, each other one revocable; Réglages › Appareils.
 class DeviceList extends StatefulWidget {
