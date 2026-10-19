@@ -48,6 +48,9 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
   final _terminalFocus = FocusNode();
   late double _treeWidth = _state.settings.treeWidth;
   bool _treeVisible = true;
+
+  /// Rail and tree only: the terminal's keys never reach Loquet.
+  final _loquetKeys = FocusNode(debugLabel: 'loquet-keys');
   bool _ledgerDismissed = false;
 
   /// The floating host or folder editor over the terminal, if open.
@@ -74,6 +77,7 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
     _state.onHomeUnmounted();
     _searchFocus.dispose();
     _terminalFocus.dispose();
+    _loquetKeys.dispose();
     super.dispose();
   }
 
@@ -202,7 +206,45 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
       body: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          VaultRail(page: _page, onLock: state.lock, onShow: _show),
+          Focus(
+            key: const Key('loquet-keys'),
+            focusNode: _loquetKeys,
+            onKeyEvent: (_, e) {
+              if (e is KeyDownEvent) {
+                state.loquet.show(state.loquet.engine.key(e.logicalKey));
+              }
+              // focused itself (a tap on the background), it keeps the arrows from moving the focus
+              // away; a focused field or row inside still gets every key
+              return _loquetKeys.hasPrimaryFocus
+                  ? KeyEventResult.handled
+                  : KeyEventResult.ignored;
+            },
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTap: _loquetKeys.requestFocus,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  VaultRail(
+                    page: _page,
+                    onLock: state.lock,
+                    onShow: _show,
+                    showLoquet: _page != null || !_treeVisible,
+                  ),
+                  if (_page == null && _treeVisible) ...[
+                    AnimatedContainer(
+                      key: const Key('tree-panel'),
+                      duration: UfMotion.of(context).base,
+                      curve: UfMotion.curve,
+                      width: _treeWidth,
+                      child: _treePanel(),
+                    ),
+                    _resizer(),
+                  ],
+                ],
+              ),
+            ),
+          ),
           if (_page case final page?)
             Expanded(
               child: switch (page) {
@@ -212,32 +254,6 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
               },
             )
           else ...[
-            if (_treeVisible) ...[
-              AnimatedContainer(
-                key: const Key('tree-panel'),
-                duration: UfMotion.of(context).base,
-                curve: UfMotion.curve,
-                width: _treeWidth,
-                child: TreePanel(
-                  searchFocus: _searchFocus,
-                  onHide: () => setState(() => _treeVisible = false),
-                  onNewHost: () =>
-                      _openEditor((close) => HostEditorPanel(onClose: close)),
-                  onNewFolder: () =>
-                      _openEditor((close) => FolderEditorPanel(onClose: close)),
-                  onEdit: (e) => e.kind == ItemKind.folder
-                      ? _openEditor(
-                          (close) => FolderEditorPanel(
-                            key: ValueKey(e.id),
-                            folderId: e.id,
-                            onClose: close,
-                          ),
-                        )
-                      : _editHost(e.id),
-                ),
-              ),
-              _resizer(),
-            ],
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -282,6 +298,23 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
       ),
     );
   }
+
+  Widget _treePanel() => TreePanel(
+    searchFocus: _searchFocus,
+    onHide: () => setState(() => _treeVisible = false),
+    onNewHost: () => _openEditor((close) => HostEditorPanel(onClose: close)),
+    onNewFolder: () =>
+        _openEditor((close) => FolderEditorPanel(onClose: close)),
+    onEdit: (e) => e.kind == ItemKind.folder
+        ? _openEditor(
+            (close) => FolderEditorPanel(
+              key: ValueKey(e.id),
+              folderId: e.id,
+              onClose: close,
+            ),
+          )
+        : _editHost(e.id),
+  );
 
   Widget _resizer() => Focus(
     onKeyEvent: (_, event) {

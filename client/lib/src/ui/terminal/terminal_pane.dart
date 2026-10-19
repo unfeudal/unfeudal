@@ -9,9 +9,10 @@ import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
 import '../../design/banner.dart';
 import '../../design/icons.dart';
-import '../../design/logo.dart';
 import '../../design/seal.dart';
 import '../../design/tokens.dart';
+import '../../loquet/loquet_pose.dart';
+import '../../loquet/loquet_spot.dart';
 import '../../terminal/charte_theme.dart';
 import '../../terminal/snippet_insertion.dart';
 import '../../terminal/terminal_search.dart';
@@ -349,8 +350,10 @@ class _ErrorCard extends StatelessWidget {
               Row(
                 spacing: 20,
                 children: [
-                  // Loquet's place
-                  UfLogo(size: 64, color: colors.muted),
+                  const LoquetSpot(
+                    placement: LoquetPlacement.dialog,
+                    mood: LoquetMood.sad,
+                  ),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,

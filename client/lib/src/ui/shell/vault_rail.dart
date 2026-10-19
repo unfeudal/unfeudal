@@ -5,6 +5,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../design/icons.dart';
 import '../../design/motion.dart';
 import '../../design/tokens.dart';
+import '../../loquet/loquet_spot.dart';
 
 /// A screen that replaces the tree and terminals while the rail stays.
 enum ShellPage { keychain, devices, settings }
@@ -16,7 +17,11 @@ class VaultRail extends StatelessWidget {
     required this.onLock,
     required this.onShow,
     this.page,
+    this.showLoquet = false,
   });
+
+  /// Set while the tree, and its Loquet, is hidden.
+  final bool showLoquet;
 
   final VoidCallback onLock;
 
@@ -122,6 +127,11 @@ class VaultRail extends StatelessWidget {
           item(ShellPage.keychain, l.railKeychain, UfIcons.key),
           item(ShellPage.devices, l.railDevices, UfIcons.devices),
           item(ShellPage.settings, l.railSettings, UfIcons.gear),
+          if (showLoquet)
+            const LoquetSpot(
+              key: Key('loquet-spot-rail'),
+              placement: LoquetPlacement.rail,
+            ),
           item(null, l.railLock, UfIcons.lock),
         ],
       ),

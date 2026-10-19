@@ -2,12 +2,16 @@
 import 'package:flutter/material.dart';
 
 import '../../../l10n/app_localizations.dart';
+import '../../app_scope.dart';
 import '../../design/icons.dart';
 import '../../design/logo.dart';
 import '../../design/tokens.dart';
+import '../../loquet/lock_mapping.dart';
+import '../../loquet/loquet_pose.dart';
+import '../../loquet/loquet_spot.dart';
 
 /// Every screen before the vault: the form on the left (mark, step, title, fields, actions), the side panel on
-/// the right. The side panel holds the logo until Loquet takes its place.
+/// the right. The side panel holds Loquet, whose face follows the lock machine.
 class LockFrame extends StatelessWidget {
   const LockFrame({
     super.key,
@@ -15,7 +19,11 @@ class LockFrame extends StatelessWidget {
     this.step,
     this.subtitle,
     required this.children,
+    this.eyeX = 0.5,
   });
+
+  /// Where Loquet looks while an address is typed: 0 left … 1 right.
+  final double eyeX;
 
   final String title;
 
@@ -102,10 +110,37 @@ class LockFrame extends StatelessWidget {
             Expanded(
               child: ColoredBox(
                 color: light ? colors.rail : colors.side,
-                child: Center(child: UfLogo(size: 220, color: colors.accent)),
+                child: Center(child: _hero(context)),
               ),
             ),
           ],
+        );
+      },
+    );
+  }
+}
+
+extension on LockFrame {
+  Widget _hero(BuildContext context) {
+    final state = context
+        .dependOnInheritedWidgetOfExactType<AppScope>()
+        ?.notifier;
+    if (state == null) {
+      return const LoquetSpot(placement: LoquetPlacement.lock);
+    }
+    return ListenableBuilder(
+      listenable: Listenable.merge([state.lockMachine, state.loquet]),
+      builder: (context, _) {
+        final face = loquetForLock(state.lockMachine.state);
+        // three wrong passwords: he hides his face over the table's mood
+        final covering = state.loquet.current?.mood == LoquetMood.covering;
+        return LoquetSpot(
+          key: const Key('loquet-spot-lock'),
+          placement: LoquetPlacement.lock,
+          mood: covering ? LoquetMood.covering : face.mood,
+          line: face.line,
+          params: {'name': ?state.stored?.displayName},
+          eyeX: eyeX,
         );
       },
     );

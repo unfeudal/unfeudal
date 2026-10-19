@@ -4,8 +4,9 @@ import 'package:flutter/material.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../design/dialog.dart';
 import '../../design/field.dart';
-import '../../design/logo.dart';
 import '../../design/tokens.dart';
+import '../../loquet/loquet_pose.dart';
+import '../../loquet/loquet_spot.dart';
 import '../../ssh/ssh_connector.dart';
 
 /// An org host's startup command, shown in full before it runs.
@@ -24,8 +25,10 @@ class StartupCommandDialog extends StatelessWidget {
     final l = AppLocalizations.of(context);
     final colors = UfColors.of(context);
     return UfDialog(
-      // Loquet's place
-      leading: UfLogo(size: 56, color: colors.muted),
+      leading: const LoquetSpot(
+        placement: LoquetPlacement.dialog,
+        mood: LoquetMood.concerned,
+      ),
       title: l.startupCommandTitle(hostName),
       message: l.startupCommandBody,
       actions: [

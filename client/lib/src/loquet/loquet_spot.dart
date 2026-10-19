@@ -10,6 +10,7 @@ import '../design/tokens.dart';
 import '../events/app_events.dart';
 import '../settings/settings.dart';
 import 'line_bank.dart';
+import 'mood.dart';
 import 'loquet.dart';
 import 'loquet_pose.dart';
 
@@ -111,7 +112,12 @@ class _LoquetSpotState extends State<LoquetSpot> {
             widget.placement != LoquetPlacement.rail &&
             widget.placement !=
                 LoquetPlacement.tree; // the status card prints the line itself
-        final text = bubbles ? _line(l, state) : null;
+        final text =
+            bubbles ||
+                (widget.placement == LoquetPlacement.tree &&
+                    loquet.mode == LoquetMode.on)
+            ? _line(l, state)
+            : null;
         final lively = loquet.mode == LoquetMode.on && !still;
         Widget face = GestureDetector(
           onTap: () => state.emit(const LoquetClicked()),
@@ -163,6 +169,27 @@ class _LoquetSpotState extends State<LoquetSpot> {
             child: face,
           );
         }
+        if (widget.placement == LoquetPlacement.tree) {
+          // the status card is the tree's bubble
+          final caption =
+              // reasons asked by a click win over a fixed line (an empty vault)
+              (loquet.reasons ? _reasons(l, loquet.engine.health) : null) ??
+              text ??
+              loquetLabel(l, mood);
+          return Row(
+            spacing: 12,
+            children: [
+              face,
+              Expanded(
+                child: Text(
+                  caption,
+                  style: Theme.of(context).textTheme.bodySmall!
+                      .copyWith(color: UfColors.of(context).muted),
+                ),
+              ),
+            ],
+          );
+        }
         return Stack(
           clipBehavior: Clip.none,
           alignment: Alignment.topCenter,
@@ -179,6 +206,16 @@ class _LoquetSpotState extends State<LoquetSpot> {
     );
   }
 }
+
+String _reasons(AppLocalizations l, VaultHealth h) => [
+  for (final r in h.reasons)
+    switch (r) {
+      MoodReason.verify => l.loquetReasonVerify(h.verifyOver7Days),
+      MoodReason.conflicts => l.loquetReasonConflicts(h.conflicts),
+      MoodReason.oldKeys => l.loquetReasonOldKeys(h.keysOver5Years),
+      MoodReason.staleSync => l.loquetReasonStaleSync,
+    },
+].join(' · ');
 
 /// What Loquet says, in a small floating panel.
 class LoquetBubble extends StatelessWidget {

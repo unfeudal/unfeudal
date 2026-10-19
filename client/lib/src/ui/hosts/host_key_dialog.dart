@@ -4,9 +4,10 @@ import 'package:flutter/material.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../design/dialog.dart';
 import '../../design/field.dart';
-import '../../design/logo.dart';
 import '../../design/seal.dart';
 import '../../design/tokens.dart';
+import '../../loquet/loquet_pose.dart';
+import '../../loquet/loquet_spot.dart';
 import '../../ssh/ssh_connector.dart';
 
 /// First sight of a host key: the fingerprint, trust or cancel.
@@ -20,8 +21,10 @@ class HostKeyUnknownDialog extends StatelessWidget {
     final l = AppLocalizations.of(context);
     final colors = UfColors.of(context);
     return UfDialog(
-      // Loquet's place
-      leading: UfLogo(size: 56, color: colors.muted),
+      leading: const LoquetSpot(
+        placement: LoquetPlacement.dialog,
+        mood: LoquetMood.connecting,
+      ),
       title: l.hostKeyUnknownTitle,
       message: l.hostKeyUnknownBody(check.hostName),
       actions: [

@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 import 'package:flutter/material.dart';
 
-import 'logo.dart';
+import '../loquet/loquet_pose.dart';
+import '../loquet/loquet_spot.dart';
 import 'motion.dart';
 import 'tokens.dart';
 
@@ -20,7 +21,7 @@ class UfDialog extends StatelessWidget {
   final String? title;
   final String? message;
 
-  /// Loquet's place; the logo or a seal until then.
+  /// Loquet, or a seal.
   final Widget? leading;
   final List<Widget> children;
   final List<Widget> actions;
@@ -136,8 +137,10 @@ Future<bool> confirmDanger(
           Row(
             spacing: 16,
             children: [
-              // Loquet's place
-              UfLogo(size: 48, color: colors.muted),
+              const LoquetSpot(
+                placement: LoquetPlacement.dialog,
+                mood: LoquetMood.concerned,
+              ),
               Expanded(
                 child: Text(
                   question,
