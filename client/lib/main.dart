@@ -13,6 +13,7 @@ import 'src/session/biometrics.dart';
 import 'src/session/session_store.dart';
 import 'src/settings/settings.dart';
 import 'src/storage/local_mirror.dart';
+import 'src/ui/settings/licenses_screen.dart';
 import 'src/window/single_instance.dart';
 import 'src/window/window_chrome.dart';
 
@@ -40,5 +41,6 @@ Future<void> main() async {
     ),
   )..loquet.life = true;
   await state.boot();
+  registerFontLicenses();
   runApp(UnfeudalApp(state: state, chrome: chrome));
 }
