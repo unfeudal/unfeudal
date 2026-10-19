@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
@@ -10,6 +12,7 @@ import '../../design/dialog.dart';
 import '../../design/icons.dart';
 import '../../design/motion.dart';
 import '../../design/tokens.dart';
+import '../../events/app_events.dart';
 import '../../keys/key_tools.dart';
 import '../../vault/vault.dart';
 import '../form_dialog.dart';
@@ -157,6 +160,9 @@ class KeychainScreen extends StatelessWidget {
                             initial: {'identity-name': e.name ?? ''},
                           ),
                           onDelete: () => _confirmTrash(context, vault, e),
+                          onReveal: canReveal(state, e)
+                              ? () => _reveal(context, e)
+                              : null,
                           onHistory: state.serverHas('item_history')
                               ? () => showUfDialog<void>(
                                   context,
@@ -169,6 +175,18 @@ class KeychainScreen extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  /// Shows the secret once per opening and reports that it was shown.
+  static Future<void> _reveal(BuildContext context, VaultEntry e) async {
+    final state = AppScope.read(context);
+    final secret = await state.vault!.identitySecret(e.id);
+    if (secret == null || !context.mounted) return;
+    state.emit(SecretRevealed(itemId: e.id));
+    await showUfDialog<void>(
+      context,
+      (_) => _RevealDialog(name: e.name ?? '', secret: secret),
     );
   }
 
@@ -259,6 +277,7 @@ class _IdentityRow extends StatelessWidget {
     required this.readOnly,
     required this.onRename,
     required this.onDelete,
+    this.onReveal,
     this.onHistory,
   });
 
@@ -266,6 +285,9 @@ class _IdentityRow extends StatelessWidget {
   final bool readOnly;
   final VoidCallback onRename;
   final VoidCallback onDelete;
+
+  /// Null hides the button (no reveal flag, or no reveal right on the folder).
+  final VoidCallback? onReveal;
 
   /// Null hides the button (no item history on this server).
   final VoidCallback? onHistory;
@@ -337,6 +359,13 @@ class _IdentityRow extends StatelessWidget {
                   },
                   icon: const Icon(UfIcons.copy, size: 17),
                 ),
+              if (onReveal != null)
+                IconButton(
+                  key: Key('identity-reveal-${entry.id}'),
+                  tooltip: l.identityReveal,
+                  onPressed: onReveal,
+                  icon: const Icon(UfIcons.eye, size: 17),
+                ),
               if (onHistory != null)
                 IconButton(
                   key: Key('identity-history-${entry.id}'),
@@ -360,6 +389,76 @@ class _IdentityRow extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// The password, or the private key and its passphrase; a copy is wiped from the clipboard after a minute.
+class _RevealDialog extends StatefulWidget {
+  const _RevealDialog({required this.name, required this.secret});
+
+  final String name;
+  final IdentitySecret secret;
+
+  @override
+  State<_RevealDialog> createState() => _RevealDialogState();
+}
+
+class _RevealDialogState extends State<_RevealDialog> {
+  Timer? _clear;
+  String? _copied;
+
+  Future<void> _copy(String text) async {
+    await Clipboard.setData(ClipboardData(text: text));
+    _copied = text;
+    _clear?.cancel();
+    _clear = Timer(const Duration(seconds: 60), _wipe);
+  }
+
+  /// Clears the clipboard only if it still holds the copied secret.
+  Future<void> _wipe() async {
+    _clear?.cancel();
+    _clear = null;
+    final now = await Clipboard.getData(Clipboard.kTextPlain);
+    if (now?.text == _copied) {
+      await Clipboard.setData(const ClipboardData(text: ''));
+    }
+  }
+
+  @override
+  void dispose() {
+    if (_clear != null) unawaited(_wipe());
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    final copy = MaterialLocalizations.of(context).copyButtonLabel;
+    final s = widget.secret;
+    Widget field(String value) => Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: SelectionArea(
+            child: Text(value, style: monoStyle.copyWith(fontSize: 13)),
+          ),
+        ),
+        IconButton(
+          tooltip: copy,
+          onPressed: () => _copy(value),
+          icon: const Icon(UfIcons.copy, size: 17),
+        ),
+      ],
+    );
+    return UfDialog(
+      title: l.identityRevealTitle(widget.name),
+      actions: [CancelButton(onPressed: () => Navigator.of(context).pop())],
+      children: [
+        if (s.password case final password?) field(password),
+        if (s.passphrase case final passphrase?) field(passphrase),
+        if (s.privateKeyPem case final pem?) field(pem),
+      ],
     );
   }
 }
