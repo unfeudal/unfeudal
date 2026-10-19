@@ -534,6 +534,19 @@ class AppState extends ChangeNotifier implements SshCallbacks {
     await _closeSession(tab);
   }
 
+  /// A new session for [previous]'s host, in [previous]'s place; the old one is closed first (ports, hops).
+  Future<TerminalSession> reconnect(TerminalSession previous) async {
+    final index = tabs.indexOf(previous);
+    await closeTab(previous);
+    final tab = await connect(previous.hostId);
+    tabs
+      ..remove(tab)
+      ..insert(index.clamp(0, tabs.length), tab);
+    activeTab = tabs.indexOf(tab);
+    notifyListeners();
+    return tab;
+  }
+
   /// Reports every running forward as stopped, then closes the shell, forwards and hops.
   Future<void> _closeSession(TerminalSession tab) async {
     for (final port in tab.forwarder?.active.keys ?? const <int>[]) {
