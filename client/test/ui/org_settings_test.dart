@@ -69,6 +69,12 @@ void main() {
     expect(find.byKey(const Key('org-delete')), findsNothing);
   });
 
+  testWidgets('a member sees no settings, only leaving', (t) async {
+    await open(t, const OrgSettingsScreen(orgId: testOrgId), role: 'member');
+    expect(find.byKey(const Key('org-settings-save')), findsNothing);
+    expect(find.byKey(const Key('org-leave')), findsOneWidget);
+  });
+
   testWidgets(
     'rotation banner: admins only, count, credentials note, rotate now',
     (t) async {

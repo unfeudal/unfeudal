@@ -28,7 +28,11 @@ void main() {
     t,
   ) async {
     final s = await signedIn(t, FakeBiometricBackend());
-    await pumpApp(t, state: s, child: const SettingsScreen());
+    await pumpApp(
+      t,
+      state: s,
+      child: const SettingsScreen(initialGroup: 'security'),
+    );
     await pumpReal(t, rounds: 5);
     await t.tap(find.byKey(const Key('settings-biometric')));
     await pumpReal(t, rounds: 5);
@@ -43,7 +47,11 @@ void main() {
 
   testWidgets('no hardware: no toggle and no button', (t) async {
     final s = await signedIn(t, FakeBiometricBackend(isAvailable: false));
-    await pumpApp(t, state: s, child: const SettingsScreen());
+    await pumpApp(
+      t,
+      state: s,
+      child: const SettingsScreen(initialGroup: 'security'),
+    );
     await pumpReal(t, rounds: 5);
     expect(find.byKey(const Key('settings-biometric')), findsNothing);
     await t.runAsync(s.lock);

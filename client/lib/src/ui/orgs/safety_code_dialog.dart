@@ -58,8 +58,8 @@ class _SafetyCodeDialogState extends State<SafetyCodeDialog> {
         Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: colors.field,
-            borderRadius: const BorderRadius.all(Radius.circular(10)),
+            border: Border.all(color: colors.line),
+            borderRadius: UfRadius.control,
           ),
           child: Text(
             safetyCode(widget.publicKey),

@@ -41,6 +41,8 @@ void main() {
         child: HostEditorPanel(hostId: id),
       );
       final l = AppLocalizations.of(t.element(find.byType(HostEditorPanel)));
+      await t.tap(find.byKey(const Key('inspector-tab-1')));
+      await t.pump();
       Future<void> row(int i, String local, String host, String remote) async {
         await t.tap(find.byKey(const Key('forward-add')));
         await t.pump();
@@ -106,6 +108,8 @@ void main() {
       state: s,
       child: HostEditorPanel(hostId: id),
     );
+    await t.tap(find.byKey(const Key('inspector-tab-1')));
+    await t.pump();
     expect(button(t, 'forward-add').onPressed, isNull);
   });
 

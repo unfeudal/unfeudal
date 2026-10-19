@@ -212,20 +212,17 @@ class _RecoveryKitViewState extends State<RecoveryKitView> {
         title: l.kitTitle,
         subtitle: l.kitBody,
         children: [
+          // ponytail: solid `edge` for the read-only frame, Flutter has no dashed border; paint one if it matters
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
-              color: colors.field,
-              borderRadius: const BorderRadius.all(Radius.circular(10)),
+              borderRadius: UfRadius.control,
+              border: Border.all(color: colors.edge),
             ),
             child: SelectableText(
               widget.recoveryKey,
               key: const Key('recovery-key'),
-              style: monoStyle.copyWith(
-                fontSize: 18,
-                height: 1.7,
-                letterSpacing: 0.4,
-              ),
+              style: monoStyle.copyWith(fontSize: 17, height: 1.7),
             ),
           ),
           Wrap(
@@ -251,7 +248,10 @@ class _RecoveryKitViewState extends State<RecoveryKitView> {
           ),
           Text(
             l.kitInstructions,
-            style: theme.textTheme.bodyMedium!.copyWith(color: colors.muted),
+            style: theme.textTheme.bodyMedium!.copyWith(
+              color: colors.muted,
+              fontSize: 13,
+            ),
           ),
           CheckboxListTile(
             key: const Key('recovery-confirm'),
@@ -260,7 +260,10 @@ class _RecoveryKitViewState extends State<RecoveryKitView> {
             controlAffinity: ListTileControlAffinity.leading,
             contentPadding: EdgeInsets.zero,
             dense: true,
-            title: Text(l.kitConfirm, style: theme.textTheme.bodyLarge),
+            title: Text(
+              l.kitConfirm,
+              style: theme.textTheme.bodyMedium!.copyWith(fontSize: 13.5),
+            ),
           ),
           LockActions(
             primary: FilledButton(

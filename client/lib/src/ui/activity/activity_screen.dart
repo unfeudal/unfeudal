@@ -12,13 +12,14 @@ import '../../app_state.dart';
 import '../../audit/activity_model.dart';
 import '../../audit/audit_anchors.dart';
 import '../../design/banner.dart';
+import '../../design/buttons.dart';
 import '../../design/empty_state.dart';
 import '../../design/tokens.dart';
 import '../describe_error.dart';
 import '../manage_frame.dart';
 
-/// The audit views this account may read: its actions and chain, org chains it administers, folders it
-/// manages, the instance for the Instance Owner. Verify and export read the whole chain.
+/// The audit views this account may read: in a vault, its actions and the org chain it administers or the
+/// folders it manages; from Réglages, its account chain or the instance. Verify and export read the whole chain.
 class ActivityScreen extends StatefulWidget {
   const ActivityScreen({
     super.key,
@@ -40,7 +41,7 @@ class ActivityScreen extends StatefulWidget {
 }
 
 class _ActivityScreenState extends State<ActivityScreen> {
-  late String _scope = widget.scope;
+  late String _scope = _initialScope();
   late ActivityModel _model = _open(_scope);
   String? _notice;
 
@@ -69,29 +70,50 @@ class _ActivityScreenState extends State<ActivityScreen> {
     });
   }
 
-  /// (scope, label) pairs offered to this account.
+  /// Opened from Réglages on the account or server chain; otherwise the section of the selected vault.
+  bool get _fromSettings =>
+      widget.scope == 'user' || widget.scope == 'instance';
+
+  /// The selected org's chain for its admins, else « Mes actions ».
+  String _initialScope() {
+    if (widget.scope != 'me') return widget.scope;
+    final orgs = AppScope.read(context).orgs;
+    final orgId = orgs?.selected;
+    return orgId != null && orgs!.isAdmin(orgId) ? 'org:$orgId' : 'me';
+  }
+
+  /// (scope, label) pairs offered here: the account and server chains in Réglages; « Mes actions » and the
+  /// selected org's chain or the folders this account manages in a vault.
   List<(String, String)> _scopes(AppLocalizations l, AppState state) {
     final block = state.orgs?.block;
+    final orgId = state.orgs?.selected;
     return [
-      ('me', l.activityScopeMe),
-      ('user', l.activityScopeAccount),
-      for (final org in block?.orgs ?? const <OrgSummary>[])
-        if (state.orgs!.isAdmin(org.id))
-          ('org:${org.id}', org.name)
-        else
-          for (final n in block!.folderTree)
-            if (n.orgId == org.id &&
-                state.orgs!
-                    .permissions(org.id, n.folderId)
-                    .contains(Permission.manage))
-              (
-                'folder:${n.folderId}',
-                l.activityScopeFolder(
-                  state.vault?.entry(n.folderId)?.name ??
-                      n.folderId.substring(0, 8),
-                ),
-              ),
-      if (state.stored!.isInstanceOwner) ('instance', l.activityScopeInstance),
+      if (_fromSettings) ...[
+        if (widget.scope == 'user') ...[
+          ('me', l.activityScopeMe),
+          ('user', l.activityScopeAccount),
+        ],
+        if (widget.scope == 'instance') ('instance', l.activityScopeInstance),
+      ] else ...[
+        ('me', l.activityScopeMe),
+        for (final org in block?.orgs ?? const <OrgSummary>[])
+          if (org.id == orgId)
+            if (state.orgs!.isAdmin(org.id))
+              ('org:${org.id}', org.name)
+            else
+              for (final n in block!.folderTree)
+                if (n.orgId == org.id &&
+                    state.orgs!
+                        .permissions(org.id, n.folderId)
+                        .contains(Permission.manage))
+                  (
+                    'folder:${n.folderId}',
+                    l.activityScopeFolder(
+                      state.vault?.entry(n.folderId)?.name ??
+                          n.folderId.substring(0, 8),
+                    ),
+                  ),
+      ],
       // a deleted org's chain, opened from its org.deleted event: the Instance Owner only
       if (_scope.startsWith('org:') &&
           !(block?.orgs.any((o) => 'org:${o.id}' == _scope) ?? false))
@@ -166,116 +188,189 @@ class _ActivityScreenState extends State<ActivityScreen> {
     final chain = ActivityModel.chainOf(_scope);
     final nameOf = _resolver(l, state);
     final dates = MaterialLocalizations.of(context);
-    final muted = TextStyle(color: colors.muted, fontSize: 12);
+    final muted = Theme.of(context).textTheme.bodySmall!
+        .copyWith(color: colors.muted);
+    final orgId = state.orgs?.selected;
+    final vaultName =
+        state.orgs?.orgs.where((o) => o.id == orgId).firstOrNull?.name ??
+        l.vaultPersonal;
     return ManageFrame(
       title: l.activityTitle,
+      subtitle: _fromSettings ? null : vaultName,
       onBack: widget.onBack,
       child: ListenableBuilder(
         listenable: _model,
         builder: (context, _) {
           final m = _model;
           final alert = m.alerts.firstOrNull;
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            spacing: 10,
-            children: [
-              Row(
-                spacing: 8,
+          return Align(
+            alignment: Alignment.topLeft,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 980),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                spacing: 10,
                 children: [
-                  DropdownButton<String>(
-                    key: const Key('activity-scope'),
-                    value: scopes.any((s) => s.$1 == _scope) ? _scope : null,
-                    items: [
-                      for (final (scope, label) in scopes)
-                        DropdownMenuItem(
-                          key: Key('activity-scope-$scope'),
-                          value: scope,
-                          child: Text(label),
+                  Row(
+                    spacing: 8,
+                    children: [
+                      if (scopes.length > 1)
+                        DropdownButton<String>(
+                          key: const Key('activity-scope'),
+                          value: scopes.any((s) => s.$1 == _scope)
+                              ? _scope
+                              : null,
+                          underline: const SizedBox.shrink(),
+                          items: [
+                            for (final (scope, label) in scopes)
+                              DropdownMenuItem(
+                                key: Key('activity-scope-$scope'),
+                                value: scope,
+                                child: Text(label),
+                              ),
+                          ],
+                          onChanged: (s) {
+                            if (s != null && s != _scope) _select(s);
+                          },
+                        )
+                      else
+                        Text(
+                          scopes.first.$2,
+                          key: Key('activity-scope-${scopes.first.$1}'),
+                          style: Theme.of(context).textTheme.labelLarge,
                         ),
+                      const Spacer(),
+                      if (chain != null) ...[
+                        OutlinedButton(
+                          key: const Key('activity-verify'),
+                          style: smallButton,
+                          onPressed: _verify,
+                          child: Text(l.activityVerify),
+                        ),
+                        OutlinedButton(
+                          key: const Key('activity-export'),
+                          style: smallButton,
+                          onPressed: _export,
+                          child: Text(l.activityExport),
+                        ),
+                      ],
                     ],
-                    onChanged: (s) {
-                      if (s != null && s != _scope) _select(s);
-                    },
                   ),
-                  const Spacer(),
-                  if (chain != null) ...[
-                    TextButton(
-                      key: const Key('activity-verify'),
-                      onPressed: _verify,
-                      child: Text(l.activityVerify),
+                  if (alert != null)
+                    StatusBanner(
+                      key: const Key('activity-alert'),
+                      tone: BannerTone.danger,
+                      message: alert.kind == AnchorAlertKind.rewritten
+                          ? l.activityRewritten(alert.scope, alert.seq)
+                          : l.activityVanished(alert.scope, alert.seq),
                     ),
-                    TextButton(
-                      key: const Key('activity-export'),
-                      onPressed: _export,
-                      child: Text(l.activityExport),
+                  if (m.error case final Exception e)
+                    StatusBanner(
+                      tone: BannerTone.warn,
+                      message: describeError(l, e),
                     ),
-                  ],
+                  if (_notice case final notice?) Text(notice, style: muted),
+                  Expanded(
+                    child: m.events.isEmpty && !m.loading
+                        ? EmptyState(
+                            title: l.activityTitle,
+                            body: l.activityEmpty,
+                          )
+                        : ListView.builder(
+                            itemCount: m.events.length,
+                            itemBuilder: (context, i) {
+                              final e = m.events[i];
+                              final ts = DateTime.parse(e.ts).toLocal();
+                              return EventRow(
+                                when:
+                                    '${dates.formatShortDate(ts)} ${dates.formatTimeOfDay(TimeOfDay.fromDateTime(ts))}',
+                                text: describeEvent(l, e, nameOf),
+                                who: [
+                                  if (e.actorUser case final actor?)
+                                    nameOf(actor),
+                                  ?e.ipAddress,
+                                ].join(' · '),
+                                trailing:
+                                    e.action == 'org.deleted' &&
+                                        state.stored!.isInstanceOwner &&
+                                        e.targetIds.isNotEmpty
+                                    ? OutlinedButton(
+                                        key: Key(
+                                          'activity-open-org-${e.targetIds.first}',
+                                        ),
+                                        style: smallButton,
+                                        onPressed: () =>
+                                            _select('org:${e.targetIds.first}'),
+                                        child: Text(l.activityOpenDeletedOrg),
+                                      )
+                                    : null,
+                              );
+                            },
+                          ),
+                  ),
+                  if (m.hasMore)
+                    Align(
+                      child: TextButton(
+                        key: const Key('activity-more'),
+                        onPressed: m.loading ? null : m.more,
+                        child: Text(l.activityMore),
+                      ),
+                    ),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: Text(l.activitySshNote, style: muted),
+                  ),
                 ],
               ),
-              if (alert != null)
-                StatusBanner(
-                  key: const Key('activity-alert'),
-                  tone: BannerTone.danger,
-                  message: alert.kind == AnchorAlertKind.rewritten
-                      ? l.activityRewritten(alert.scope, alert.seq)
-                      : l.activityVanished(alert.scope, alert.seq),
-                ),
-              if (m.error case final Exception e)
-                StatusBanner(
-                  tone: BannerTone.warn,
-                  message: describeError(l, e),
-                ),
-              if (_notice case final notice?) Text(notice),
-              Expanded(
-                child: m.events.isEmpty && !m.loading
-                    ? EmptyState(title: l.activityTitle, body: l.activityEmpty)
-                    : ListView.builder(
-                        itemCount: m.events.length,
-                        itemBuilder: (context, i) {
-                          final e = m.events[i];
-                          final ts = DateTime.parse(e.ts).toLocal();
-                          return ListTile(
-                            dense: true,
-                            title: Text(describeEvent(l, e, nameOf)),
-                            subtitle: Text(
-                              [
-                                '${dates.formatShortDate(ts)} ${dates.formatTimeOfDay(TimeOfDay.fromDateTime(ts))}',
-                                if (e.actorUser case final actor?)
-                                  nameOf(actor),
-                              ].join(' · '),
-                              style: muted,
-                            ),
-                            trailing:
-                                e.action == 'org.deleted' &&
-                                    state.stored!.isInstanceOwner &&
-                                    e.targetIds.isNotEmpty
-                                ? TextButton(
-                                    key: Key(
-                                      'activity-open-org-${e.targetIds.first}',
-                                    ),
-                                    onPressed: () =>
-                                        _select('org:${e.targetIds.first}'),
-                                    child: Text(l.activityOpenDeletedOrg),
-                                  )
-                                : e.ipAddress == null
-                                ? null
-                                : Text(e.ipAddress!, style: muted),
-                          );
-                        },
-                      ),
-              ),
-              if (m.hasMore)
-                Align(
-                  child: TextButton(
-                    key: const Key('activity-more'),
-                    onPressed: m.loading ? null : m.more,
-                    child: Text(l.activityMore),
-                  ),
-                ),
-              Text(l.activitySshNote, style: muted),
-            ],
+            ),
           );
         },
+      ),
+    );
+  }
+}
+
+/// One audit event: when, what, who; the same row for every chain.
+class EventRow extends StatelessWidget {
+  const EventRow({
+    super.key,
+    required this.when,
+    required this.text,
+    required this.who,
+    this.trailing,
+  });
+
+  final String when;
+  final String text;
+  final String who;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = UfColors.of(context);
+    final muted = Theme.of(context).textTheme.bodySmall!
+        .copyWith(color: colors.muted);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: colors.line)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Row(
+          spacing: 16,
+          children: [
+            SizedBox(width: 130, child: Text(when, style: muted)),
+            Expanded(
+              child: Text(
+                text,
+                style: Theme.of(context).textTheme.bodyMedium!
+                    .copyWith(fontSize: 13.5),
+              ),
+            ),
+            if (who.isNotEmpty) Text(who, style: muted),
+            ?trailing,
+          ],
+        ),
       ),
     );
   }

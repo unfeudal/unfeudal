@@ -60,24 +60,27 @@ void main() {
     return (h, s, host);
   }
 
-  testWidgets('one pill per org; the tree shows the selected vault only', (
-    t,
-  ) async {
-    final (_, s, host) = await withOrg(t);
-    expect(find.byKey(const Key('vault-personal')), findsOneWidget);
-    expect(find.byKey(Key('host-${host.id}')), findsNothing);
-    await t.tap(find.byKey(const Key('vault-org-$testOrgId')));
-    await t.pump();
-    expect(find.byKey(Key('host-${host.id}')), findsOneWidget);
-  });
+  testWidgets(
+    'one menu entry per org; the tree shows the selected vault only',
+    (t) async {
+      final (_, s, host) = await withOrg(t);
+      expect(find.byKey(Key('host-${host.id}')), findsNothing);
+      await openVaults(t);
+      expect(find.byKey(const Key('vault-personal')), findsOneWidget);
+      await t.tap(find.byKey(const Key('vault-org-$testOrgId')));
+      await t.pumpAndSettle();
+      expect(find.byKey(Key('host-${host.id}')), findsOneWidget);
+    },
+  );
 
   testWidgets('an accepted member sees the org name and a waiting note', (
     t,
   ) async {
     final (h, _, _) = await withOrg(t, status: 'accepted');
+    await openVaults(t);
     await t.tap(find.byKey(const Key('vault-org-$testOrgId')));
-    await t.pump();
-    expect(find.text('Waiting for an admin to confirm you.'), findsOneWidget);
+    await t.pumpAndSettle();
+    expect(find.text('Waiting for an admin to confirm you.'), findsWidgets);
     // leaving needs no confirmation by an admin
     await t.tap(find.byKey(const Key('org-awaiting-leave')));
     await t.pumpAndSettle();
@@ -92,8 +95,9 @@ void main() {
   testWidgets('no org UI without the orgs capability', (t) async {
     final s = await signedInState(t);
     await pumpApp(t, state: s);
-    expect(find.byKey(const Key('rail-new-org')), findsNothing);
-    expect(find.byKey(const Key('rail-join-org')), findsNothing);
+    await openVaults(t);
+    expect(find.byKey(const Key('vault-new-org')), findsNothing);
+    expect(find.byKey(const Key('vault-join-org')), findsNothing);
   });
 
   testWidgets('create an org and join one with a link', (t) async {
@@ -103,14 +107,16 @@ void main() {
     }, 201);
     h.orgReplies['POST /invites/join'] = (_) =>
         SyncHarness.reply({'orgId': testOrgId});
-    await t.tap(find.byKey(const Key('rail-new-org')));
-    await t.pump();
+    await openVaults(t);
+    await t.tap(find.byKey(const Key('vault-new-org')));
+    await t.pumpAndSettle();
     await t.enterText(find.byKey(const Key('org-name')), 'Beta');
     await t.tap(find.byKey(const Key('org-create')));
     await pumpReal(t);
     expect(h.orgCalls.last.body, {'name': 'Beta'});
-    await t.tap(find.byKey(const Key('rail-join-org')));
-    await t.pump();
+    await openVaults(t);
+    await t.tap(find.byKey(const Key('vault-join-org')));
+    await t.pumpAndSettle();
     await t.enterText(find.byKey(const Key('join-link')), 'nonsense');
     await t.tap(find.byKey(const Key('join-submit')));
     await t.pump();
@@ -130,16 +136,23 @@ void main() {
     'new org folder is disabled offline; new host in an org folder goes through the org writer',
     (t) async {
       final (h, s, host) = await withOrg(t);
+      await openVaults(t);
       await t.tap(find.byKey(const Key('vault-org-$testOrgId')));
-      await t.pump();
+      await t.pumpAndSettle();
       h.offline = true;
       await t.runAsync(() => s.sync!.syncNow());
       await t.pump();
-      final button = t.widget<TextButton>(
+      final button = t.widget<IconButton>(
         find.byKey(const Key('tree-new-folder')),
       );
       expect(button.onPressed, isNull);
       expect(s.vault!.entry(host.id)!.orgId, testOrgId);
     },
   );
+}
+
+/// Opens the vault selector's menu.
+Future<void> openVaults(WidgetTester t) async {
+  await t.tap(find.byKey(const Key('vault-selector')));
+  await t.pumpAndSettle();
 }

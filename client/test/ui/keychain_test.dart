@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:unfeudal_client/l10n/app_localizations.dart';
 import 'package:unfeudal_client/src/keys/key_tools.dart';
+import 'package:unfeudal_client/src/orgs/host_binding.dart';
 import 'package:unfeudal_client/src/ui/keychain/keychain_screen.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
@@ -56,6 +57,7 @@ void main() {
         );
         await s.sync!.syncNow();
       });
+      s.orgs!.select(testOrgId);
       await pumpApp(t, state: s, child: const KeychainScreen());
       await pumpReal(t);
       Future<void> place(String id) async {
@@ -169,4 +171,60 @@ void main() {
     ); // passwords have no public key
     expect(clip, isEmpty);
   });
+
+  testWidgets(
+    'an org vault lists the personal keys bound to its hosts, read-only; the personal vault does not',
+    (t) async {
+      final h = SyncHarness(capabilities: ['orgs', 'sync']);
+      final s = await signedInState(t, harness: h);
+      final me = s.stored!.userId;
+      final keys = FolderKeys.generate(1), f = newId();
+      h.orgMembers[testOrgId] = {me};
+      late String mine;
+      await t.runAsync(() async {
+        final pub = h.accounts.values.first.bundle.publicKey;
+        final host = h.serverPutOrg(
+          await sealOrgItem(
+            keys,
+            folderId: f,
+            meta: {...hostJson('db'), 'identityMode': 'perMember'},
+          ),
+        );
+        final folder = h.serverPutOrg(
+          await sealOrgItem(keys, id: f, type: 'folder', meta: folderJson('P')),
+        );
+        h.orgBlock = orgBlock(
+          members: [memberRow(me)],
+          folderTree: [node(f)],
+          acl: [
+            aclRow(f, me, allow: ['view', 'connect']),
+          ],
+          wrappedKeys: [await wrappedRow(keys, f, pub)],
+          itemIds: [host.id, folder.id],
+        );
+        await s.sync!.syncNow();
+        mine = await s.vault!.upsertItem(
+          type: 'identity',
+          meta: IdentityMeta(
+            name: 'atelier',
+            kind: IdentityKind.password,
+          ).toJson(),
+          secret: IdentitySecret(
+            kind: IdentityKind.password,
+            password: 'x',
+          ).toJson(),
+        );
+        await bindHost(s.vault!, host.id, mine);
+      });
+      s.orgs!.select(testOrgId);
+      await pumpApp(t, state: s, child: const KeychainScreen());
+      await pumpReal(t);
+      expect(find.byKey(Key('identity-linked-$mine')), findsOneWidget);
+      expect(find.byKey(Key('identity-rename-$mine')), findsNothing);
+      s.orgs!.select(null);
+      await t.pump();
+      expect(find.byKey(Key('identity-linked-$mine')), findsNothing);
+      expect(find.byKey(Key('identity-rename-$mine')), findsOneWidget);
+    },
+  );
 }

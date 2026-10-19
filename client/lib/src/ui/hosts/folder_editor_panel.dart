@@ -5,13 +5,13 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
 import '../../design/dialog.dart';
-import '../../design/motion.dart';
 import '../../design/tokens.dart';
 import '../../vault/org_writer.dart';
 import '../../vault/vault.dart';
 import '../describe_error.dart';
 import '../history/item_history_panel.dart';
 import '../fields.dart';
+import 'access_tab.dart';
 import 'editor_frame.dart';
 import 'jump_host_picker.dart';
 
@@ -196,7 +196,16 @@ class _FolderEditorPanelState extends State<FolderEditorPanel> {
       title: widget.folderId == null
           ? l.treeNewFolder
           : vault.entry(widget.folderId!)?.name ?? l.treeNewFolder,
-      crumb: [l.vaultPersonal, ?parentName].join(' / '),
+      crumb: [vaultNameOf(l, state, _orgId), ?parentName].join(' / '),
+      tabs: [
+        if ((_orgId, widget.folderId) case (final org?, final folder?))
+          (l.inspectorTabAccess, [AccessTab(orgId: org, folderId: folder)]),
+        if (state.serverHas('item_history') && widget.folderId != null)
+          (
+            l.itemHistory,
+            [ItemHistoryPanel.embedded(itemId: widget.folderId!)],
+          ),
+      ],
       onClose: widget.onClose,
       save: FilledButton(
         key: const Key('folder-save'),
@@ -211,14 +220,11 @@ class _FolderEditorPanelState extends State<FolderEditorPanel> {
             )
           : null,
       children: [
-        ShakeOnError(
-          trigger: _failures,
-          child: keyedField(
-            'folder-name',
-            _name,
-            l.folderName,
-            error: _problems['name'],
-          ),
+        keyedField(
+          'folder-name',
+          _name,
+          l.folderName,
+          error: _problems['name'],
         ),
         entryPicker(
           key: 'folder-parent',
@@ -255,18 +261,6 @@ class _FolderEditorPanelState extends State<FolderEditorPanel> {
         ),
         if (_error case final error?)
           Text(error, style: TextStyle(color: UfColors.of(context).danger)),
-        if (state.serverHas('item_history') && widget.folderId != null)
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton(
-              key: const Key('item-history'),
-              onPressed: () => showUfDialog<void>(
-                context,
-                (_) => ItemHistoryPanel(itemId: widget.folderId!),
-              ),
-              child: Text(l.itemHistory),
-            ),
-          ),
       ],
     );
   }

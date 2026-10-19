@@ -42,7 +42,11 @@ void main() {
       await pumpApp(t, state: s, child: const SettingsScreen());
       await t.tap(find.byKey(const Key('theme-dark')));
       await pumpReal(t, rounds: 5);
-      await t.tap(find.byKey(const Key('autolock-5')));
+      await t.tap(find.byKey(const Key('group-security')));
+      await t.pump();
+      await t.tap(find.byKey(const Key('autolock')));
+      await t.pumpAndSettle();
+      await t.tap(find.byKey(const Key('autolock-5')).last);
       await pumpReal(t, rounds: 5);
       expect(
         (s.settings.themeMode, s.settings.autoLockMinutes),
@@ -59,7 +63,11 @@ void main() {
     (t) async {
       final h = SyncHarness();
       final s = await signedInState(t, harness: h);
-      await pumpApp(t, state: s, child: const SettingsScreen());
+      await pumpApp(
+        t,
+        state: s,
+        child: const SettingsScreen(initialGroup: 'security'),
+      );
       await t.tap(find.byKey(const Key('settings-recovery-kit')));
       await t.pumpAndSettle();
       await t.enterText(
@@ -80,7 +88,11 @@ void main() {
       t,
       harness: SyncHarness(capabilities: ['sync']),
     );
-    await pumpApp(t, state: s, child: const SettingsScreen());
+    await pumpApp(
+      t,
+      state: s,
+      child: const SettingsScreen(initialGroup: 'security'),
+    );
     await pumpReal(t, rounds: 5);
     expect(find.byKey(const Key('settings-recovery-kit')), findsNothing);
   });

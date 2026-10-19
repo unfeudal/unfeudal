@@ -59,7 +59,7 @@ void main() {
     );
     expect(
       (charteDark.background, charteLight.background),
-      (UfColors.dark.bg, UfColors.light.panel),
+      (UfColors.dark.term, UfColors.light.term),
     );
     for (final t in [charteDark, charteLight]) {
       for (final c in [

@@ -4,7 +4,6 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
-import '../../design/motion.dart';
 import '../describe_error.dart';
 import '../fields.dart';
 import '../lock/lock_frame.dart';
@@ -27,7 +26,6 @@ class _SetupScreenState extends State<SetupScreen> {
   final _name = TextEditingController();
   bool _busy = false;
   String? _problem;
-  int _failures = 0;
 
   /// 1: server and token; 2: the owner account. A setup link fills step 1 and opens on step 2.
   late int _step = _token.text.isEmpty ? 1 : 2;
@@ -86,7 +84,6 @@ class _SetupScreenState extends State<SetupScreen> {
 
   void _fail(String problem) => setState(() {
     _problem = problem;
-    _failures++;
   });
 
   @override
@@ -114,16 +111,13 @@ class _SetupScreenState extends State<SetupScreen> {
               l.setupServer,
               keyboard: TextInputType.url,
             ),
-            ShakeOnError(
-              trigger: _failures,
-              child: keyedField(
-                'setup-token',
-                _token,
-                l.setupToken,
-                mono: true,
-                hint: 'ABCD-EFGH-IJKL-MNOP-QRST-UVWX-YZ',
-                onSubmitted: (_) => _next(),
-              ),
+            keyedField(
+              'setup-token',
+              _token,
+              l.setupToken,
+              mono: true,
+              hint: 'ABCD-EFGH-IJKL-MNOP-QRST-UVWX-YZ',
+              onSubmitted: (_) => _next(),
             ),
           ] else ...[
             keyedField(
@@ -132,26 +126,23 @@ class _SetupScreenState extends State<SetupScreen> {
               l.setupEmail,
               keyboard: TextInputType.emailAddress,
             ),
-            ShakeOnError(
-              trigger: _failures,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                spacing: 14,
-                children: [
-                  keyedField(
-                    'setup-password',
-                    _password,
-                    l.setupPassword,
-                    secret: true,
-                  ),
-                  keyedField(
-                    'setup-confirm',
-                    _confirm,
-                    l.setupConfirm,
-                    secret: true,
-                  ),
-                ],
-              ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              spacing: 14,
+              children: [
+                keyedField(
+                  'setup-password',
+                  _password,
+                  l.setupPassword,
+                  secret: true,
+                ),
+                keyedField(
+                  'setup-confirm',
+                  _confirm,
+                  l.setupConfirm,
+                  secret: true,
+                ),
+              ],
             ),
             keyedField('setup-name', _name, l.setupDisplayName),
             LockNotice(l.setupWarning),

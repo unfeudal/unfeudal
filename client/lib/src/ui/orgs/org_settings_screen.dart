@@ -7,16 +7,17 @@ import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
 import '../../design/dialog.dart';
 import '../../design/motion.dart';
+import '../../design/rows.dart';
 import '../../design/tokens.dart';
 import '../describe_error.dart';
-import '../manage_frame.dart';
+import 'members_screen.dart';
 
-/// Name, Loquet and retention of an org (admins); owners can delete it. Only changed keys are sent.
+/// Name, Loquet and retention of an org (admins), then leaving it (anyone) or deleting it (owners). Only changed
+/// keys are sent.
 class OrgSettingsScreen extends StatefulWidget {
-  const OrgSettingsScreen({super.key, required this.orgId, this.onBack});
+  const OrgSettingsScreen({super.key, required this.orgId});
 
   final String orgId;
-  final VoidCallback? onBack;
 
   @override
   State<OrgSettingsScreen> createState() => _OrgSettingsScreenState();
@@ -136,9 +137,9 @@ class _OrgSettingsScreenState extends State<OrgSettingsScreen> {
     final l = AppLocalizations.of(context);
     try {
       await state.api!.deleteOrg(widget.orgId);
+      // the section closes once the org leaves the selection
       state.orgs!.select(null);
       await state.sync!.syncNow();
-      widget.onBack?.call();
     } on Exception catch (e) {
       if (mounted) setState(() => _error = describeError(l, e));
     }
@@ -148,65 +149,94 @@ class _OrgSettingsScreenState extends State<OrgSettingsScreen> {
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
     final colors = UfColors.of(context);
-    final org = AppScope.of(context).orgs?.orgs
-        .where((o) => o.id == widget.orgId)
-        .firstOrNull;
+    final orgs = AppScope.of(context).orgs;
+    final org = orgs?.orgs.where((o) => o.id == widget.orgId).firstOrNull;
+    final isAdmin = orgs?.isAdmin(widget.orgId) ?? false;
     final isOwner = org?.role == OrgRole.owner.name;
-    Widget number(String key, String settingKey, String label) => TextField(
-      key: Key(key),
-      controller: _fields[settingKey],
-      keyboardType: TextInputType.number,
-      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-      decoration: InputDecoration(
-        labelText: label,
-        helperText: switch (_server?[settingKey]) {
-          null => null,
-          0 => l.orgRetentionUnlimited,
-          final days => l.orgRetentionServer(days),
-        },
+    Widget number(String key, String settingKey, String label) => SettingRow(
+      label: label,
+      hint: switch (_server?[settingKey]) {
+        null => null,
+        0 => l.orgRetentionUnlimited,
+        final days => l.orgRetentionServer(days),
+      },
+      trailing: SizedBox(
+        width: 96,
+        child: TextField(
+          key: Key(key),
+          controller: _fields[settingKey],
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+        ),
       ),
     );
-    return ManageFrame(
-      title: l.orgSettingsTitle,
-      onBack: widget.onBack,
+    // a Material of its own: the section, a dialog or a test may host it
+    return Material(
+      type: MaterialType.transparency,
       child: ListView(
         padding: const EdgeInsets.only(bottom: 40),
         children: [
-          TextField(
-            key: const Key('org-name-field'),
-            controller: _name,
-            maxLength: 100,
-            decoration: InputDecoration(labelText: l.orgName),
-          ),
-          SwitchListTile(
-            key: const Key('org-mascot'),
-            contentPadding: EdgeInsets.zero,
-            title: Text(l.orgMascot),
-            value: _mascot,
-            onChanged: (v) => setState(() => _mascot = v),
-          ),
-          number('org-audit-days', 'auditDays', l.orgAuditDays),
-          number('org-max-versions', 'maxVersions', l.orgMaxVersions),
-          number('org-trash-days', 'trashDays', l.orgTrashDays),
-          if (_error case final error?)
-            Text(error, style: TextStyle(color: colors.danger)),
-          Row(
-            children: [
-              if (isOwner)
-                TextButton(
-                  key: const Key('org-delete'),
-                  style: TextButton.styleFrom(foregroundColor: colors.danger),
-                  onPressed: () => _delete(org!.name),
-                  child: Text(l.orgDelete),
+          if (isAdmin) ...[
+            SettingRow(
+              label: l.orgName,
+              trailing: SizedBox(
+                width: 240,
+                child: TextField(
+                  key: const Key('org-name-field'),
+                  controller: _name,
+                  maxLength: 100,
+                  decoration: const InputDecoration(counterText: ''),
                 ),
-              const Spacer(),
-              FilledButton(
-                key: const Key('org-settings-save'),
-                onPressed: _save,
-                child: Text(l.orgSettingsSave),
               ),
-            ],
+            ),
+            SettingRow(
+              label: l.orgMascot,
+              trailing: Switch(
+                key: const Key('org-mascot'),
+                value: _mascot,
+                onChanged: (v) => setState(() => _mascot = v),
+              ),
+            ),
+            number('org-audit-days', 'auditDays', l.orgAuditDays),
+            number('org-max-versions', 'maxVersions', l.orgMaxVersions),
+            number('org-trash-days', 'trashDays', l.orgTrashDays),
+            if (_error case final error?)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(error, style: TextStyle(color: colors.danger)),
+              ),
+            Padding(
+              padding: const EdgeInsets.only(top: 12, bottom: 24),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: FilledButton(
+                  key: const Key('org-settings-save'),
+                  onPressed: _save,
+                  child: Text(l.orgSettingsSave),
+                ),
+              ),
+            ),
+          ],
+          SettingRow(
+            label: l.orgLeave,
+            trailing: TextButton(
+              key: const Key('org-leave'),
+              style: dangerQuietStyle(colors),
+              onPressed: () =>
+                  confirmAndLeaveOrg(context, widget.orgId, org?.name ?? ''),
+              child: Text(l.orgLeave),
+            ),
           ),
+          if (isOwner)
+            SettingRow(
+              label: l.orgDelete,
+              trailing: TextButton(
+                key: const Key('org-delete'),
+                style: dangerQuietStyle(colors),
+                onPressed: () => _delete(org!.name),
+                child: Text(l.orgDelete),
+              ),
+            ),
         ],
       ),
     );

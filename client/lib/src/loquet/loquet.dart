@@ -209,7 +209,7 @@ class _LoquetState extends State<Loquet> with TickerProviderStateMixin {
               _ => 0.0,
             };
             final fading = _previous != null && _fade.isAnimating;
-            final t = UfMotion.curve.transform(_fade.value);
+            final t = UfMotion.standard.transform(_fade.value);
             Widget paint(LoquetMood mood) => CustomPaint(
               size: Size.square(size),
               painter: _painter(mood, colors),

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:unfeudal_client/src/app_state.dart';
 import 'package:unfeudal_client/src/ui/admin/instance_admin_screen.dart';
+import 'package:unfeudal_client/src/ui/settings/settings_screen.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../support/pump_app.dart';
@@ -51,13 +52,11 @@ void main() {
     return s;
   }
 
-  testWidgets('the rail shows administration to the Instance Owner only', (
-    t,
-  ) async {
+  testWidgets('Réglages shows Serveur to the Instance Owner only', (t) async {
     final s = await signedInState(t);
-    await pumpApp(t, state: s);
+    await pumpApp(t, state: s, child: const SettingsScreen());
     expect(
-      find.byKey(const Key('rail-admin')),
+      find.byKey(const Key('group-server')),
       findsOneWidget,
       reason: 'the first account is the Instance Owner',
     );

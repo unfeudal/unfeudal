@@ -16,6 +16,7 @@ import 'ui/lock/login_screen.dart';
 import 'ui/onboarding/join_screen.dart';
 import 'ui/onboarding/setup_screen.dart';
 import 'ui/shell/home_shell.dart';
+import 'ui/shell/shell_chrome.dart';
 import 'ui/title_bar.dart';
 import 'ui/lock/unlock_screen.dart';
 import 'window/window_chrome.dart';
@@ -47,6 +48,7 @@ class UnfeudalApp extends StatefulWidget {
 
 class _UnfeudalAppState extends State<UnfeudalApp> {
   final _navigator = GlobalKey<NavigatorState>();
+  final _shellChrome = ShellChrome();
   late AppStage _stage = widget.state.stage;
 
   @override
@@ -60,6 +62,7 @@ class _UnfeudalAppState extends State<UnfeudalApp> {
   @override
   void dispose() {
     widget.state.removeListener(_onState);
+    _shellChrome.dispose();
     super.dispose();
   }
 
@@ -104,22 +107,22 @@ class _UnfeudalAppState extends State<UnfeudalApp> {
         false;
   }
 
-  /// Puts the custom title bar over the screens: `rail` over the vault, `bg` over the access screens.
+  /// Puts the custom title bar over the screens: it follows the home shell's sidebar, else the access screens.
   Widget _framed(BuildContext context, Widget screen) {
     final chrome = widget.chrome;
-    if (chrome == null) return screen;
-    final colors = UfColors.of(context);
+    final scoped = ShellChromeScope(chrome: _shellChrome, child: screen);
+    if (chrome == null) return scoped;
     final l = AppLocalizations.of(context);
-    final home = widget.state.stage == AppStage.home;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         UfTitleBar(
           chrome: chrome,
-          title: home ? '${l.appName} — ${l.vaultPersonal}' : l.appName,
-          background: home ? colors.rail : LockFrame.background(context),
+          shell: _shellChrome,
+          title: l.appName,
+          background: LockFrame.background(context),
         ),
-        Expanded(child: screen),
+        Expanded(child: scoped),
       ],
     );
   }

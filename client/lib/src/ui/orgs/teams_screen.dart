@@ -5,17 +5,17 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
 import '../../design/dialog.dart';
+import '../../design/field.dart';
 import '../../design/icons.dart';
+import '../../design/rows.dart';
 import '../../design/tokens.dart';
 import '../describe_error.dart';
-import '../manage_frame.dart';
 
 /// The org's teams (with the `teams` capability): create, rename, change members, delete.
 class TeamsScreen extends StatefulWidget {
-  const TeamsScreen({super.key, required this.orgId, this.onBack});
+  const TeamsScreen({super.key, required this.orgId});
 
   final String orgId;
-  final VoidCallback? onBack;
 
   @override
   State<TeamsScreen> createState() => _TeamsScreenState();
@@ -107,71 +107,94 @@ class _TeamsScreenState extends State<TeamsScreen> {
         if (m.orgId == widget.orgId) m,
     ]..sort((a, b) => a.email.compareTo(b.email));
     final editing = _editing;
-    return ManageFrame(
-      title: l.teamsTitle,
-      onBack: widget.onBack,
-      child: !enabled
-          ? const SizedBox.shrink()
-          : ListView(
-              padding: const EdgeInsets.only(bottom: 40),
-              children: [
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: FilledButton(
-                    key: const Key('team-new'),
-                    onPressed: () => _edit(null),
-                    child: Text(l.teamNew),
-                  ),
-                ),
-                if (editing != null) ...[
-                  TextField(
-                    key: const Key('team-name'),
-                    controller: editing.name,
-                    maxLength: 100,
-                    decoration: InputDecoration(labelText: l.teamName),
-                  ),
-                  for (final m in members)
-                    CheckboxListTile(
-                      key: Key('team-member-${m.userId}'),
-                      value: editing.memberIds.contains(m.userId),
-                      title: Text(m.email),
-                      onChanged: (on) => setState(
-                        () => on == true
-                            ? editing.memberIds.add(m.userId)
-                            : editing.memberIds.remove(m.userId),
+    final muted = Theme.of(context).textTheme.bodySmall!
+        .copyWith(color: colors.muted);
+    if (!enabled) return const SizedBox.shrink();
+    // a Material of its own: the section, a dialog or a test may host it
+    return Material(
+      type: MaterialType.transparency,
+      child: ListView(
+        padding: const EdgeInsets.only(bottom: 40),
+        children: [
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
+              key: const Key('team-new'),
+              icon: const Icon(UfIcons.plus),
+              onPressed: () => _edit(null),
+              label: Text(l.teamNew),
+            ),
+          ),
+          if (editing != null)
+            Card(
+              margin: const EdgeInsets.only(top: 12),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  spacing: 8,
+                  children: [
+                    UfField(
+                      label: l.teamName,
+                      child: TextField(
+                        key: const Key('team-name'),
+                        controller: editing.name,
+                        maxLength: 100,
                       ),
                     ),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: FilledButton(
-                      key: const Key('team-save'),
-                      onPressed: _save,
-                      child: Text(l.teamSave),
+                    for (final m in members)
+                      CheckboxListTile(
+                        key: Key('team-member-${m.userId}'),
+                        value: editing.memberIds.contains(m.userId),
+                        contentPadding: EdgeInsets.zero,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        title: Text(m.email),
+                        onChanged: (on) => setState(
+                          () => on == true
+                              ? editing.memberIds.add(m.userId)
+                              : editing.memberIds.remove(m.userId),
+                        ),
+                      ),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: FilledButton(
+                        key: const Key('team-save'),
+                        onPressed: _save,
+                        child: Text(l.teamSave),
+                      ),
                     ),
+                  ],
+                ),
+              ),
+            ),
+          if (_error case final error?)
+            Text(error, style: TextStyle(color: colors.danger)),
+          const SizedBox(height: 8),
+          if (teams.isEmpty && editing == null)
+            Text(l.teamsEmpty, style: muted),
+          for (final t in teams)
+            InkWell(
+              key: Key('team-${t.id}'),
+              onTap: () => _edit(t),
+              child: ItemRow(
+                icon: UfIcons.usersThree,
+                title: t.name,
+                subtitle: [
+                  for (final m in members)
+                    if (t.memberIds.contains(m.userId)) m.email,
+                ].join(', '),
+                trailing: [
+                  IconButton(
+                    key: Key('team-delete-${t.id}'),
+                    tooltip: l.teamDelete,
+                    onPressed: () => _delete(t),
+                    icon: const Icon(UfIcons.trash),
                   ),
                 ],
-                if (_error case final error?)
-                  Text(error, style: TextStyle(color: colors.danger)),
-                for (final t in teams)
-                  ListTile(
-                    key: Key('team-${t.id}'),
-                    title: Text(t.name),
-                    subtitle: Text(
-                      [
-                        for (final m in members)
-                          if (t.memberIds.contains(m.userId)) m.email,
-                      ].join(', '),
-                    ),
-                    onTap: () => _edit(t),
-                    trailing: IconButton(
-                      key: Key('team-delete-${t.id}'),
-                      tooltip: l.teamDelete,
-                      onPressed: () => _delete(t),
-                      icon: const Icon(UfIcons.trash, size: 16),
-                    ),
-                  ),
-              ],
+              ),
             ),
+        ],
+      ),
     );
   }
 }

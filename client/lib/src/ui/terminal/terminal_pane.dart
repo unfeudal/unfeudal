@@ -265,8 +265,10 @@ class _TerminalPaneState extends State<TerminalPane> {
       },
       child: Material(
         color: colors.panel,
-        elevation: 4,
-        borderRadius: BorderRadius.circular(10),
+        shape: RoundedRectangleBorder(
+          borderRadius: UfRadius.card,
+          side: BorderSide(color: colors.line),
+        ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           child: Row(
@@ -372,7 +374,10 @@ class _ErrorCard extends StatelessWidget {
                         Text(
                           describeError(l, error),
                           key: const Key('tab-error'),
-                          style: text.bodyLarge!.copyWith(color: colors.muted),
+                          style: text.bodyMedium!.copyWith(
+                            color: colors.muted,
+                            fontSize: 13.5,
+                          ),
                         ),
                       ],
                     ),

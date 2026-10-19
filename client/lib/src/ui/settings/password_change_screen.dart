@@ -4,7 +4,7 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
-import '../../design/motion.dart';
+import '../../design/field.dart';
 import '../../design/tokens.dart';
 import '../describe_error.dart';
 import '../manage_frame.dart';
@@ -27,7 +27,6 @@ class _PasswordChangeScreenState extends State<PasswordChangeScreen> {
   final _confirm = TextEditingController();
   bool _busy = false;
   String? _problem;
-  int _wrongCurrent = 0;
 
   /// Reset mode, after the change: the new kit, or null when the server allows none.
   String? _kit;
@@ -70,7 +69,6 @@ class _PasswordChangeScreenState extends State<PasswordChangeScreen> {
       if (mounted) {
         setState(() {
           _problem = l.passwordCurrentWrong;
-          _wrongCurrent++;
         });
       }
     } on WeakPassword {
@@ -97,14 +95,15 @@ class _PasswordChangeScreenState extends State<PasswordChangeScreen> {
         onDone: () => Navigator.of(context).maybePop(),
       );
     }
-    Widget field(String key, TextEditingController c, String label) =>
-        TextField(
-          key: Key(key),
-          controller: c,
-          obscureText: true,
-          enabled: !_done,
-          decoration: InputDecoration(labelText: label),
-        );
+    Widget field(String key, TextEditingController c, String label) => UfField(
+      label: label,
+      child: TextField(
+        key: Key(key),
+        controller: c,
+        obscureText: true,
+        enabled: !_done,
+      ),
+    );
     // a Scaffold of its own: pushed alone, the confirmation still has somewhere to show
     return Scaffold(
       body: ManageFrame(
@@ -119,10 +118,7 @@ class _PasswordChangeScreenState extends State<PasswordChangeScreen> {
               shrinkWrap: true,
               children: [
                 if (widget.securityReset) Text(l.securityResetBody),
-                ShakeOnError(
-                  trigger: _wrongCurrent,
-                  child: field('pw-current', _current, l.pwCurrent),
-                ),
+                field('pw-current', _current, l.pwCurrent),
                 field('pw-next', _next, l.pwNext),
                 field('pw-confirm', _confirm, l.pwConfirm),
                 if (_problem case final problem?)

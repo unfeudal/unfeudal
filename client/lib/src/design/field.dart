@@ -24,31 +24,40 @@ class UfField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = UfColors.of(context);
-    final small = Theme.of(context).textTheme.labelSmall!;
+    final text = Theme.of(context).textTheme;
+    final help = text.bodySmall!.copyWith(color: colors.muted);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       spacing: 6,
       children: [
-        Text(label, style: small.copyWith(color: colors.muted)),
+        Text(label, style: text.labelLarge),
         child,
         if (source case final source?)
           Row(
             spacing: 6,
             children: [
-              Icon(UfIcons.arrowElbowDownRight, size: 13, color: colors.muted),
-              Flexible(
-                child: Text(
-                  source,
-                  style: small.copyWith(
-                    color: colors.muted,
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
-              ),
+              Icon(UfIcons.arrowElbowDownRight, size: 12, color: colors.muted),
+              Flexible(child: Text(source, style: help)),
             ],
           ),
         if (error case final error?)
-          Text(error, style: small.copyWith(color: colors.danger)),
+          Row(
+            spacing: 6,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Icon(
+                  UfIcons.warningOctagon,
+                  size: 13,
+                  color: colors.danger,
+                ),
+              ),
+              Flexible(
+                child: Text(error, style: help.copyWith(color: colors.danger)),
+              ),
+            ],
+          ),
       ],
     );
   }

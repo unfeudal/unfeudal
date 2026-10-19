@@ -57,9 +57,11 @@ void main() {
       await t.runAsync(() => s.sync!.syncNow());
       await pumpApp(t, state: s, child: const TrashScreen());
       await pumpReal(t);
-      expect(find.text('Kept until restored.'), findsOneWidget);
+      expect(find.textContaining('Kept until restored.'), findsOneWidget);
       expect(
-        t.widget<TextButton>(find.byKey(Key('trash-restore-$gone'))).onPressed,
+        t
+            .widget<ButtonStyleButton>(find.byKey(Key('trash-restore-$gone')))
+            .onPressed,
         isNull,
       );
     },
@@ -100,11 +102,14 @@ void main() {
         );
         await s.sync!.syncNow();
       });
+      s.orgs!.select(testOrgId);
       await pumpApp(t, state: s, child: const TrashScreen());
       await pumpReal(t);
       expect(
         t
-                .widget<TextButton>(find.byKey(Key('trash-restore-${host.id}')))
+                .widget<ButtonStyleButton>(
+                  find.byKey(Key('trash-restore-${host.id}')),
+                )
                 .onPressed !=
             null,
         enabled,
@@ -161,6 +166,7 @@ void main() {
         );
         await s.sync!.syncNow();
       });
+      s.orgs!.select(testOrgId);
       await pumpApp(t, state: s, child: const TrashScreen());
       await pumpReal(t);
       expect(find.byKey(Key('trash-inside-${host.id}')), findsOneWidget);
@@ -177,11 +183,11 @@ void main() {
     },
   );
 
-  testWidgets('the rail opens the trash', (t) async {
+  testWidgets('the sidebar opens the trash', (t) async {
     final (_, s, gone, _) = await world(t);
     await pumpApp(t, state: s, child: const HomeShell());
     await pumpReal(t);
-    await t.tap(find.byKey(const Key('rail-trash')));
+    await t.tap(find.byKey(const Key('section-trash')));
     await pumpReal(t);
     expect(find.byKey(Key('trash-$gone')), findsOneWidget);
   });

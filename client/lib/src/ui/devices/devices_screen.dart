@@ -4,23 +4,38 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
+import '../../design/buttons.dart';
 import '../../design/icons.dart';
+import '../../design/rows.dart';
 import '../../design/tokens.dart';
 import '../../design/dialog.dart';
 import '../describe_error.dart';
 import '../manage_frame.dart';
 
 /// The devices of the account; revoking this one signs out (asked first). Allowed in read-only mode.
-class DevicesScreen extends StatefulWidget {
+/// This account's devices in a section frame, for a screen pushed on its own.
+class DevicesScreen extends StatelessWidget {
   const DevicesScreen({super.key, this.onBack});
 
   final VoidCallback? onBack;
 
   @override
-  State<DevicesScreen> createState() => _DevicesScreenState();
+  Widget build(BuildContext context) => ManageFrame(
+    title: AppLocalizations.of(context).devicesTitle,
+    onBack: onBack,
+    child: const DeviceList(),
+  );
 }
 
-class _DevicesScreenState extends State<DevicesScreen> {
+/// This account's devices, the current one marked, each other one revocable; Réglages › Appareils.
+class DeviceList extends StatefulWidget {
+  const DeviceList({super.key});
+
+  @override
+  State<DeviceList> createState() => _DeviceListState();
+}
+
+class _DeviceListState extends State<DeviceList> {
   late Future<List<Device>> _devices = AppScope.read(context).loadDevices();
   String? _error;
 
@@ -54,37 +69,33 @@ class _DevicesScreenState extends State<DevicesScreen> {
     final l = AppLocalizations.of(context);
     final colors = UfColors.of(context);
     final dates = MaterialLocalizations.of(context);
-    return ManageFrame(
-      title: l.devicesTitle,
-      onBack: widget.onBack,
-      child: FutureBuilder(
-        future: _devices,
-        builder: (context, snapshot) {
-          if (snapshot.error case final Exception e) {
-            return Center(child: Text(describeError(l, e)));
-          }
-          final devices = snapshot.data;
-          if (devices == null) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          return ListView(
-            padding: const EdgeInsets.only(bottom: 40),
-            children: [
-              if (_error case final error?)
-                Text(error, style: TextStyle(color: colors.danger)),
-              for (final d in devices)
-                _DeviceRow(
-                  key: ValueKey(d.id),
-                  device: d,
-                  lastSeen: l.deviceLastSeen(
-                    dates.formatMediumDate(d.lastSeenAt.toLocal()),
-                  ),
-                  onRevoke: () => _revoke(d),
+    return FutureBuilder(
+      future: _devices,
+      builder: (context, snapshot) {
+        if (snapshot.error case final Exception e) {
+          return Center(child: Text(describeError(l, e)));
+        }
+        final devices = snapshot.data;
+        if (devices == null) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        return ListView(
+          padding: const EdgeInsets.only(bottom: 40),
+          children: [
+            if (_error case final error?)
+              Text(error, style: TextStyle(color: colors.danger)),
+            for (final d in devices)
+              _DeviceRow(
+                key: ValueKey(d.id),
+                device: d,
+                lastSeen: l.deviceLastSeen(
+                  dates.formatMediumDate(d.lastSeenAt.toLocal()),
                 ),
-            ],
-          );
-        },
-      ),
+                onRevoke: () => _revoke(d),
+              ),
+          ],
+        );
+      },
     );
   }
 }
@@ -106,76 +117,41 @@ class _DeviceRow extends StatelessWidget {
     final l = AppLocalizations.of(context);
     final colors = UfColors.of(context);
     final revoked = device.revokedAt != null;
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 960),
-        child: Opacity(
-          opacity: revoked ? 0.55 : 1,
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              spacing: 14,
-              children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: colors.field,
-                    borderRadius: const BorderRadius.all(Radius.circular(10)),
-                  ),
-                  child: Icon(UfIcons.devices, size: 18, color: colors.accent),
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 720),
+      child: ItemRow(
+        icon: UfIcons.desktop,
+        title: device.name,
+        subtitle: lastSeen,
+        dimmed: revoked,
+        trailing: [
+          if (device.current)
+            Container(
+              key: Key('device-current-${device.id}'),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: colors.okSoft,
+                borderRadius: UfRadius.key,
+              ),
+              child: Text(
+                l.deviceCurrent,
+                style: TextStyle(
+                  color: colors.ok,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
                 ),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        device.name,
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                      Text(
-                        lastSeen,
-                        style: TextStyle(color: colors.muted, fontSize: 13),
-                      ),
-                    ],
-                  ),
-                ),
-                if (device.current)
-                  Container(
-                    key: Key('device-current-${device.id}'),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 3,
-                    ),
-                    decoration: BoxDecoration(
-                      color: colors.okSoft,
-                      borderRadius: const BorderRadius.all(
-                        Radius.circular(999),
-                      ),
-                    ),
-                    child: Text(
-                      l.deviceCurrent,
-                      style: TextStyle(
-                        color: colors.ok,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                if (revoked)
-                  Text(l.deviceRevoked, style: TextStyle(color: colors.muted))
-                else
-                  TextButton(
-                    key: Key('revoke-${device.id}'),
-                    style: TextButton.styleFrom(foregroundColor: colors.danger),
-                    onPressed: onRevoke,
-                    child: Text(l.deviceRevoke),
-                  ),
-              ],
+              ),
             ),
-          ),
-        ),
+          if (revoked)
+            UfTag(l.deviceRevoked)
+          else
+            TextButton(
+              key: Key('revoke-${device.id}'),
+              style: dangerQuietStyle(colors).merge(smallButton),
+              onPressed: onRevoke,
+              child: Text(l.deviceRevoke),
+            ),
+        ],
       ),
     );
   }

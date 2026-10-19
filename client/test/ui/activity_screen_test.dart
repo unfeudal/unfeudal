@@ -38,7 +38,7 @@ void main() {
       );
       await pumpReal(t);
       expect(find.text('A device signed in'), findsWidgets);
-      expect(find.text('203.0.113.7'), findsWidgets);
+      expect(find.textContaining('203.0.113.7'), findsWidgets);
       await t.tap(find.byKey(const Key('activity-more')));
       await pumpReal(t);
       expect(find.byKey(const Key('activity-more')), findsNothing);
@@ -53,7 +53,7 @@ void main() {
   );
 
   testWidgets(
-    'scopes: org for admins, folders with manage, instance for the Instance Owner',
+    'vault scopes: my actions and the folders I manage; account and server stay in settings',
     (t) async {
       final h = SyncHarness(capabilities: ['audit', 'orgs', 'sync']);
       final s = await signedInState(t, harness: h);
@@ -71,11 +71,15 @@ void main() {
         );
         await s.sync!.syncNow();
       });
+      s.orgs!.select(testOrgId);
       await pumpApp(t, state: s, child: const ActivityScreen());
       await pumpReal(t);
       await t.tap(find.byKey(const Key('activity-scope')));
       await t.pumpAndSettle();
-      for (final scope in ['me', 'user', 'instance', 'folder:$f']) {
+      for (final scope in ['user', 'instance']) {
+        expect(find.byKey(Key('activity-scope-$scope')), findsNothing);
+      }
+      for (final scope in ['me', 'folder:$f']) {
         expect(
           find.byKey(Key('activity-scope-$scope')),
           findsWidgets,
@@ -183,7 +187,7 @@ void main() {
     },
   );
 
-  testWidgets('the rail shows Activity only when the server has audit', (
+  testWidgets('the sidebar shows Activity only when the server has audit', (
     t,
   ) async {
     for (final (caps, shown) in [
@@ -197,7 +201,7 @@ void main() {
       await pumpApp(t, state: s, child: const HomeShell());
       await pumpReal(t);
       expect(
-        find.byKey(const Key('rail-activity')),
+        find.byKey(const Key('section-activity')),
         shown ? findsOneWidget : findsNothing,
       );
     }

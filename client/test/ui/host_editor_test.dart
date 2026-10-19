@@ -10,7 +10,9 @@ import 'package:unfeudal_client/src/ui/hosts/host_editor_panel.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../support/fakes.dart';
+import '../support/org_fixtures.dart';
 import '../support/pump_app.dart';
+import '../support/sync_harness.dart';
 
 AppLocalizations l10n(WidgetTester t) =>
     AppLocalizations.of(t.element(find.byType(EditorFrame).first));
@@ -172,4 +174,87 @@ void main() {
       expect((s.vault!.isTrashed(top), s.vault!.isTrashed(sub)), (true, true));
     },
   );
+
+  testWidgets(
+    'Accès: an org host lists its folder rights, no edit without manage; a personal host has no Accès',
+    (t) async {
+      final h = SyncHarness(capabilities: ['orgs', 'sync']);
+      final s = await signedInState(t, harness: h);
+      final me = s.stored!.userId;
+      final keys = FolderKeys.generate(1), f = newId();
+      h.orgMembers[testOrgId] = {me};
+      late Item host;
+      late String personal;
+      await t.runAsync(() async {
+        final pub = h.accounts.values.first.bundle.publicKey;
+        host = h.serverPutOrg(
+          await sealOrgItem(keys, folderId: f, meta: hostJson('org-db')),
+        );
+        final folder = h.serverPutOrg(
+          await sealOrgItem(
+            keys,
+            id: f,
+            type: 'folder',
+            meta: folderJson('Prod'),
+          ),
+        );
+        h.orgBlock = orgBlock(
+          members: [memberRow(me)],
+          folderTree: [node(f)],
+          acl: [
+            aclRow(f, me, allow: ['edit']),
+          ],
+          wrappedKeys: [await wrappedRow(keys, f, pub)],
+          itemIds: [host.id, folder.id],
+        );
+        await s.sync!.syncNow();
+        personal = await s.vault!.upsertItem(
+          type: 'host',
+          meta: hostJson('nas'),
+        );
+      });
+      await pumpApp(
+        t,
+        state: s,
+        child: HostEditorPanel(hostId: host.id),
+      );
+      await t.tap(find.text(l10n(t).inspectorTabAccess));
+      await t.pump();
+      expect(find.byKey(Key('access-$me')), findsOneWidget);
+      expect(find.byKey(const Key('access-why')), findsOneWidget);
+      expect(find.byKey(const Key('access-edit')), findsNothing);
+
+      await pumpApp(
+        t,
+        state: s,
+        child: HostEditorPanel(hostId: personal),
+      );
+      expect(find.text(l10n(t).inspectorTabAccess), findsNothing);
+    },
+  );
+
+  testWidgets('Historique: the versions listed inside the inspector', (
+    t,
+  ) async {
+    final h = SyncHarness(capabilities: ['item_history', 'sync']);
+    final s = await signedInState(t, harness: h);
+    late String id;
+    await t.runAsync(() async {
+      id = await s.vault!.upsertItem(type: 'host', meta: hostJson('web'));
+      await s.sync!.syncNow();
+      await s.vault!.upsertItem(id: id, type: 'host', meta: hostJson('web-2'));
+      await s.sync!.syncNow();
+    });
+    await pumpApp(
+      t,
+      state: s,
+      child: HostEditorPanel(hostId: id),
+    );
+    await t.tap(find.text(l10n(t).itemHistory));
+    await pumpReal(t);
+    expect([
+      find.byKey(const Key('history-rev-2')),
+      find.byKey(const Key('history-rev-1')),
+    ], everyElement(findsOneWidget));
+  });
 }

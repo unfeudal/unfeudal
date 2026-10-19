@@ -5,6 +5,7 @@ import 'package:unfeudal_client/src/app_state.dart';
 import 'package:unfeudal_client/src/orgs/member_pins.dart';
 import 'package:unfeudal_client/src/ui/orgs/invite_dialog.dart';
 import 'package:unfeudal_client/src/ui/orgs/members_screen.dart';
+import 'package:unfeudal_client/src/ui/orgs/members_section.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../support/org_fixtures.dart';
@@ -187,9 +188,7 @@ void main() {
     },
   );
 
-  testWidgets('remove shows the last-owner refusal; leave asks first', (
-    t,
-  ) async {
+  testWidgets('remove shows the last-owner refusal', (t) async {
     await admin(t, role: 'owner');
     h.orgReplies['DELETE /orgs/$testOrgId/members/$mia'] = (_) =>
         SyncHarness.reply({
@@ -206,10 +205,9 @@ void main() {
       find.text('Last owner of: Acme. Name another owner first.'),
       findsOneWidget,
     );
-    expect(find.byKey(const Key('org-leave')), findsOneWidget);
   });
 
-  testWidgets('invite: link and file, mail state, pending list with revoke', (
+  testWidgets('invite: link and file, mail state; the pending list revokes', (
     t,
   ) async {
     final s = await admin(t);
@@ -259,6 +257,12 @@ void main() {
       findsOneWidget,
     );
     expect(find.textContaining('unfeudal://enroll'), findsOneWidget);
+    await pumpApp(
+      t,
+      state: s,
+      child: const PendingInvites(orgId: testOrgId),
+    );
+    await pumpReal(t);
     // role and sender shown; an admin invite is an owner's to revoke
     expect(
       find.textContaining('boss@example.org · Admin · by mia@example.org'),
@@ -272,4 +276,33 @@ void main() {
     await pumpReal(t);
     expect(h.orgCalls.last.route, 'DELETE /invites/$id');
   });
+
+  testWidgets(
+    'the section: groups on the left, an admin sees invitations, anyone leaves from Organization',
+    (t) async {
+      final s = await admin(t);
+      h.orgReplies['GET /orgs/$testOrgId/invites'] = (_) =>
+          SyncHarness.reply({'invites': <Object?>[]});
+      await pumpApp(
+        t,
+        state: s,
+        child: const MembersSection(orgId: testOrgId),
+      );
+      await pumpReal(t);
+      expect(find.byKey(Key('member-confirm-$ana')), findsOneWidget);
+      for (final g in MembersGroup.values) {
+        expect(
+          find.byKey(Key('group-${g.name}')),
+          findsOneWidget,
+          reason: '$g',
+        );
+      }
+      await t.tap(find.byKey(const Key('group-invitations')));
+      await pumpReal(t);
+      expect(find.text('No pending invitation.'), findsOneWidget);
+      await t.tap(find.byKey(const Key('group-organization')));
+      await pumpReal(t);
+      expect(find.byKey(const Key('org-leave')), findsOneWidget);
+    },
+  );
 }

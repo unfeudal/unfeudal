@@ -5,13 +5,13 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
 import '../../design/field.dart';
-import '../../design/motion.dart';
 import '../../design/tokens.dart';
 import '../../events/app_events.dart';
 import '../../vault/org_writer.dart';
 import '../../vault/vault.dart';
 import '../describe_error.dart';
 import '../history/item_history_panel.dart';
+import 'access_tab.dart';
 import 'editor_frame.dart';
 import 'forwards_editor.dart';
 import 'host_binding_field.dart';
@@ -265,9 +265,30 @@ class _HostEditorPanelState extends State<HostEditorPanel> {
     final readOnly = state.sync?.readOnly ?? true;
     return EditorFrame(
       title: entry?.name ?? l.treeNewHost,
-      crumb: [l.vaultPersonal, ?folderName].join(' / '),
+      crumb: [vaultNameOf(l, state, orgId), ?folderName].join(' / '),
       notice: notice,
       onClose: widget.onClose,
+      onConnect: switch (widget.hostId) {
+        final id? when entry?.state == EntryState.ok => () => state.connect(id),
+        _ => null,
+      },
+      tabs: [
+        (
+          l.inspectorTabForwards,
+          [
+            ForwardsEditor(
+              forwards: _forwards ?? const [],
+              enabled: editable,
+              onChanged: (forwards) => setState(() => _forwards = forwards),
+            ),
+          ],
+        ),
+        if ((orgId, _folderId) case (final org?, final folder?)
+            when widget.hostId != null)
+          (l.inspectorTabAccess, [AccessTab(orgId: org, folderId: folder)]),
+        if (state.serverHas('item_history') && widget.hostId != null)
+          (l.itemHistory, [ItemHistoryPanel.embedded(itemId: widget.hostId!)]),
+      ],
       save: editable
           ? FilledButton(
               key: const Key('host-save'),
@@ -283,53 +304,45 @@ class _HostEditorPanelState extends State<HostEditorPanel> {
             )
           : null,
       children: [
-        ShakeOnError(
-          trigger: _failures,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            spacing: 12,
-            children: [
-              field('host-name', _name, l.hostName, 'name'),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                spacing: 10,
-                children: [
-                  Expanded(
-                    flex: 2,
-                    child: field(
-                      'host-address',
-                      _address,
-                      l.hostAddress,
-                      'address',
-                    ),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          spacing: 12,
+          children: [
+            field('host-name', _name, l.hostName, 'name'),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              spacing: 10,
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: field(
+                    'host-address',
+                    _address,
+                    l.hostAddress,
+                    'address',
                   ),
-                  Expanded(
-                    child: field(
-                      'host-port',
-                      _port,
-                      l.hostPort,
-                      'port',
-                      inheritable: true,
-                      resolvedValue: resolved?.port,
-                    ),
+                ),
+                Expanded(
+                  child: field(
+                    'host-port',
+                    _port,
+                    l.hostPort,
+                    'port',
+                    inheritable: true,
+                    resolvedValue: resolved?.port,
                   ),
-                ],
-              ),
-              field(
-                'host-user',
-                _user,
-                l.hostUser,
-                'user',
-                inheritable: true,
-                resolvedValue: resolved?.user,
-              ),
-            ],
-          ),
-        ),
-        ForwardsEditor(
-          forwards: _forwards ?? const [],
-          enabled: editable,
-          onChanged: (forwards) => setState(() => _forwards = forwards),
+                ),
+              ],
+            ),
+            field(
+              'host-user',
+              _user,
+              l.hostUser,
+              'user',
+              inheritable: true,
+              resolvedValue: resolved?.user,
+            ),
+          ],
         ),
         entryPicker(
           key: 'host-identity',
@@ -392,18 +405,6 @@ class _HostEditorPanelState extends State<HostEditorPanel> {
           'startupCommand',
           mono: true,
         ),
-        if (state.serverHas('item_history') && widget.hostId != null)
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton(
-              key: const Key('item-history'),
-              onPressed: () => showUfDialog<void>(
-                context,
-                (_) => ItemHistoryPanel(itemId: widget.hostId!),
-              ),
-              child: Text(l.itemHistory),
-            ),
-          ),
         if (_error case final error?)
           Text(error, style: TextStyle(color: UfColors.of(context).danger)),
       ],

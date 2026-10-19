@@ -163,19 +163,23 @@ class _TwoChoices extends StatelessWidget {
         selected: selected,
         button: true,
         child: Material(
-          color: selected ? colors.accentBg : Colors.transparent,
-          borderRadius: const BorderRadius.all(Radius.circular(8)),
+          color: selected ? colors.panel : Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: UfRadius.control,
+            side: selected ? BorderSide(color: colors.line) : BorderSide.none,
+          ),
           child: InkWell(
-            borderRadius: const BorderRadius.all(Radius.circular(8)),
+            borderRadius: UfRadius.control,
             onTap: () => onChanged(target),
             child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
               child: Text(
                 label,
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: selected ? colors.accentFg : colors.text,
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                  color: selected ? colors.text : colors.muted,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),
@@ -184,10 +188,10 @@ class _TwoChoices extends StatelessWidget {
       ),
     );
     return Container(
-      padding: const EdgeInsets.all(3),
+      padding: const EdgeInsets.all(2),
       decoration: BoxDecoration(
-        color: colors.field,
-        borderRadius: const BorderRadius.all(Radius.circular(10)),
+        color: colors.neutral,
+        borderRadius: UfRadius.card,
       ),
       child: Row(children: [side(off, !value, false), side(on, value, true)]),
     );

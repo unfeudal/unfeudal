@@ -9,6 +9,7 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
 import '../../design/banner.dart';
+import '../../design/field.dart';
 import '../../design/tokens.dart';
 import '../../export/vault_export_service.dart';
 import '../describe_error.dart';
@@ -139,18 +140,20 @@ class _ExportScreenState extends State<ExportScreen> {
                   title: Text(l.exportPlainConfirm),
                 ),
               ] else ...[
-                TextField(
-                  key: const Key('export-passphrase'),
-                  controller: _passphrase,
-                  obscureText: true,
-                  decoration: InputDecoration(labelText: l.exportPassphrase),
+                UfField(
+                  label: l.exportPassphrase,
+                  child: TextField(
+                    key: const Key('export-passphrase'),
+                    controller: _passphrase,
+                    obscureText: true,
+                  ),
                 ),
-                TextField(
-                  key: const Key('export-passphrase-confirm'),
-                  controller: _confirm,
-                  obscureText: true,
-                  decoration: InputDecoration(
-                    labelText: l.exportPassphraseConfirm,
+                UfField(
+                  label: l.exportPassphraseConfirm,
+                  child: TextField(
+                    key: const Key('export-passphrase-confirm'),
+                    controller: _confirm,
+                    obscureText: true,
                   ),
                 ),
               ],

@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 
 import '../../l10n/app_localizations.dart';
+import 'buttons.dart';
 import 'icons.dart';
 import 'tokens.dart';
 
@@ -38,7 +39,7 @@ class StatusBanner extends StatelessWidget {
     final colors = UfColors.of(context);
     // status never by colour alone: each tone has its own icon shape
     final (color, fill, icon) = switch (tone) {
-      BannerTone.info => (colors.accent, colors.infoSoft, UfIcons.info),
+      BannerTone.info => (colors.accentText, colors.select, UfIcons.info),
       BannerTone.warn => (colors.warn, colors.warnSoft, UfIcons.warning),
       BannerTone.danger => (
         colors.danger,
@@ -46,49 +47,43 @@ class StatusBanner extends StatelessWidget {
         UfIcons.warningOctagon,
       ),
     };
-    const compact = EdgeInsets.symmetric(horizontal: 12, vertical: 10);
+    // full width above the main area; actions are small secondary buttons
     return Material(
       color: fill,
-      borderRadius: const BorderRadius.all(Radius.circular(10)),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 8, 10, 8),
-        child: Row(
-          spacing: 12,
-          children: [
-            Icon(icon, color: color, size: 20),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Text(message),
-              ),
-            ),
-            if (action case (final label, final onPressed))
-              FilledButton(
-                key: actionKey,
-                style: FilledButton.styleFrom(padding: compact),
-                onPressed: onPressed,
-                child: Text(label),
-              ),
-            if (secondAction case (final label, final onPressed))
-              TextButton(
-                key: secondActionKey,
-                style: TextButton.styleFrom(
-                  foregroundColor: colors.text,
-                  padding: compact,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 44),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 6, 8, 6),
+          child: Row(
+            spacing: 12,
+            children: [
+              Icon(icon, color: color, size: 16),
+              Expanded(child: Text(message)),
+              if (action case (final label, final onPressed))
+                OutlinedButton(
+                  key: actionKey,
+                  style: smallButton,
+                  onPressed: onPressed,
+                  child: Text(label),
                 ),
-                onPressed: onPressed,
-                child: Text(label),
-              ),
-            if (onDismiss != null)
-              IconButton(
-                key: dismissKey,
-                onPressed: onDismiss,
-                tooltip:
-                    dismissTooltip ??
-                    AppLocalizations.of(context).bannerDismiss,
-                icon: const Icon(UfIcons.x, size: 16),
-              ),
-          ],
+              if (secondAction case (final label, final onPressed))
+                TextButton(
+                  key: secondActionKey,
+                  style: smallButton,
+                  onPressed: onPressed,
+                  child: Text(label),
+                ),
+              if (onDismiss != null)
+                IconButton(
+                  key: dismissKey,
+                  onPressed: onDismiss,
+                  tooltip:
+                      dismissTooltip ??
+                      AppLocalizations.of(context).bannerDismiss,
+                  icon: const Icon(UfIcons.x),
+                ),
+            ],
+          ),
         ),
       ),
     );

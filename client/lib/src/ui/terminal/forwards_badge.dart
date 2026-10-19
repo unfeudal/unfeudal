@@ -59,20 +59,21 @@ class ForwardsBadge extends StatelessWidget {
             message: l.forwardsActive(active.length),
             child: InkWell(
               key: Key('forwards-badge-$index'),
-              borderRadius: BorderRadius.circular(6),
+              borderRadius: UfRadius.key,
               onTap: () =>
                   controller.isOpen ? controller.close() : controller.open(),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                padding: const EdgeInsets.symmetric(horizontal: 5),
                 decoration: BoxDecoration(
-                  color: active.isEmpty ? colors.field : colors.accentBg,
-                  borderRadius: BorderRadius.circular(6),
+                  color: active.isEmpty ? colors.neutral : colors.accent,
+                  borderRadius: UfRadius.key,
                 ),
                 child: Text(
                   '${active.length}',
                   style: monoStyle.copyWith(
                     fontSize: 11,
-                    color: active.isEmpty ? colors.muted : colors.accent,
+                    height: 16 / 11,
+                    color: active.isEmpty ? colors.muted : colors.accentFg,
                   ),
                 ),
               ),

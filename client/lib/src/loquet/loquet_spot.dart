@@ -17,11 +17,15 @@ import 'loquet_pose.dart';
 /// Where Loquet sits, and his size there.
 enum LoquetPlacement {
   lock(260),
-  tree(56),
-  rail(36),
-  dialog(64),
+
+  /// The sidebar footer: his face, the account name and his reason line.
+  sidebar(28),
+
+  /// The title bar while the sidebar is hidden.
+  titleBar(24),
+  dialog(40),
   empty(88),
-  banner(40);
+  notice(28);
 
   const LoquetPlacement(this.size);
   final double size;
@@ -37,6 +41,7 @@ class LoquetSpot extends StatefulWidget {
     this.line,
     this.params = const {},
     this.eyeX,
+    this.name,
   });
 
   final LoquetPlacement placement;
@@ -44,6 +49,9 @@ class LoquetSpot extends StatefulWidget {
   final LineKey? line;
   final Map<String, String> params;
   final double? eyeX;
+
+  /// The account name above his line, in the sidebar footer.
+  final String? name;
 
   @override
   State<LoquetSpot> createState() => _LoquetSpotState();
@@ -109,22 +117,22 @@ class _LoquetSpotState extends State<LoquetSpot> {
         final mood = widget.mood ?? loquet.mood;
         final bubbles =
             loquet.mode == LoquetMode.on &&
-            widget.placement != LoquetPlacement.rail &&
+            widget.placement != LoquetPlacement.titleBar &&
             widget.placement !=
-                LoquetPlacement.tree; // the status card prints the line itself
+                LoquetPlacement.sidebar; // the footer prints the line itself
         final text =
             bubbles ||
-                (widget.placement == LoquetPlacement.tree &&
+                (widget.placement == LoquetPlacement.sidebar &&
                     loquet.mode == LoquetMode.on)
             ? _line(l, state)
             : null;
         final lively = loquet.mode == LoquetMode.on && !still;
         Widget face = GestureDetector(
           onTap: () => state.emit(const LoquetClicked()),
-          onPanUpdate: lively && widget.placement == LoquetPlacement.tree
+          onPanUpdate: lively && widget.placement == LoquetPlacement.sidebar
               ? (d) => setState(() => _drag += d.delta)
               : null,
-          onPanEnd: lively && widget.placement == LoquetPlacement.tree
+          onPanEnd: lively && widget.placement == LoquetPlacement.sidebar
               ? (_) {
                   setState(() {
                     _drag = Offset.zero;
@@ -169,22 +177,39 @@ class _LoquetSpotState extends State<LoquetSpot> {
             child: face,
           );
         }
-        if (widget.placement == LoquetPlacement.tree) {
-          // the status card is the tree's bubble
+        if (widget.placement == LoquetPlacement.sidebar) {
+          // the footer is the sidebar's bubble: the account name over his line
           final caption =
               // reasons asked by a click win over a fixed line (an empty vault)
               (loquet.reasons ? _reasons(l, loquet.engine.health) : null) ??
               text ??
               loquetLabel(l, mood);
+          final small = Theme.of(context).textTheme.bodySmall!;
           return Row(
-            spacing: 12,
+            spacing: 8,
             children: [
               face,
               Expanded(
-                child: Text(
-                  caption,
-                  style: Theme.of(context).textTheme.bodySmall!
-                      .copyWith(color: UfColors.of(context).muted),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (widget.name case final name?)
+                      Text(
+                        name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: small.copyWith(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    Text(
+                      caption,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: small.copyWith(color: UfColors.of(context).muted),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -235,7 +260,7 @@ class LoquetBubble extends StatelessWidget {
       child: TweenAnimationBuilder<double>(
         tween: Tween(begin: 0.8, end: 1),
         duration: UfMotion.of(context).fast,
-        curve: UfMotion.curve,
+        curve: UfMotion.standard,
         builder: (context, scale, child) =>
             Transform.scale(scale: scale, child: child),
         child: Container(
@@ -243,14 +268,8 @@ class LoquetBubble extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
             color: colors.panel,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x33000000),
-                blurRadius: 16,
-                offset: Offset(0, 6),
-              ),
-            ],
+            borderRadius: UfRadius.card,
+            boxShadow: UfElevation.floating(colors),
           ),
           child: Text(text, style: TextStyle(color: colors.text)),
         ),

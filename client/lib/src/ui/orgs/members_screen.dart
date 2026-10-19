@@ -6,13 +6,12 @@ import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
 import '../../app_state.dart';
 import '../../design/banner.dart';
+import '../../design/buttons.dart';
 import '../../design/dialog.dart';
-import '../../design/motion.dart';
+import '../../design/rows.dart';
 import '../../design/tokens.dart';
 import '../../orgs/member_pins.dart';
 import '../describe_error.dart';
-import '../manage_frame.dart';
-import 'invite_dialog.dart';
 import 'safety_code_dialog.dart';
 
 String roleLabel(AppLocalizations l, OrgRole role) => switch (role) {
@@ -43,12 +42,12 @@ Future<void> confirmAndLeaveOrg(
   await state.sync!.syncNow();
 }
 
-/// The org's members from the cached block: admins see status and keys, confirm and verify through the safety code.
+/// The org's members from the cached block: admins see status and keys, confirm and verify through the safety
+/// code, change roles and remove.
 class MembersScreen extends StatefulWidget {
-  const MembersScreen({super.key, required this.orgId, this.onBack});
+  const MembersScreen({super.key, required this.orgId});
 
   final String orgId;
-  final VoidCallback? onBack;
 
   @override
   State<MembersScreen> createState() => _MembersScreenState();
@@ -126,9 +125,6 @@ class _MembersScreenState extends State<MembersScreen> {
     });
   }
 
-  Future<void> _leave(String orgName) =>
-      _run((state) => confirmAndLeaveOrg(context, widget.orgId, orgName));
-
   /// Pins live in the vault: its changes redraw the badges.
   @override
   Widget build(BuildContext context) => ListenableBuilder(
@@ -137,7 +133,6 @@ class _MembersScreenState extends State<MembersScreen> {
   );
 
   Widget _members(BuildContext context) {
-    final l = AppLocalizations.of(context);
     final state = AppScope.of(context);
     final orgs = state.orgs!;
     final me = state.stored!.userId;
@@ -157,34 +152,14 @@ class _MembersScreenState extends State<MembersScreen> {
           m.status != MemberStatus.accepted.name &&
           m.disabled != true,
     );
-    return ManageFrame(
-      title: l.membersTitle,
-      onBack: widget.onBack,
+    // a Material of its own: the section, a dialog or a test may host it
+    return Material(
+      type: MaterialType.transparency,
       child: ListView(
         padding: const EdgeInsets.only(bottom: 40),
         children: [
           if (_error case final error?)
             StatusBanner(tone: BannerTone.danger, message: error),
-          Row(
-            spacing: 8,
-            children: [
-              if (isAdmin)
-                FilledButton(
-                  key: const Key('members-invite'),
-                  onPressed: () => showUfDialog<void>(
-                    context,
-                    (_) => InviteDialog(orgId: widget.orgId),
-                  ),
-                  child: Text(l.inviteTitle),
-                ),
-              const Spacer(),
-              TextButton(
-                key: const Key('org-leave'),
-                onPressed: () => _leave(org?.name ?? ''),
-                child: Text(l.orgLeave),
-              ),
-            ],
-          ),
           for (final m in members)
             _row(
               context,
@@ -224,9 +199,11 @@ class _MembersScreenState extends State<MembersScreen> {
         !accepted &&
         pin == null &&
         (m.status != null || unconfirmed.contains(m.userId));
-    final muted = TextStyle(color: colors.muted, fontSize: 12);
+    final muted = Theme.of(context).textTheme.bodySmall!
+        .copyWith(color: colors.muted);
     final badges = <Widget>[
-      if (isAdmin && accepted) Text(l.memberAwaiting, style: muted),
+      if (isAdmin && accepted)
+        Text(l.memberAwaiting, style: muted.copyWith(color: colors.warn)),
       if (isAdmin && !self && changed)
         Text(
           l.memberKeyChanged,
@@ -236,76 +213,104 @@ class _MembersScreenState extends State<MembersScreen> {
       else if (isAdmin && !self && pin != null)
         Text(
           pin.verified ? l.memberVerified : l.memberNotVerified,
-          style: muted,
+          style: pin.verified ? muted.copyWith(color: colors.ok) : muted,
         )
       else if (isAdmin && !self && unpinned)
         Text(l.memberUnpinned, style: muted),
     ];
     final touchable = isOwner || role == OrgRole.member;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        spacing: 12,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              spacing: 2,
-              children: [Text(m.email), ...badges],
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: colors.line)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Row(
+          spacing: 12,
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: colors.neutral,
+                borderRadius: UfRadius.control,
+              ),
+              child: Text(
+                m.email.isEmpty ? '?' : m.email[0].toUpperCase(),
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
             ),
-          ),
-          if (isAdmin && role != null)
-            DropdownButton<OrgRole>(
-              key: Key('member-role-${m.userId}'),
-              value: role,
-              onChanged: touchable && (!self || (isOwner && anotherOwner))
-                  ? (r) {
-                      if (r == null || r == role) return;
-                      _run((state) async {
-                        await state.api!.setMemberRole(
-                          widget.orgId,
-                          m.userId,
-                          r,
-                        );
-                        await state.sync!.syncNow();
-                      });
-                    }
-                  : null,
-              items: [
-                for (final r in OrgRole.values)
-                  DropdownMenuItem(
-                    key: Key('role-option-${r.name}'),
-                    value: r,
-                    enabled: isOwner || r == OrgRole.member,
-                    child: Text(roleLabel(l, r)),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    m.email,
+                    style: Theme.of(context).textTheme.labelLarge!
+                        .copyWith(fontSize: 13.5),
                   ),
-              ],
-            )
-          else if (role != null)
-            Text(roleLabel(l, role), style: muted),
-          if (isAdmin && accepted && key != null)
-            FilledButton(
-              key: Key('member-confirm-${m.userId}'),
-              onPressed: () => _confirm(m),
-              child: Text(l.memberConfirm),
+                  ...badges,
+                ],
+              ),
             ),
-          if (isAdmin &&
-              !self &&
-              !accepted &&
-              key != null &&
-              (pin == null || !pin.verified || changed))
-            TextButton(
-              key: Key('member-verify-${m.userId}'),
-              onPressed: () => _verify(m),
-              child: Text(l.memberVerify),
-            ),
-          if (isAdmin && !self && touchable)
-            TextButton(
-              key: Key('member-remove-${m.userId}'),
-              onPressed: () => _remove(m),
-              child: Text(l.memberRemove),
-            ),
-        ],
+            if (isAdmin && role != null)
+              DropdownButton<OrgRole>(
+                key: Key('member-role-${m.userId}'),
+                value: role,
+                underline: const SizedBox.shrink(),
+                onChanged: touchable && (!self || (isOwner && anotherOwner))
+                    ? (r) {
+                        if (r == null || r == role) return;
+                        _run((state) async {
+                          await state.api!.setMemberRole(
+                            widget.orgId,
+                            m.userId,
+                            r,
+                          );
+                          await state.sync!.syncNow();
+                        });
+                      }
+                    : null,
+                items: [
+                  for (final r in OrgRole.values)
+                    DropdownMenuItem(
+                      key: Key('role-option-${r.name}'),
+                      value: r,
+                      enabled: isOwner || r == OrgRole.member,
+                      child: Text(roleLabel(l, r)),
+                    ),
+                ],
+              )
+            else if (role != null)
+              UfTag(roleLabel(l, role)),
+            if (isAdmin && accepted && key != null)
+              FilledButton(
+                key: Key('member-confirm-${m.userId}'),
+                style: smallButton,
+                onPressed: () => _confirm(m),
+                child: Text(l.memberConfirm),
+              ),
+            if (isAdmin &&
+                !self &&
+                !accepted &&
+                key != null &&
+                (pin == null || !pin.verified || changed))
+              OutlinedButton(
+                key: Key('member-verify-${m.userId}'),
+                style: smallButton,
+                onPressed: () => _verify(m),
+                child: Text(l.memberVerify),
+              ),
+            if (isAdmin && !self && touchable)
+              TextButton(
+                key: Key('member-remove-${m.userId}'),
+                style: dangerQuietStyle(colors).merge(smallButton),
+                onPressed: () => _remove(m),
+                child: Text(l.memberRemove),
+              ),
+          ],
+        ),
       ),
     );
   }

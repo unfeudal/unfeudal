@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
@@ -17,28 +18,29 @@ import '../../storage/local_mirror.dart';
 import '../../sync/sync_engine.dart';
 import '../../version.dart';
 import '../activity/activity_screen.dart';
-import '../admin/instance_admin_screen.dart';
 import '../describe_error.dart';
 import '../hosts/folder_editor_panel.dart';
 import '../hosts/host_editor_panel.dart';
 import '../../ssh/ssh_connector.dart';
 import '../history/trash_screen.dart';
 import '../hosts/host_key_dialog.dart';
-import '../devices/devices_screen.dart';
 import '../keychain/keychain_screen.dart';
 import '../orgs/rotation_banner.dart';
 import '../settings/settings_screen.dart';
 import '../terminal/ssh_dialogs.dart';
 import '../terminal/terminal_tabs.dart';
 import 'shortcuts.dart';
+import '../orgs/members_section.dart';
+import '../snippets/snippets_screen.dart';
+import 'shell_chrome.dart';
+import 'sidebar.dart';
 import 'tree_panel.dart';
-import 'vault_rail.dart';
 
 /// Opens a link in the system browser; replaced in tests.
 @visibleForTesting
 Future<bool> Function(Uri url) openExternalUrl = launchUrl;
 
-/// Rail, resizable tree and terminal area, under the status banners.
+/// The sidebar (resizable, Ctrl+B hides it) beside the sessions under the status banners, or a section.
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
 
@@ -53,18 +55,18 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
   late double _treeWidth = _state.settings.treeWidth;
   bool _treeVisible = true;
 
-  /// Rail and tree only: the terminal's keys never reach Loquet.
+  /// The sidebar only: the terminal's keys never reach Loquet.
   final _loquetKeys = FocusNode(debugLabel: 'loquet-keys');
   bool _ledgerDismissed = false;
 
-  /// The floating host or folder editor over the terminal, if open.
+  /// The host or folder inspector docked right of the sessions, if open.
   Widget? _editor;
 
-  /// Where the open editor grows from (the control that opened it), in global coordinates.
-  Rect? _editorFrom;
-
-  /// The management screen in place of the tree and terminals, if open.
+  /// The section in place of the sessions, if open.
   ShellPage? _page;
+
+  /// Kept to clear the title bar on dispose, when the context can no longer look it up.
+  ShellChrome? _chrome;
 
   static const _minTree = 220.0, _maxTree = 400.0, _resizeStep = 16.0;
 
@@ -74,6 +76,9 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
     _state
       ..dialogs = this
       ..onHomeMounted();
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _chrome = mounted ? ShellChromeScope.maybeOf(context) : null,
+    );
     HardwareKeyboard.instance.addHandler(_onKey);
   }
 
@@ -85,11 +90,13 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
     _searchFocus.dispose();
     _terminalFocus.dispose();
     _loquetKeys.dispose();
+    _chrome?.clear();
     super.dispose();
   }
 
   bool _onKey(KeyEvent event) {
     final keyboard = HardwareKeyboard.instance;
+    if (_vaultShortcut(event, keyboard)) return true;
     final shortcut = UfShortcuts.resolve(
       event,
       ctrl: keyboard.isControlPressed,
@@ -117,6 +124,36 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
     }
     return true;
   }
+
+  /// Ctrl+1…9 (⌘ on macOS) picks the personal vault, then each org in order; the terminal keeps its keys.
+  bool _vaultShortcut(KeyEvent event, HardwareKeyboard keyboard) {
+    final mac = defaultTargetPlatform == TargetPlatform.macOS;
+    final modifier = mac ? keyboard.isMetaPressed : keyboard.isControlPressed;
+    if (event is! KeyDownEvent || !modifier || keyboard.isShiftPressed) {
+      return false;
+    }
+    if (_terminalFocus.hasFocus) return false;
+    final digit = _digits.indexOf(event.logicalKey);
+    if (digit < 0) return false;
+    final orgs = _state.serverHas('orgs') ? _state.orgs : null;
+    final vaults = [null, ...?orgs?.orgs.map((o) => o.id)];
+    if (digit >= vaults.length) return false;
+    orgs?.select(vaults[digit]);
+    _show(null);
+    return true;
+  }
+
+  static const _digits = [
+    LogicalKeyboardKey.digit1,
+    LogicalKeyboardKey.digit2,
+    LogicalKeyboardKey.digit3,
+    LogicalKeyboardKey.digit4,
+    LogicalKeyboardKey.digit5,
+    LogicalKeyboardKey.digit6,
+    LogicalKeyboardKey.digit7,
+    LogicalKeyboardKey.digit8,
+    LogicalKeyboardKey.digit9,
+  ];
 
   void _focusSearch() {
     setState(() {
@@ -194,10 +231,7 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
       setState(() => _editor = null);
     });
     trace(TraceArea.ui, 'editor open: ${editor.runtimeType}');
-    setState(() {
-      _editor = editor;
-      _editorFrom = from;
-    });
+    setState(() => _editor = editor);
   }
 
   void _resize(double delta) => setState(
@@ -212,114 +246,121 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
     final banners = _banners(context, state);
+    final page = _page == ShellPage.members && selectedOrg(state) == null
+        ? null
+        : _page;
     void back() => _show(null);
+    _publishChrome(context, state, page);
     return Scaffold(
       body: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Focus(
-            key: const Key('loquet-keys'),
-            focusNode: _loquetKeys,
-            onKeyEvent: (_, e) {
-              if (e is KeyDownEvent) {
-                state.loquet.show(state.loquet.engine.key(e.logicalKey));
-              }
-              // focused itself (a tap on the background), it keeps the arrows from moving the focus
-              // away; a focused field or row inside still gets every key
-              return _loquetKeys.hasPrimaryFocus
-                  ? KeyEventResult.handled
-                  : KeyEventResult.ignored;
-            },
-            child: GestureDetector(
-              behavior: HitTestBehavior.translucent,
-              onTap: _loquetKeys.requestFocus,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  VaultRail(
-                    page: _page,
-                    onLock: state.lock,
+          if (_treeVisible) ...[
+            Focus(
+              key: const Key('loquet-keys'),
+              focusNode: _loquetKeys,
+              onKeyEvent: (_, e) {
+                if (e is KeyDownEvent) {
+                  state.loquet.show(state.loquet.engine.key(e.logicalKey));
+                }
+                // focused itself (a tap on the background), it keeps the arrows from moving the focus
+                // away; a focused field or row inside still gets every key
+                return _loquetKeys.hasPrimaryFocus
+                    ? KeyEventResult.handled
+                    : KeyEventResult.ignored;
+              },
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onTap: _loquetKeys.requestFocus,
+                child: AnimatedContainer(
+                  key: const Key('tree-panel'),
+                  duration: UfMotion.of(context).base,
+                  curve: UfMotion.standard,
+                  width: _treeWidth,
+                  child: Sidebar(
+                    tree: _treePanel(),
+                    page: page,
                     onShow: _show,
-                    showLoquet: _page != null || !_treeVisible,
+                    onLock: state.lock,
                   ),
-                  if (_page == null && _treeVisible) ...[
-                    AnimatedContainer(
-                      key: const Key('tree-panel'),
-                      duration: UfMotion.of(context).base,
-                      curve: UfMotion.curve,
-                      width: _treeWidth,
-                      child: _treePanel(),
-                    ),
-                    _resizer(),
-                  ],
-                ],
+                ),
               ),
             ),
-          ),
-          if (_page case final page?)
-            Expanded(
-              child: switch (page) {
-                ShellPage.keychain => KeychainScreen(onBack: back),
-                ShellPage.activity => ActivityScreen(onBack: back),
-                ShellPage.trash => TrashScreen(onBack: back),
-                ShellPage.devices => DevicesScreen(onBack: back),
-                ShellPage.admin => InstanceAdminScreen(onBack: back),
-                ShellPage.settings => SettingsScreen(onBack: back),
-              },
-            )
-          else ...[
-            Expanded(
-              child: Column(
+            _resizer(),
+          ],
+          Expanded(
+            child: switch (page) {
+              ShellPage.snippets => SnippetsScreen(onBack: back),
+              ShellPage.keychain => KeychainScreen(onBack: back),
+              ShellPage.members => MembersSection(
+                orgId: state.orgs!.selected!,
+                onBack: back,
+              ),
+              ShellPage.activity => ActivityScreen(onBack: back),
+              ShellPage.trash => TrashScreen(onBack: back),
+              ShellPage.settings => SettingsScreen(onBack: back),
+              null => Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  if (banners.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(10, 8, 10, 0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        spacing: 6,
-                        children: banners,
-                      ),
-                    ),
+                  ...banners,
                   Expanded(
-                    child: Stack(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Focus(
-                          focusNode: _terminalFocus,
-                          child: TerminalTabs(
-                            onNewTab: _focusSearch,
-                            onShowTree: _treeVisible
-                                ? null
-                                : () => setState(() => _treeVisible = true),
-                            onEditHost: _editHost,
+                        Expanded(
+                          child: Focus(
+                            focusNode: _terminalFocus,
+                            child: TerminalTabs(
+                              onNewTab: _focusSearch,
+                              onEditHost: _editHost,
+                            ),
                           ),
                         ),
                         if (_editor case final editor?)
-                          Positioned(
-                            top: 10,
-                            right: 10,
-                            bottom: 10,
-                            child: GrowFrom(
-                              key: ObjectKey(editor),
-                              from: _editorFrom?.center,
-                              child: editor,
-                            ),
+                          GrowFrom(
+                            key: ObjectKey(editor),
+                            from: null,
+                            child: editor,
                           ),
                       ],
                     ),
                   ),
                 ],
               ),
-            ),
-          ],
+            },
+          ),
         ],
       ),
     );
   }
 
-  Widget _treePanel() => TreePanel(
+  /// The title bar reads the sidebar width and the window title: « [vault] — [section or session] ».
+  void _publishChrome(BuildContext context, AppState state, ShellPage? page) {
+    final chrome = ShellChromeScope.maybeOf(context);
+    if (chrome == null) return;
+    final l = AppLocalizations.of(context);
+    final vault = selectedOrg(state)?.name ?? l.vaultPersonal;
+    final tab = state.tabs.isEmpty
+        ? l.statusNoSession
+        : state.tabs[state.activeTab.clamp(0, state.tabs.length - 1)].title;
+    final title = switch (page) {
+      ShellPage.settings => l.railSettings,
+      final page? => '$vault — ${pageTitle(l, page)}',
+      null => '$vault — $tab',
+    };
+    final width = _treeVisible ? _treeWidth : null;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      chrome.show(
+        sidebarWidth: width,
+        title: title,
+        toggleSidebar: () => setState(() => _treeVisible = !_treeVisible),
+      );
+    });
+  }
+
+  TreePanel _treePanel() => TreePanel(
     searchFocus: _searchFocus,
-    onHide: () => setState(() => _treeVisible = false),
     onNewHost: () => _openEditor(
       (close) => HostEditorPanel(orgId: _state.orgs?.selected, onClose: close),
     ),

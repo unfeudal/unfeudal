@@ -13,11 +13,24 @@ const _bodyData =
 @visibleForTesting
 Path loquetBodyPath() => _path(_bodyData)..fillType = PathFillType.evenOdd;
 
+// colours are irrelevant when only the outlines are read
+const _none = Color(0x00000000);
+const _shapesOnly = LoquetPalette(
+  body: _none,
+  face: _none,
+  feet: _none,
+  hand: _none,
+  handLine: _none,
+  zzz: _none,
+  accent: _none,
+  drop: _none,
+);
+
 /// Every shape of [accessory], for its bounds.
 @visibleForTesting
 Path loquetAccessoryPath(LoquetAccessory accessory) {
   final out = Path();
-  for (final s in _accessory(accessory)) {
+  for (final s in _accessory(accessory, _shapesOnly)) {
     out.addPath(s.path, Offset.zero);
   }
   return out;
@@ -69,7 +82,7 @@ class LoquetPainter extends CustomPainter {
       _draw(canvas, s);
     }
     if (accessory case final a?) {
-      for (final s in _accessory(a)) {
+      for (final s in _accessory(a, c)) {
         _draw(canvas, s);
       }
     }
@@ -121,7 +134,7 @@ class LoquetPainter extends CustomPainter {
         ],
         LoquetEyes.squeezed => [
           line('M30 40 Q36 46 43 42 M57 42 Q64 46 70 40', 3.4),
-          fill('M27 47 q-2 4 0.5 6 q3 -1 1.5 -6 Z', _tear),
+          fill('M27 47 q-2 4 0.5 6 q3 -1 1.5 -6 Z', palette.drop),
         ],
         LoquetEyes.sleepy => [
           fill(
@@ -152,7 +165,7 @@ class LoquetPainter extends CustomPainter {
         LoquetMouth.zigzag => [line('M42 60 l3 -3 l3 3 l3 -3 l3 3 l3 -3', 3)],
         LoquetMouth.yawn => [
           _ellipse(50, 63, 8, 12, face),
-          _ellipse(50, 70, 5, 3.5, const Color(0xD9D9645A)),
+          _ellipse(50, 70, 5, 3.5, const Color(0xD9E57A87)),
         ],
         LoquetMouth.tiny => [_ellipse(50, 60, 2.6, 2, face)],
         LoquetMouth.grin => [line('M41 56 Q50 66 59 56')],
@@ -160,7 +173,9 @@ class LoquetPainter extends CustomPainter {
       },
       for (final extra in pose.extras)
         ...switch (extra) {
-          LoquetExtra.sweat => [_fill('M78 26 q4 6 0 9 q-4 -3 0 -9 Z', _tear)],
+          LoquetExtra.sweat => [
+            _fill('M78 26 q4 6 0 9 q-4 -3 0 -9 Z', palette.drop),
+          ],
           LoquetExtra.magnifier => [
             _ring(86, 70, 9, palette.feet, 4),
             _line('M92.5 76.5 L101 85', palette.feet, 5),
@@ -197,8 +212,6 @@ class LoquetPainter extends CustomPainter {
       old.blink != blink ||
       old.squash != squash;
 }
-
-const _tear = Color(0xFF8EB0D8);
 
 typedef _Shape = ({Path path, Color? fill, Color? stroke, double width});
 
@@ -276,10 +289,10 @@ _Shape _rect(
   width: 1,
 );
 
-List<_Shape> _accessory(LoquetAccessory a) {
-  const ink = Color(0xFF171B1F);
+List<_Shape> _accessory(LoquetAccessory a, LoquetPalette palette) {
+  const ink = Color(0xFF121715);
   const gold = Color(0xFFE7B53C);
-  const red = Color(0xFFD9645A);
+  const red = Color(0xFFC0485C);
   const snow = Color(0xFFF4F7FA);
   const snowLine = Color(0xFFC7D0CC);
   switch (a) {
@@ -298,7 +311,7 @@ List<_Shape> _accessory(LoquetAccessory a) {
         _fill('M12 18 Q12 -9 50 -9 Q88 -9 88 18 Z', red),
         _line(
           'M27 -3 V16 M38 -7 V16 M50 -9 V16 M62 -7 V16 M73 -3 V16',
-          const Color(0xFFC04F46),
+          const Color(0xFFB03A4E),
           2.2,
         ),
         _rect(9, 14, 82, 12, 6, snow, stroke: snowLine),
@@ -325,7 +338,7 @@ List<_Shape> _accessory(LoquetAccessory a) {
         width: s.width,
       );
       return [
-        turn(_fill('M30 14 L50 -36 L70 14 Z', const Color(0xFF23466E))),
+        turn(_fill('M30 14 L50 -36 L70 14 Z', palette.accent)),
         turn(_line('M36 0 L64 0 M41 -12 L59 -12 M45 -24 L55 -24', gold, 4.5)),
         turn(_circle(50, -38, 6, red)),
         turn(_line('M28 14 H72', gold, 3)),
@@ -337,7 +350,7 @@ List<_Shape> _accessory(LoquetAccessory a) {
           ink,
         ),
         _line('M20 34 H80', ink, 3.5),
-        _line('M27 38 L32 38 M59 38 L64 38', _tear, 2.4),
+        _line('M27 38 L32 38 M59 38 L64 38', palette.drop, 2.4),
       ];
     case LoquetAccessory.fakeNose:
       return [

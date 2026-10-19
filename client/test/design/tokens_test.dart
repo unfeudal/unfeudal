@@ -9,98 +9,99 @@ double contrast(Color a, Color b) {
 }
 
 void main() {
-  test('tokens match the design palette', () {
-    const light = UfColors.light, dark = UfColors.dark;
-    expect(
-      [
-        light.bg,
-        light.rail,
-        light.side,
-        light.panel,
-        light.field,
-        light.select,
-        light.text,
-        light.muted,
-      ],
-      const [
-        Color(0xFFE7ECEA),
-        Color(0xFFDCE3E0),
-        Color(0xFFEEF2F0),
-        Color(0xFFFFFFFF),
-        Color(0xFFE4E9E7),
-        Color(0xFFD3DEEA),
-        Color(0xFF252B31),
-        Color(0xFF5A646D),
-      ],
-    );
-    expect(
-      [
-        light.accent,
-        light.accentBg,
-        light.accentFg,
-        light.ok,
-        light.warn,
-        light.danger,
-      ],
-      const [
-        Color(0xFF23466E),
-        Color(0xFF23466E),
-        Color(0xFFF4F7FA),
-        Color(0xFF56664A),
-        Color(0xFF8A6A1F),
-        Color(0xFFA23B32),
-      ],
-    );
-    expect(
-      [
-        dark.bg,
-        dark.rail,
-        dark.side,
-        dark.panel,
-        dark.field,
-        dark.select,
-        dark.text,
-        dark.muted,
-      ],
-      const [
-        Color(0xFF171B1F),
-        Color(0xFF121518),
-        Color(0xFF1B2025),
-        Color(0xFF22282E),
-        Color(0xFF2A3138),
-        Color(0xFF26374B),
-        Color(0xFFE1E7E4),
-        Color(0xFF97A29D),
-      ],
-    );
-    expect(
-      [
-        dark.accent,
-        dark.accentBg,
-        dark.accentFg,
-        dark.ok,
-        dark.warn,
-        dark.danger,
-      ],
-      const [
-        Color(0xFF8EB0D8),
-        Color(0xFF2F5A8A),
-        Color(0xFFF2F6FA),
-        Color(0xFF9DB089),
-        Color(0xFFC9A54E),
-        Color(0xFFD9645A),
-      ],
-    );
+  test('roles match the palette, light then dark', () {
+    Map<String, Color> roles(UfColors c) => {
+      'bg': c.bg,
+      'side': c.side,
+      'panel': c.panel,
+      'field': c.field,
+      'term': c.term,
+      'line': c.line,
+      'edge': c.edge,
+      'text': c.text,
+      'muted': c.muted,
+      'neutral': c.neutral,
+      'accent': c.accent,
+      'accentFg': c.accentFg,
+      'accentText': c.accentText,
+      'select': c.select,
+      'focus': c.focus,
+      'danger': c.danger,
+      'onDanger': c.onDanger,
+      'dangerSoft': c.dangerSoft,
+      'ok': c.ok,
+      'warn': c.warn,
+    };
+    expect(roles(UfColors.light), const {
+      'bg': Color(0xFFEDF0EE),
+      'side': Color(0xFFF6F8F7),
+      'panel': Color(0xFFFFFFFF),
+      'field': Color(0xFFFFFFFF),
+      'term': Color(0xFFFFFFFF),
+      'line': Color(0xFFD8E0DB),
+      'edge': Color(0xFF7B8A83),
+      'text': Color(0xFF18201C),
+      'muted': Color(0xFF52605A),
+      'neutral': Color(0xFFE3E9E5),
+      'accent': Color(0xFF2F6B57),
+      'accentFg': Color(0xFFFFFFFF),
+      'accentText': Color(0xFF245544),
+      'select': Color(0xFFD9E8E0),
+      'focus': Color(0xFF2F6B57),
+      'danger': Color(0xFFB03A4E),
+      'onDanger': Color(0xFFFFFFFF),
+      'dangerSoft': Color(0xFFF5DFE3),
+      'ok': Color(0xFF4F6526),
+      'warn': Color(0xFF9A5523),
+    });
+    expect(roles(UfColors.dark), const {
+      'bg': Color(0xFF121715),
+      'side': Color(0xFF161C19),
+      'panel': Color(0xFF1E2622),
+      'field': Color(0xFF1B221F),
+      'term': Color(0xFF0E1210),
+      'line': Color(0xFF28322D),
+      'edge': Color(0xFF6E8077),
+      'text': Color(0xFFE3E9E5),
+      'muted': Color(0xFF94A39C),
+      'neutral': Color(0xFF28322D),
+      'accent': Color(0xFF86AE9A),
+      'accentFg': Color(0xFF0F1A15),
+      'accentText': Color(0xFFA9CDBA),
+      'select': Color(0xFF223229),
+      'focus': Color(0xFFA9CDBA),
+      'danger': Color(0xFFE57A87),
+      'onDanger': Color(0xFF1A0E10),
+      'dangerSoft': Color(0xFF3A2228),
+      'ok': Color(0xFFB9C77A),
+      'warn': Color(0xFFD08A55),
+    });
   });
 
-  test('muted text reaches 4.5:1 on window and panel', () {
+  test('text pairs reach 4.5:1 and edges 3:1 in both themes', () {
     for (final c in [UfColors.light, UfColors.dark]) {
-      expect(contrast(c.muted, c.bg), greaterThanOrEqualTo(4.5));
-      expect(contrast(c.muted, c.panel), greaterThanOrEqualTo(4.5));
+      for (final (fg, bg) in [
+        (c.text, c.bg),
+        (c.muted, c.bg),
+        (c.muted, c.panel),
+        (c.accentFg, c.accent),
+        (c.accentText, c.select),
+        (c.onDanger, c.danger),
+        (c.danger, c.dangerSoft),
+        (c.warn, c.warnSoft),
+      ]) {
+        expect(
+          contrast(fg, bg),
+          greaterThanOrEqualTo(4.5),
+          reason: '$fg on $bg',
+        );
+      }
+      expect(contrast(c.edge, c.bg), greaterThanOrEqualTo(3));
+      expect(contrast(c.focus, c.bg), greaterThanOrEqualTo(3));
     }
   });
 
-  test('theme uses the bundled fonts, 8 px controls and no default shadow', () {
+  test('theme uses the bundled fonts, 6 px controls and flat surfaces', () {
     for (final b in Brightness.values) {
       final t = ufTheme(b);
       expect(
@@ -116,9 +117,13 @@ void main() {
       final shape =
           t.filledButtonTheme.style!.shape!.resolve({})!
               as RoundedRectangleBorder;
-      expect(shape.borderRadius, BorderRadius.circular(8));
+      expect(shape.borderRadius, UfRadius.control);
+      expect(t.filledButtonTheme.style!.minimumSize!.resolve({})!.height, 32);
       expect(t.cardTheme.elevation, 0);
-      expect(t.dialogTheme.shape, isA<RoundedRectangleBorder>());
+      expect(
+        (t.dialogTheme.shape! as RoundedRectangleBorder).borderRadius,
+        UfRadius.dialog,
+      );
     }
   });
 }

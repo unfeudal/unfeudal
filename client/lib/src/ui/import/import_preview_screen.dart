@@ -8,6 +8,7 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
 import '../../design/banner.dart';
+import '../../design/field.dart';
 import '../../design/empty_state.dart';
 import '../../design/tokens.dart';
 import '../../import/ssh_config_import.dart';
@@ -175,12 +176,12 @@ class _ImportPreviewScreenState extends State<ImportPreviewScreen> {
                     ),
                   for (final (i, k) in plan.keys.indexed)
                     if (_passphrases[k.path] case final controller?)
-                      TextField(
-                        key: Key('import-passphrase-$i'),
-                        controller: controller,
-                        obscureText: true,
-                        decoration: InputDecoration(
-                          labelText: l.importPassphrase(p.basename(k.path)),
+                      UfField(
+                        label: l.importPassphrase(p.basename(k.path)),
+                        child: TextField(
+                          key: Key('import-passphrase-$i'),
+                          controller: controller,
+                          obscureText: true,
                         ),
                       ),
                   entryPicker(

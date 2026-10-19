@@ -3,59 +3,37 @@ import 'package:flutter/material.dart';
 
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
+import '../../app_state.dart';
 import '../../design/empty_state.dart';
 import '../../design/icons.dart';
 import '../../design/motion.dart';
 import '../../design/seal.dart';
 import '../../design/tokens.dart';
 import '../shell/shortcuts.dart';
-import '../snippets/snippets_panel.dart';
 import 'forwards_badge.dart';
 import 'terminal_pane.dart';
 
-/// The tab strip over the terminals; the active tab shares the terminal's background.
-class TerminalTabs extends StatefulWidget {
-  const TerminalTabs({
-    super.key,
-    this.onNewTab,
-    this.onShowTree,
-    this.onEditHost,
-  });
+/// The tab strip, the terminals and the status bar; the active tab shares the terminal's background.
+class TerminalTabs extends StatelessWidget {
+  const TerminalTabs({super.key, this.onNewTab, this.onEditHost});
 
   /// Opens the search to pick a host (the same as Ctrl+Shift+T).
   final VoidCallback? onNewTab;
-
-  /// Set while the tree is hidden: the strip then starts with the button that shows it.
-  final VoidCallback? onShowTree;
   final void Function(String hostId)? onEditHost;
 
   @override
-  State<TerminalTabs> createState() => _TerminalTabsState();
-}
-
-class _TerminalTabsState extends State<TerminalTabs> {
-  bool _snippets = false;
-
-  @override
   Widget build(BuildContext context) {
-    final onShowTree = widget.onShowTree;
     final l = AppLocalizations.of(context);
     final state = AppScope.of(context);
     final colors = UfColors.of(context);
-    final showTree = onShowTree == null
-        ? null
-        : IconButton(
-            key: const Key('tree-show'),
-            tooltip: l.treeShow,
-            iconSize: 17,
-            onPressed: onShowTree,
-            icon: const Icon(UfIcons.sidebarSimple),
-          );
     if (state.tabs.isEmpty) {
-      return Stack(
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          EmptyState(title: l.tabsEmpty, body: l.tabsEmptyBody),
-          if (showTree != null) Positioned(top: 8, left: 10, child: showTree),
+          Expanded(
+            child: EmptyState(title: l.tabsEmpty, body: l.tabsEmptyBody),
+          ),
+          const _StatusBar(),
         ],
       );
     }
@@ -64,14 +42,15 @@ class _TerminalTabsState extends State<TerminalTabs> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Container(
-          color: colors.bg,
-          height: 46,
-          padding: const EdgeInsets.fromLTRB(10, 8, 10, 0),
+          height: 38,
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          decoration: BoxDecoration(
+            color: colors.side,
+            border: Border(bottom: BorderSide(color: colors.line)),
+          ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.end,
-            spacing: 4,
             children: [
-              ?showTree,
               Flexible(
                 child: ListView(
                   scrollDirection: Axis.horizontal,
@@ -104,25 +83,13 @@ class _TerminalTabsState extends State<TerminalTabs> {
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.only(bottom: 4),
+                padding: const EdgeInsets.only(left: 2, bottom: 5),
                 child: IconButton(
                   key: const Key('tab-new'),
                   tooltip: l.treeSearch(UfShortcuts.label(UfShortcut.newTab)),
-                  iconSize: 15,
-                  onPressed: widget.onNewTab,
+                  iconSize: 14,
+                  onPressed: onNewTab,
                   icon: const Icon(UfIcons.plus),
-                ),
-              ),
-              const Spacer(),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: IconButton(
-                  key: const Key('snippets-button'),
-                  tooltip: l.snippetsTitle,
-                  iconSize: 15,
-                  isSelected: _snippets,
-                  onPressed: () => setState(() => _snippets = !_snippets),
-                  icon: const Icon(UfIcons.copySimple),
                 ),
               ),
             ],
@@ -131,38 +98,26 @@ class _TerminalTabsState extends State<TerminalTabs> {
         Expanded(
           child: ColoredBox(
             color: colors.term,
-            child: Stack(
+            child: IndexedStack(
+              index: active,
               children: [
-                IndexedStack(
-                  index: active,
-                  children: [
-                    for (final tab in state.tabs)
-                      TerminalPane(
-                        key: ObjectKey(tab),
-                        session: tab,
-                        onEditHost: widget.onEditHost,
-                      ),
-                  ],
-                ),
-                if (_snippets)
-                  Positioned(
-                    top: 10,
-                    right: 10,
-                    bottom: 10,
-                    child: SnippetsPanel(
-                      onClose: () => setState(() => _snippets = false),
-                    ),
+                for (final tab in state.tabs)
+                  TerminalPane(
+                    key: ObjectKey(tab),
+                    session: tab,
+                    onEditHost: onEditHost,
                   ),
               ],
             ),
           ),
         ),
+        const _StatusBar(),
       ],
     );
   }
 }
 
-class _TabChip extends StatelessWidget {
+class _TabChip extends StatefulWidget {
   const _TabChip({
     super.key,
     required this.index,
@@ -183,50 +138,182 @@ class _TabChip extends StatelessWidget {
   final Widget badge;
 
   @override
+  State<_TabChip> createState() => _TabChipState();
+}
+
+class _TabChipState extends State<_TabChip> {
+  bool _hover = false;
+
+  @override
   Widget build(BuildContext context) {
     final colors = UfColors.of(context);
+    final selected = widget.selected;
+    const top = BorderRadius.vertical(top: Radius.circular(6));
+    final text = Theme.of(context).textTheme.bodyMedium!.copyWith(
+      fontSize: 13,
+      color: selected || _hover ? colors.text : colors.muted,
+      fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+    );
+    // the active tab grows by the strip's bottom line so it joins the terminal
     return Padding(
-      padding: const EdgeInsets.only(right: 4),
+      padding: const EdgeInsets.only(right: 2),
       child: TweenAnimationBuilder<double>(
         tween: Tween(begin: 0, end: 1),
         duration: UfMotion.of(context).fast,
-        curve: UfMotion.curve,
-        builder: (context, t, child) =>
-            Transform.translate(offset: Offset(0, (1 - t) * 8), child: child),
-        child: Material(
-          color: selected ? colors.term : Colors.transparent,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
-          child: InkWell(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
-            onTap: onSelect,
-            child: Padding(
-              padding: const EdgeInsets.only(left: 12, right: 4),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                spacing: 8,
-                children: [
-                  Seal(state: seal, size: 13),
-                  Text(
-                    title,
-                    style: TextStyle(
-                      color: selected ? colors.text : colors.muted,
+        curve: UfMotion.enter,
+        builder: (context, t, child) => Opacity(opacity: t, child: child),
+        child: MouseRegion(
+          onEnter: (_) => setState(() => _hover = true),
+          onExit: (_) => setState(() => _hover = false),
+          child: Transform.translate(
+            offset: Offset(0, selected ? 1 : 0),
+            child: Container(
+              height: selected ? 33 : 32,
+              decoration: BoxDecoration(
+                color: selected
+                    ? colors.term
+                    : _hover
+                    ? colors.panelHover
+                    : Colors.transparent,
+                borderRadius: top,
+                border: selected
+                    ? Border(
+                        top: BorderSide(color: colors.line),
+                        left: BorderSide(color: colors.line),
+                        right: BorderSide(color: colors.line),
+                      )
+                    : null,
+              ),
+              child: Material(
+                type: MaterialType.transparency,
+                child: InkWell(
+                  borderRadius: top,
+                  hoverColor: Colors.transparent,
+                  onTap: widget.onSelect,
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 10, right: 2),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      spacing: 8,
+                      children: [
+                        Seal(state: widget.seal, size: 12),
+                        Text(widget.title, style: text),
+                        widget.badge,
+                        Opacity(
+                          opacity: selected || _hover ? 0.8 : 0,
+                          child: IconButton(
+                            key: Key('tab-close-${widget.index}'),
+                            tooltip: AppLocalizations.of(context).tabClose,
+                            iconSize: 12,
+                            style: IconButton.styleFrom(
+                              fixedSize: const Size.square(22),
+                              minimumSize: const Size.square(22),
+                            ),
+                            onPressed: widget.onClose,
+                            icon: const Icon(UfIcons.x),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  badge,
-                  IconButton(
-                    key: Key('tab-close-$index'),
-                    tooltip: AppLocalizations.of(context).tabClose,
-                    iconSize: 12,
-                    visualDensity: VisualDensity.compact,
-                    onPressed: onClose,
-                    icon: const Icon(UfIcons.x),
-                  ),
-                ],
+                ),
               ),
             ),
           ),
         ),
       ),
     );
+  }
+}
+
+/// 28 px under the terminal: the active target (and its jump host), its running forwards, then the sync state.
+class _StatusBar extends StatelessWidget {
+  const _StatusBar();
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    final state = AppScope.of(context);
+    final colors = UfColors.of(context);
+    final style = Theme.of(context).textTheme.bodySmall!
+        .copyWith(color: colors.muted);
+    final tab = state.tabs.isEmpty
+        ? null
+        : state.tabs[state.activeTab.clamp(0, state.tabs.length - 1)];
+    final forwards = tab?.forwarder;
+    return Container(
+      key: const Key('status-bar'),
+      height: 28,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: colors.side,
+        border: Border(top: BorderSide(color: colors.line)),
+      ),
+      child: Row(
+        spacing: 16,
+        children: [
+          Flexible(
+            child: Text(
+              tab == null ? l.statusNoSession : _target(l, state, tab.hostId),
+              style: style,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          if (forwards != null)
+            ListenableBuilder(
+              listenable: forwards,
+              builder: (context, _) => forwards.active.isEmpty
+                  ? const SizedBox.shrink()
+                  : Text(
+                      l.statusForwards(forwards.active.length),
+                      style: style,
+                    ),
+            ),
+          const Spacer(),
+          ..._sync(l, state, style),
+        ],
+      ),
+    );
+  }
+
+  /// user@address[:port], with « via » the jump host's name when there is one.
+  static String _target(AppLocalizations l, AppState state, String hostId) {
+    final lookup = state.vault?.hostLookup(hostId);
+    if (lookup == null) return '';
+    final (:meta, :resolved, org: _) = lookup;
+    final target = [
+      if (resolved.user case final user?) '$user@',
+      meta.address,
+      if (resolved.port != 22) ':${resolved.port}',
+    ].join();
+    final jump = switch (resolved.jumpHostId) {
+      final id? => state.vault?.entry(id)?.name,
+      null => null,
+    };
+    return jump == null ? target : l.statusVia(target, jump);
+  }
+
+  static List<Widget> _sync(
+    AppLocalizations l,
+    AppState state,
+    TextStyle style,
+  ) {
+    final sync = state.sync;
+    if (sync == null) return const [];
+    final (seal, label) = !sync.online
+        ? (SealState.offline, l.sealOffline)
+        : sync.lastSyncAt == null
+        ? (SealState.verify, l.statusSyncing)
+        : (SealState.connected, l.statusSynced);
+    return [
+      Row(
+        spacing: 6,
+        children: [
+          Seal(state: seal, size: 12),
+          Text(label, style: style),
+        ],
+      ),
+    ];
   }
 }

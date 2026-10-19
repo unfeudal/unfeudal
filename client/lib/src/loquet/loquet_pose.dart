@@ -208,8 +208,8 @@ class LoquetPose {
   int get hashCode => Object.hash(signature, lookX);
 }
 
-/// Loquet's colours, as in the mockup: the bright red and ochre of the dark theme in both themes, and a
-/// dark face on them so it stays readable.
+/// Loquet's colours, from the theme's roles: `accent` body (`danger` sad or alert, `warn` offline), an
+/// `accentFg` face, `text` feet, `accentText` drops.
 class LoquetPalette {
   const LoquetPalette({
     required this.body,
@@ -218,30 +218,29 @@ class LoquetPalette {
     required this.hand,
     required this.handLine,
     required this.zzz,
+    required this.accent,
+    required this.drop,
   });
 
   factory LoquetPalette.of(LoquetTone tone, UfColors c) {
-    final dark = c == UfColors.dark;
-    final lightFace = !dark && tone == LoquetTone.normal;
+    final body = switch (tone) {
+      LoquetTone.normal => c.accent,
+      LoquetTone.danger => c.danger,
+      LoquetTone.warn => c.warn,
+    };
     return LoquetPalette(
-      body: switch (tone) {
-        LoquetTone.normal => c.accent,
-        LoquetTone.danger => UfColors.dark.danger,
-        LoquetTone.warn => UfColors.dark.warn,
-      },
-      face: lightFace ? UfColors.light.side : UfColors.dark.bg,
+      body: body,
+      face: c.accentFg,
       feet: c.text,
-      hand: tone == LoquetTone.danger
-          ? UfColors.dark.dangerText
-          : dark
-          ? const Color(0xFFA7C2E2)
-          : UfColors.dark.accentBg,
-      handLine: lightFace || !dark ? UfColors.light.side : UfColors.dark.bg,
+      hand: body,
+      handLine: c.accentFg,
       zzz: c.muted,
+      accent: c.accent,
+      drop: c.accentText,
     );
   }
 
-  final Color body, face, feet, hand, handLine, zzz;
+  final Color body, face, feet, hand, handLine, zzz, accent, drop;
 
   @override
   bool operator ==(Object other) =>
@@ -251,8 +250,11 @@ class LoquetPalette {
       other.feet == feet &&
       other.hand == hand &&
       other.handLine == handLine &&
-      other.zzz == zzz;
+      other.zzz == zzz &&
+      other.accent == accent &&
+      other.drop == drop;
 
   @override
-  int get hashCode => Object.hash(body, face, feet, hand, handLine, zzz);
+  int get hashCode =>
+      Object.hash(body, face, feet, hand, handLine, zzz, accent, drop);
 }

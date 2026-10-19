@@ -128,7 +128,6 @@
   "recoverNewPassword": "New master password",
   "recoverSubmit": "Reset the password",
   "railKeychain": "Keychain",
-  "railDevices": "Devices",
   "railSettings": "Settings",
   "railLock": "Lock",
   "vaultPersonal": "Personal vault",
@@ -407,14 +406,13 @@
   },
   "tabRetry": "Retry",
   "tabEditHost": "Edit host",
-  "manageBack": "Back to the vault",
-  "treeHide": "Hide folders",
-  "treeShow": "Show folders",
+  "manageBack": "Back to sessions",
+  "treeHide": "Hide the sidebar",
+  "treeShow": "Show the sidebar",
   "windowMinimize": "Minimize",
   "windowMaximize": "Maximize",
   "windowRestore": "Restore",
   "windowClose": "Close",
-  "treeRolePersonal": "Personal vault",
   "passwordChecking": "Checking…",
   "errorJumpLoop": "These jump hosts lead back to each other. Change one of them.",
   "errorJumpTooDeep": "More than 8 jump hosts in a row. Shorten the chain.",
@@ -688,7 +686,6 @@
   "inviteShare": "No email sent: share the link or the file.",
   "inviteCopyLink": "Copy link",
   "inviteSaveFile": "Save file",
-  "invitePending": "Pending invitations",
   "inviteRevoke": "Revoke",
   "roleOwner": "Owner",
   "roleAdmin": "Admin",
@@ -763,7 +760,6 @@
       }
     }
   },
-  "orgSettingsTitle": "Organization settings",
   "orgMascot": "Loquet for members",
   "orgAuditDays": "Keep activity (days)",
   "orgMaxVersions": "Versions kept per item",
@@ -1369,5 +1365,99 @@
     }
   },
   "trashMoveOutPick": "Choose a folder",
-  "trashMoveOutNowhere": "No folder of this organization you can edit."
+  "trashMoveOutNowhere": "No folder of this organization you can edit.",
+  "sidebarIn": "In {vault}",
+  "@sidebarIn": {
+    "placeholders": {
+      "vault": {
+        "type": "String"
+      }
+    }
+  },
+  "sidebarHosts": "Hosts",
+  "sidebarVaults": "Vaults",
+  "vaultPersonalSubtitle": "Personal · {count} hosts",
+  "@vaultPersonalSubtitle": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "vaultOrgSubtitle": "Organization · {role}",
+  "@vaultOrgSubtitle": {
+    "placeholders": {
+      "role": {
+        "type": "String"
+      }
+    }
+  },
+  "searchSnippets": "Snippets",
+  "searchNoResult": "Nothing matches.",
+  "sectionMembers": "Members and access",
+  "membersGroupFolders": "Folder access",
+  "settingsAppearance": "Appearance",
+  "settingsData": "Data",
+  "settingsAccount": "Account",
+  "settingsAccountActivity": "Account activity",
+  "settingsSubtitle": "For this account and this device",
+  "statusSynced": "Synced",
+  "statusSyncing": "Syncing",
+  "statusNoSession": "No session",
+  "statusVia": "{target} via {jump}",
+  "@statusVia": {
+    "placeholders": {
+      "target": {
+        "type": "String"
+      },
+      "jump": {
+        "type": "String"
+      }
+    }
+  },
+  "statusForwards": "{count} active forwards",
+  "@statusForwards": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "tabOpen": "Session open",
+  "inspectorConnect": "Connect",
+  "inspectorTabConnection": "Connection",
+  "inspectorTabForwards": "Forwards",
+  "keychainLinked": "My keys linked to {org}",
+  "@keychainLinked": {
+    "placeholders": {
+      "org": {
+        "type": "String"
+      }
+    }
+  },
+  "keychainLinkedNote": "A linked key stays in the personal vault: edit it there.",
+  "keychainOf": "Keys of {vault}",
+  "@keychainOf": {
+    "placeholders": {
+      "vault": {
+        "type": "String"
+      }
+    }
+  },
+  "snippetsNote": "Insert sends the command to the active terminal, without Enter.",
+  "folderAccessEmpty": "No folder in this organization yet.",
+  "invitesEmpty": "No pending invitation.",
+  "teamsEmpty": "No team yet.",
+  "hostKeyCancelConnection": "Cancel the connection",
+  "inspectorTabAccess": "Access",
+  "accessEdit": "Edit access",
+  "accessNone": "No access set on this folder: admins only.",
+  "accessDenied": "Denied: {rights}",
+  "@accessDenied": {
+    "placeholders": {
+      "rights": {
+        "type": "String"
+      }
+    }
+  }
 }

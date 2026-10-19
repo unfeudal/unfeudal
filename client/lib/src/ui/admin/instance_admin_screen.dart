@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../api/admin_models.dart';
 import '../../app_scope.dart';
+import '../../design/buttons.dart';
 import '../../design/dialog.dart';
 import '../../design/motion.dart';
 import '../../design/tokens.dart';
@@ -20,16 +21,29 @@ String sizeLabel(AppLocalizations l, int bytes) => switch (bytes) {
 };
 
 /// The Instance Owner's screen: accounts, instance invitations, org metadata (never their content).
-class InstanceAdminScreen extends StatefulWidget {
+/// The instance's accounts, invitations and organisations in a section frame, for a screen pushed on its own.
+class InstanceAdminScreen extends StatelessWidget {
   const InstanceAdminScreen({super.key, this.onBack});
 
   final VoidCallback? onBack;
 
   @override
-  State<InstanceAdminScreen> createState() => _InstanceAdminScreenState();
+  Widget build(BuildContext context) => ManageFrame(
+    title: AppLocalizations.of(context).railAdmin,
+    onBack: onBack,
+    child: const InstanceAdminPanel(),
+  );
 }
 
-class _InstanceAdminScreenState extends State<InstanceAdminScreen> {
+/// Accounts, invitations and organisations of the instance, for its owner; Réglages › Serveur.
+class InstanceAdminPanel extends StatefulWidget {
+  const InstanceAdminPanel({super.key});
+
+  @override
+  State<InstanceAdminPanel> createState() => _InstanceAdminPanelState();
+}
+
+class _InstanceAdminPanelState extends State<InstanceAdminPanel> {
   List<AdminUser> _users = const [];
   List<AdminOrg> _orgs = const [];
   List<PendingInvite> _invites = const [];
@@ -173,129 +187,120 @@ class _InstanceAdminScreenState extends State<InstanceAdminScreen> {
     final muted = TextStyle(color: colors.muted, fontSize: 12);
     final dates = MaterialLocalizations.of(context);
     final created = _created;
-    return ManageFrame(
-      title: l.railAdmin,
-      onBack: widget.onBack,
-      child: DefaultTabController(
-        length: 3,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            TabBar(
-              isScrollable: true,
-              tabAlignment: TabAlignment.start,
-              tabs: [
-                Tab(
-                  key: const Key('admin-tab-accounts'),
-                  text: l.adminAccounts,
+    return DefaultTabController(
+      length: 3,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TabBar(
+            isScrollable: true,
+            tabAlignment: TabAlignment.start,
+            tabs: [
+              Tab(key: const Key('admin-tab-accounts'), text: l.adminAccounts),
+              Tab(key: const Key('admin-tab-invites'), text: l.adminInvites),
+              Tab(key: const Key('admin-tab-orgs'), text: l.adminOrgs),
+            ],
+          ),
+          if (_error case final error?)
+            Text(error, style: TextStyle(color: colors.danger)),
+          Expanded(
+            child: TabBarView(
+              children: [
+                ListView(
+                  children: [
+                    for (final u in _users)
+                      ListTile(
+                        title: Text(u.email),
+                        trailing: u.isInstanceOwner
+                            ? null
+                            : Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  TextButton(
+                                    key: Key('admin-user-disable-${u.id}'),
+                                    style: smallButton,
+                                    onPressed: () => _toggle(u),
+                                    child: Text(
+                                      u.disabled
+                                          ? l.adminEnable
+                                          : l.adminDisable,
+                                    ),
+                                  ),
+                                  TextButton(
+                                    key: Key('admin-user-delete-${u.id}'),
+                                    style: dangerQuietStyle(colors)
+                                        .merge(smallButton),
+                                    onPressed: () => _deleteUser(u),
+                                    child: Text(l.adminDelete),
+                                  ),
+                                ],
+                              ),
+                      ),
+                  ],
                 ),
-                Tab(key: const Key('admin-tab-invites'), text: l.adminInvites),
-                Tab(key: const Key('admin-tab-orgs'), text: l.adminOrgs),
+                ListView(
+                  children: [
+                    Row(
+                      spacing: 8,
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            key: const Key('admin-invite-email'),
+                            controller: _email,
+                            keyboardType: TextInputType.emailAddress,
+                            decoration: InputDecoration(
+                              hintText: l.inviteEmail,
+                            ),
+                          ),
+                        ),
+                        FilledButton(
+                          key: const Key('admin-invite-create'),
+                          onPressed: _invite,
+                          child: Text(l.inviteCreate),
+                        ),
+                      ],
+                    ),
+                    if (created != null) InviteResult(created: created),
+                    for (final p in _invites)
+                      PendingInviteRow(invite: p, onRevoke: () => _revoke(p)),
+                  ],
+                ),
+                ListView(
+                  children: [
+                    for (final o in _orgs)
+                      ListTile(
+                        title: Text(o.name),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(o.owners.join(', ')),
+                            Text(
+                              [
+                                l.adminOrgMembers(o.memberCount),
+                                o.lastActivityAt == null
+                                    ? '—'
+                                    : dates.formatMediumDate(
+                                        o.lastActivityAt!.toLocal(),
+                                      ),
+                              ].join(' · '),
+                              style: muted,
+                            ),
+                            Text(sizeLabel(l, o.storageBytes), style: muted),
+                          ],
+                        ),
+                        trailing: TextButton(
+                          key: Key('admin-org-delete-${o.id}'),
+                          style: dangerQuietStyle(colors).merge(smallButton),
+                          onPressed: () => _deleteOrg(o),
+                          child: Text(l.adminOrgDelete),
+                        ),
+                      ),
+                  ],
+                ),
               ],
             ),
-            if (_error case final error?)
-              Text(error, style: TextStyle(color: colors.danger)),
-            Expanded(
-              child: TabBarView(
-                children: [
-                  ListView(
-                    children: [
-                      for (final u in _users)
-                        ListTile(
-                          title: Text(u.email),
-                          trailing: u.isInstanceOwner
-                              ? null
-                              : Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    TextButton(
-                                      key: Key('admin-user-disable-${u.id}'),
-                                      onPressed: () => _toggle(u),
-                                      child: Text(
-                                        u.disabled
-                                            ? l.adminEnable
-                                            : l.adminDisable,
-                                      ),
-                                    ),
-                                    TextButton(
-                                      key: Key('admin-user-delete-${u.id}'),
-                                      style: TextButton.styleFrom(
-                                        foregroundColor: colors.danger,
-                                      ),
-                                      onPressed: () => _deleteUser(u),
-                                      child: Text(l.adminDelete),
-                                    ),
-                                  ],
-                                ),
-                        ),
-                    ],
-                  ),
-                  ListView(
-                    children: [
-                      Row(
-                        spacing: 8,
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              key: const Key('admin-invite-email'),
-                              controller: _email,
-                              keyboardType: TextInputType.emailAddress,
-                              decoration: InputDecoration(
-                                labelText: l.inviteEmail,
-                              ),
-                            ),
-                          ),
-                          FilledButton(
-                            key: const Key('admin-invite-create'),
-                            onPressed: _invite,
-                            child: Text(l.inviteCreate),
-                          ),
-                        ],
-                      ),
-                      if (created != null) InviteResult(created: created),
-                      for (final p in _invites)
-                        PendingInviteRow(invite: p, onRevoke: () => _revoke(p)),
-                    ],
-                  ),
-                  ListView(
-                    children: [
-                      for (final o in _orgs)
-                        ListTile(
-                          title: Text(o.name),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(o.owners.join(', ')),
-                              Text(
-                                [
-                                  l.adminOrgMembers(o.memberCount),
-                                  o.lastActivityAt == null
-                                      ? '—'
-                                      : dates.formatMediumDate(
-                                          o.lastActivityAt!.toLocal(),
-                                        ),
-                                ].join(' · '),
-                                style: muted,
-                              ),
-                              Text(sizeLabel(l, o.storageBytes), style: muted),
-                            ],
-                          ),
-                          trailing: TextButton(
-                            key: Key('admin-org-delete-${o.id}'),
-                            style: TextButton.styleFrom(
-                              foregroundColor: colors.danger,
-                            ),
-                            onPressed: () => _deleteOrg(o),
-                            child: Text(l.adminOrgDelete),
-                          ),
-                        ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

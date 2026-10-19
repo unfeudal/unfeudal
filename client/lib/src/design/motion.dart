@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: Apache-2.0
-import 'dart:math' as math;
 import 'dart:ui' show SemanticsRole;
 
 import 'package:flutter/material.dart';
@@ -8,15 +7,25 @@ import '../debug_trace.dart';
 import 'tokens.dart';
 
 class UfMotion {
-  const UfMotion._(this.fast, this.base, this.slow, this.shake);
+  const UfMotion._(this.instant, this.fast, this.base, this.slow);
 
-  final Duration fast, base, slow, shake;
+  /// Hover colour of a tree row.
+  final Duration instant;
+
+  /// Hover, press, focus, check marks and every exit.
+  final Duration fast;
+
+  /// Switches, segmented controls, lists opening, dialogs, notifications in.
+  final Duration base;
+
+  /// Row to inspector, screen changes, unlock to main.
+  final Duration slow;
 
   static const normal = UfMotion._(
+    Duration(milliseconds: 90),
+    Duration(milliseconds: 120),
     Duration(milliseconds: 160),
-    Duration(milliseconds: 240),
-    Duration(milliseconds: 420),
-    Duration(milliseconds: 360),
+    Duration(milliseconds: 280),
   );
   static const still = UfMotion._(
     Duration.zero,
@@ -24,7 +33,15 @@ class UfMotion {
     Duration.zero,
     Duration.zero,
   );
-  static const curve = Cubic(0.2, 0.8, 0.2, 1);
+
+  /// In-place changes.
+  static const standard = Cubic(0.2, 0, 0, 1);
+
+  /// What appears or grows.
+  static const enter = Cubic(0.05, 0.7, 0.1, 1);
+
+  /// What leaves, faster than it came.
+  static const exit = Cubic(0.3, 0, 1, 1);
 
   /// [still] under performance mode or the OS reduce-motion setting.
   static UfMotion of(BuildContext context) {
@@ -51,48 +68,6 @@ class MotionScope extends InheritedWidget {
   @override
   bool updateShouldNotify(MotionScope oldWidget) =>
       performanceMode != oldWidget.performanceMode;
-}
-
-class ShakeOnError extends StatefulWidget {
-  const ShakeOnError({super.key, required this.trigger, required this.child});
-
-  final Object? trigger;
-  final Widget child;
-
-  @override
-  State<ShakeOnError> createState() => _ShakeOnErrorState();
-}
-
-class _ShakeOnErrorState extends State<ShakeOnError>
-    with SingleTickerProviderStateMixin {
-  late final _controller = AnimationController(vsync: this);
-
-  @override
-  void didUpdateWidget(ShakeOnError oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.trigger == oldWidget.trigger) return;
-    final motion = UfMotion.of(context);
-    if (motion == UfMotion.still) return;
-    _controller.duration = motion.shake;
-    _controller.forward(from: 0);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => AnimatedBuilder(
-    animation: _controller,
-    builder: (context, child) {
-      final t = _controller.value;
-      final dx = 8 * (1 - t) * math.sin(t * 3 * 2 * math.pi);
-      return Transform.translate(offset: Offset(dx, 0), child: child);
-    },
-    child: widget.child,
-  );
 }
 
 /// [alert] marks the dialog as an `alertdialog` and disables barrier dismiss; Escape still closes it (null).
@@ -130,15 +105,15 @@ Future<T?> showUfDialog<T>(
         );
       },
       transitionBuilder: (context, animation, _, child) {
-        final eased = CurvedAnimation(parent: animation, curve: UfMotion.curve);
+        final eased = CurvedAnimation(
+          parent: animation,
+          curve: UfMotion.enter,
+          reverseCurve: UfMotion.exit,
+        );
         return FadeTransition(
           opacity: eased,
-          child: AnimatedBuilder(
-            animation: eased,
-            builder: (context, child) => Transform.translate(
-              offset: Offset(0, 10 * (1 - eased.value)),
-              child: child,
-            ),
+          child: ScaleTransition(
+            scale: Tween(begin: 0.98, end: 1.0).animate(eased),
             child: child,
           ),
         );
@@ -179,7 +154,7 @@ class GrowFrom extends StatefulWidget {
 class _GrowFromState extends State<GrowFrom>
     with SingleTickerProviderStateMixin {
   late final _controller = AnimationController(vsync: this);
-  late final _t = CurvedAnimation(parent: _controller, curve: UfMotion.curve);
+  late final _t = CurvedAnimation(parent: _controller, curve: UfMotion.enter);
 
   /// [GrowFrom.from] relative to the child's centre, read once it is laid out.
   Offset? _origin;
@@ -215,7 +190,7 @@ class _GrowFromState extends State<GrowFrom>
     builder: (context, child) => Opacity(
       opacity: _t.value,
       child: Transform.scale(
-        scale: 0.85 + 0.15 * _t.value,
+        scale: 0.96 + 0.04 * _t.value,
         origin: _origin,
         child: child,
       ),

@@ -7,6 +7,7 @@ import 'package:unfeudal_client/src/app_state.dart';
 
 import 'package:unfeudal_client/src/ui/keychain/keychain_screen.dart';
 import 'package:unfeudal_client/src/ui/shell/home_shell.dart';
+import 'package:unfeudal_client/src/vault/snippet_store.dart';
 import 'package:unfeudal_client/src/version.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
@@ -26,26 +27,25 @@ AppLocalizations l10n(WidgetTester t) =>
 
 void main() {
   testWidgets(
-    'the rail opens the keychain beside it; back returns to the vault',
+    'a sidebar entry opens its section in place of the sessions; back returns',
     (t) async {
       await shell(t);
-      await t.tap(find.byTooltip(l10n(t).railKeychain));
+      await t.tap(find.byKey(const Key('section-keychain')));
       await t.pump();
       expect(find.byType(KeychainScreen), findsOneWidget);
-      expect(find.byKey(const Key('vault-rail')), findsOneWidget);
-      expect(find.byKey(const Key('tree-panel')), findsNothing);
+      expect(find.byKey(const Key('sidebar')), findsOneWidget);
+      expect(find.text(l10n(t).tabsEmpty), findsNothing);
       await t.tap(find.byKey(const Key('manage-back')));
       await t.pump();
       expect(find.byType(KeychainScreen), findsNothing);
-      expect(find.byKey(const Key('tree-panel')), findsOneWidget);
+      expect(find.text(l10n(t).tabsEmpty), findsOneWidget);
     },
   );
 
   testWidgets(
-    'layout: rail 60, tree 272 resizable within 220–400, saved per device',
+    'layout: sidebar 272 resizable within 220–400, saved per device',
     (t) async {
       final s = await shell(t);
-      expect(t.getSize(find.byKey(const Key('vault-rail'))).width, 60);
       expect(t.getSize(find.byKey(const Key('tree-panel'))).width, 272);
       await t.drag(find.byKey(const Key('tree-resizer')), const Offset(500, 0));
       await t.pumpAndSettle();
@@ -121,6 +121,23 @@ void main() {
     },
   );
 
+  testWidgets(
+    'the search lists matching snippets; without a session they insert nothing',
+    (t) async {
+      final s = await shell(t);
+      late String id;
+      await t.runAsync(() async {
+        id = await SnippetStore(s.vault!)
+            .save(SnippetMeta(name: 'Disk usage', command: 'df -h'));
+      });
+      await t.pumpAndSettle();
+      await t.enterText(find.byKey(const Key('tree-search')), 'disk');
+      await t.pumpAndSettle();
+      final row = t.widget<InkWell>(find.byKey(Key('search-snippet-$id')));
+      expect(row.onTap, isNull);
+    },
+  );
+
   testWidgets('update button opens the compiled URL, never a server value', (
     t,
   ) async {
@@ -162,7 +179,7 @@ void main() {
     await shell(t, harness: SyncHarness(minClient: '9.0.0'));
     expect(find.byKey(const Key('banner-read-only')), findsOneWidget);
     expect(
-      t.widget<FilledButton>(find.byKey(const Key('tree-new-host'))).onPressed,
+      t.widget<IconButton>(find.byKey(const Key('tree-new-host'))).onPressed,
       isNull,
     );
   });

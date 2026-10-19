@@ -29,9 +29,9 @@ void main() {
     await pumpApp(
       t,
       state: s,
-      child: const LoquetSpot(placement: LoquetPlacement.tree),
+      child: const LoquetSpot(placement: LoquetPlacement.sidebar),
     );
-    expect(t.getSize(find.byType(Loquet)), const Size(56, 56));
+    expect(t.getSize(find.byType(Loquet)), const Size(28, 28));
     s.loquet.show(const Reaction(LoquetMood.happy));
     await t.pump();
     expect(t.widget<Loquet>(find.byType(Loquet)).mood, LoquetMood.happy);
@@ -45,7 +45,7 @@ void main() {
     await pumpApp(
       t,
       state: s,
-      child: const LoquetSpot(placement: LoquetPlacement.tree),
+      child: const LoquetSpot(placement: LoquetPlacement.sidebar),
     );
     expect(find.byType(UfLogo), findsOneWidget);
   });
@@ -103,19 +103,20 @@ void main() {
     }
   });
 
-  testWidgets('the rail never shows a bubble (it would cover the terminal)', (
-    t,
-  ) async {
-    final s = await signedInState(t);
-    await pumpApp(
-      t,
-      state: s,
-      child: const LoquetSpot(placement: LoquetPlacement.rail),
-    );
-    s.loquet.show(const Reaction(LoquetMood.happy, line: LineKey.lock));
-    await t.pump();
-    expect(find.byKey(const Key('loquet-bubble')), findsNothing);
-  });
+  testWidgets(
+    'the title bar never shows a bubble (it would cover the terminal)',
+    (t) async {
+      final s = await signedInState(t);
+      await pumpApp(
+        t,
+        state: s,
+        child: const LoquetSpot(placement: LoquetPlacement.titleBar),
+      );
+      s.loquet.show(const Reaction(LoquetMood.happy, line: LineKey.lock));
+      await t.pump();
+      expect(find.byKey(const Key('loquet-bubble')), findsNothing);
+    },
+  );
 
   testWidgets('a fixed mood and line override the controller', (t) async {
     final s = await signedInState(t);
@@ -142,7 +143,7 @@ void main() {
     await pumpApp(
       t,
       state: s,
-      child: const LoquetSpot(placement: LoquetPlacement.tree),
+      child: const LoquetSpot(placement: LoquetPlacement.sidebar),
     );
     expect(t.widget<Loquet>(find.byType(Loquet)).still, isTrue);
     await t.tap(find.byType(Loquet));

@@ -6,6 +6,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../api/api_client.dart';
 import '../../app_scope.dart';
 import '../../design/dialog.dart';
+import '../../design/field.dart';
 import '../../design/tokens.dart';
 import '../describe_error.dart';
 import '../manage_frame.dart';
@@ -76,17 +77,21 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
             shrinkWrap: true,
             children: [
               Text(l.deleteAccountBody, style: TextStyle(color: colors.danger)),
-              TextField(
-                key: const Key('delete-password'),
-                controller: _password,
-                obscureText: true,
-                decoration: InputDecoration(labelText: l.deletePassword),
+              UfField(
+                label: l.deletePassword,
+                child: TextField(
+                  key: const Key('delete-password'),
+                  controller: _password,
+                  obscureText: true,
+                ),
               ),
-              TextField(
-                key: const Key('delete-confirm-email'),
-                controller: _email,
-                keyboardType: TextInputType.emailAddress,
-                decoration: InputDecoration(labelText: l.deleteConfirmEmail),
+              UfField(
+                label: l.deleteConfirmEmail,
+                child: TextField(
+                  key: const Key('delete-confirm-email'),
+                  controller: _email,
+                  keyboardType: TextInputType.emailAddress,
+                ),
               ),
               if (_problem case final problem?)
                 Text(problem, style: TextStyle(color: colors.danger)),

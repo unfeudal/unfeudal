@@ -8,7 +8,6 @@ import '../../app_scope.dart';
 import '../../app_state.dart';
 import '../../design/field.dart';
 import '../../design/icons.dart';
-import '../../design/motion.dart';
 import '../../design/tokens.dart';
 import '../../events/app_events.dart';
 import '../../session/lock_machine.dart';
@@ -33,7 +32,6 @@ class _UnlockScreenState extends State<UnlockScreen> {
 
   /// The key derivation takes seconds: one at a time, the button waits for it.
   bool _busy = false;
-  int _failures = 0;
 
   /// A stored biometric wrap the server still allows.
   late final Future<bool> _biometric = _biometricEnabled();
@@ -80,7 +78,6 @@ class _UnlockScreenState extends State<UnlockScreen> {
       if (mounted) {
         setState(() {
           _error = e;
-          _failures++;
         });
       }
     } finally {
@@ -101,39 +98,31 @@ class _UnlockScreenState extends State<UnlockScreen> {
         eyeX: (_password.text.length / 30).clamp(0, 1),
         children: [
           if (stored != null)
-            UfField(
-              label: l.loginEmail,
-              child: TextFormField(
-                key: const Key('unlock-account'),
-                initialValue: stored.email,
-                readOnly: true,
-                enableInteractiveSelection: false,
-                decoration: InputDecoration(helperText: stored.displayName),
-              ),
+            _AccountChip(
+              key: const Key('unlock-account'),
+              name: stored.displayName,
+              email: stored.email,
             ),
-          ShakeOnError(
-            trigger: _failures,
-            child: UfField(
-              label: l.unlockPassword,
-              child: TextField(
-                key: const Key('unlock-password'),
-                controller: _password,
-                focusNode: _focus,
-                obscureText: !peeking,
-                readOnly: _busy,
-                onChanged: (_) {
-                  _machine.input();
-                  setState(() {});
-                },
-                onSubmitted: (_) => _submit(),
-                decoration: InputDecoration(
-                  suffixIcon: IconButton(
-                    key: const Key('unlock-peek'),
-                    tooltip: l.unlockPeek,
-                    icon: Icon(peeking ? UfIcons.eyeSlash : UfIcons.eye),
-                    color: peeking ? UfColors.of(context).accent : null,
-                    onPressed: _machine.togglePeek,
-                  ),
+          UfField(
+            label: l.unlockPassword,
+            child: TextField(
+              key: const Key('unlock-password'),
+              controller: _password,
+              focusNode: _focus,
+              obscureText: !peeking,
+              readOnly: _busy,
+              onChanged: (_) {
+                _machine.input();
+                setState(() {});
+              },
+              onSubmitted: (_) => _submit(),
+              decoration: InputDecoration(
+                suffixIcon: IconButton(
+                  key: const Key('unlock-peek'),
+                  tooltip: l.unlockPeek,
+                  icon: Icon(peeking ? UfIcons.eyeSlash : UfIcons.eye),
+                  color: peeking ? UfColors.of(context).accentText : null,
+                  onPressed: _machine.togglePeek,
                 ),
               ),
             ),
@@ -174,6 +163,61 @@ class _UnlockScreenState extends State<UnlockScreen> {
                   child: Text(l.loginToRecover),
                 ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The known account on this device, in place of an e-mail field: its initial, name and address.
+class _AccountChip extends StatelessWidget {
+  const _AccountChip({super.key, required this.email, this.name});
+
+  final String email;
+  final String? name;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = UfColors.of(context);
+    final text = Theme.of(context).textTheme;
+    final label = name ?? email;
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: colors.panel,
+        borderRadius: UfRadius.card,
+        border: Border.all(color: colors.line),
+      ),
+      child: Row(
+        spacing: 10,
+        children: [
+          Container(
+            width: 28,
+            height: 28,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: colors.neutral,
+              borderRadius: UfRadius.control,
+            ),
+            child: Text(
+              String.fromCharCode(label.runes.first).toUpperCase(),
+              style: text.labelSmall,
+            ),
+          ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (name case final name?)
+                  Text(name, style: text.labelLarge!.copyWith(fontSize: 13.5)),
+                Text(
+                  email,
+                  overflow: TextOverflow.ellipsis,
+                  style: text.bodySmall!.copyWith(color: colors.muted),
+                ),
+              ],
+            ),
           ),
         ],
       ),

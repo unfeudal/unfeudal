@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:unfeudal_client/l10n/app_localizations.dart';
 import 'package:unfeudal_client/src/events/app_events.dart';
-import 'package:unfeudal_client/src/ui/snippets/snippets_panel.dart';
+import 'package:unfeudal_client/src/ui/snippets/snippets_screen.dart';
 import 'package:unfeudal_client/src/vault/snippet_store.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
@@ -16,7 +16,7 @@ import '../support/sync_harness.dart';
 
 void main() {
   testWidgets(
-    'org snippets: read-only without edit; a new one can go to an editable org folder',
+    'org vault: its snippets, read-only without edit; a new one goes to an editable org folder',
     (t) async {
       final h = SyncHarness(capabilities: ['orgs', 'sync']);
       final s = await signedInState(t, harness: h);
@@ -72,17 +72,14 @@ void main() {
         );
         await s.sync!.syncNow();
       });
-      await pumpApp(t, state: s, child: const SnippetsPanel());
+      s.orgs!.select(testOrgId);
+      await pumpApp(t, state: s, child: const SnippetsScreen());
       await pumpReal(t);
       for (final k in [
         'snippet-edit-${snippet.id}',
         'snippet-delete-${snippet.id}',
       ]) {
-        expect(
-          t.widget<TextButton>(find.byKey(Key(k))).onPressed,
-          isNull,
-          reason: k,
-        );
+        expect(pressed(t, k), isNull, reason: k);
       }
       await t.tap(find.byKey(const Key('snippet-new')));
       await t.pumpAndSettle();
@@ -114,8 +111,8 @@ void main() {
     'create: name and command required, command kept as typed, tags split',
     (t) async {
       final s = await signedInState(t);
-      await pumpApp(t, state: s, child: const SnippetsPanel());
-      final l = AppLocalizations.of(t.element(find.byType(SnippetsPanel)));
+      await pumpApp(t, state: s, child: const SnippetsScreen());
+      final l = AppLocalizations.of(t.element(find.byType(SnippetsScreen)));
       expect(find.text(l.snippetsEmpty), findsOneWidget);
       await t.tap(find.byKey(const Key('snippet-new')));
       await t.pumpAndSettle();
@@ -163,7 +160,7 @@ void main() {
       s.events.listen(events.add);
       await pumpApp(t, state: s);
       await pumpReal(t, rounds: 5);
-      await t.tap(find.byKey(const Key('snippets-button')));
+      await t.tap(find.byKey(const Key('section-snippets')));
       await t.pumpAndSettle();
       await t.enterText(find.byKey(const Key('snippets-search')), 'ops');
       await t.pump();
@@ -213,9 +210,9 @@ void main() {
         await s.vault!.reload();
         await s.sync!.syncNow();
       });
-      await pumpApp(t, state: s, child: const SnippetsPanel());
+      await pumpApp(t, state: s, child: const SnippetsScreen());
       await t.pump();
-      final l = AppLocalizations.of(t.element(find.byType(SnippetsPanel)));
+      final l = AppLocalizations.of(t.element(find.byType(SnippetsScreen)));
       expect(find.text(l.snippetNoTerminal), findsOneWidget);
       for (final key in [
         'snippet-insert-$id',
@@ -223,12 +220,16 @@ void main() {
         'snippet-edit-$id',
         'snippet-delete-$id',
       ]) {
-        expect(
-          t.widget<ButtonStyleButton>(find.byKey(Key(key))).onPressed,
-          isNull,
-          reason: key,
-        );
+        expect(pressed(t, key), isNull, reason: key);
       }
     },
   );
 }
+
+/// The callback of a text or icon button, null when disabled.
+VoidCallback? pressed(WidgetTester t, String key) =>
+    switch (t.widget(find.byKey(Key(key)))) {
+      final ButtonStyleButton b => b.onPressed,
+      final IconButton b => b.onPressed,
+      final other => throw StateError('not a button: $other'),
+    };

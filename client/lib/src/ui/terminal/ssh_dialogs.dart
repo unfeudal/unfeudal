@@ -34,7 +34,6 @@ class StartupCommandDialog extends StatelessWidget {
       actions: [
         TextButton(
           key: const Key('startup-skip'),
-          style: quietButtonStyle(colors),
           onPressed: () => Navigator.pop(context, false),
           child: Text(l.startupCommandSkip),
         ),
@@ -49,13 +48,14 @@ class StartupCommandDialog extends StatelessWidget {
           constraints: const BoxConstraints(maxHeight: 240),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
-            color: colors.field,
-            borderRadius: const BorderRadius.all(Radius.circular(10)),
+            color: colors.term,
+            borderRadius: UfRadius.control,
+            border: Border.all(color: colors.line),
           ),
           child: SingleChildScrollView(
             child: SelectableText(
               command,
-              style: monoStyle.copyWith(fontSize: 13),
+              style: monoStyle.copyWith(fontSize: 12, height: 1.5),
             ),
           ),
         ),

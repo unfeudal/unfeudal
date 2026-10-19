@@ -5,7 +5,6 @@ import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
 import '../../app_state.dart';
 import '../../design/banner.dart';
-import '../../design/motion.dart';
 import '../../session/lock_machine.dart';
 import '../describe_error.dart';
 import '../fields.dart';
@@ -25,7 +24,6 @@ class _LoginScreenState extends State<LoginScreen> {
   final _password = TextEditingController();
   bool _busy = false;
   Object? _error;
-  int _failures = 0;
   double _eyeX = 0.5;
 
   @override
@@ -69,7 +67,6 @@ class _LoginScreenState extends State<LoginScreen> {
       if (mounted) {
         setState(() {
           _error = e;
-          _failures++;
         });
       }
     } finally {
@@ -108,19 +105,16 @@ class _LoginScreenState extends State<LoginScreen> {
               keyboard: TextInputType.emailAddress,
             ),
           ),
-          ShakeOnError(
-            trigger: _failures,
-            child: Focus(
-              onFocusChange: (on) {
-                if (on) _machine.focusPassword();
-              },
-              child: keyedField(
-                'login-password',
-                _password,
-                l.loginPassword,
-                secret: true,
-                onSubmitted: (_) => _submit(),
-              ),
+          Focus(
+            onFocusChange: (on) {
+              if (on) _machine.focusPassword();
+            },
+            child: keyedField(
+              'login-password',
+              _password,
+              l.loginPassword,
+              secret: true,
+              onSubmitted: (_) => _submit(),
             ),
           ),
           if (_error case final error?) LockError(describeError(l, error)),

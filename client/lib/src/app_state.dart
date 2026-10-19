@@ -932,6 +932,9 @@ class AppState extends ChangeNotifier implements SshCallbacks {
 
   String? get _displayName => vault?.profile.displayName ?? stored?.displayName;
 
+  /// The name shown beside Loquet in the sidebar.
+  String? get accountName => _displayName;
+
   /// The language of the security mails; best effort, retried at the next sign-in or change.
   Future<void> _sendLocale() async {
     try {

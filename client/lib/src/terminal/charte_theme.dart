@@ -5,10 +5,10 @@ import 'package:xterm2/xterm.dart';
 import '../design/tokens.dart';
 import '../settings/settings.dart';
 
-/// Charte on a light window: the token hues, adjusted until each reads at 4.5:1 on the background.
-final charteLight = _charte(UfColors.light, background: UfColors.light.panel);
+/// Charte: the token hues on `term`, each adjusted until it reads at 4.5:1 on it.
+final charteLight = _charte(UfColors.light, background: UfColors.light.term);
 
-final charteDark = _charte(UfColors.dark, background: UfColors.dark.bg);
+final charteDark = _charte(UfColors.dark, background: UfColors.dark.term);
 
 /// Published Solarized Dark palette.
 const solarizedDark = TerminalTheme(
@@ -75,7 +75,7 @@ TerminalTheme terminalThemeFor(TerminalThemeId id, Brightness brightness) =>
 
 TerminalTheme _charte(UfColors c, {required Color background}) {
   Color read(Color hue) => _readable(hue, background);
-  // magenta and cyan have no token: a plum and a teal between garance, guède and lichen
+  // magenta and cyan have no token: a plum and a teal between garance, vert-de-gris and lichen
   final magenta = read(Color.lerp(c.danger, c.accent, 0.5)!);
   final cyan = read(Color.lerp(c.ok, c.accent, 0.5)!);
   return TerminalTheme(
@@ -100,7 +100,7 @@ TerminalTheme _charte(UfColors c, {required Color background}) {
     brightCyan: cyan,
     brightWhite: read(c.text),
     searchHitBackground: c.warn,
-    searchHitBackgroundCurrent: c.accentBg,
+    searchHitBackgroundCurrent: c.accent,
     searchHitForeground: c.accentFg,
   );
 }

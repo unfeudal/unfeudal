@@ -9,12 +9,16 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../api/admin_models.dart';
 import '../../app_scope.dart';
+import '../../design/buttons.dart';
 import '../../design/dialog.dart';
+import '../../design/field.dart';
+import '../../design/icons.dart';
+import '../../design/rows.dart';
 import '../../design/tokens.dart';
 import '../describe_error.dart';
 import 'members_screen.dart';
 
-/// Invites someone to the org: the link and file are shown once; pending invitations can be revoked.
+/// Invites someone to the org: the link and file are shown once.
 class InviteDialog extends StatefulWidget {
   const InviteDialog({super.key, required this.orgId, this.saveLocation});
 
@@ -31,32 +35,13 @@ class _InviteDialogState extends State<InviteDialog> {
   final _email = TextEditingController();
   OrgRole _role = OrgRole.member;
   InviteCreated? _created;
-  List<PendingInvite> _pending = const [];
   bool _busy = false;
   String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadPending();
-  }
 
   @override
   void dispose() {
     _email.dispose();
     super.dispose();
-  }
-
-  Future<void> _loadPending() async {
-    try {
-      final pending = await AppScope.read(context).api!
-          .orgInvites(widget.orgId);
-      if (mounted) setState(() => _pending = pending);
-    } on Exception catch (e) {
-      if (!mounted) return;
-      final l = AppLocalizations.of(context);
-      setState(() => _error = describeError(l, e));
-    }
   }
 
   Future<void> _create() async {
@@ -77,29 +62,10 @@ class _InviteDialogState extends State<InviteDialog> {
           _error = null;
         });
       }
-      await _loadPending();
     } on Exception catch (e) {
       if (mounted) setState(() => _error = describeError(l, e));
     } finally {
       if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  /// The list is updated here, not fetched again.
-  Future<void> _revoke(PendingInvite invite) async {
-    final l = AppLocalizations.of(context);
-    try {
-      await AppScope.read(context).api!.revokeInvite(invite.id);
-      if (mounted) {
-        setState(
-          () => _pending = [
-            for (final p in _pending)
-              if (p.id != invite.id) p,
-          ],
-        );
-      }
-    } on Exception catch (e) {
-      if (mounted) setState(() => _error = describeError(l, e));
     }
   }
 
@@ -113,18 +79,12 @@ class _InviteDialogState extends State<InviteDialog> {
           (o) => o.id == widget.orgId && o.role == OrgRole.owner.name,
         ) ??
         false;
-    final emails = {
-      for (final m in state.orgs?.block?.members ?? const <OrgMember>[])
-        m.userId: m.email,
-    };
     final created = _created;
     return UfDialog(
       title: l.inviteTitle,
+      width: 480,
       actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).maybePop(),
-          child: Text(l.cancel),
-        ),
+        CancelButton(onPressed: () => Navigator.of(context).maybePop()),
         FilledButton(
           key: const Key('invite-create'),
           onPressed: _busy ? null : _create,
@@ -132,43 +92,35 @@ class _InviteDialogState extends State<InviteDialog> {
         ),
       ],
       children: [
-        TextField(
-          key: const Key('invite-email'),
-          controller: _email,
-          autofocus: true,
-          keyboardType: TextInputType.emailAddress,
-          decoration: InputDecoration(labelText: l.inviteEmail),
+        UfField(
+          label: l.inviteEmail,
+          child: TextField(
+            key: const Key('invite-email'),
+            controller: _email,
+            autofocus: true,
+            keyboardType: TextInputType.emailAddress,
+          ),
         ),
-        DropdownButtonFormField<OrgRole>(
-          key: const Key('invite-role'),
-          initialValue: _role,
-          decoration: InputDecoration(labelText: l.inviteRole),
-          items: [
-            for (final r in OrgRole.values)
-              DropdownMenuItem(
-                value: r,
-                enabled: isOwner || r == OrgRole.member,
-                child: Text(roleLabel(l, r)),
-              ),
-          ],
-          onChanged: (r) => setState(() => _role = r ?? OrgRole.member),
+        UfField(
+          label: l.inviteRole,
+          child: DropdownButtonFormField<OrgRole>(
+            key: const Key('invite-role'),
+            initialValue: _role,
+            items: [
+              for (final r in OrgRole.values)
+                DropdownMenuItem(
+                  value: r,
+                  enabled: isOwner || r == OrgRole.member,
+                  child: Text(roleLabel(l, r)),
+                ),
+            ],
+            onChanged: (r) => setState(() => _role = r ?? OrgRole.member),
+          ),
         ),
         if (_error case final error?)
           Text(error, style: TextStyle(color: colors.danger)),
         if (created != null)
           InviteResult(created: created, saveLocation: widget.saveLocation),
-        if (_pending.isNotEmpty) ...[
-          Text(l.invitePending, style: Theme.of(context).textTheme.titleSmall),
-          for (final p in _pending)
-            PendingInviteRow(
-              invite: p,
-              creator: emails[p.createdBy],
-              // an admin or owner invite is revoked by a confirmed owner only
-              onRevoke: p.role == OrgRole.member || isOwner
-                  ? () => _revoke(p)
-                  : null,
-            ),
-        ],
       ],
     );
   }
@@ -200,18 +152,31 @@ class InviteResult extends StatelessWidget {
       spacing: 8,
       children: [
         Text(created.mailSent ? l.inviteMailSent : l.inviteShare),
-        Text(created.link, style: monoStyle.copyWith(fontSize: 12)),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            border: Border.all(color: UfColors.of(context).line),
+            borderRadius: UfRadius.control,
+          ),
+          child: SelectableText(
+            created.link,
+            style: monoStyle.copyWith(fontSize: 12),
+          ),
+        ),
         Row(
           spacing: 8,
           children: [
-            TextButton(
+            OutlinedButton(
               key: const Key('invite-copy-link'),
+              style: smallButton,
               onPressed: () =>
                   Clipboard.setData(ClipboardData(text: created.link)),
               child: Text(l.inviteCopyLink),
             ),
-            TextButton(
+            OutlinedButton(
               key: const Key('invite-save-file'),
+              style: smallButton,
               onPressed: _saveFile,
               child: Text(l.inviteSaveFile),
             ),
@@ -243,20 +208,18 @@ class PendingInviteRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
     final dates = MaterialLocalizations.of(context);
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            [
-              invite.email,
-              if (invite.role case final role?) roleLabel(l, role),
-              if (creator case final by?) l.inviteBy(by),
-              dates.formatMediumDate(invite.expiresAt.toLocal()),
-            ].join(' · '),
-          ),
-        ),
+    return ItemRow(
+      icon: UfIcons.envelope,
+      title: [
+        invite.email,
+        if (invite.role case final role?) roleLabel(l, role),
+        if (creator case final by?) l.inviteBy(by),
+      ].join(' · '),
+      subtitle: dates.formatMediumDate(invite.expiresAt.toLocal()),
+      trailing: [
         TextButton(
           key: Key('invite-revoke-${invite.id}'),
+          style: dangerQuietStyle(UfColors.of(context)).merge(smallButton),
           onPressed: onRevoke,
           child: Text(l.inviteRevoke),
         ),

@@ -42,9 +42,15 @@ typedef _Version = ({Item item, Map<String, Object?>? meta});
 /// The stored versions of an item, newest first, each with its field changes; old secrets need `reveal`.
 /// Restoring writes an old version back as a new revision: the history is never rewritten.
 class ItemHistoryPanel extends StatefulWidget {
-  const ItemHistoryPanel({super.key, required this.itemId});
+  /// In its own dialog.
+  const ItemHistoryPanel({super.key, required this.itemId}) : embedded = false;
+
+  /// The version list alone, for the inspector's Historique tab.
+  const ItemHistoryPanel.embedded({super.key, required this.itemId})
+    : embedded = true;
 
   final String itemId;
+  final bool embedded;
 
   @override
   State<ItemHistoryPanel> createState() => _ItemHistoryPanelState();
@@ -159,7 +165,13 @@ class _ItemHistoryPanelState extends State<ItemHistoryPanel> {
           secret: secret,
         );
       }
-      if (mounted) Navigator.of(context).maybePop();
+      if (!mounted) return;
+      if (widget.embedded) {
+        setState(() => _versions = null);
+        await _load();
+      } else {
+        await Navigator.of(context).maybePop();
+      }
     } on Exception catch (e) {
       if (mounted) setState(() => _error = describeError(l, e));
     }
@@ -206,73 +218,80 @@ class _ItemHistoryPanelState extends State<ItemHistoryPanel> {
           ],
         );
 
+    final children = [
+      if (_error case final error?)
+        Text(
+          error,
+          key: const Key('history-error'),
+          style: TextStyle(color: colors.danger),
+        ),
+      if (versions == null && _error == null)
+        const Center(child: CircularProgressIndicator()),
+      for (final (i, v) in (versions ?? const <_Version>[]).indexed)
+        Container(
+          key: Key('history-rev-${v.item.revision}'),
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            spacing: 4,
+            children: [
+              Text(
+                l.historyVersion(
+                  v.item.revision ?? 0,
+                  v.item.updatedAt == null
+                      ? ''
+                      : dates.formatMediumDate(v.item.updatedAt!.toLocal()),
+                ),
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              if (v.meta == null)
+                Text(l.historyUnreadable, style: muted)
+              else if (i == versions!.length - 1)
+                Text(l.historyFirst, style: muted)
+              else
+                changes(versions[i + 1].meta, v.meta),
+              if (i + 1 < versions!.length &&
+                  (v.item.secret != null ||
+                      versions[i + 1].item.secret != null)) ...[
+                if (_secrets.containsKey(v.item.revision))
+                  changes(
+                    _secrets[versions[i + 1].item.revision],
+                    _secrets[v.item.revision],
+                  )
+                else if (reveal)
+                  TextButton(
+                    key: Key('history-reveal-${v.item.revision}'),
+                    onPressed: () => _reveal(i),
+                    child: Text(l.historyReveal),
+                  )
+                else
+                  Text(l.historySecretHidden, style: muted),
+              ],
+              if (i > 0)
+                TextButton(
+                  key: Key('history-restore-${v.item.revision}'),
+                  onPressed: restorable && v.meta != null
+                      ? () => _restore(v)
+                      : null,
+                  child: Text(l.historyRestore),
+                ),
+            ],
+          ),
+        ),
+    ];
+    if (widget.embedded) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: children,
+      );
+    }
     return UfDialog(
       title: l.itemHistory,
       width: 640,
       actions: [
         CancelButton(onPressed: () => Navigator.of(context).maybePop()),
       ],
-      children: [
-        if (_error case final error?)
-          Text(
-            error,
-            key: const Key('history-error'),
-            style: TextStyle(color: colors.danger),
-          ),
-        if (versions == null && _error == null)
-          const Center(child: CircularProgressIndicator()),
-        for (final (i, v) in (versions ?? const <_Version>[]).indexed)
-          Container(
-            key: Key('history-rev-${v.item.revision}'),
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              spacing: 4,
-              children: [
-                Text(
-                  l.historyVersion(
-                    v.item.revision ?? 0,
-                    v.item.updatedAt == null
-                        ? ''
-                        : dates.formatMediumDate(v.item.updatedAt!.toLocal()),
-                  ),
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-                if (v.meta == null)
-                  Text(l.historyUnreadable, style: muted)
-                else if (i == versions!.length - 1)
-                  Text(l.historyFirst, style: muted)
-                else
-                  changes(versions[i + 1].meta, v.meta),
-                if (i + 1 < versions!.length &&
-                    (v.item.secret != null ||
-                        versions[i + 1].item.secret != null)) ...[
-                  if (_secrets.containsKey(v.item.revision))
-                    changes(
-                      _secrets[versions[i + 1].item.revision],
-                      _secrets[v.item.revision],
-                    )
-                  else if (reveal)
-                    TextButton(
-                      key: Key('history-reveal-${v.item.revision}'),
-                      onPressed: () => _reveal(i),
-                      child: Text(l.historyReveal),
-                    )
-                  else
-                    Text(l.historySecretHidden, style: muted),
-                ],
-                if (i > 0)
-                  TextButton(
-                    key: Key('history-restore-${v.item.revision}'),
-                    onPressed: restorable && v.meta != null
-                        ? () => _restore(v)
-                        : null,
-                    child: Text(l.historyRestore),
-                  ),
-              ],
-            ),
-          ),
-      ],
+      children: children,
     );
   }
 }

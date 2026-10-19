@@ -34,20 +34,23 @@ class EmptyState extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           LoquetSpot(placement: LoquetPlacement.empty, mood: mood, line: line),
-          const SizedBox(height: 18),
+          const SizedBox(height: 16),
           Text(
             title,
-            style: theme.textTheme.headlineMedium,
+            style: theme.textTheme.headlineSmall,
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 8),
-          Text(
-            body,
-            style: theme.textTheme.bodyMedium!.copyWith(color: colors.muted),
-            textAlign: TextAlign.center,
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: Text(
+              body,
+              style: theme.textTheme.bodyMedium!.copyWith(color: colors.muted),
+              textAlign: TextAlign.center,
+            ),
           ),
           if (primary != null || secondary != null) ...[
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
             Row(
               mainAxisSize: MainAxisSize.min,
               spacing: 8,
