@@ -568,5 +568,6 @@
   "settingsLicenses": "Licences",
   "licenseClient": "Cette application est un logiciel libre sous licence Apache 2.0.",
   "licenseServer": "Le serveur est un logiciel libre sous licence GNU AGPL 3.0 ou ultérieure. Son code source :",
-  "licensesAll": "Toutes les licences"
+  "licensesAll": "Toutes les licences",
+  "historySecretUnreadable": "Le secret de cette version ne s'ouvre pas sur cet appareil : rien n'a été restauré."
 }

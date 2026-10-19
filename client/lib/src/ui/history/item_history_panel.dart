@@ -133,6 +133,10 @@ class _ItemHistoryPanelState extends State<ItemHistoryPanel> {
     final entry = state.vault!.entry(widget.itemId)!;
     try {
       final secret = await _open(state.vault!, v.item, PayloadPart.secret);
+      if (v.item.secret != null && secret == null) {
+        // writing null would drop the secret: refuse instead
+        return setState(() => _error = l.historySecretUnreadable);
+      }
       final orgId = entry.orgId;
       if (orgId == null) {
         await state.vault!.upsertItem(
@@ -205,7 +209,11 @@ class _ItemHistoryPanelState extends State<ItemHistoryPanel> {
       ],
       children: [
         if (_error case final error?)
-          Text(error, style: TextStyle(color: colors.danger)),
+          Text(
+            error,
+            key: const Key('history-error'),
+            style: TextStyle(color: colors.danger),
+          ),
         if (versions == null && _error == null)
           const Center(child: CircularProgressIndicator()),
         for (final (i, v) in (versions ?? const <_Version>[]).indexed)
