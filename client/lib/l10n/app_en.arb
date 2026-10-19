@@ -1330,5 +1330,13 @@
   "licensesAll": "Every licence",
   "historySecretUnreadable": "This version's secret does not open on this device: nothing was restored.",
   "snippetLocation": "Saved in",
-  "keychainPlace": "Keys of"
+  "keychainPlace": "Keys of",
+  "inviteBy": "by {email}",
+  "@inviteBy": {
+    "placeholders": {
+      "email": {
+        "type": "String"
+      }
+    }
+  }
 }
