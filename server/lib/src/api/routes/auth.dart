@@ -5,7 +5,9 @@ import 'package:shelf/shelf.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../../auth/secret_hash.dart';
+import '../../audit/audit_log.dart';
 import '../../auth/tokens.dart';
+import '../../net/client_ip.dart';
 import '../app.dart';
 import '../credentials.dart';
 import '../errors.dart';
@@ -53,7 +55,16 @@ Future<Response> login(Request request) async {
   // Always exactly one verification, known email or not.
   final ok = await verifySecret(stored, authKey);
   if (user == null || !ok || user['disabled'] != 0) {
-    // Audit hook: auth.login_failed (own transaction, user scope) when the account exists and the key is wrong.
+    if (user != null && !ok) {
+      // own transaction, committed before the 401; an unknown email is never recorded
+      await deps.db.transaction(
+        (tx) => auditWriter(request, tx, actor: (user: null, device: null))(
+          AuditScope.user(user['id']! as String),
+          'auth.login_failed',
+          const [],
+        ),
+      );
+    }
     throw ApiError(
       ApiErrorCode.unauthorized,
       'Wrong email or master password.',
@@ -87,7 +98,12 @@ Future<Response> login(Request request) async {
       bundleVersion: user['bundle_version']! as int,
       device: device,
     );
-    // Audit hook: device.added. Mail hook: newDevice after commit.
+    await auditWriter(
+      request,
+      tx,
+      actor: (user: userId, device: session.deviceId),
+    )(AuditScope.user(userId), 'device.added', [session.deviceId]);
+    // Mail hook: newDevice after commit.
     return session;
   });
   return jsonResponse(session.toJson());
@@ -99,6 +115,7 @@ Future<Response> refreshToken(Request request) async {
   final body = await readJson(request);
   final rotated = await deps.refresh.rotate(
     reqString(body, 'refreshToken', max: 200),
+    ip: clientIp(request, deps.config.trustedProxies).address,
   );
   return jsonResponse(
     TokenPair(

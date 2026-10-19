@@ -61,6 +61,7 @@ class AppDeps {
     Mailer mailer = const NoMailer(),
   }) async {
     final serverSecret = await loadServerSecret(config.secretFile);
+    final audit = AuditLog(clock, config.features, serverSecret);
     return AppDeps._(
       config: config,
       db: db,
@@ -68,9 +69,15 @@ class AppDeps {
       log: log ?? Logger(config.logLevel, stdout.writeln),
       serverSecret: serverSecret,
       instanceEpoch: await ensureInstanceEpoch(db),
-      audit: AuditLog(clock, config.features, serverSecret),
+      audit: audit,
       access: AccessTokens(serverSecret, clock, config.accessTokenTtl),
-      refresh: RefreshTokens(db, clock, config.refreshTokenTtl, serverSecret),
+      refresh: RefreshTokens(
+        db,
+        clock,
+        config.refreshTokenTtl,
+        serverSecret,
+        audit: audit,
+      ),
       limiter: RateLimiter(db, clock, config),
       secretHash: secretHash,
       allowTestingKdf: allowTestingKdf,

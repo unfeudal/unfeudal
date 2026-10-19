@@ -5,6 +5,7 @@ import 'package:shelf/shelf.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../../auth/secret_hash.dart';
+import '../../audit/audit_log.dart';
 import '../../auth/tokens.dart';
 import '../../db/db.dart';
 import '../app.dart';
@@ -161,7 +162,12 @@ Future<Response> changePassword(Request request) async {
       deps.clock.now(),
       exceptDeviceId: auth.deviceId,
     );
-    // Audit hook: account.password_changed. Mail hook: passwordChanged after commit.
+    await auditWriter(request, tx)(
+      AuditScope.user(auth.userId),
+      'account.password_changed',
+      const [],
+    );
+    // Mail hook: passwordChanged after commit.
   });
   return noContent();
 }
@@ -222,7 +228,12 @@ Future<Response> recover(Request request) async {
       recoveryHash: recoveryHash,
     );
     await _revokeAll(tx, user.id, deps.clock.now());
-    // Audit hook: account.recovery_used. Mail hook: recoveryUsed after commit.
+    await auditWriter(request, tx, actor: (user: user.id, device: null))(
+      AuditScope.user(user.id),
+      'account.recovery_used',
+      const [],
+    );
+    // Mail hook: recoveryUsed after commit.
   });
   // Only after every check passed.
   await clearCredentials(request, user.email);
@@ -245,7 +256,11 @@ Future<Response> recoveryKit(Request request) async {
   final recoveryHash = await hashSecret(recoveryAuthKey, deps.secretHash);
   await deps.db.transaction((tx) async {
     await _casBundle(tx, user.id, version, bundle, recoveryHash: recoveryHash);
-    // Audit hook: account.recovery_kit_changed.
+    await auditWriter(request, tx)(
+      AuditScope.user(auth.userId),
+      'account.recovery_kit_changed',
+      const [],
+    );
   });
   return noContent();
 }
