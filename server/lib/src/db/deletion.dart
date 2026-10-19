@@ -9,8 +9,8 @@ import '../orgs/org_access.dart';
 import '../orgs/rotations.dart';
 import 'db.dart';
 
-/// "Member removed". [reason]: member_removed | member_left | user_deleted. [before] lets deleteUser load
-/// every org before any delete.
+/// Removes a member: team seats, user entries, keys, a pending rotation, then the membership.
+/// [reason]: member_removed | member_left | user_deleted. [before] lets deleteUser load every org before any delete.
 Future<void> removeMember(
   Tx tx,
   String orgId,
@@ -85,7 +85,7 @@ Future<void> deleteOrg(Tx tx, String orgId) async {
   await bumpOrgSeq(tx); // the org:<id> audit chain stays
 }
 
-/// "User deleted": refusals, every org loaded before any delete, member removal per org, personal data.
+/// Deletes an account: refusals, every org loaded before any delete, member removal per org, personal data.
 Future<void> deleteUser(
   Tx tx,
   String userId, {
@@ -149,8 +149,8 @@ Future<void> deleteUser(
   await audit?.call(AuditScope.instance, 'account.deleted', [userId]);
 }
 
-/// Retention step 4: [itemId] and, for a folder, its whole subtree become tombstones in the caller's transaction
-/// ("Org folder purged" order; personal folders the same without the org tables).
+/// Turns [itemId] and, for a folder, its whole subtree into tombstones in the caller's transaction; an org
+/// folder also loses its ACL, keys, key history and pending rotation (a personal folder has none).
 Future<void> purgeItem(Tx tx, String itemId, AuditLog audit) async {
   Future<int> nextSeq() async =>
       (await tx.query(

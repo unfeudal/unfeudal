@@ -186,9 +186,7 @@ Future<Item> writeItem(
                 folderChanged ||
                 (cur['deleted'] == 1) != input.deleted
           : folderChanged)) {
-    await bumpOrgSeq(
-      tx,
-    ); // write 2: the block lists folders and where items live
+    await bumpOrgSeq(tx); // the org block lists folders and where items live
   }
   final params = {
     'id': input.id,
@@ -220,7 +218,7 @@ Future<Item> writeItem(
     );
   }
   if (cur != null && deps.features.enabled(Flag.itemHistory)) {
-    // write 4
+    // the replaced version becomes a revision
     await tx.execute(
       'INSERT INTO item_revisions (item_id, revision, body, size, created_at) VALUES (@i, @r, @b, @z, @t)',
       {
@@ -237,7 +235,7 @@ Future<Item> writeItem(
       (await retentionFor(tx, deps.config, input.orgId)).maxVersions,
     );
   }
-  final at = [input.id, ?input.folderId]; // write 5
+  final at = [input.id, ?input.folderId]; // one audit event per write
   final wasDeleted = cur?['deleted'] == 1;
   final (action, targets) = cur == null
       ? ('item.created', at)
@@ -269,9 +267,10 @@ Future<Item> writeItem(
   return stored;
 }
 
-/// PUT /items check 9: parent and cycle (400), edit on the new and the old parent (403; root: confirmed
-/// owner/admin), a folder move under No escalation (403) and pending_rotations, keyIds at max(current, 1) of the item's folder (400). Check 10's org re-seal rule
-/// (current key version, edit holder or admin) follows from these two.
+/// Org writes: parent and cycle (400), edit on the new and the old parent (403; root: a confirmed
+/// owner or admin), a folder move priced like an ACL change (403 for a gain the mover lacks; lost readers queued
+/// for rotation), keyIds at max(current, 1) of the item's folder (400). A re-seal of a trashed item therefore
+/// needs the current key version and edit.
 Future<void> checkOrgWrite(
   Tx tx,
   AuthContext auth,
