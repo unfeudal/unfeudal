@@ -213,7 +213,7 @@ void main() {
     t,
   ) async {
     final s = await admin(t);
-    final id = newId();
+    final id = newId(), other = newId();
     h.orgReplies['POST /orgs/$testOrgId/invites'] = (b) => SyncHarness.reply({
       'invite': {
         'id': id,
@@ -236,6 +236,14 @@ void main() {
           'createdAt': '2026-10-15T12:00:00.000Z',
           'expiresAt': '2026-10-22T12:00:00.000Z',
         },
+        {
+          'id': other,
+          'email': 'boss@example.org',
+          'role': 'admin',
+          'createdBy': mia,
+          'createdAt': '2026-10-15T12:00:00.000Z',
+          'expiresAt': '2026-10-22T12:00:00.000Z',
+        },
       ],
     });
     await pumpApp(
@@ -251,6 +259,15 @@ void main() {
       findsOneWidget,
     );
     expect(find.textContaining('unfeudal://enroll'), findsOneWidget);
+    // role and sender shown; an admin invite is an owner's to revoke
+    expect(
+      find.textContaining('boss@example.org · Admin · by mia@example.org'),
+      findsOneWidget,
+    );
+    expect(
+      t.widget<TextButton>(find.byKey(Key('invite-revoke-$other'))).onPressed,
+      isNull,
+    );
     await t.tap(find.byKey(Key('invite-revoke-$id')));
     await pumpReal(t);
     expect(h.orgCalls.last.route, 'DELETE /invites/$id');
