@@ -111,3 +111,23 @@ Future<void> runCleanup(Tx tx, DateTime now, Config config) async {
     {'c': c},
   );
 }
+
+/// The old flag to 0, then the new one to 1, in one transaction
+/// (users_one_instance_owner forbids two owners at any moment).
+Future<void> transferOwner(Db db, String email) => db.transaction((tx) async {
+  final target = (await tx.query(
+    'SELECT id, is_instance_owner, disabled FROM users WHERE email = @e',
+    {'e': email.trim().toLowerCase()},
+  )).firstOrNull;
+  if (target == null) throw StateError('No account with this email.');
+  if (target['is_instance_owner'] == 1) return;
+  if (target['disabled'] != 0) {
+    throw StateError('This account is disabled: enable it first.');
+  }
+  await tx.execute(
+    'UPDATE users SET is_instance_owner = 0 WHERE is_instance_owner = 1',
+  );
+  await tx.execute('UPDATE users SET is_instance_owner = 1 WHERE id = @u', {
+    'u': target['id'],
+  });
+});

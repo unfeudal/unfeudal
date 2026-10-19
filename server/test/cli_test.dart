@@ -10,6 +10,8 @@ library;
 import 'dart:io';
 
 import 'package:test/test.dart';
+import 'package:unfeudal_server/src/db/db.dart';
+import 'package:unfeudal_server/src/db/migrate.dart';
 
 /// The parent environment without any UNFEUDAL_* variable, plus [env].
 Future<ProcessResult> cli(List<String> args, Map<String, String> env) =>
@@ -74,5 +76,29 @@ void main() {
     expect((await cli(['backup', target], env)).exitCode, 0);
     expect(File(target).existsSync(), isTrue);
     expect((await cli(['backup', target], env)).exitCode, 1);
+  });
+
+  test('transfer-owner: usage 64, unknown email 1, success 0', () async {
+    expect((await cli(['transfer-owner'], env)).exitCode, 64);
+    expect(
+      (await cli(['transfer-owner', 'ghost@vault.test'], env)).exitCode,
+      1,
+    );
+    final db = await openDb(env['UNFEUDAL_DATABASE_URL']!);
+    await migrate(db);
+    for (final (id, email, io) in [
+      ('a', 'a@vault.test', 1),
+      ('b', 'b@vault.test', 0),
+    ]) {
+      await db.execute(
+        'INSERT INTO users (id, email, is_instance_owner, bundle, auth_hash, created_at) '
+        "VALUES (@i, @e, @o, '{}', 'h', '2026-10-13T12:00:00.000Z')",
+        {'i': id, 'e': email, 'o': io},
+      );
+    }
+    await db.close();
+    final ok = await cli(['transfer-owner', 'b@vault.test'], env);
+    expect(ok.exitCode, 0);
+    expect('${ok.stdout}', contains('b@vault.test'));
   });
 }
