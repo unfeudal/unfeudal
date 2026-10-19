@@ -12,6 +12,11 @@ COPY server server
 RUN cd server && dart pub get --offline && dart build cli --target bin/server.dart -o /out
 
 FROM debian:bookworm-slim
+ARG VERSION=dev
+LABEL org.opencontainers.image.title="unfeudal-server" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.source="https://github.com/unfeudal/unfeudal" \
+      org.opencontainers.image.licenses="AGPL-3.0-or-later"
 RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates \
  && rm -rf /var/lib/apt/lists/* \

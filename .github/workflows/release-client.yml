@@ -1,0 +1,103 @@
+name: release-client
+on:
+  push:
+    tags: ["client-v*"]
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: {persist-credentials: false}
+      - uses: dart-lang/setup-dart@6afc89df92d6eb3834022f73cd65adc8cdfcb92d # v1.8.1
+      - run: cd tool && dart pub get && dart run bin/check_tag.dart "$GITHUB_REF_NAME"
+  test:
+    needs: check
+    uses: $/.github/workflows/client.yml
+  windows:
+    needs: test
+    runs-on: windows-latest
+    timeout-minutes: 40
+    environment: release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: {persist-credentials: false}
+      - shell: bash
+        run: |
+          git clone --depth 1 --branch 3.47.7 https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+      - run: cd client && flutter build windows --release
+      - shell: pwsh
+        run: |
+          $v = "$env:GITHUB_REF_NAME".Substring(8)
+          $rel = "client/build/windows/x64/runner/Release"
+          foreach ($dll in 'msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll') { Copy-Item "$env:SystemRoot\System32\$dll" $rel }
+          New-Item -ItemType Directory -Force client/dist | Out-Null
+          Compress-Archive -Path "$rel\*" -DestinationPath "client/dist/Unfeudal-$v-windows-x64.zip"
+          $env:UNFEUDAL_VERSION = $v
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\iscc.exe" client/windows/installer/unfeudal.iss
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: windows
+          path: client/dist/*
+  macos:
+    needs: test
+    runs-on: macos-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: {persist-credentials: false}
+      - shell: bash
+        run: |
+          git clone --depth 1 --branch 3.47.7 https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+      - run: cd client && flutter build macos --release
+      - run: |
+          v="${GITHUB_REF_NAME#client-v}"
+          mkdir -p client/dist
+          hdiutil create -volname Unfeudal -srcfolder client/build/macos/Build/Products/Release/Unfeudal.app -ov -format UDZO "client/dist/Unfeudal-$v-macos.dmg"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: macos
+          path: client/dist/*
+  publish:
+    needs: [windows, macos]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: release
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: {persist-credentials: false}
+      - uses: dart-lang/setup-dart@6afc89df92d6eb3834022f73cd65adc8cdfcb92d # v1.8.1
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: dist
+          merge-multiple: true
+      - run: cd dist && sha256sum * > SHA256SUMS
+      - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-path: dist/*
+      - run: cd tool && dart pub get && dart run bin/changelog.dart client "${GITHUB_REF_NAME#client-v}" > ../notes.md
+      # draft with every file, then published: immutable releases freeze what is published
+      - run: |
+          gh release create "$GITHUB_REF_NAME" dist/* --draft --verify-tag --title "$GITHUB_REF_NAME" --notes-file notes.md
+          gh release edit "$GITHUB_REF_NAME" --draft=false
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: |
+          api=https://git.killiandalcin.fr/api/v1/repos/unfeudal/unfeudal/releases
+          id=$(jq -n --arg t "$GITHUB_REF_NAME" --arg c "$GITHUB_SHA" --rawfile b notes.md \
+              '{tag_name: $t, target_commitish: $c, name: $t, body: $b}' |
+            curl --fail --retry 5 --retry-all-errors -H "Authorization: token $GITEA_TOKEN" -H 'Content-Type: application/json' -d @- "$api" |
+            jq -r .id)
+          for f in dist/*; do
+            curl --fail --retry 3 -H "Authorization: token $GITEA_TOKEN" -F "attachment=@$f" "$api/$id/assets?name=$(basename "$f")"
+          done
+        env:
+          GITEA_TOKEN: ${{ secrets.GITEA_TOKEN }}
