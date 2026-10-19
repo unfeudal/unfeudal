@@ -11,6 +11,7 @@ import '../../events/app_events.dart';
 import '../../vault/org_writer.dart';
 import '../../vault/vault.dart';
 import '../describe_error.dart';
+import '../history/item_history_panel.dart';
 import 'editor_frame.dart';
 import 'forwards_editor.dart';
 import 'host_binding_field.dart';
@@ -387,6 +388,18 @@ class _HostEditorPanelState extends State<HostEditorPanel> {
           'startupCommand',
           mono: true,
         ),
+        if (state.serverHas('item_history') && widget.hostId != null)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              key: const Key('item-history'),
+              onPressed: () => showUfDialog<void>(
+                context,
+                (_) => ItemHistoryPanel(itemId: widget.hostId!),
+              ),
+              child: Text(l.itemHistory),
+            ),
+          ),
         if (_error case final error?)
           Text(error, style: TextStyle(color: UfColors.of(context).danger)),
       ],

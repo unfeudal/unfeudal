@@ -501,5 +501,13 @@
   "activityRewritten": "Le serveur a modifié un historique déjà vu par cet appareil ({scope}, événement {seq}).",
   "activityVanished": "Des événements déjà vus par cet appareil ont disparu sans point de contrôle ({scope}, événement {seq}).",
   "activitySshNote": "Les sessions SSH, redirections et secrets affichés sont déclarés par l'application : une application modifiée peut les omettre.",
-  "activityEmpty": "Aucune activité pour l'instant."
+  "activityEmpty": "Aucune activité pour l'instant.",
+  "itemHistory": "Historique",
+  "historyVersion": "Version {revision}, {date}",
+  "historyFirst": "Plus ancienne version conservée",
+  "historyUnreadable": "Cette version est illisible sur cet appareil.",
+  "historySecretHidden": "Les champs secrets sont masqués.",
+  "historyReveal": "Afficher les secrets",
+  "historyRestore": "Restaurer cette version",
+  "historyRestoreConfirm": "Réécrire cette version comme la plus récente ? L'actuelle reste dans l'historique."
 }

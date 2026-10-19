@@ -10,6 +10,7 @@ import '../../design/tokens.dart';
 import '../../vault/org_writer.dart';
 import '../../vault/vault.dart';
 import '../describe_error.dart';
+import '../history/item_history_panel.dart';
 import '../fields.dart';
 import 'editor_frame.dart';
 import 'jump_host_picker.dart';
@@ -254,6 +255,18 @@ class _FolderEditorPanelState extends State<FolderEditorPanel> {
         ),
         if (_error case final error?)
           Text(error, style: TextStyle(color: UfColors.of(context).danger)),
+        if (state.serverHas('item_history') && widget.folderId != null)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              key: const Key('item-history'),
+              onPressed: () => showUfDialog<void>(
+                context,
+                (_) => ItemHistoryPanel(itemId: widget.folderId!),
+              ),
+              child: Text(l.itemHistory),
+            ),
+          ),
       ],
     );
   }
