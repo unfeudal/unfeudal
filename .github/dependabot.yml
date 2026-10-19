@@ -4,3 +4,11 @@ updates:
     directory: /
     schedule: {interval: weekly}
     groups: {actions: {patterns: ["*"]}}
+  - package-ecosystem: pub
+    directories: [/server, /client, /shared, /tool]
+    schedule: {interval: weekly}
+    groups: {pub: {patterns: ["*"]}}
+  - package-ecosystem: docker
+    directory: /
+    schedule: {interval: weekly}
+    groups: {docker: {patterns: ["*"]}}
