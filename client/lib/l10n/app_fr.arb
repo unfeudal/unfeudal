@@ -521,5 +521,16 @@
   "trashKept": "Conservé jusqu'à restauration.",
   "trashRestore": "Restaurer",
   "orgRetentionServer": "Serveur : {value}",
-  "orgRetentionUnlimited": "Serveur : illimité"
+  "orgRetentionUnlimited": "Serveur : illimité",
+  "settingsChangePassword": "Changer le mot de passe maître",
+  "pwCurrent": "Mot de passe maître actuel",
+  "pwNext": "Nouveau mot de passe maître",
+  "pwConfirm": "Répéter le nouveau mot de passe",
+  "pwSubmit": "Changer",
+  "passwordCurrentWrong": "Le mot de passe actuel est incorrect.",
+  "passwordChanged": "Mot de passe maître changé. Les autres appareils sont déconnectés.",
+  "securityResetTitle": "Réinitialisation de sécurité",
+  "securityResetBody": "En cas d'appareil perdu ou de kit de récupération exposé : nouveau mot de passe maître, tous les autres appareils déconnectés, nouveau kit de récupération.",
+  "securityResetNoKit": "Mot de passe changé. Ce serveur ne permet pas de nouveau kit de récupération.",
+  "settingsSecurity": "Sécurité"
 }
