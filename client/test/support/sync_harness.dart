@@ -73,6 +73,9 @@ class SyncHarness {
   bool offline = false;
   DateTime now = DateTime.utc(2026, 10, 15, 12);
   final failPuts = <String, int>{};
+
+  /// PUT /items/{id} of these ids never reaches the server: a network error.
+  final dropPuts = <String>{};
   final requests = <String>[];
   final hosts = <String>{};
   final accounts = <String, HarnessAccount>{};
@@ -381,6 +384,10 @@ class SyncHarness {
     final path = r.url.path;
     requests.add('${r.method} $path');
     if (offline) throw http.ClientException('offline', r.url);
+    if (r.method == 'PUT' &&
+        dropPuts.any((id) => path == '/api/v1/items/$id')) {
+      throw http.ClientException('dropped', r.url);
+    }
     if (path == '/api/info') return _json(_info(_caller(r)));
     if (!path.startsWith('/api/v1/')) return _error(404, 'not_found');
     final v = r.headers['x-unfeudal-client'];
