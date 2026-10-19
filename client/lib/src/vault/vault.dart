@@ -5,21 +5,31 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../api/api_client.dart';
 import '../debug_trace.dart';
+import '../orgs/folder_keyring.dart';
 import '../storage/local_mirror.dart';
 import '../sync/ledger_store.dart';
 
 enum EntryState { ok, unreadable, unsupported, readOnly }
 
-/// One personal item as shown: [meta] is the opened payload, [pending] a local write not yet confirmed.
+/// One item as shown: [meta] is the opened payload, [pending] a local write not yet confirmed,
+/// [awaitingKey] an org item whose folder key version is not held.
 class VaultEntry {
-  const VaultEntry(this.item, this.state, {this.meta, this.pending = false});
+  const VaultEntry(
+    this.item,
+    this.state, {
+    this.meta,
+    this.pending = false,
+    this.awaitingKey = false,
+  });
 
   final Item item;
   final EntryState state;
   final Map<String, Object?>? meta;
   final bool pending;
+  final bool awaitingKey;
 
   String get id => item.id;
+  String? get orgId => item.orgId;
   String? get folderId => item.folderId;
   ItemKind get kind => item.kind;
   String? get name => switch (meta?['name']) {
@@ -40,6 +50,9 @@ class Vault extends ChangeNotifier {
   final LedgerStore ledger;
   final Future<void> Function(Item) _send;
   void Function(String id)? onReplay;
+
+  /// Set at unlock by the org controller, null at lock; without it org items stay hidden.
+  FolderKeyring? keyring;
   Uint8List? _key;
   Map<String, VaultEntry> _entries = {};
 
@@ -275,7 +288,11 @@ class Vault extends ChangeNotifier {
   ) {
     final winners = <String, VaultEntry>{};
     for (final e in entries) {
-      if (e.kind != ItemKind.knownHost || e.state != EntryState.ok) continue;
+      if (e.kind != ItemKind.knownHost ||
+          e.state != EntryState.ok ||
+          e.orgId != null) {
+        continue;
+      }
       final host = _knownHostMeta(e)!.hostItemId;
       final best = winners[host];
       if (best == null || e.id.compareTo(best.id) < 0) winners[host] = e;
@@ -318,7 +335,10 @@ class Vault extends ChangeNotifier {
   VaultEntry? get _profileEntry {
     final profiles = [
       for (final e in _entries.values)
-        if (e.kind == ItemKind.profile && e.state == EntryState.ok) e,
+        if (e.kind == ItemKind.profile &&
+            e.state == EntryState.ok &&
+            e.orgId == null)
+          e,
     ]..sort((a, b) => a.id.compareTo(b.id));
     return profiles.firstOrNull;
   }
@@ -331,6 +351,7 @@ class Vault extends ChangeNotifier {
     _requireKey();
     final current =
         _entries[id] ?? (throw ArgumentError.value(id, 'id', 'unknown item'));
+    _personalOnly(current);
     if (current.state != EntryState.ok) {
       throw StateError('${current.state.name} item is not rewritten');
     }
@@ -358,11 +379,13 @@ class Vault extends ChangeNotifier {
     PayloadPart part, {
     bool fromServer = true,
   }) async {
-    final key = _requireKey();
+    _requireKey();
     final envelope = part == PayloadPart.meta ? item.meta : item.secret;
     if (envelope == null) {
       throw FormatException('item has no ${part.name} payload');
     }
+    final key =
+        _keyFor(item, envelope, part) ?? (throw const _MissingFolderKey());
     final opened = await PayloadCrypto.open(
       PayloadAad.of(item, part),
       envelope,
@@ -378,6 +401,16 @@ class Vault extends ChangeNotifier {
     return opened;
   }
 
+  /// The key for [envelope] of [item]: the user key for personal items; for org items the keyring's key of the
+  /// keyId's folder and version. Null = not held (the entry shows awaitingKey).
+  Uint8List? _keyFor(Item item, Envelope envelope, PayloadPart part) {
+    if (item.scope == ItemScope.personal) return _key;
+    final id = KeyIds.parseFolder(envelope.keyId);
+    if (id == null || id.part != part) return null;
+    final keys = keyring?.keyFor(id.folderId, id.version);
+    return part == PayloadPart.meta ? keys?.metaKey : keys?.secretKey;
+  }
+
   Future<void> reload() async {
     final key = _key;
     if (key == null) {
@@ -390,8 +423,8 @@ class Vault extends ChangeNotifier {
     }; // the outbox overlays the server row
     final next = <String, VaultEntry>{};
     for (final item in rows.values) {
-      if (item.scope != ItemScope.personal || item.purged) {
-        continue; // Org hook: org items are not read yet
+      if (item.purged || (item.scope == ItemScope.org && keyring == null)) {
+        continue;
       }
       final fromServer = !queued.containsKey(item.id);
       final built = await _build(item, fromServer: fromServer);
@@ -473,6 +506,7 @@ class Vault extends ChangeNotifier {
   }) async {
     _requireKey();
     final current = id == null ? null : _entries[id];
+    if (current != null) _personalOnly(current);
     if (current != null && current.state != EntryState.ok) {
       throw StateError('${current.state.name} item is not rewritten');
     }
@@ -529,6 +563,10 @@ class Vault extends ChangeNotifier {
 
   Uint8List _requireKey() => _key ?? (throw StateError('locked'));
 
+  static void _personalOnly(VaultEntry e) {
+    if (e.orgId != null) throw StateError('org items go through OrgWriter');
+  }
+
   /// null = replayed payload.
   Future<VaultEntry?> _build(Item item, {required bool fromServer}) async {
     if (item.kind == ItemKind.unknown) {
@@ -556,6 +594,13 @@ class Vault extends ChangeNotifier {
         meta: opened.json,
         pending: !fromServer,
       );
+    } on _MissingFolderKey {
+      return VaultEntry(
+        item,
+        EntryState.unreadable,
+        pending: !fromServer,
+        awaitingKey: true,
+      );
     } on DecryptionFailed {
       return VaultEntry(item, EntryState.unreadable, pending: !fromServer);
     } on UnsupportedEnvelope {
@@ -581,4 +626,8 @@ class Vault extends ChangeNotifier {
 
 class _ReplayedSecret implements Exception {
   const _ReplayedSecret();
+}
+
+class _MissingFolderKey implements Exception {
+  const _MissingFolderKey();
 }
