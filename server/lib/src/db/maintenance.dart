@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../auth/tokens.dart';
+import '../config/config.dart';
 import 'db.dart';
 
 /// Creates [path] empty and owner-only before anything secret is written to it.
@@ -91,4 +92,22 @@ Future<void> backupDatabase(Db db, String path) async {
   }
   await _createPrivate(path);
   await db.execute('VACUUM INTO @p', {'p': path});
+}
+
+/// Daily cleanup. One cutoff for login_attempts: 24 h is the longest window of any key (login_lockout ≤ 24 h).
+Future<void> runCleanup(Tx tx, DateTime now, Config config) async {
+  final t = iso(now);
+  await tx.execute(
+    'DELETE FROM login_attempts WHERE (locked_until IS NULL OR locked_until <= @t) AND window_start < @w',
+    {'t': t, 'w': iso(now.subtract(const Duration(hours: 24)))},
+  );
+  await tx.execute(
+    'DELETE FROM refresh_tokens WHERE expires_at <= @t OR used_at < @u',
+    {'t': t, 'u': iso(now.subtract(const Duration(days: 7)))},
+  );
+  final c = iso(now.subtract(config.inviteTtl));
+  await tx.execute(
+    'DELETE FROM invites WHERE expires_at < @c OR accepted_at < @c OR revoked_at < @c',
+    {'c': c},
+  );
 }
