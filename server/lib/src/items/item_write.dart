@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
@@ -8,6 +9,8 @@ import '../api/errors.dart';
 import '../api/middleware.dart';
 import '../config/features.dart';
 import '../db/db.dart';
+import '../orgs/org_access.dart';
+import '../orgs/rotations.dart';
 
 /// Checks 2–3 (before the transaction): the client body as an Item, server-set fields dropped.
 Item parseItemInput(String pathId, Map<String, Object?> body) {
@@ -94,15 +97,19 @@ Future<Item> writeItem(
   }
   final storedSecret = curBody?['secret'];
   final folderChanged = cur != null && cur['folder_id'] != input.folderId;
-  if (storedSecret != null && input.secret == null && folderChanged) {
-    throw _bad(
-      'a move re-seals the secret',
-    ); // 7. Org hook: a key version change re-seals too.
+  final keyChanged =
+      cur != null &&
+      (curBody?['meta'] as Map?)?['keyId'] !=
+          input.meta?.keyId; // personal: always `user`
+  if (storedSecret != null &&
+      input.secret == null &&
+      (folderChanged || keyChanged)) {
+    throw _bad('a move or a re-seal re-seals the secret'); // 7.
   }
   if (input.scope == ItemScope.personal) {
     await _checkPersonalFolder(tx, auth, input); // 8.
   } else {
-    // Org hook: parent and cycle, edit permission on old and new folder, keyIds at max(current, 1).
+    await checkOrgWrite(tx, auth, input, cur); // 9.
   }
   if (cur != null &&
       await isTrashed(
@@ -119,7 +126,7 @@ Future<Item> writeItem(
               deleted: input.deleted,
               folderId: input.folderId,
             ));
-    final reseal = !folderChanged && input.deleted == (cur['deleted'] == 1); // Org hook: an org re-seal needs the current key version and edit.
+    final reseal = !folderChanged && input.deleted == (cur['deleted'] == 1);
     if (!restore && !reseal) {
       throw _bad('a trashed item can only be restored or re-sealed');
     }
@@ -170,7 +177,16 @@ Future<Item> writeItem(
       max: personal ? deps.config.maxVaultSize : deps.config.maxOrgSize,
     );
   }
-  // Org hook: org_seq + 1 when a folder is created, moved, deleted or restored, or an item changes folder.
+  if (input.scope == ItemScope.org &&
+      (input.type == 'folder'
+          ? cur == null ||
+                folderChanged ||
+                (cur['deleted'] == 1) != input.deleted
+          : folderChanged)) {
+    await bumpOrgSeq(
+      tx,
+    ); // write 2: the block lists folders and where items live
+  }
   final params = {
     'id': input.id,
     'owner': input.scope == ItemScope.personal ? auth.userId : null,
@@ -202,6 +218,57 @@ Future<Item> writeItem(
   }
   // Revision hook: item_revisions (item_history), then audit item.created / deleted / restored / moved / updated.
   return stored;
+}
+
+/// PUT /items check 9: parent and cycle (400), edit on the new and the old parent (403; root: confirmed
+/// owner/admin), a folder move under No escalation (403) and pending_rotations, keyIds at max(current, 1) of the item's folder (400). Check 10's org re-seal rule
+/// (current key version, edit holder or admin) follows from these two.
+Future<void> checkOrgWrite(
+  Tx tx,
+  AuthContext auth,
+  Item input,
+  Map<String, Object?>? cur,
+) async {
+  final org = (await loadOrg(tx, input.orgId!))!;
+  final isFolder = input.type == 'folder';
+  final parent = input.folderId;
+  if (parent != null && !org.folders.containsKey(parent)) {
+    throw _bad('folderId must be a folder of this organization');
+  }
+  if (!isFolder && parent == null) throw _bad('org items live in a folder');
+  final seen = <String>{};
+  for (
+    String? at = parent;
+    isFolder && at != null && seen.add(at);
+    at = org.parentOf(at)
+  ) {
+    if (at == input.id) throw _bad('a folder cannot move under itself');
+  }
+  bool canEdit(String? folderId) => folderId == null
+      ? org.members[auth.userId]!.isAdmin
+      : permissionsOf(org, auth.userId, folderId).contains(Permission.edit);
+  final oldParent = cur?['folder_id'] as String?;
+  if (!canEdit(parent) ||
+      (cur != null && oldParent != parent && !canEdit(oldParent))) {
+    throw ApiError(ApiErrorCode.forbidden, 'You need edit on this folder.');
+  }
+  if (isFolder && cur != null && oldParent != parent) {
+    // a move changes inherited entries: priced like an ACL change
+    final after = org.withParent(input.id, parent);
+    if (!org.members[auth.userId]!.isAdmin) {
+      checkNoEscalation(org, after, auth.userId); // 403
+    }
+    await recordRotations(tx, input.orgId!, org, after, 'folder_moved');
+  }
+  final keyFolder = isFolder ? input.id : parent!;
+  final version = max(await currentKeyVersion(tx, keyFolder), 1);
+  if (input.meta?.keyId !=
+          KeyIds.folder(keyFolder, version, PayloadPart.meta) ||
+      (input.secret != null &&
+          input.secret!.keyId !=
+              KeyIds.folder(keyFolder, version, PayloadPart.secret))) {
+    throw _bad('payloads must use the folder keys at version $version');
+  }
 }
 
 /// Check 8, folder rule: folderId a live personal folder of the caller, not the item or below it.
