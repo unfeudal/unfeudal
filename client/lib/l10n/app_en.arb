@@ -513,5 +513,100 @@
   "termCopy": "Copy",
   "termPaste": "Paste",
   "settingsTerminalFont": "Terminal font",
-  "settingsTerminalFontSize": "Text size"
+  "settingsTerminalFontSize": "Text size",
+  "loquetWelcome1": "Welcome back, {name}.",
+  "@loquetWelcome1": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "loquetWelcome2": "Hello again, {name}.",
+  "@loquetWelcome2": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "loquetWelcomeAnon": "Welcome back.",
+  "loquetNotLooking1": "Not looking.",
+  "loquetNotLooking2": "Eyes shut.",
+  "loquetPeeking1": "Only peeking a tiny bit.",
+  "loquetChecking1": "Checking the key.",
+  "loquetWrongPassword1": "That's not the right password.",
+  "loquetWaitingHello1": "Waiting for {method}.",
+  "@loquetWaitingHello1": {
+    "placeholders": {
+      "method": {
+        "type": "String"
+      }
+    }
+  },
+  "loquetConnected1": "Connected. Door opened, then shut.",
+  "loquetConnected2": "Connected. Nothing out of place.",
+  "loquetKeyChanged1": "This key changed. Blocking.",
+  "loquetOffline1": "No network. Keeping everything warm.",
+  "loquetLock1": "Shut tight.",
+  "loquetIdleClick1": "Everything's locked up.",
+  "loquetIdleClick2": "Nothing to report.",
+  "loquetIdleClick3": "Guarding the door.",
+  "loquetEmptyVault1": "Nobody to guard yet.",
+  "loquetEmptySearch1": "Nothing behind this door.",
+  "loquetEarlyYawn1": "Already?",
+  "loquetNight1": "Still up?",
+  "loquetFridayProd1": "Friday evening in prod. Good luck.",
+  "loquetRoot1": "Careful, it's root.",
+  "loquetLocalhost1": "That's my place.",
+  "loquetHost421": "The answer.",
+  "loquetDizzy1": "My head is spinning.",
+  "loquetFirstHost1": "One host. Well guarded.",
+  "loquetSecondDevice1": "There are two of us now.",
+  "loquetSharedVault1": "A shared vault. Watching over it.",
+  "loquetConnections1001": "A hundred connections. All shut tight.",
+  "loquetConnections10001": "A thousand connections. Not one astray.",
+  "loquetFirstKeyRotation1": "New keys. The previous ones stay out.",
+  "loquetOneYear1": "One year guarding the door.",
+  "loquetMoodIdle": "Loquet, resting",
+  "loquetMoodWatching": "Loquet, watching",
+  "loquetMoodCovering": "Loquet, covering his eyes",
+  "loquetMoodPeeking": "Loquet, peeking",
+  "loquetMoodHappy": "Loquet, happy",
+  "loquetMoodSad": "Loquet, sad",
+  "loquetMoodAlert": "Loquet, alarmed",
+  "loquetMoodConnecting": "Loquet, connecting",
+  "loquetMoodSearch": "Loquet, searching",
+  "loquetMoodOffline": "Loquet, offline",
+  "loquetMoodSleep": "Loquet, asleep",
+  "loquetMoodSleepy": "Loquet, sleepy",
+  "loquetMoodYawn": "Loquet, yawning",
+  "loquetMoodCheerful": "Loquet, cheerful",
+  "loquetMoodConcerned": "Loquet, concerned",
+  "loquetMoodDizzy": "Loquet, dizzy",
+  "loquetReasonVerify": "{count, plural, =1{1 host key to verify for over 7 days} other{{count} host keys to verify for over 7 days}}",
+  "@loquetReasonVerify": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "loquetReasonConflicts": "{count, plural, =1{1 conflict copy to sort out} other{{count} conflict copies to sort out}}",
+  "@loquetReasonConflicts": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "loquetReasonOldKeys": "{count, plural, =1{1 key older than 5 years} other{{count} keys older than 5 years}}",
+  "@loquetReasonOldKeys": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "loquetReasonStaleSync": "No sync for over 7 days"
 }
