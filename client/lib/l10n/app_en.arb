@@ -1284,7 +1284,7 @@
     }
   },
   "settingsImportSshConfig": "Import ~/.ssh/config",
-  "importCount": "{count, plural, =1{Import 1 host} other{Import {count} hosts}}",
+  "importCount": "Import {count, plural, =1{1 host} other{{count} hosts}}",
   "@importCount": {
     "placeholders": {
       "count": {
