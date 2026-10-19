@@ -7,6 +7,7 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
+import '../debug_trace.dart';
 import '../version.dart';
 
 /// A non-2xx answer. [code] keeps an unknown wire code; [known] is null for it.
@@ -81,7 +82,9 @@ class ApiClient {
     throw const FormatException('prelogin: unexpected body');
   }
 
-  Future<Session> setup({
+  /// Creates the account: the owner with a setup token, a member with an invite token.
+  Future<Session> enroll(
+    EnrollKind kind, {
     required String token,
     required String email,
     required AccountBundle bundle,
@@ -89,25 +92,7 @@ class ApiClient {
     required List<int> recoveryAuthKey,
     required DeviceInput device,
     String? locale,
-  }) => _session('/setup', {
-    'token': token,
-    'email': email,
-    'bundle': bundle.toJson(),
-    'authKey': b64(authKey),
-    'recoveryAuthKey': b64(recoveryAuthKey),
-    'device': _device(device),
-    'locale': ?locale,
-  });
-
-  Future<Session> acceptInvite({
-    required String token,
-    required String email,
-    required AccountBundle bundle,
-    required List<int> authKey,
-    required List<int> recoveryAuthKey,
-    required DeviceInput device,
-    String? locale,
-  }) => _session('/invites/accept', {
+  }) => _session(kind == EnrollKind.setup ? '/setup' : '/invites/accept', {
     'token': token,
     'email': email,
     'bundle': bundle.toJson(),
@@ -128,6 +113,9 @@ class ApiClient {
   });
 
   Future<TokenPair> refresh() async {
+    if (tracing(TraceArea.session)) {
+      trace(TraceArea.session, 'refresh with #${await tokenTag(refreshToken)}');
+    }
     final res = await _raw(
       'POST',
       '/api/v1/token/refresh',
@@ -136,6 +124,12 @@ class ApiClient {
     );
     final pair = TokenPair.fromJson(_decode(res));
     await onTokens?.call(pair); // persisted before anything uses it: a lost write would revoke the device on replay
+    if (tracing(TraceArea.session)) {
+      trace(
+        TraceArea.session,
+        'refresh: new #${await tokenTag(pair.refreshToken)} persisted',
+      );
+    }
     accessToken = pair.accessToken;
     refreshToken = pair.refreshToken;
     return pair;
@@ -330,15 +324,24 @@ class ApiClient {
             ...headers,
           });
     if (body != null) request.body = jsonEncode(body);
+    final watch = Stopwatch()..start();
     try {
-      return await http.Response.fromStream(
+      final res = await http.Response.fromStream(
         await _http.send(request).timeout(_timeout),
       );
+      trace(
+        TraceArea.http,
+        '$method $path → ${res.statusCode} (${watch.elapsedMilliseconds} ms)',
+      );
+      return res;
     } on http.ClientException catch (e) {
+      trace(TraceArea.http, '$method $path → network error');
       throw NetworkException(e);
     } on IOException catch (e) {
+      trace(TraceArea.http, '$method $path → network error');
       throw NetworkException(e);
     } on TimeoutException catch (e) {
+      trace(TraceArea.http, '$method $path → timeout');
       throw NetworkException(e);
     }
   }

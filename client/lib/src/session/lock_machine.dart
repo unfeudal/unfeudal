@@ -17,9 +17,7 @@ enum LockScreenState {
 
 /// Lock screen states; an illegal transition is ignored.
 class LockMachine extends ChangeNotifier {
-  LockMachine({this.sleepAfter = const Duration(seconds: 20)});
-
-  final Duration sleepAfter;
+  static const sleepAfter = Duration(seconds: 20);
   LockScreenState _state = LockScreenState.locked;
   Timer? _idle;
 

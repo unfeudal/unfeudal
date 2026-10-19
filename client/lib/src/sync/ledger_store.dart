@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import 'dart:convert';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:unfeudal_shared/unfeudal_shared.dart';
@@ -63,7 +64,7 @@ class LedgerStore {
           mark(id, PayloadPart.meta),
           mark(id, PayloadPart.secret),
           _handedOut[id] ?? 0,
-        ].reduce(_max) +
+        ].reduce(max) +
         1;
     _handedOut[id] = next;
     return next;
@@ -134,6 +135,4 @@ class LedgerStore {
   }
 
   static String _seqKey(String id, PayloadPart part) => '$id/${part.name}';
-
-  static int _max(int a, int b) => a > b ? a : b;
 }

@@ -6,14 +6,9 @@ import 'package:flutter/foundation.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../api/api_client.dart';
+import '../debug_trace.dart';
 import '../storage/local_mirror.dart';
 import '../version.dart';
-
-/// A newer client exists: only its version text is shown, the link is compiled in.
-class UpdateNotice {
-  const UpdateNotice(this.version);
-  final String version;
-}
 
 /// Push the outbox, pull the server's changes: at start, after each local change, every [interval].
 class SyncEngine extends ChangeNotifier {
@@ -21,18 +16,13 @@ class SyncEngine extends ChangeNotifier {
     required this.api,
     required this.mirror,
     required this.deviceId,
-    this.version = clientVersion,
-    this.apis = clientApis,
-    this.interval = const Duration(seconds: 30),
     this._now = DateTime.now,
   });
 
   final ApiClient api;
   final LocalMirror mirror;
   final String deviceId;
-  final String version;
-  final List<int> apis;
-  final Duration interval;
+  static const interval = Duration(seconds: 30);
   final DateTime Function() _now;
 
   static const maxAttempts = 3;
@@ -53,7 +43,9 @@ class SyncEngine extends ChangeNotifier {
   DateTime? lastSyncAt;
   int ignoredRollbacks = 0;
   Compat? compat;
-  UpdateNotice? updateNotice;
+
+  /// A newer client's version: only its text is shown, the link is compiled in.
+  String? updateVersion;
 
   bool get readOnly => compat?.mode == CompatMode.readOnly || restoreRefused;
 
@@ -89,18 +81,21 @@ class SyncEngine extends ChangeNotifier {
   }
 
   Future<void> retry(String itemId) {
+    trace(TraceArea.sync, 'retry ${shortId(itemId)}');
     mirror.retryOutbox(itemId);
     return syncNow();
   }
 
   /// The server row is already the shown version: only the local edit goes.
   Future<void> discard(String itemId) async {
+    trace(TraceArea.sync, 'discard local edit ${shortId(itemId)}');
     mirror.removeOutbox(itemId);
     await onChanged?.call();
     notifyListeners();
   }
 
   Future<void> keepPersonalCopy(String itemId) async {
+    trace(TraceArea.sync, 'keep a personal copy of ${shortId(itemId)}');
     final entry = mirror.outbox().firstWhere((e) => e.item.id == itemId);
     final copy = await copyOf?.call(entry.item, personal: true);
     mirror.removeOutbox(itemId);
@@ -127,11 +122,22 @@ class SyncEngine extends ChangeNotifier {
   }
 
   Future<void> _round({bool restoring = false}) async {
+    trace(TraceArea.sync, restoring ? 'round (restore)' : 'round');
     try {
       final info = await api.info();
       online = true;
-      if (!_negotiate(info)) return;
-      if (!restoring && _mustPause(info)) return;
+      if (!_negotiate(info)) {
+        trace(TraceArea.sync, 'no common API: nothing pushed or pulled');
+        return;
+      }
+      trace(
+        TraceArea.sync,
+        'compat ${compat!.mode.name}${compat!.reason == null ? '' : ' (${compat!.reason})'}',
+      );
+      if (!restoring && _mustPause(info)) {
+        trace(TraceArea.sync, 'paused: server restored or restore refused');
+        return;
+      }
       if (restoring) await _pull(full: true, acceptOlder: true);
       if (compat!.mode == CompatMode.full) {
         await _push(); // client-too-old: pull only
@@ -150,10 +156,16 @@ class SyncEngine extends ChangeNotifier {
       if (restoring) _finishRestore();
       lastSyncAt = _now();
       lastError = null;
+      trace(TraceArea.sync, 'round done, outbox ${mirror.outbox().length}');
     } on NetworkException catch (e) {
+      trace(TraceArea.sync, 'offline');
       online = false;
       lastError = e;
     } on ApiException catch (e) {
+      trace(
+        TraceArea.sync,
+        'server said ${e.status} ${e.code}${e.reason == null ? '' : '/${e.reason}'}',
+      );
       if (e.status == 401) {
         onUnauthorized?.call(e.reason);
       } else if (e.reason == 'cursor_ahead') {
@@ -162,8 +174,10 @@ class SyncEngine extends ChangeNotifier {
         lastError = e;
       }
     } on FormatException catch (e) {
+      trace(TraceArea.sync, 'unreadable server answer');
       lastError = e; // protocol error: shown in the sync banner, retried next round; nothing deleted
     } on ReadOnlyException catch (e) {
+      trace(TraceArea.sync, 'read-only switched on during the round');
       lastError = e; // read-only switched on during the round; nothing lost, the outbox stays
     } finally {
       await onChanged?.call();
@@ -173,9 +187,9 @@ class SyncEngine extends ChangeNotifier {
 
   /// False when there is no common API: no push, no pull.
   bool _negotiate(ApiInfo info) {
-    compat = negotiate(version, apis, info);
-    updateNotice = compareVersions(info.latestClient, version) > 0
-        ? UpdateNotice(info.latestClient)
+    compat = negotiate(clientVersion, clientApis, info);
+    updateVersion = compareVersions(info.latestClient, clientVersion) > 0
+        ? info.latestClient
         : null;
     api.readOnly = readOnly;
     return compat!.api != null;
@@ -207,6 +221,10 @@ class SyncEngine extends ChangeNotifier {
           ..setKv(KvKey.orgCursor, '${org.orgCursor}'); // itemIds rule: p6
         orgCursor = org.orgCursor;
       }
+      trace(
+        TraceArea.sync,
+        'pulled ${page.items.length} items, cursor $cursor → ${page.cursor}',
+      );
       cursor = page.cursor;
       mirror.setKv(KvKey.cursor, '$cursor');
       more = page.more;
@@ -248,6 +266,7 @@ class SyncEngine extends ChangeNotifier {
   void _pause() => _pending = true; // 409 cursor_ahead
 
   Future<void> refuseRestore() async {
+    trace(TraceArea.sync, 'restore refused: read-only');
     mirror.setKv(
       KvKey.refusedEpoch,
       _seenEpoch ?? _storedEpoch ?? '',
@@ -257,6 +276,7 @@ class SyncEngine extends ChangeNotifier {
   }
 
   Future<void> acceptRestore() async {
+    trace(TraceArea.sync, 'restore accepted: full pull');
     mirror.resetForRestore(); // cursor, orgCursor, orgBlock reset; anchors emptied
     await onRestoreAccepted?.call(); // LedgerStore.reset: marks emptied, pins kept (p6, p7 add theirs)
     _pending = false;
@@ -283,10 +303,18 @@ class SyncEngine extends ChangeNotifier {
     )) {
       try {
         _settle(e.item, await api.putItem(e.item, ifMatch: e.baseRevision));
+        trace(
+          TraceArea.sync,
+          'pushed ${e.item.kind.name} ${shortId(e.item.id)}',
+        );
         _failures = 0;
         _pushAfter = null;
       } on ApiException catch (x) {
         if (x.status == 401) rethrow;
+        trace(
+          TraceArea.sync,
+          'push ${shortId(e.item.id)} refused: ${x.status} ${x.reason ?? x.code}',
+        );
         if (x.status == 409 && x.reason == 'client_too_old') return _tooOld();
         if (x.status == 409) {
           await _conflict(e.item, x.item);
@@ -307,6 +335,7 @@ class SyncEngine extends ChangeNotifier {
     var wait = doubled < maxBackoff ? doubled : maxBackoff;
     if (retryAfter != null && retryAfter > wait) wait = retryAfter;
     _pushAfter = _now().add(wait);
+    trace(TraceArea.sync, 'push backs off ${wait.inSeconds} s');
   }
 
   /// Server accepted [sent]: mirror it; drop the outbox entry unless it was edited meanwhile (then rebase it).
@@ -336,6 +365,7 @@ class SyncEngine extends ChangeNotifier {
         current.deleted == mine.deleted &&
         jsonEncode(current.meta?.toJson()) == jsonEncode(mine.meta?.toJson());
     if (ours) return _settle(mine, current); // our write, its response was lost
+    trace(TraceArea.sync, 'conflict on ${mine.kind.name} ${shortId(mine.id)}');
     mirror.upsertItems([current]);
     if (mine.kind == ItemKind.knownHost) {
       return mirror.removeOutbox(

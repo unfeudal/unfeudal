@@ -260,7 +260,8 @@ void main() {
       allowTestingKdf: true,
     ).create('password-456');
     final api = ApiClient(h.baseUrl, h.client);
-    final s = await api.acceptInvite(
+    final s = await api.enroll(
+      EnrollKind.invite,
       token: token,
       email: 'dom@example.org',
       bundle: acc.bundle,
@@ -272,7 +273,8 @@ void main() {
     expect(s.isInstanceOwner, isFalse);
     h.invites[token] = 'dom@example.org';
     await expectLater(
-      api.acceptInvite(
+      api.enroll(
+        EnrollKind.invite,
         token: token,
         email: 'dom@example.org',
         bundle: acc.bundle,

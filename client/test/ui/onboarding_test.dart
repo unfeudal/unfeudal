@@ -15,7 +15,8 @@ import '../support/fakes.dart';
 import '../support/pump_app.dart';
 import '../support/sync_harness.dart';
 
-Future<void> fillSetup(WidgetTester t, {String confirm = testPassword}) async {
+/// Step 1: server and token, then on to the account step.
+Future<void> fillServer(WidgetTester t) async {
   await t.enterText(
     find.byKey(const Key('setup-server')),
     'https://vault.test',
@@ -24,12 +25,36 @@ Future<void> fillSetup(WidgetTester t, {String confirm = testPassword}) async {
     find.byKey(const Key('setup-token')),
     'ABCD EFGH IJKL MNOP QRST UVWX YZ',
   );
+  await t.tap(find.byKey(const Key('setup-next')));
+  await t.pump();
+}
+
+Future<void> fillAccount(
+  WidgetTester t, {
+  String confirm = testPassword,
+}) async {
   await t.enterText(find.byKey(const Key('setup-email')), testEmail);
   await t.enterText(find.byKey(const Key('setup-password')), testPassword);
   await t.enterText(find.byKey(const Key('setup-confirm')), confirm);
 }
 
 void main() {
+  testWidgets('setup step 1 needs a token before the account step', (t) async {
+    await pumpApp(
+      t,
+      state: testAppState(harness: SyncHarness())..stage = AppStage.setup,
+    );
+    final l = AppLocalizations.of(t.element(find.byType(SetupScreen)));
+    await t.enterText(
+      find.byKey(const Key('setup-server')),
+      'https://vault.test',
+    );
+    await t.tap(find.byKey(const Key('setup-next')));
+    await t.pump();
+    expect(find.text(l.fieldRequired), findsOneWidget);
+    expect(find.byKey(const Key('setup-email')), findsNothing);
+  });
+
   testWidgets(
     'setup warns, checks the confirmation, then shows the kit before home',
     (t) async {
@@ -39,12 +64,13 @@ void main() {
         state: testAppState(harness: h)..stage = AppStage.setup,
       );
       final l = AppLocalizations.of(t.element(find.byType(SetupScreen)));
+      await fillServer(t);
       expect(find.text(l.setupWarning), findsOneWidget);
-      await fillSetup(t, confirm: 'other-password');
+      await fillAccount(t, confirm: 'other-password');
       await t.tap(find.byKey(const Key('setup-submit')));
       await t.pump();
       expect(find.text(l.passwordsDiffer), findsOneWidget);
-      await fillSetup(t);
+      await fillAccount(t);
       await t.tap(find.byKey(const Key('setup-submit')));
       await pumpReal(t);
       expect(find.byType(RecoveryKitView), findsOneWidget);
@@ -60,7 +86,8 @@ void main() {
       t,
       state: testAppState(harness: h)..stage = AppStage.setup,
     );
-    await fillSetup(t);
+    await fillServer(t);
+    await fillAccount(t);
     await t.tap(find.byKey(const Key('setup-submit')));
     await pumpReal(t);
     await t.pumpAndSettle();

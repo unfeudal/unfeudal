@@ -4,12 +4,14 @@ import 'package:flutter/material.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
 import '../../app_state.dart';
+import '../../design/field.dart';
 import '../../design/icons.dart';
 import '../../design/motion.dart';
 import '../../design/tokens.dart';
 import '../../events/app_events.dart';
 import '../../session/lock_machine.dart';
 import '../describe_error.dart';
+import '../onboarding/recovery_screen.dart';
 import 'lock_frame.dart';
 
 /// Driven by [LockMachine]; every state change is reported as a [LockScreenStateChanged] event.
@@ -26,6 +28,9 @@ class _UnlockScreenState extends State<UnlockScreen> {
   final _password = TextEditingController();
   final _focus = FocusNode();
   Object? _error;
+
+  /// The key derivation takes seconds: one at a time, the button waits for it.
+  bool _busy = false;
   int _failures = 0;
 
   @override
@@ -55,6 +60,8 @@ class _UnlockScreenState extends State<UnlockScreen> {
   }
 
   Future<void> _submit() async {
+    if (_busy) return;
+    setState(() => _busy = true);
     _machine.submit();
     try {
       await _state.unlock(_password.text);
@@ -67,58 +74,80 @@ class _UnlockScreenState extends State<UnlockScreen> {
           _failures++;
         });
       }
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
-    final stored = AppScope.of(context).stored;
+    final state = AppScope.of(context);
+    final stored = state.stored;
     final peeking = _machine.state == LockScreenState.peek;
     return Scaffold(
       body: LockFrame(
+        title: l.unlockTitle,
+        subtitle: stored?.serverUrl.host,
         children: [
-          Text(
-            l.unlockTitle,
-            style: Theme.of(context).textTheme.headlineMedium,
-          ),
           if (stored != null)
-            ListTile(
-              leading: const Icon(UfIcons.user),
-              title: Text(stored.displayName ?? stored.email),
-              subtitle: stored.displayName == null ? null : Text(stored.email),
+            UfField(
+              label: l.loginEmail,
+              child: TextFormField(
+                key: const Key('unlock-account'),
+                initialValue: stored.email,
+                readOnly: true,
+                enableInteractiveSelection: false,
+                decoration: InputDecoration(helperText: stored.displayName),
+              ),
             ),
           ShakeOnError(
             trigger: _failures,
-            child: TextField(
-              key: const Key('unlock-password'),
-              controller: _password,
-              focusNode: _focus,
-              obscureText: !peeking,
-              onChanged: (_) => _machine.input(),
-              onSubmitted: (_) => _submit(),
-              decoration: InputDecoration(
-                labelText: l.unlockPassword,
-                suffixIcon: IconButton(
-                  key: const Key('unlock-peek'),
-                  tooltip: l.unlockPeek,
-                  icon: Icon(peeking ? UfIcons.eyeSlash : UfIcons.eye),
-                  onPressed: _machine.togglePeek,
+            child: UfField(
+              label: l.unlockPassword,
+              child: TextField(
+                key: const Key('unlock-password'),
+                controller: _password,
+                focusNode: _focus,
+                obscureText: !peeking,
+                readOnly: _busy,
+                onChanged: (_) => _machine.input(),
+                onSubmitted: (_) => _submit(),
+                decoration: InputDecoration(
+                  suffixIcon: IconButton(
+                    key: const Key('unlock-peek'),
+                    tooltip: l.unlockPeek,
+                    icon: Icon(peeking ? UfIcons.eyeSlash : UfIcons.eye),
+                    color: peeking ? UfColors.of(context).accent : null,
+                    onPressed: _machine.togglePeek,
+                  ),
                 ),
               ),
             ),
           ),
-          if (_error case final error?)
-            Text(
-              describeError(l, error),
-              style: TextStyle(color: UfColors.of(context).danger),
+          if (_error case final error?) LockError(describeError(l, error)),
+          LockActions(
+            primary: FilledButton(
+              key: const Key('unlock-submit'),
+              onPressed: _busy ? null : _submit,
+              child: BusyLabel(busy: _busy, label: l.unlockSubmit),
             ),
-          FilledButton(
-            key: const Key('unlock-submit'),
-            onPressed: _submit,
-            child: Text(l.unlockSubmit),
+            links: [
+              TextButton(
+                onPressed: _state.signOut,
+                child: Text(l.unlockRelogin),
+              ),
+              if (state.serverHas('recovery_kit'))
+                TextButton(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const RecoveryScreen(),
+                    ),
+                  ),
+                  child: Text(l.loginToRecover),
+                ),
+            ],
           ),
-          TextButton(onPressed: _state.signOut, child: Text(l.unlockRelogin)),
         ],
       ),
     );

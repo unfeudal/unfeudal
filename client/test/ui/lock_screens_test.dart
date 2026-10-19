@@ -75,6 +75,32 @@ void main() {
     expect(s.stage, AppStage.login);
   });
 
+  testWidgets('unlock: one check at a time, the button waits for it', (
+    t,
+  ) async {
+    final s = await signedInState(t);
+    await t.runAsync(s.lock);
+    final checks = <LockScreenState>[];
+    s.events.listen((e) {
+      if (e is LockScreenStateChanged && e.state == LockScreenState.checking) {
+        checks.add(e.state);
+      }
+    });
+    await pumpApp(t, state: s);
+    await t.enterText(find.byKey(const Key('unlock-password')), testPassword);
+    await t.tap(find.byKey(const Key('unlock-submit')));
+    await t.pump();
+    expect(
+      t.widget<FilledButton>(find.byKey(const Key('unlock-submit'))).onPressed,
+      isNull,
+    );
+    await t.tap(find.byKey(const Key('unlock-submit')));
+    await pumpReal(t);
+    await t.pumpAndSettle();
+    expect(s.stage, AppStage.home);
+    expect(checks, hasLength(1));
+  });
+
   testWidgets(
     'unlock drives the lock machine: password, peek, error, success',
     (t) async {

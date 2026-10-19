@@ -2,6 +2,9 @@
 import 'package:flutter/material.dart';
 
 import '../../../l10n/app_localizations.dart';
+import '../../design/dialog.dart';
+import '../../design/field.dart';
+import '../../design/logo.dart';
 import '../../design/tokens.dart';
 import '../../ssh/ssh_connector.dart';
 
@@ -19,27 +22,16 @@ class StartupCommandDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
-    return AlertDialog(
-      title: Text(l.startupCommandTitle(hostName)),
-      content: SelectionArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          spacing: 12,
-          children: [
-            Text(l.startupCommandBody),
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 240),
-              child: SingleChildScrollView(
-                child: Text(command, style: monoStyle),
-              ),
-            ),
-          ],
-        ),
-      ),
+    final colors = UfColors.of(context);
+    return UfDialog(
+      // Loquet's place
+      leading: UfLogo(size: 56, color: colors.muted),
+      title: l.startupCommandTitle(hostName),
+      message: l.startupCommandBody,
       actions: [
         TextButton(
           key: const Key('startup-skip'),
+          style: quietButtonStyle(colors),
           onPressed: () => Navigator.pop(context, false),
           child: Text(l.startupCommandSkip),
         ),
@@ -47,6 +39,22 @@ class StartupCommandDialog extends StatelessWidget {
           key: const Key('startup-run'),
           onPressed: () => Navigator.pop(context, true),
           child: Text(l.startupCommandRun),
+        ),
+      ],
+      children: [
+        Container(
+          constraints: const BoxConstraints(maxHeight: 240),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: colors.field,
+            borderRadius: const BorderRadius.all(Radius.circular(10)),
+          ),
+          child: SingleChildScrollView(
+            child: SelectableText(
+              command,
+              style: monoStyle.copyWith(fontSize: 13),
+            ),
+          ),
         ),
       ],
     );
@@ -75,23 +83,23 @@ class _PasswordPromptDialogState extends State<PasswordPromptDialog> {
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
     void submit() => Navigator.pop(context, _password.text);
-    return AlertDialog(
-      title: Text(l.sshPasswordTitle(widget.target)),
-      content: TextField(
-        key: const Key('password-prompt'),
-        controller: _password,
-        obscureText: true,
-        autofocus: true,
-        onSubmitted: (_) => submit(),
-      ),
+    return UfDialog(
+      width: 440,
+      title: l.sshPasswordTitle(widget.target),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: Text(l.cancel),
-        ),
+        CancelButton(onPressed: () => Navigator.pop(context)),
         FilledButton(
           onPressed: submit,
           child: Text(MaterialLocalizations.of(context).okButtonLabel),
+        ),
+      ],
+      children: [
+        TextField(
+          key: const Key('password-prompt'),
+          controller: _password,
+          obscureText: true,
+          autofocus: true,
+          onSubmitted: (_) => submit(),
         ),
       ],
     );
@@ -132,35 +140,29 @@ class _KeyboardInteractiveDialogState extends State<KeyboardInteractiveDialog> {
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
-    return AlertDialog(
-      title: Text(widget.name.isEmpty ? l.sshPromptsTitle : widget.name),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        spacing: 12,
-        children: [
-          if (widget.instruction.isNotEmpty) Text(widget.instruction),
-          for (var i = 0; i < widget.prompts.length; i++)
-            TextField(
-              controller: _answers[i],
-              obscureText: !widget.prompts[i].echo,
-              autofocus: i == 0,
-              decoration: InputDecoration(
-                labelText: widget.prompts[i].text.trim(),
-              ),
-            ),
-        ],
-      ),
+    return UfDialog(
+      width: 440,
+      title: widget.name.isEmpty ? l.sshPromptsTitle : widget.name,
+      message: widget.instruction.isEmpty ? null : widget.instruction,
       actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: Text(l.cancel),
-        ),
+        CancelButton(onPressed: () => Navigator.pop(context)),
         FilledButton(
           key: const Key('prompts-ok'),
           onPressed: () =>
               Navigator.pop(context, [for (final c in _answers) c.text]),
           child: Text(MaterialLocalizations.of(context).okButtonLabel),
         ),
+      ],
+      children: [
+        for (var i = 0; i < widget.prompts.length; i++)
+          UfField(
+            label: widget.prompts[i].text.trim(),
+            child: TextField(
+              controller: _answers[i],
+              obscureText: !widget.prompts[i].echo,
+              autofocus: i == 0,
+            ),
+          ),
       ],
     );
   }

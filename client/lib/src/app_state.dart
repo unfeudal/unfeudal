@@ -11,6 +11,7 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../l10n/app_localizations.dart';
 import 'api/api_client.dart';
+import 'debug_trace.dart';
 import 'design/seal.dart';
 import 'events/app_events.dart';
 import 'session/auto_lock.dart';
@@ -137,11 +138,13 @@ class AppState extends ChangeNotifier implements SshCallbacks {
   Uint8List get accountPublicKey => _cachedBundle().bundle.publicKey;
 
   /// The server version of the last ApiInfo seen with a token, if any.
-  String? get serverVersion {
-    if (_lastInfo?.server case final server?) return server;
-    final raw = mirror?.getKv(KvKey.apiInfo);
-    return raw == null ? null : ApiInfo.fromJson(jsonDecode(raw)).server;
-  }
+  String? get serverVersion => _lastInfo?.server ?? _storedInfo?.server;
+
+  /// The ApiInfo the last sync round stored in the mirror.
+  ApiInfo? get _storedInfo => switch (mirror?.getKv(KvKey.apiInfo)) {
+    final raw? => ApiInfo.fromJson(jsonDecode(raw)),
+    null => null,
+  };
 
   /// Moves between the signed-out screens (login, setup, join).
   void show(AppStage stage) {
@@ -149,14 +152,23 @@ class AppState extends ChangeNotifier implements SshCallbacks {
     notifyListeners();
   }
 
-  void emit(AppEvent event) => _events.add(event);
+  void emit(AppEvent event) {
+    if (tracing(TraceArea.ui)) trace(TraceArea.ui, 'event ${_describe(event)}');
+    _events.add(event);
+  }
+
+  /// The event's type, plus the host id and error type for connections; nothing from the vault.
+  static String _describe(AppEvent event) => switch (event) {
+    ConnectStarted(:final hostId) => 'ConnectStarted ${shortId(hostId)}',
+    ConnectSucceeded(:final hostId) => 'ConnectSucceeded ${shortId(hostId)}',
+    ConnectFailed(:final hostId, :final error) =>
+      'ConnectFailed ${shortId(hostId)} (${error.runtimeType})',
+    _ => '${event.runtimeType}',
+  };
 
   /// From the last ApiInfo seen (a sync round or [checkServer]), else the stored one; false when none.
-  bool serverHas(String capability) {
-    if (_lastInfo case final info?) return info.has(capability);
-    final raw = mirror?.getKv(KvKey.apiInfo);
-    return raw != null && ApiInfo.fromJson(jsonDecode(raw)).has(capability);
-  }
+  bool serverHas(String capability) =>
+      (_lastInfo ?? _storedInfo)?.has(capability) ?? false;
 
   Future<void> boot() async {
     settings = await settingsStore.load();
@@ -167,7 +179,7 @@ class AppState extends ChangeNotifier implements SshCallbacks {
     } else {
       try {
         await _mirrorFor(session.userId);
-        stage = AppStage.unlock;
+        stage = session.refreshToken == null ? AppStage.login : AppStage.unlock;
       } on MirrorTooNew {
         stage = AppStage
             .mirrorTooNew; // a newer client wrote it: nothing is touched
@@ -198,10 +210,48 @@ class AppState extends ChangeNotifier implements SshCallbacks {
     required String password,
     String? displayName,
   }) async {
+    trace(TraceArea.session, 'setup');
+    await _enroll(
+      EnrollKind.setup,
+      server,
+      token,
+      email,
+      password,
+      displayName,
+    );
+  }
+
+  Future<void> acceptInvite({
+    required Enrollment enrollment,
+    required String email,
+    required String password,
+    String? displayName,
+  }) async {
+    trace(TraceArea.session, 'accept invite');
+    this.enrollment = enrollment;
+    await _enroll(
+      EnrollKind.invite,
+      enrollment.server,
+      enrollment.token,
+      email,
+      password,
+      displayName,
+    );
+  }
+
+  Future<void> _enroll(
+    EnrollKind kind,
+    Uri server,
+    String token,
+    String email,
+    String password,
+    String? displayName,
+  ) async {
     await checkServer(server);
     final api = _newApi(server);
     final account = await _crypto.create(password);
-    final session = await api.setup(
+    final session = await api.enroll(
+      kind,
       token: token,
       email: email,
       bundle: account.bundle,
@@ -211,35 +261,6 @@ class AppState extends ChangeNotifier implements SshCallbacks {
       locale: _uiLocale,
     );
     await _onboarded(api, session, server, email, account, displayName);
-  }
-
-  Future<void> acceptInvite({
-    required Enrollment enrollment,
-    required String email,
-    required String password,
-    String? displayName,
-  }) async {
-    this.enrollment = enrollment;
-    await checkServer(enrollment.server);
-    final api = _newApi(enrollment.server);
-    final account = await _crypto.create(password);
-    final session = await api.acceptInvite(
-      token: enrollment.token,
-      email: email,
-      bundle: account.bundle,
-      authKey: account.authKey,
-      recoveryAuthKey: account.recoveryAuthKey,
-      device: deviceInput(),
-      locale: _uiLocale,
-    );
-    await _onboarded(
-      api,
-      session,
-      enrollment.server,
-      email,
-      account,
-      displayName,
-    );
   }
 
   /// Leaves the recovery-kit screen: the key text is forgotten.
@@ -254,6 +275,7 @@ class AppState extends ChangeNotifier implements SshCallbacks {
     required String email,
     required String password,
   }) async {
+    trace(TraceArea.session, 'login');
     await checkServer(server);
     final api = _newApi(server);
     final pre = await api.prelogin(email);
@@ -284,10 +306,21 @@ class AppState extends ChangeNotifier implements SshCallbacks {
   /// Offline: the cached bundle opens the vault; the API resumes with the stored refresh token.
   Future<void> unlock(String password) async {
     // the keystore holds the latest refresh token (rotations since sign-in); a stale one is a replay
+    final loaded = await sessions.load();
+    if (loaded == null) {
+      trace(
+        TraceArea.session,
+        'unlock: keystore empty, using the cached session',
+      );
+    }
     final session = stored =
-        await sessions.load() ??
-        stored ??
-        (throw StateError('no stored session'));
+        loaded ?? stored ?? (throw StateError('no stored session'));
+    if (tracing(TraceArea.session)) {
+      trace(
+        TraceArea.session,
+        'unlock with #${await tokenTag(session.refreshToken)}',
+      );
+    }
     final (:bundle, bundleVersion: _) = _cachedBundle();
     final UnlockedAccount unlocked;
     try {
@@ -307,6 +340,7 @@ class AppState extends ChangeNotifier implements SshCallbacks {
 
   /// Keys, entries and terminal tabs go; the stage is set at once, the tabs close behind it.
   Future<void> lock() async {
+    trace(TraceArea.session, 'lock (${tabs.length} tabs closed)');
     final closing = [for (final tab in tabs) tab.close()];
     tabs.clear();
     activeTab = 0;
@@ -321,6 +355,7 @@ class AppState extends ChangeNotifier implements SshCallbacks {
   }
 
   Future<void> signOut() async {
+    trace(TraceArea.session, 'sign out');
     await lock();
     await sessions.clear();
     stored = null;
@@ -351,6 +386,7 @@ class AppState extends ChangeNotifier implements SshCallbacks {
     required String recoveryKey,
     required String newPassword,
   }) async {
+    trace(TraceArea.session, 'recover with the recovery key');
     await checkServer(server);
     final api = _newApi(server);
     final recoveryAuth = await recoveryAuthKey(RecoveryKey.decode(recoveryKey));
@@ -445,6 +481,7 @@ class AppState extends ChangeNotifier implements SshCallbacks {
   }
 
   Future<void> closeTab(TerminalSession tab) async {
+    trace(TraceArea.ssh, 'tab closed ${shortId(tab.hostId)}');
     tabs.remove(tab);
     activeTab = tabs.isEmpty ? 0 : activeTab.clamp(0, tabs.length - 1);
     notifyListeners();
@@ -526,7 +563,13 @@ class AppState extends ChangeNotifier implements SshCallbacks {
     sync?.start();
     _autoLock = AutoLock(
       timeout: () => Duration(minutes: settings.autoLockMinutes),
-      onLock: () => unawaited(lock()),
+      onLock: () {
+        trace(
+          TraceArea.session,
+          'auto-lock after ${settings.autoLockMinutes} min idle',
+        );
+        unawaited(lock());
+      },
       onIdle: () => emit(const UserIdle()),
     )..start();
   }
@@ -555,9 +598,7 @@ class AppState extends ChangeNotifier implements SshCallbacks {
       _wasOnline = engine.online;
       emit(engine.online ? const CameOnline() : const WentOffline());
     }
-    if (mirror?.getKv(KvKey.apiInfo) case final raw?) {
-      _lastInfo = ApiInfo.fromJson(jsonDecode(raw));
-    }
+    _lastInfo = _storedInfo ?? _lastInfo;
     notifyListeners();
   }
 
@@ -566,7 +607,11 @@ class AppState extends ChangeNotifier implements SshCallbacks {
   String? get _uiLocale {
     if (settings.locale case final locale?) return locale;
     final system = PlatformDispatcher.instance.locale.languageCode;
-    return const ['en', 'fr'].contains(system) ? system : null;
+    return AppLocalizations.supportedLocales.any(
+          (l) => l.languageCode == system,
+        )
+        ? system
+        : null;
   }
 
   ApiClient _newApi(Uri server) => ApiClient(server, _http);
@@ -639,11 +684,17 @@ class AppState extends ChangeNotifier implements SshCallbacks {
 
   /// The server ended the session: back to login, mirror, outbox and stored session kept.
   Future<void> _sessionEnded(String? reason) async {
+    trace(
+      TraceArea.session,
+      'session ended by the server: ${reason ?? 'no reason'}',
+    );
     deviceRevoked = reason == UnauthorizedReason.deviceRevoked.wire;
     sessionExpired = !deviceRevoked;
-    await lock();
+    await lock(); // first: stops sync and the vault before any await below
     stage = AppStage.login;
     notifyListeners();
+    await sessions.forgetRefreshToken();
+    stored = await sessions.load() ?? stored;
   }
 
   /// The mirror of [userId]: kept open across locks, replaced for another account.

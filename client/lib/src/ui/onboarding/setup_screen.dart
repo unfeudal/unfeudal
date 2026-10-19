@@ -5,7 +5,6 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
 import '../../design/motion.dart';
-import '../../design/tokens.dart';
 import '../describe_error.dart';
 import '../fields.dart';
 import '../lock/lock_frame.dart';
@@ -30,6 +29,9 @@ class _SetupScreenState extends State<SetupScreen> {
   String? _problem;
   int _failures = 0;
 
+  /// 1: server and token; 2: the owner account. A setup link fills step 1 and opens on step 2.
+  late int _step = _token.text.isEmpty ? 1 : 2;
+
   @override
   void initState() {
     super.initState();
@@ -44,6 +46,20 @@ class _SetupScreenState extends State<SetupScreen> {
       c.dispose();
     }
     super.dispose();
+  }
+
+  /// Checked here, the server is only reached by the final submit (one plain-http prompt, not two).
+  void _next() {
+    final l = AppLocalizations.of(context);
+    final server = Uri.tryParse(_server.text.trim());
+    if (server == null || !server.hasScheme || server.host.isEmpty) {
+      return _fail(l.fieldInvalid);
+    }
+    if (_token.text.trim().isEmpty) return _fail(l.fieldRequired);
+    setState(() {
+      _problem = null;
+      _step = 2;
+    });
   }
 
   Future<void> _submit() async {
@@ -80,62 +96,99 @@ class _SetupScreenState extends State<SetupScreen> {
     if (state.recoveryKey case final key?) {
       return RecoveryKitView(recoveryKey: key, onDone: state.finishOnboarding);
     }
+    final first = _step == 1;
     return Scaffold(
       body: LockFrame(
+        step: l.stepOf(_step, 2),
+        title: first ? l.setupTitle : l.setupAccountTitle,
+        subtitle: first
+            ? l.setupSubtitle
+            : l.setupAccountSubtitle(
+                Uri.tryParse(_server.text.trim())?.host ?? '',
+              ),
         children: [
-          Text(l.setupTitle, style: Theme.of(context).textTheme.headlineMedium),
-          keyedField(
-            'setup-server',
-            _server,
-            l.setupServer,
-            keyboard: TextInputType.url,
-          ),
-          keyedField('setup-token', _token, l.setupToken),
-          keyedField(
-            'setup-email',
-            _email,
-            l.setupEmail,
-            keyboard: TextInputType.emailAddress,
-          ),
-          ShakeOnError(
-            trigger: _failures,
-            child: Column(
-              spacing: 12,
-              children: [
-                keyedField(
-                  'setup-password',
-                  _password,
-                  l.setupPassword,
-                  secret: true,
-                ),
-                keyedField(
-                  'setup-confirm',
-                  _confirm,
-                  l.setupConfirm,
-                  secret: true,
+          if (first) ...[
+            keyedField(
+              'setup-server',
+              _server,
+              l.setupServer,
+              keyboard: TextInputType.url,
+            ),
+            ShakeOnError(
+              trigger: _failures,
+              child: keyedField(
+                'setup-token',
+                _token,
+                l.setupToken,
+                mono: true,
+                hint: 'ABCD-EFGH-IJKL-MNOP-QRST-UVWX-YZ',
+                onSubmitted: (_) => _next(),
+              ),
+            ),
+          ] else ...[
+            keyedField(
+              'setup-email',
+              _email,
+              l.setupEmail,
+              keyboard: TextInputType.emailAddress,
+            ),
+            ShakeOnError(
+              trigger: _failures,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                spacing: 14,
+                children: [
+                  keyedField(
+                    'setup-password',
+                    _password,
+                    l.setupPassword,
+                    secret: true,
+                  ),
+                  keyedField(
+                    'setup-confirm',
+                    _confirm,
+                    l.setupConfirm,
+                    secret: true,
+                  ),
+                ],
+              ),
+            ),
+            keyedField('setup-name', _name, l.setupDisplayName),
+            LockNotice(l.setupWarning),
+          ],
+          if (_problem case final problem?) LockError(problem),
+          if (first)
+            LockActions(
+              primary: FilledButton(
+                key: const Key('setup-next'),
+                onPressed: _next,
+                child: Text(l.stepNext),
+              ),
+            )
+          else
+            LockActions(
+              primary: FilledButton(
+                key: const Key('setup-submit'),
+                onPressed: _busy ? null : _submit,
+                child: BusyLabel(busy: _busy, label: l.setupSubmit),
+              ),
+              links: [
+                TextButton(
+                  key: const Key('setup-back'),
+                  onPressed: () => setState(() {
+                    _problem = null;
+                    _step = 1;
+                  }),
+                  child: Text(l.setupBack),
                 ),
               ],
             ),
-          ),
-          keyedField('setup-name', _name, l.setupDisplayName),
-          Text(
-            l.setupWarning,
-            style: TextStyle(color: UfColors.of(context).warn),
-          ),
-          if (_problem case final problem?)
-            Text(problem, style: TextStyle(color: UfColors.of(context).danger)),
-          FilledButton(
-            key: const Key('setup-submit'),
-            onPressed: _busy ? null : _submit,
-            child: Text(l.setupSubmit),
-          ),
         ],
       ),
     );
   }
 }
 
-/// Null when the new password is long enough and confirmed; else the sentence to show. Nothing is sent before.
 String? checkNewPassword(
   AppLocalizations l,
   String password,

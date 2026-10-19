@@ -12,13 +12,13 @@ const sampleWords =
 
 void main() {
   test('text kit: the contract lines', () {
-    final text = recoveryKitText(
+    final text = recoveryKitText((
       server: Uri.parse('https://vault.example.org'),
       email: 'camille@example.org',
       created: DateTime.utc(2026, 10, 15),
       recoveryKey: sampleWords,
       instructions: 'Keep it offline.',
-    );
+    ));
     expect(text.split('\n').take(5), [
       'Server: https://vault.example.org',
       'Account: camille@example.org',
@@ -30,13 +30,13 @@ void main() {
   });
 
   test('PDF kit is one A4 page', () async {
-    final pdf = await buildRecoveryKitPdf(
+    final pdf = await buildRecoveryKitPdf((
       server: Uri.parse('https://vault.example.org'),
       email: 'camille@example.org',
       created: DateTime.utc(2026, 10, 15),
       recoveryKey: sampleWords,
       instructions: 'Keep it offline.',
-    );
+    ));
     expect(String.fromCharCodes(pdf.take(5)), '%PDF-');
     expect(
       RegExp(r'/Type\s*/Page[^s]').allMatches(

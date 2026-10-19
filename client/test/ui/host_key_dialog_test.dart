@@ -67,8 +67,8 @@ void main() {
     );
     expect(find.text('SHA256:${'A' * 43}'), findsOneWidget);
     expect(find.text('SHA256:${'B' * 43}'), findsOneWidget);
-    FilledButton accept() =>
-        t.widget<FilledButton>(find.byKey(const Key('hostkey-accept')));
+    TextButton accept() =>
+        t.widget<TextButton>(find.byKey(const Key('hostkey-accept')));
     expect(accept().onPressed, isNull);
     await t.enterText(
       find.byKey(const Key('hostkey-confirm-input')),
@@ -104,7 +104,7 @@ void main() {
         const StartupCommandDialog(hostName: 'db1', command: 'tmux attach'),
       );
       expect(
-        t.widget<Text>(find.text('tmux attach')).style!.fontFamily,
+        t.widget<EditableText>(find.text('tmux attach')).style.fontFamily,
         'JetBrainsMono',
       );
       await t.tap(find.byKey(const Key('startup-run')));

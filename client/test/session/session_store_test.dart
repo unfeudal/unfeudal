@@ -48,6 +48,11 @@ void main() {
     await store.save(s);
     await store.saveRefreshToken('r2');
     expect((await store.load())!.refreshToken, 'r2');
+    await store.forgetRefreshToken();
+    expect(
+      ((await store.load())!.refreshToken, (await store.load())!.email),
+      (null, s.email),
+    );
     await store.clear();
     expect(kv.values, isEmpty);
   });
