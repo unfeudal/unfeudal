@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import 'dart:async';
 import 'dart:io';
 
 import 'package:shelf/shelf_io.dart' as shelf_io;
@@ -18,9 +19,11 @@ class RunningServer {
   RunningServer(this.port, this._close);
 
   final int port;
-  final Future<void> Function() _close;
+  final Future<void> Function(Duration drain) _close;
 
-  Future<void> close() => _close();
+  /// Stops accepting, lets open requests and queued mails finish within [drain], closes the database.
+  Future<void> close({Duration drain = const Duration(seconds: 8)}) =>
+      _close(drain);
 }
 
 /// Opens and migrates the database (a newer schema refuses to start), prints
@@ -43,17 +46,38 @@ Future<RunningServer> runServer(
     final token = await ensureSetupToken(db, config.setupToken);
     // Printed once, raw: redaction would hide it.
     if (token != null) log.sink('Setup token: ${groupSetupToken(token)}');
-    final server = await shelf_io.serve(
-      buildHandler(deps),
+    final handler = buildHandler(deps);
+    final server = await HttpServer.bind(
       config.listen.host,
       config.listen.port,
     );
+    var inFlight = 0;
+    Completer<void>? idle;
+    server.listen((req) {
+      inFlight++; // counted until the response is written, not only until the handler returns
+      shelf_io.handleRequest(req, handler).whenComplete(() {
+        if (--inFlight == 0 && idle != null && !idle!.isCompleted) {
+          idle!.complete();
+        }
+      });
+    });
     log.info('listening', {'host': config.listen.host, 'port': server.port});
     final retention = startRetentionTimer(deps);
-    return RunningServer(server.port, () async {
-      retention.cancel();
-      // ponytail: force close; drain in-flight requests on SIGTERM when it matters.
+    return RunningServer(server.port, (Duration drain) async {
+      final deadline = DateTime.now().add(drain);
+      unawaited(
+        server.close(),
+      ); // stop accepting; open requests keep their connection
+      if (inFlight > 0) {
+        await (idle = Completer<void>()).future.timeout(
+          drain,
+          onTimeout: () {},
+        );
+      }
+      final left = deadline.difference(DateTime.now());
+      await deps.notifier.drain(left.isNegative ? Duration.zero : left);
       await server.close(force: true);
+      retention.cancel();
       await db.close();
     });
   } catch (_) {

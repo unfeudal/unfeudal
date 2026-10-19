@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import 'dart:async';
 import 'dart:io';
 
 import 'package:unfeudal_server/src/config/config.dart';
 import 'package:unfeudal_server/src/db/db.dart';
 import 'package:unfeudal_server/src/db/maintenance.dart';
 import 'package:unfeudal_server/src/db/migrate.dart';
+import 'package:unfeudal_server/src/mail/mailer.dart';
+import 'package:unfeudal_server/src/mail/smtp_mailer.dart';
 import 'package:unfeudal_server/src/run_server.dart';
 
 const _usage =
@@ -20,12 +23,31 @@ Future<void> main(List<String> args) async {
   }
   switch (args) {
     case []:
+      final RunningServer running;
       try {
-        await runServer(config);
+        running = await runServer(
+          config,
+          mailer: config.smtp == null
+              ? const NoMailer()
+              : SmtpMailer(config.smtp!, timezone: config.timezone),
+        );
       } catch (e) {
         stderr.writeln('cannot start: $e');
         exit(1);
       }
+      // SIGTERM cannot be watched on Windows.
+      final stop = Completer<void>();
+      for (final signal in [
+        ProcessSignal.sigint,
+        if (!Platform.isWindows) ProcessSignal.sigterm,
+      ]) {
+        signal.watch().listen((_) {
+          if (!stop.isCompleted) stop.complete();
+        });
+      }
+      await stop.future;
+      await running.close();
+      exit(0);
     case ['healthcheck']:
       exit(await healthcheck(config));
     case ['backup', final path]:
