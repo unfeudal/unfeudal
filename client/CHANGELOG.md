@@ -12,3 +12,11 @@
 - Security settings: unlock with Windows Hello or Touch ID, change the master password or reset security, export the vault (encrypted by default), delete the account, and open a recovery kit from its file.
 - Import `~/.ssh/config`: preview the hosts, keys and jump hosts, pick what to bring in, and see what was left out and why.
 - A licences screen with the server's source link and the licence of every bundled font and package; the app is now named Unfeudal on Windows and macOS.
+- Org snippets and shared org identities (a key or password the whole folder uses), created in a folder you can edit.
+- Leave an organization while still waiting for confirmation; an owner can hand over the owner role and step down.
+- The trash shows what a deleted org folder holds and moves items out of it; the Instance Owner opens a deleted organization's activity.
+
+### Fixed
+- Editing an item no longer drops fields written by a newer version of the app.
+- Restoring an old version never erases the item's password or key, and is offered only with the right to edit.
+- An exported activity log is verified; a broken chain is still saved, with a warning.
