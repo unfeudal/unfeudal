@@ -24,6 +24,8 @@ class HarnessAccount {
   final NewAccount? account; // keys for tests
   final bool isOwner;
   AccountBundle bundle;
+  String locale = 'en';
+  List<String> lastOwnerOf = [];
   int bundleVersion = 0;
   String authKey, recoveryAuthKey;
 }
@@ -72,6 +74,7 @@ class SyncHarness {
   DateTime now = DateTime.utc(2026, 10, 15, 12);
   final failPuts = <String, int>{};
   final requests = <String>[];
+  final hosts = <String>{};
   final accounts = <String, HarnessAccount>{};
   final devices = <String, HarnessDevice>{};
   final invites = <String, String>{}; // token → email
@@ -374,6 +377,7 @@ class SyncHarness {
   }
 
   Future<http.Response> _handle(http.Request r) async {
+    hosts.add(r.url.host);
     final path = r.url.path;
     requests.add('${r.method} $path');
     if (offline) throw http.ClientException('offline', r.url);
@@ -548,6 +552,46 @@ class SyncHarness {
         ..bundle = AccountBundle.fromJson(body['bundle'])
         ..bundleVersion += 1
         ..recoveryAuthKey = s('recoveryAuthKey')!;
+      return http.Response('', 204);
+    }
+    if (route == 'POST /account/password') {
+      if (s('currentAuthKey') != account.authKey) {
+        return _error(403, 'forbidden');
+      }
+      if (body['bundleVersion'] != account.bundleVersion) {
+        return _error(409, 'conflict');
+      }
+      account
+        ..bundle = AccountBundle.fromJson(body['bundle'])
+        ..bundleVersion += 1
+        ..authKey = s('authKey')!;
+      for (final d in devices.values.where(
+        (d) => d.userId == me.userId && d.id != me.id,
+      )) {
+        d.revokedAt ??= now;
+      }
+      return http.Response('', 204);
+    }
+    if (route == 'DELETE /account') {
+      if (account.isOwner || s('currentAuthKey') != account.authKey) {
+        return _error(403, 'forbidden');
+      }
+      if (account.lastOwnerOf.isNotEmpty) {
+        return _error(409, 'conflict', {
+          'reason': 'last_owner',
+          'orgs': [...account.lastOwnerOf]..sort(),
+        });
+      }
+      accounts.remove(account.email);
+      devices.removeWhere((_, d) => d.userId == me.userId);
+      _items.removeWhere((_, e) => e.$2 == me.userId);
+      return http.Response('', 204);
+    }
+    if (route == 'PUT /account/locale') {
+      if (body['locale'] != 'en' && body['locale'] != 'fr') {
+        return _error(400, 'invalid_request');
+      }
+      account.locale = body['locale']! as String;
       return http.Response('', 204);
     }
     if (route == 'GET /sync') {
