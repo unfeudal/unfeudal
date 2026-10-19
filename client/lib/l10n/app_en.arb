@@ -471,5 +471,25 @@
   "jumpNone": "None",
   "multilineTitle": "Several lines",
   "multilineBody": "This terminal does not protect pasted text: each line may run as soon as it arrives.",
-  "multilineSend": "Send anyway"
+  "multilineSend": "Send anyway",
+  "snippetsTitle": "Snippets",
+  "snippetsSearch": "Search snippets",
+  "snippetsEmpty": "No snippet yet.",
+  "snippetNew": "New snippet",
+  "snippetName": "Name",
+  "snippetCommand": "Command",
+  "snippetTags": "Tags, comma-separated",
+  "snippetSave": "Save",
+  "snippetEdit": "Edit",
+  "snippetDelete": "Delete",
+  "snippetDeleteConfirm": "Move {name} to the trash?",
+  "@snippetDeleteConfirm": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "snippetInsert": "Insert",
+  "snippetNoTerminal": "Open a terminal to insert a snippet."
 }

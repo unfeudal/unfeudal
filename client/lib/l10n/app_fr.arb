@@ -263,5 +263,18 @@
   "jumpNone": "Aucun",
   "multilineTitle": "Plusieurs lignes",
   "multilineBody": "Ce terminal ne protège pas le texte collé : chaque ligne peut s'exécuter dès son arrivée.",
-  "multilineSend": "Envoyer quand même"
+  "multilineSend": "Envoyer quand même",
+  "snippetsTitle": "Snippets",
+  "snippetsSearch": "Rechercher un snippet",
+  "snippetsEmpty": "Aucun snippet pour l'instant.",
+  "snippetNew": "Nouveau snippet",
+  "snippetName": "Nom",
+  "snippetCommand": "Commande",
+  "snippetTags": "Étiquettes, séparées par des virgules",
+  "snippetSave": "Enregistrer",
+  "snippetEdit": "Modifier",
+  "snippetDelete": "Supprimer",
+  "snippetDeleteConfirm": "Mettre {name} à la corbeille ?",
+  "snippetInsert": "Insérer",
+  "snippetNoTerminal": "Ouvrir un terminal pour insérer un snippet."
 }
