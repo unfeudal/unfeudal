@@ -12,6 +12,7 @@ import '../../design/tokens.dart';
 import '../../settings/settings.dart';
 import '../../version.dart';
 import '../form_dialog.dart';
+import '../import/import_preview_screen.dart';
 import '../manage_frame.dart';
 import '../onboarding/recovery_kit_view.dart';
 import 'delete_account_screen.dart';
@@ -341,6 +342,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onPressed: () => _push(const ExportScreen()),
                   child: Text(l.settingsExport),
                 ),
+                if (state.serverHas('ssh_config_import'))
+                  OutlinedButton(
+                    key: const Key('settings-import-ssh-config'),
+                    onPressed: () => _push(const ImportPreviewScreen()),
+                    child: Text(l.settingsImportSshConfig),
+                  ),
                 if (!(state.stored?.isInstanceOwner ?? true))
                   TextButton(
                     key: const Key('settings-delete-account'),
