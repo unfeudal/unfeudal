@@ -16,6 +16,7 @@ import 'debug_trace.dart';
 import 'design/seal.dart';
 import 'events/app_events.dart';
 import 'session/auto_lock.dart';
+import 'session/biometrics.dart';
 import 'session/lock_machine.dart';
 import 'session/session_store.dart';
 import 'settings/settings.dart';
@@ -99,7 +100,12 @@ class AppState extends ChangeNotifier implements SshCallbacks {
     KdfParams kdf = KdfParams.defaults,
     LoquetMemory? loquetMemory,
     DateTime Function() loquetClock = DateTime.now,
+    BiometricBackend? biometrics,
   }) : _http = httpClient ?? http.Client(),
+       _biometrics = biometrics,
+       biometric = biometrics == null
+           ? null
+           : BiometricUnlock(sessions.kv, biometrics),
        _ssh = ssh ?? SshConnector(),
        _crypto = AccountCrypto(kdf: kdf, allowTestingKdf: allowTestingKdf),
        _loquetClock = loquetClock,
@@ -120,6 +126,13 @@ class AppState extends ChangeNotifier implements SshCallbacks {
   final SshConnector _ssh;
 
   final AccountCrypto _crypto;
+  final BiometricBackend? _biometrics;
+
+  /// The vault key sealed by the device's secure hardware; null on a platform without it.
+  final BiometricUnlock? biometric;
+
+  /// The unlocked account while the vault is open (its userKey seals the biometric wrap).
+  UnlockedAccount? _account;
   final DateTime Function() _loquetClock;
 
   /// Sessions, forwards and shown secrets for the server's audit, when it asks for them.
@@ -417,6 +430,62 @@ class AppState extends ChangeNotifier implements SshCallbacks {
     emit(Unlocked(displayName: _displayName));
   }
 
+  /// Hardware present, the server allows it, and the OS offers it.
+  Future<bool> biometricAvailable() async =>
+      biometric != null &&
+      serverHas('biometric_unlock') &&
+      await _biometrics!.available();
+
+  Future<bool> enableBiometrics() async {
+    final account = _account;
+    if (account == null || !await biometricAvailable()) return false;
+    return biometric!.enable(account.userKey, reason: _biometricReason);
+  }
+
+  Future<void> disableBiometrics() async => biometric?.disable();
+
+  /// The public key check of `unlockWithUserKey` runs before the vault opens.
+  Future<bool> unlockWithBiometrics() async {
+    final bio = biometric;
+    if (bio == null || !await bio.isEnabled()) return false;
+    if (!serverHas('biometric_unlock')) {
+      await bio.disable(); // flag off on the server: a stored wrap is wiped
+      return false;
+    }
+    lockMachine.helloStarted();
+    final userKey = await bio.unlock(reason: _biometricReason);
+    if (userKey == null) {
+      lockMachine.helloCancelled();
+      return false;
+    }
+    final UnlockedAccount unlocked;
+    try {
+      unlocked = await _crypto.unlockWithUserKey(
+        _cachedBundle().bundle,
+        userKey,
+      );
+    } on WrongPassword {
+      await bio.disable();
+      lockMachine.helloCancelled();
+      return false;
+    }
+    await _resume(unlocked);
+    lockMachine.succeed();
+    return true;
+  }
+
+  String get _biometricReason =>
+      lookupAppLocalizations(Locale(_uiLocale ?? 'en')).biometricReason;
+
+  /// The server turning biometric_unlock off wipes a stored wrap, once per change of the flag.
+  void _checkBiometricFlag() {
+    final allowed = serverHas('biometric_unlock');
+    if (_biometricAllowed && !allowed) unawaited(biometric?.disable());
+    _biometricAllowed = allowed;
+  }
+
+  bool _biometricAllowed = true;
+
   /// Keys, entries and terminal tabs go; the stage is set at once, the tabs close behind it.
   Future<void> lock() async {
     trace(TraceArea.session, 'lock (${tabs.length} tabs closed)');
@@ -426,6 +495,7 @@ class AppState extends ChangeNotifier implements SshCallbacks {
     activeTab = 0;
     sync?.stop();
     _autoLock?.stop();
+    _account = null;
     orgs?.lock();
     vault?.lock();
     lockMachine.reset();
@@ -437,6 +507,7 @@ class AppState extends ChangeNotifier implements SshCallbacks {
 
   Future<void> signOut() async {
     trace(TraceArea.session, 'sign out');
+    await biometric?.disable(); // the wrap is useless without the session
     await lock();
     await sessions.clear();
     stored = null;
@@ -444,7 +515,6 @@ class AppState extends ChangeNotifier implements SshCallbacks {
     notifyListeners();
   }
 
-  /// New recovery key text; the server stores the new wrap (compare-and-swap on the bundle version).
   /// The current password is proved locally before anything is sent; the userKey stays the same.
   Future<void> changeMasterPassword(String current, String next) async {
     final (:bundle, :bundleVersion) = _cachedBundle();
@@ -480,6 +550,7 @@ class AppState extends ChangeNotifier implements SshCallbacks {
     return serverHas('recovery_kit') ? regenerateRecoveryKit(next) : null;
   }
 
+  /// New recovery key text; the server stores the new wrap (compare-and-swap on the bundle version).
   Future<String> regenerateRecoveryKit(String password) async {
     final (:bundle, :bundleVersion) = _cachedBundle();
     final unlocked = await _crypto.unlock(bundle, password);
@@ -825,6 +896,7 @@ class AppState extends ChangeNotifier implements SshCallbacks {
       emit(engine.online ? const CameOnline() : const WentOffline());
     }
     _lastInfo = _storedInfo ?? _lastInfo;
+    _checkBiometricFlag();
     _refreshLoquet();
     _refreshHealth();
     notifyListeners();
@@ -899,6 +971,7 @@ class AppState extends ChangeNotifier implements SshCallbacks {
   }
 
   Future<void> _startVault(ApiClient api, UnlockedAccount unlocked) async {
+    _account = unlocked;
     final m = mirror!;
     sync?.dispose();
     vault?.removeListener(_applySyncedPrefs);
@@ -956,6 +1029,7 @@ class AppState extends ChangeNotifier implements SshCallbacks {
     );
     deviceRevoked = reason == UnauthorizedReason.deviceRevoked.wire;
     sessionExpired = !deviceRevoked;
+    if (deviceRevoked) unawaited(biometric?.disable()); // other endings keep it
     await lock(); // first: stops sync and the vault before any await below
     stage = AppStage.login;
     notifyListeners();

@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import 'src/app.dart';
 import 'src/app_state.dart';
 import 'src/loquet/loquet_memory.dart';
+import 'src/session/biometrics.dart';
 import 'src/session/session_store.dart';
 import 'src/settings/settings.dart';
 import 'src/storage/local_mirror.dart';
@@ -27,6 +28,9 @@ Future<void> main() async {
   chrome = await WindowChrome.start();
   final state = AppState(
     sessions: SessionStore(FlutterSecureKv()),
+    biometrics: Platform.isWindows || Platform.isMacOS
+        ? const ChannelBiometricBackend()
+        : null,
     settingsStore: SettingsStore(File(p.join(support, 'settings.json'))),
     openMirror: (userId) async =>
         LocalMirror.open(p.join(support, 'mirror-$userId.sqlite')),
