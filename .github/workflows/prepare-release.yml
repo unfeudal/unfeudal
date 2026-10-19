@@ -8,6 +8,8 @@ permissions:
   contents: read
 jobs:
   pr:
+    # releases stay off until the repository variable RELEASES_ENABLED is 'true'
+    if: vars.RELEASES_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: bot

@@ -5,7 +5,8 @@ permissions:
   contents: read
 jobs:
   tag:
-    if: startsWith(github.event.head_commit.message, 'chore(release):')
+    # releases stay off until the repository variable RELEASES_ENABLED is 'true'
+    if: vars.RELEASES_ENABLED == 'true' && startsWith(github.event.head_commit.message, 'chore(release):')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     environment: bot
