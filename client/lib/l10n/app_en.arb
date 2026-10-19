@@ -446,5 +446,15 @@
         "type": "int"
       }
     }
-  }
+  },
+  "forwardsActive": "{count, plural, =1{1 active forward} other{{count} active forwards}}",
+  "@forwardsActive": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "forwardStart": "Start",
+  "forwardStop": "Stop"
 }
