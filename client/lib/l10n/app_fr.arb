@@ -347,5 +347,10 @@
   "settingsLoquetOn": "Activé",
   "settingsLoquetSober": "Sobre",
   "settingsLoquetOff": "Désactivé",
-  "settingsLoquetForcedOff": "Désactivé par le serveur ou une organisation."
+  "settingsLoquetForcedOff": "Désactivé par le serveur ou une organisation.",
+  "errorMissingBinding": "Choisir d'abord sa propre clé pour cet hôte.",
+  "hostIdentityMode": "Identité",
+  "hostIdentityShared": "Identité partagée de l'organisation",
+  "hostIdentityPerMember": "Clé propre à chaque membre",
+  "hostBindingLabel": "Clé personnelle pour cet hôte"
 }

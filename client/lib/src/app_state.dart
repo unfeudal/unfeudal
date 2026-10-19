@@ -23,6 +23,7 @@ import 'loquet/loquet_memory.dart';
 import 'loquet/loquet_mode.dart';
 import 'loquet/mood.dart';
 import 'loquet/reaction_engine.dart';
+import 'orgs/host_binding.dart';
 import 'orgs/org_controller.dart';
 import 'ssh/jump_connector.dart';
 import 'ssh/port_forwarder.dart';
@@ -486,7 +487,12 @@ class AppState extends ChangeNotifier implements SshCallbacks {
   Future<ConnectTarget> _targetFor(String id) async {
     final found = vault!.hostLookup(id)!;
     final user = found.resolved.user ?? (throw const MissingUser());
-    final identityId = found.resolved.identityId;
+    final entry = vault!.entry(id)!;
+    final identityId =
+        found.meta.identityMode == IdentityMode.perMember && entry.orgId != null
+        ? bindingFor(vault!, id) ??
+              (throw MissingBinding(id)) // never inherited, never the org's
+        : found.resolved.identityId;
     return ConnectTarget(
       hostId: id,
       hostName: found.meta.name,
