@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "fr.unfeudal" "\0"
-            VALUE "FileDescription", "unfeudal_client" "\0"
+            VALUE "FileDescription", "Unfeudal" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "unfeudal_client" "\0"
+            VALUE "InternalName", "unfeudal" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 fr.unfeudal. All rights reserved." "\0"
-            VALUE "OriginalFilename", "unfeudal_client.exe" "\0"
-            VALUE "ProductName", "unfeudal_client" "\0"
+            VALUE "OriginalFilename", "unfeudal.exe" "\0"
+            VALUE "ProductName", "Unfeudal" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END
