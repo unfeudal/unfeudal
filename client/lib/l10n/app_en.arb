@@ -1181,5 +1181,14 @@
   "historySecretHidden": "Secret fields are hidden.",
   "historyReveal": "Show secrets",
   "historyRestore": "Restore this version",
-  "historyRestoreConfirm": "Write this version back as the newest one? The current one stays in the history."
+  "historyRestoreConfirm": "Write this version back as the newest one? The current one stays in the history.",
+  "identityReveal": "Show secret",
+  "identityRevealTitle": "Secret of {name}",
+  "@identityRevealTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  }
 }
