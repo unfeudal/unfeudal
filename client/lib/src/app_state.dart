@@ -379,6 +379,21 @@ class AppState extends ChangeNotifier implements SshCallbacks {
 
   /// Offline: the cached bundle opens the vault; the API resumes with the stored refresh token.
   Future<void> unlock(String password) async {
+    final (:bundle, bundleVersion: _) = _cachedBundle();
+    final UnlockedAccount unlocked;
+    try {
+      unlocked = await _crypto.unlock(bundle, password);
+    } on WrongPassword {
+      lockMachine.fail();
+      emit(UnlockFailed(consecutive: ++_unlockFailures));
+      rethrow;
+    }
+    _unlockFailures = 0;
+    await _resume(unlocked);
+  }
+
+  /// After the key is checked: the API resumes with the stored refresh token, the vault opens, home.
+  Future<void> _resume(UnlockedAccount unlocked) async {
     // the keystore holds the latest refresh token (rotations since sign-in); a stale one is a replay
     final loaded = await sessions.load();
     if (loaded == null) {
@@ -395,16 +410,6 @@ class AppState extends ChangeNotifier implements SshCallbacks {
         'unlock with #${await tokenTag(session.refreshToken)}',
       );
     }
-    final (:bundle, bundleVersion: _) = _cachedBundle();
-    final UnlockedAccount unlocked;
-    try {
-      unlocked = await _crypto.unlock(bundle, password);
-    } on WrongPassword {
-      lockMachine.fail();
-      emit(UnlockFailed(consecutive: ++_unlockFailures));
-      rethrow;
-    }
-    _unlockFailures = 0;
     final api = _newApi(session.serverUrl)..refreshToken = session.refreshToken;
     await _startVault(api, unlocked);
     stage = AppStage.home;
