@@ -416,5 +416,19 @@
   "windowRestore": "Restore",
   "windowClose": "Close",
   "treeRolePersonal": "Personal vault",
-  "passwordChecking": "Checking…"
+  "passwordChecking": "Checking…",
+  "errorJumpLoop": "These jump hosts lead back to each other. Change one of them.",
+  "errorJumpTooDeep": "More than 8 jump hosts in a row. Shorten the chain.",
+  "errorJumpMissing": "A jump host of this chain no longer exists. Pick another one.",
+  "errorJumpHop": "Jump host {host}: {reason}",
+  "@errorJumpHop": {
+    "placeholders": {
+      "host": {
+        "type": "String"
+      },
+      "reason": {
+        "type": "String"
+      }
+    }
+  }
 }

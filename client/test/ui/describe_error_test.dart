@@ -5,6 +5,7 @@ import 'package:unfeudal_client/l10n/app_localizations.dart';
 import 'package:unfeudal_client/src/api/api_client.dart';
 import 'package:unfeudal_client/src/app_state.dart';
 import 'package:unfeudal_client/src/keys/key_tools.dart';
+import 'package:unfeudal_client/src/ssh/jump_connector.dart';
 import 'package:unfeudal_client/src/ssh/ssh_connector.dart';
 import 'package:unfeudal_client/src/storage/local_mirror.dart';
 import 'package:unfeudal_client/src/ui/describe_error.dart';
@@ -107,5 +108,16 @@ void main() {
       d(StateError('secret detail')),
       'Unexpected error (StateError).',
     ); // never toString()
+  });
+
+  test('jump errors', () {
+    final l = lookupAppLocalizations(const Locale('en'));
+    expect(describeError(l, JumpLoop(['a', 'b', 'a'])), l.errorJumpLoop);
+    expect(describeError(l, JumpTooDeep(['t'])), l.errorJumpTooDeep);
+    expect(describeError(l, JumpHostMissing('x')), l.errorJumpMissing);
+    expect(
+      describeError(l, JumpChainFailed('b', 'bastion', 0, const MissingUser())),
+      l.errorJumpHop('bastion', describeError(l, const MissingUser())),
+    );
   });
 }
