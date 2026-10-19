@@ -13,6 +13,7 @@ import '../../design/seal.dart';
 import '../../design/tokens.dart';
 import '../../loquet/loquet_pose.dart';
 import '../../loquet/loquet_spot.dart';
+import '../../ssh/ssh_connector.dart';
 import '../../terminal/charte_theme.dart';
 import '../../terminal/snippet_insertion.dart';
 import '../../terminal/terminal_search.dart';
@@ -350,9 +351,14 @@ class _ErrorCard extends StatelessWidget {
               Row(
                 spacing: 20,
                 children: [
-                  const LoquetSpot(
-                    placement: LoquetPlacement.dialog,
-                    mood: LoquetMood.sad,
+                  LoquetSpot(
+                    key: const Key('tab-error-card'),
+                    placement: LoquetPlacement.empty,
+                    mood: switch (error) {
+                      HostKeyRejected(decision: HostKeyDecision.changed) =>
+                        LoquetMood.alert,
+                      _ => LoquetMood.sad,
+                    },
                   ),
                   Expanded(
                     child: Column(
