@@ -428,5 +428,21 @@
   "rotationBlocked": "Confirmer d'abord ces {count} membres : {emails}",
   "rotationCredentials": "Les membres retirés ont pu copier des secrets de ces dossiers : changer ces mots de passe et clés.",
   "keyAlert": "{count} clés ne correspondent pas à ce que connaît cet appareil. Rien n'a été partagé.",
-  "orgMenu": "Organisation"
+  "orgMenu": "Organisation",
+  "railAdmin": "Administration",
+  "adminAccounts": "Comptes",
+  "adminInvites": "Invitations",
+  "adminOrgs": "Organisations",
+  "adminDisable": "Désactiver",
+  "adminEnable": "Réactiver",
+  "adminDelete": "Supprimer le compte",
+  "adminDeleteConfirm": "Supprimer {email} et tout son contenu personnel ?",
+  "adminOrgOwners": "Propriétaires",
+  "adminOrgMembers": "{count} membres",
+  "adminOrgStorage": "Stockage",
+  "adminOrgActivity": "Dernière activité",
+  "adminOrgDelete": "Supprimer l'organisation",
+  "sizeKb": "{n} Ko",
+  "sizeMb": "{n} Mo",
+  "sizeGb": "{n} Go"
 }
