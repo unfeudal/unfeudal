@@ -13,6 +13,7 @@ import '../../design/tokens.dart';
 import '../../keys/key_tools.dart';
 import '../../vault/vault.dart';
 import '../form_dialog.dart';
+import '../history/item_history_panel.dart';
 import '../manage_frame.dart';
 
 /// SSH keys and passwords of the vault: generate, import, add a password, copy a public key, rename, trash.
@@ -156,6 +157,12 @@ class KeychainScreen extends StatelessWidget {
                             initial: {'identity-name': e.name ?? ''},
                           ),
                           onDelete: () => _confirmTrash(context, vault, e),
+                          onHistory: state.serverHas('item_history')
+                              ? () => showUfDialog<void>(
+                                  context,
+                                  (_) => ItemHistoryPanel(itemId: e.id),
+                                )
+                              : null,
                         ),
                     ],
                   ),
@@ -252,12 +259,16 @@ class _IdentityRow extends StatelessWidget {
     required this.readOnly,
     required this.onRename,
     required this.onDelete,
+    this.onHistory,
   });
 
   final VaultEntry entry;
   final bool readOnly;
   final VoidCallback onRename;
   final VoidCallback onDelete;
+
+  /// Null hides the button (no item history on this server).
+  final VoidCallback? onHistory;
 
   @override
   Widget build(BuildContext context) {
@@ -325,6 +336,13 @@ class _IdentityRow extends StatelessWidget {
                     );
                   },
                   icon: const Icon(UfIcons.copy, size: 17),
+                ),
+              if (onHistory != null)
+                IconButton(
+                  key: Key('identity-history-${entry.id}'),
+                  tooltip: l.itemHistory,
+                  onPressed: onHistory,
+                  icon: const Icon(UfIcons.clockCounterClockwise, size: 17),
                 ),
               IconButton(
                 key: Key('identity-rename-${entry.id}'),
