@@ -248,5 +248,17 @@
   "errorForwardBind": "Impossible d'ouvrir le port local {port}.",
   "forwardsActive": "{count, plural, =1{1 redirection active} other{{count} redirections actives}}",
   "forwardStart": "Démarrer",
-  "forwardStop": "Arrêter"
+  "forwardStop": "Arrêter",
+  "hostForwards": "Redirections de port",
+  "forwardAdd": "Ajouter une redirection",
+  "forwardLocalPort": "Port local",
+  "forwardRemoteHost": "Hôte distant",
+  "forwardRemotePort": "Port distant",
+  "forwardAutoStart": "Démarrer avec la session",
+  "forwardAllowLow": "Autoriser un port inférieur à 1024",
+  "forwardRemove": "Retirer",
+  "forwardLowPort": "Un port inférieur à 1024 demande l'autorisation.",
+  "forwardDuplicate": "Une autre redirection utilise déjà ce port local.",
+  "hostJump": "Hôte de rebond",
+  "jumpNone": "Aucun"
 }

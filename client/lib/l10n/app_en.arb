@@ -456,5 +456,17 @@
     }
   },
   "forwardStart": "Start",
-  "forwardStop": "Stop"
+  "forwardStop": "Stop",
+  "hostForwards": "Port forwards",
+  "forwardAdd": "Add a forward",
+  "forwardLocalPort": "Local port",
+  "forwardRemoteHost": "Remote host",
+  "forwardRemotePort": "Remote port",
+  "forwardAutoStart": "Start with the session",
+  "forwardAllowLow": "Allow a port below 1024",
+  "forwardRemove": "Remove",
+  "forwardLowPort": "Ports below 1024 need the opt-in.",
+  "forwardDuplicate": "Another forward already uses this local port.",
+  "hostJump": "Jump host",
+  "jumpNone": "None"
 }

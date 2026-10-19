@@ -11,6 +11,8 @@ import '../../events/app_events.dart';
 import '../../vault/vault.dart';
 import '../describe_error.dart';
 import 'editor_frame.dart';
+import 'forwards_editor.dart';
+import 'jump_host_picker.dart';
 
 /// Edits a host; empty port, user and key show the inherited value and where it comes from.
 class HostEditorPanel extends StatefulWidget {
@@ -37,6 +39,10 @@ class _HostEditorPanelState extends State<HostEditorPanel> {
   final _startup = TextEditingController();
   String? _identityId;
   String? _folderId;
+  String? _jumpHostId;
+
+  /// Null while a forward row has a problem.
+  List<PortForward>? _forwards = const [];
   final _problems = <String, String>{};
   String? _error;
   int _failures = 0;
@@ -61,6 +67,12 @@ class _HostEditorPanelState extends State<HostEditorPanel> {
     _startup.text = text('startupCommand');
     _identityId = meta['identityId'] as String?;
     _folderId = _entry?.folderId ?? widget.folderId;
+    _jumpHostId = meta['jumpHostId'] as String?;
+    if (widget.hostId case final id?) {
+      _forwards =
+          AppScope.read(context).vault!.hostLookup(id)?.meta.forwards ??
+          const [];
+    }
   }
 
   @override
@@ -105,7 +117,14 @@ class _HostEditorPanelState extends State<HostEditorPanel> {
       ],
       'notes': optional(_notes),
       'startupCommand': optional(_startup),
+      'forwards': [
+        for (final f in _forwards ?? const <PortForward>[]) f.toJson(),
+      ],
+      'jumpHostId': _jumpHostId,
     };
+    // written only when set
+    if (_forwards?.isEmpty ?? true) meta.remove('forwards');
+    if (_jumpHostId == null) meta.remove('jumpHostId');
     if (_problems.isEmpty) {
       try {
         HostMeta.fromJson(meta);
@@ -217,7 +236,7 @@ class _HostEditorPanelState extends State<HostEditorPanel> {
       save: editable
           ? FilledButton(
               key: const Key('host-save'),
-              onPressed: readOnly ? null : _save,
+              onPressed: readOnly || _forwards == null ? null : _save,
               child: Text(l.hostSave),
             )
           : null,
@@ -272,6 +291,11 @@ class _HostEditorPanelState extends State<HostEditorPanel> {
             ],
           ),
         ),
+        ForwardsEditor(
+          forwards: _forwards ?? const [],
+          enabled: editable,
+          onChanged: (forwards) => setState(() => _forwards = forwards),
+        ),
         entryPicker(
           key: 'host-identity',
           label: l.hostIdentity,
@@ -280,6 +304,18 @@ class _HostEditorPanelState extends State<HostEditorPanel> {
           value: _identityId,
           source: _identityId == null ? source('identityId') : null,
           onChanged: editable ? (v) => setState(() => _identityId = v) : null,
+        ),
+        JumpHostPicker(
+          key: const Key('jump-picker'),
+          hostId: widget.hostId,
+          folderId: _folderId,
+          value: _jumpHostId,
+          inheritedId: resolved?.jumpHostId,
+          inheritedFrom: switch (resolved?.sources['jumpHostId']) {
+            null || 'default' || 'host' => null,
+            final String folder => vault.entry(folder)?.name,
+          },
+          onChanged: editable ? (v) => setState(() => _jumpHostId = v) : null,
         ),
         entryPicker(
           key: 'host-folder',
