@@ -548,5 +548,11 @@
   "exportPlainConfirm": "Fichier non chiffré : compris",
   "exportSubmit": "Exporter",
   "exportDone": "{count} éléments exportés.",
-  "exportSkipped": "{count} éléments illisibles ont été laissés de côté."
+  "exportSkipped": "{count} éléments illisibles ont été laissés de côté.",
+  "settingsDeleteAccount": "Supprimer le compte",
+  "deleteAccountBody": "Le compte, ses appareils et chaque élément personnel sont supprimés du serveur et de cet appareil. Les coffres partagés restent à leur organisation.",
+  "deletePassword": "Mot de passe maître",
+  "deleteConfirmEmail": "Saisir l'e-mail du compte",
+  "deleteSubmit": "Supprimer définitivement",
+  "deleteLastOwner": "Seul propriétaire de : {orgs}. Transmettre la propriété ou supprimer ces organisations d'abord."
 }
