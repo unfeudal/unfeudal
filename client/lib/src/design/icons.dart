@@ -18,6 +18,7 @@ abstract final class UfIcons {
   static const gear = IconData(0xe272, fontFamily: _family);
   static const info = IconData(0xe2ce, fontFamily: _family);
   static const key = IconData(0xe2d6, fontFamily: _family);
+  static const link = IconData(0xe2e2, fontFamily: _family);
   static const lock = IconData(0xe308, fontFamily: _family);
   static const magnifyingGlass = IconData(0xe30c, fontFamily: _family);
   static const minus = IconData(0xe32a, fontFamily: _family);

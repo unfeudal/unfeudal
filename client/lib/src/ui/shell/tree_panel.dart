@@ -7,6 +7,7 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
 import '../../app_state.dart';
+import '../../design/empty_state.dart';
 import '../../design/icons.dart';
 import '../../design/seal.dart';
 import '../../design/tokens.dart';
@@ -16,7 +17,7 @@ import '../../loquet/loquet_spot.dart';
 import '../../vault/vault.dart';
 import 'shortcuts.dart';
 
-/// The personal vault as a tree of folders and hosts, with a search over name, address and tags.
+/// The selected vault (personal or an org) as a tree of folders and hosts, with a search over name, address and tags.
 class TreePanel extends StatefulWidget {
   const TreePanel({
     super.key,
@@ -64,9 +65,23 @@ class _TreePanelState extends State<TreePanel> {
     final colors = UfColors.of(context);
     final vault = state.vault;
     final readOnly = state.sync?.readOnly ?? true;
+    final orgs = state.orgs;
+    final orgId = orgs?.selected;
+    final org = orgs?.orgs.where((o) => o.id == orgId).firstOrNull;
+    final awaiting = org != null && org.status != 'confirmed';
+    final online = state.sync?.online ?? false;
+    // an org vault: folders need the server, and both buttons need edit somewhere in the cached block
+    final orgEdit =
+        org == null ||
+        orgs!.isAdmin(org.id) ||
+        (orgs.block?.folderTree ?? const <FolderNode>[]).any(
+          (n) =>
+              n.orgId == org.id &&
+              orgs.permissions(org.id, n.folderId).contains(Permission.edit),
+        );
     final visible = [
       for (final e in vault?.entries ?? const <VaultEntry>[])
-        if (!vault!.isTrashed(e.id) && _shown(e)) e,
+        if (e.orgId == orgId && !vault!.isTrashed(e.id) && _shown(e)) e,
     ];
     final query = _query.text.trim().toLowerCase();
     final rows = query.isEmpty
@@ -93,14 +108,18 @@ class _TreePanelState extends State<TreePanel> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(l.vaultPersonal, style: text.headlineSmall),
                       Text(
-                        l.treeRolePersonal,
-                        style: text.labelSmall!.copyWith(
-                          color: colors.muted,
-                          fontWeight: FontWeight.w400,
-                        ),
+                        org?.name ?? l.vaultPersonal,
+                        style: text.headlineSmall,
                       ),
+                      if (org == null)
+                        Text(
+                          l.treeRolePersonal,
+                          style: text.labelSmall!.copyWith(
+                            color: colors.muted,
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -135,7 +154,9 @@ class _TreePanelState extends State<TreePanel> {
             ),
           ),
           Expanded(
-            child: rows.isEmpty
+            child: awaiting
+                ? EmptyState(title: org.name, body: l.orgAwaiting)
+                : rows.isEmpty
                 ? Center(
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -177,15 +198,26 @@ class _TreePanelState extends State<TreePanel> {
                   style: FilledButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
-                  onPressed: readOnly ? null : widget.onNewHost,
+                  onPressed: readOnly || !orgEdit || awaiting
+                      ? null
+                      : widget.onNewHost,
                   icon: const Icon(UfIcons.plus, size: 15),
                   label: Text(l.treeNewHost),
                 ),
-                TextButton.icon(
-                  key: const Key('tree-new-folder'),
-                  onPressed: readOnly ? null : widget.onNewFolder,
-                  icon: const Icon(UfIcons.folderSimplePlus, size: 15),
-                  label: Text(l.treeNewFolder),
+                Tooltip(
+                  message: org != null && !online ? l.treeNewFolderOnline : '',
+                  child: TextButton.icon(
+                    key: const Key('tree-new-folder'),
+                    onPressed:
+                        readOnly ||
+                            !orgEdit ||
+                            awaiting ||
+                            (org != null && !online)
+                        ? null
+                        : widget.onNewFolder,
+                    icon: const Icon(UfIcons.folderSimplePlus, size: 15),
+                    label: Text(l.treeNewFolder),
+                  ),
                 ),
               ],
             ),
@@ -335,7 +367,9 @@ class _TreePanelState extends State<TreePanel> {
         key: Key('host-${e.id}'),
         padding: padding,
         child: Text(
-          e.state == EntryState.unreadable
+          e.awaitingKey
+              ? l.treeAwaitingKey
+              : e.state == EntryState.unreadable
               ? l.treeUnreadable
               : l.treeUnsupported,
           style: muted.copyWith(fontStyle: FontStyle.italic),

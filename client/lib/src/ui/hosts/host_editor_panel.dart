@@ -18,13 +18,22 @@ import 'jump_host_picker.dart';
 
 /// Edits a host; empty port, user and key show the inherited value and where it comes from.
 class HostEditorPanel extends StatefulWidget {
-  const HostEditorPanel({super.key, this.hostId, this.folderId, this.onClose});
+  const HostEditorPanel({
+    super.key,
+    this.hostId,
+    this.folderId,
+    this.orgId,
+    this.onClose,
+  });
 
   /// Null for a new host.
   final String? hostId;
 
   /// Folder of a new host.
   final String? folderId;
+
+  /// Org of a new host; null for the personal vault.
+  final String? orgId;
   final VoidCallback? onClose;
 
   @override
@@ -93,6 +102,8 @@ class _HostEditorPanelState extends State<HostEditorPanel> {
       ? null
       : AppScope.read(context).vault!.entry(widget.hostId!);
 
+  String? get _orgId => _entry?.orgId ?? widget.orgId;
+
   Future<void> _save() async {
     final l = AppLocalizations.of(context);
     final state = AppScope.read(context);
@@ -127,7 +138,7 @@ class _HostEditorPanelState extends State<HostEditorPanel> {
         for (final f in _forwards ?? const <PortForward>[]) f.toJson(),
       ],
       'jumpHostId': _jumpHostId,
-      if (_entry?.orgId != null) 'identityMode': _identityMode.name,
+      if (_orgId != null) 'identityMode': _identityMode.name,
     };
     // written only when set
     if (_forwards?.isEmpty ?? true) meta.remove('forwards');
@@ -142,7 +153,7 @@ class _HostEditorPanelState extends State<HostEditorPanel> {
     if (_problems.isNotEmpty) return setState(() => _failures++);
     try {
       final isNew = widget.hostId == null;
-      final orgId = _entry?.orgId;
+      final orgId = _orgId;
       final id = orgId == null
           ? await vault.upsertItem(
               type: 'host',
@@ -176,7 +187,10 @@ class _HostEditorPanelState extends State<HostEditorPanel> {
       RegExp(r'^host\.(\w+)').firstMatch(e.message)?.group(1) ?? 'name';
 
   Future<void> _trash() async {
-    await AppScope.read(context).vault!.trashItem(widget.hostId!);
+    final state = AppScope.read(context);
+    _orgId == null
+        ? await state.vault!.trashItem(widget.hostId!)
+        : await state.orgs!.writer.trash(widget.hostId!);
     widget.onClose?.call();
   }
 
@@ -233,14 +247,14 @@ class _HostEditorPanelState extends State<HostEditorPanel> {
       );
     }
 
-    final orgId = entry?.orgId;
+    final orgId = _orgId;
     final identities = vault
         .ofKind(ItemKind.identity)
         .where((e) => e.state == EntryState.ok && e.orgId == orgId)
         .toList();
     final folders = vault
         .ofKind(ItemKind.folder)
-        .where((e) => e.state == EntryState.ok)
+        .where((e) => e.state == EntryState.ok && e.orgId == orgId)
         .toList();
     final folderName = vault.entry(_folderId ?? '')?.name;
     final readOnly = state.sync?.readOnly ?? true;

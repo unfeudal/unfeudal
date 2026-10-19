@@ -62,7 +62,8 @@ class OrgWriter {
   }) async {
     final current = id == null ? null : vault.entry(id);
     final moved = current != null && current.folderId != target.folderId;
-    if (!_canEdit(target.orgId, target.folderId) ||
+    if ((type != 'folder' && target.folderId == null) ||
+        !_canEdit(target.orgId, target.folderId) ||
         (moved && !_canEdit(target.orgId, current.folderId))) {
       throw const OrgWriteRefused(OrgWriteRefusal.noEdit);
     }
