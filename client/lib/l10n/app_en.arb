@@ -67,6 +67,7 @@
   "errorHostKeyChanged": "The host key changed. Connection blocked until it is verified.",
   "errorHostKeyUnknown": "Host key not confirmed. Not connected.",
   "errorSshAuth": "The host refused the credentials.",
+  "errorSshConnection": "The SSH connection failed. Check the address, the port and that the host is up.",
   "errorMissingUser": "No user set for this host or its folders.",
   "errorInvalidKey": "Unreadable key, or wrong passphrase. PuTTY keys are not supported.",
   "errorMirrorTooNew": "Local data was written by a newer Unfeudal. Update the app.",
