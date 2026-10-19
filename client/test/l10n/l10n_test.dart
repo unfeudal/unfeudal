@@ -38,29 +38,49 @@ void main() {
     }
   });
 
-  test(
-    'no hard-coded user-facing string under lib/src/ui or lib/src/design',
-    () {
-      final literal = RegExp(
-        r'''(\bText\(\s*|\b(hintText|labelText|helperText|tooltip|semanticsLabel|title|message):\s*)['"][^'"]*[A-Za-zÀ-ÿ]''',
-      );
-      final offenders = <String>[];
-      for (final dir in ['lib/src/ui', 'lib/src/design']) {
-        if (!Directory(dir).existsSync()) continue;
-        for (final f
-            in Directory(dir)
-                .listSync(recursive: true)
-                .whereType<File>()
-                .where((f) => f.path.endsWith('.dart'))) {
-          final lines = f.readAsLinesSync();
-          for (var i = 0; i < lines.length; i++) {
-            if (literal.hasMatch(lines[i])) offenders.add('${f.path}:${i + 1}');
-          }
-        }
+  test('no hard-coded user-facing string anywhere under lib/src', () {
+    final literal = RegExp(
+      r'''(\bText\(\s*|\b(hintText|labelText|helperText|tooltip|semanticsLabel|title|message):\s*)['"][^'"]*[A-Za-zÀ-ÿ]''',
+    );
+    final offenders = <String>[];
+    for (final f
+        in Directory('lib/src')
+            .listSync(recursive: true)
+            .whereType<File>()
+            .where((f) => f.path.endsWith('.dart'))) {
+      final lines = f.readAsLinesSync();
+      for (var i = 0; i < lines.length; i++) {
+        if (literal.hasMatch(lines[i])) offenders.add('${f.path}:${i + 1}');
       }
-      expect(offenders, isEmpty);
-    },
-  );
+    }
+    expect(offenders, isEmpty);
+  });
+
+  test('every ARB key is used by the code', () {
+    final code = [
+      for (final f in Directory(
+        'lib',
+      ).listSync(recursive: true).whereType<File>())
+        if (f.path.endsWith('.dart') && !f.path.contains('app_localizations'))
+          f.readAsStringSync(),
+    ].join('\n');
+    expect([
+      for (final k in keys(arb('en')))
+        if (!RegExp('\\.$k\\b').hasMatch(code)) k,
+    ], isEmpty);
+  });
+
+  test('generated localisation files carry the SPDX header', () {
+    for (final f in Directory(
+      'lib/l10n',
+    ).listSync().whereType<File>().where((f) => f.path.endsWith('.dart'))) {
+      expect(
+        f.readAsLinesSync().first,
+        '// SPDX-License-Identifier: Apache-2.0',
+        reason: f.path,
+      );
+    }
+  });
 
   test('both locales load', () async {
     expect(
