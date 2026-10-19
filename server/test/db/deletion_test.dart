@@ -140,8 +140,26 @@ void main() {
         {'k': key, 't': t},
       );
     }
+    // raw IPs of events mia performed in other chains go with her; another actor's stay
+    for (final (seq, actor) in [(90001, mia.userId), (90002, w.io.userId)]) {
+      await s.db.execute(
+        'INSERT INTO audit_events (scope, seq, ts, actor_user, action, target_ids, prev_hash, hash) '
+        "VALUES ('instance', @q, '2026-10-19T00:00:00.000Z', @a, 'x', '[]', '', '')",
+        {'q': seq, 'a': actor},
+      );
+      await s.db.execute(
+        "INSERT INTO audit_ips (scope, seq, ip) VALUES ('instance', @q, '1.2.3.4')",
+        {'q': seq},
+      );
+    }
     await s.db.transaction(
       (tx) => deleteUser(tx, mia.userId, actor: w.io.userId),
+    );
+    expect(
+      (await s.db.query(
+        "SELECT seq FROM audit_ips WHERE scope = 'instance' AND seq > 90000",
+      )).map((r) => r['seq']),
+      [90002],
     );
     final p = {'u': mia.userId};
     expect(await w.count('users', 'id = @u', p), 0);
