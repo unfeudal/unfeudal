@@ -115,6 +115,27 @@ void main() {
     expect(e.lastError, isNull);
   });
 
+  test(
+    'a push lost to the network backs off too, without counting attempts',
+    () async {
+      final clock = FakeClock();
+      final h = SyncHarness();
+      final (e, m, _) = await h.engine(now: clock.now);
+      final id = newId();
+      h.dropPuts.add(id);
+      await e.write(wireItem(id, revision: 0));
+      await e.syncNow();
+      final first = puts(h);
+      await e.syncNow();
+      expect(puts(h), first); // backing off
+      expect(m.outbox().single.attempts, 0);
+      h.dropPuts.clear();
+      clock.advance(const Duration(seconds: 30));
+      await e.syncNow();
+      expect(m.outbox(), isEmpty);
+    },
+  );
+
   test('backoff caps at 10 minutes', () async {
     final clock = FakeClock();
     final h = SyncHarness();
