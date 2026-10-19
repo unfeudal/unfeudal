@@ -288,13 +288,16 @@ class OrgWriter {
       orgId: orgId,
       folderId: folderId,
     );
+    // a rewrite keeps the wire item's unknown fields and schemaVersion as read
+    final current = vault.entry(id)?.item;
     return Item(
       id: id,
       type: type,
       scope: ItemScope.org,
       orgId: orgId,
       folderId: folderId,
-      schemaVersion: 1,
+      schemaVersion: current?.schemaVersion ?? 1,
+      extra: current?.extra ?? const {},
       revision: revision,
       deleted: deleted,
       meta: await PayloadCrypto.seal(
