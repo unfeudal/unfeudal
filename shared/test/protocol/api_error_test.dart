@@ -57,6 +57,8 @@ void main() {
     final b = ApiErrorBody.fromJson(json);
     expect((b.code, b.item!.revision), (ApiErrorCode.conflict, 4));
     expect(jsonEncode(b.toJson()), jsonEncode(json));
+    final gone = {'error': 'conflict', 'message': 'Gone.', 'item': null};
+    expect(jsonEncode(ApiErrorBody.fromJson(gone).toJson()), jsonEncode(gone));
     final lastOwner = {
       'orgs': ['Acme'],
       'error': 'conflict',
