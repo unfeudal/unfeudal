@@ -39,5 +39,6 @@ export 'src/protocol/org_block.dart';
 export 'src/protocol/session.dart';
 export 'src/protocol/sync_page.dart';
 export 'src/protocol/version.dart';
+export 'src/ssh/jump_chain.dart';
 export 'src/time.dart';
 export 'src/util/secure.dart';
