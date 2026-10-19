@@ -180,33 +180,40 @@ class LoquetPose {
   int get hashCode => Object.hash(signature, lookX);
 }
 
-/// Loquet's colours, from the theme tokens.
+/// Loquet's colours, as in the mockup: the bright red and ochre of the dark theme in both themes, and a
+/// dark face on them so it stays readable.
 class LoquetPalette {
   const LoquetPalette({
     required this.body,
     required this.face,
     required this.feet,
     required this.hand,
+    required this.handLine,
     required this.zzz,
   });
 
   factory LoquetPalette.of(LoquetTone tone, UfColors c) {
-    final body = switch (tone) {
-      LoquetTone.normal => c.accent,
-      LoquetTone.danger => c.danger,
-      LoquetTone.warn => c.warn,
-    };
-    final face = c == UfColors.dark ? UfColors.dark.bg : UfColors.light.side;
+    final dark = c == UfColors.dark;
+    final lightFace = !dark && tone == LoquetTone.normal;
     return LoquetPalette(
-      body: body,
-      face: face,
+      body: switch (tone) {
+        LoquetTone.normal => c.accent,
+        LoquetTone.danger => UfColors.dark.danger,
+        LoquetTone.warn => UfColors.dark.warn,
+      },
+      face: lightFace ? UfColors.light.side : UfColors.dark.bg,
       feet: c.text,
-      hand: Color.lerp(body, face, 0.25)!,
+      hand: tone == LoquetTone.danger
+          ? UfColors.dark.dangerText
+          : dark
+          ? const Color(0xFFA7C2E2)
+          : UfColors.dark.accentBg,
+      handLine: lightFace || !dark ? UfColors.light.side : UfColors.dark.bg,
       zzz: c.muted,
     );
   }
 
-  final Color body, face, feet, hand, zzz;
+  final Color body, face, feet, hand, handLine, zzz;
 
   @override
   bool operator ==(Object other) =>
@@ -215,8 +222,9 @@ class LoquetPalette {
       other.face == face &&
       other.feet == feet &&
       other.hand == hand &&
+      other.handLine == handLine &&
       other.zzz == zzz;
 
   @override
-  int get hashCode => Object.hash(body, face, feet, hand, zzz);
+  int get hashCode => Object.hash(body, face, feet, hand, handLine, zzz);
 }
