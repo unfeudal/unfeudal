@@ -79,8 +79,8 @@ class Item {
       purged: isPurged,
       meta: metaJson == null ? null : Envelope.fromJson(metaJson),
       secret: secretJson == null ? null : Envelope.fromJson(secretJson),
-      createdAt: _optTime(r, 'createdAt'),
-      updatedAt: _optTime(r, 'updatedAt'),
+      createdAt: r.optTime('createdAt'),
+      updatedAt: r.optTime('updatedAt'),
       updatedBy: r.optUuid('updatedBy'),
       updatedDevice: r.optUuid('updatedDevice'),
       extra: r.extra(_known),
@@ -142,14 +142,4 @@ class Item {
     if (updatedBy != null) 'updatedBy': updatedBy,
     if (updatedDevice != null) 'updatedDevice': updatedDevice,
   };
-
-  static DateTime? _optTime(JsonReader r, String key) {
-    final text = r.opt<String>(key);
-    if (text == null) return null;
-    try {
-      return parseIso(text);
-    } on FormatException {
-      throw FormatException('item.$key: invalid timestamp');
-    }
-  }
 }

@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import '../bytes.dart';
 import '../ids.dart';
+import '../time.dart';
 
 /// Typed reads over a decoded JSON object. Every malformed value is a
 /// [FormatException] naming `what.key`, never a cast error.
@@ -56,6 +57,18 @@ class JsonReader {
   }
 
   String? optUuid(String key) => map[key] == null ? null : uuid(key);
+
+  /// Text that [iso] produces.
+  DateTime time(String key) {
+    final text = req<String>(key);
+    try {
+      return parseIso(text);
+    } on FormatException {
+      throw _error(key, 'invalid timestamp');
+    }
+  }
+
+  DateTime? optTime(String key) => map[key] == null ? null : time(key);
 
   List<T> list<T extends Object>(String key, {required int max}) {
     final value = req<List<Object?>>(key);

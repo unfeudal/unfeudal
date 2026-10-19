@@ -20,7 +20,10 @@ String base32Encode(List<int> bytes) {
   return out.toString();
 }
 
-/// Groups of 4 characters joined by `-`, for display.
+/// Groups of 4 characters joined by `-`, for display; [ungroup] reverts it.
 String groupBy4(String s) =>
     [for (var i = 0; i < s.length; i += 4) s.substring(i, min(i + 4, s.length))]
         .join('-');
+
+/// Typed text back to bare characters: uppercased, spaces and dashes dropped.
+String ungroup(String s) => s.toUpperCase().replaceAll(RegExp(r'[\s-]'), '');

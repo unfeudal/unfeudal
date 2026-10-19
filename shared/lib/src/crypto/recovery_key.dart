@@ -20,7 +20,7 @@ abstract final class RecoveryKey {
   }
 
   static Uint8List decode(String text) {
-    final s = text.toUpperCase().replaceAll(RegExp(r'[\s-]'), '');
+    final s = ungroup(text);
     if (s.length != 53) throw const InvalidRecoveryKey();
     final out = <int>[];
     var acc = 0, bits = 0;

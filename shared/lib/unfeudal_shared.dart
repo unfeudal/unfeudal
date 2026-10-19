@@ -41,4 +41,5 @@ export 'src/protocol/sync_page.dart';
 export 'src/protocol/version.dart';
 export 'src/ssh/jump_chain.dart';
 export 'src/time.dart';
+export 'src/util/base32.dart' show groupBy4;
 export 'src/util/secure.dart';

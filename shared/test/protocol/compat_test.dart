@@ -21,7 +21,7 @@ void main() {
   test('versions are X.Y.Z compared numerically', () {
     expect(compareVersions('0.10.0', '0.9.0'), greaterThan(0));
     expect(compareVersions('1.2.3', '1.2.3'), 0);
-    expect(Version.parse('1.2.3').toString(), '1.2.3');
+    expect(canonicalVersion('01.2.3'), '1.2.3');
     for (final s in [
       '1.2',
       '1.2.3-beta',
@@ -32,7 +32,7 @@ void main() {
       '1.2.${'3' * 30}',
       '',
     ]) {
-      expect(() => Version.parse(s), throwsFormatException, reason: s);
+      expect(() => canonicalVersion(s), throwsFormatException, reason: s);
     }
   });
 

@@ -23,3 +23,8 @@ String keyFingerprint(List<int> publicKey) {
   }
   return '${sha256.convert(publicKey)}'.substring(0, 40);
 }
+
+/// Text shaped like a [keyFingerprint].
+bool isKeyFingerprint(String s) => _keyFingerprint.hasMatch(s);
+
+final _keyFingerprint = RegExp(r'^[0-9a-f]{40}$');

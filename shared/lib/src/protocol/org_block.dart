@@ -19,11 +19,6 @@ List<String> _uuids(JsonReader r, String key, {int max = _maxRows}) {
   return ids;
 }
 
-Envelope? _optEnvelope(JsonReader r, String key) {
-  final json = r.opt<Map<String, Object?>>(key);
-  return json == null ? null : Envelope.fromJson(json);
-}
-
 /// One org snapshot of `GET /sync`. Every list is required: a missing list
 /// is a [FormatException], never "empty", so a broken block cannot delete
 /// local org items.
@@ -52,8 +47,16 @@ class OrgBlock {
       teams: _rows(r, 'teams', OrgTeam.fromJson),
       acl: _rows(r, 'acl', AclRow.fromJson),
       folderTree: _rows(r, 'folderTree', FolderNode.fromJson),
-      wrappedKeys: _rows(r, 'wrappedKeys', WrappedKeyRow.fromJson),
-      keyHistory: _rows(r, 'keyHistory', KeyHistoryRow.fromJson),
+      wrappedKeys: _rows(
+        r,
+        'wrappedKeys',
+        (j) => WrappedKeyRow.fromJson(j, 'wrappedKeys'),
+      ),
+      keyHistory: _rows(
+        r,
+        'keyHistory',
+        (j) => WrappedKeyRow.fromJson(j, 'keyHistory'),
+      ),
       keyRequests: _rows(r, 'keyRequests', KeyRequest.fromJson),
       pendingRotations: _rows(r, 'pendingRotations', PendingRotation.fromJson),
       itemIds: _uuids(r, 'itemIds'),
@@ -80,7 +83,7 @@ class OrgBlock {
   final List<AclRow> acl;
   final List<FolderNode> folderTree;
   final List<WrappedKeyRow> wrappedKeys;
-  final List<KeyHistoryRow> keyHistory;
+  final List<WrappedKeyRow> keyHistory;
   final List<KeyRequest> keyRequests;
   final List<PendingRotation> pendingRotations;
   final List<String> itemIds;
@@ -323,7 +326,8 @@ class FolderNode {
   };
 }
 
-/// The caller's own wrapped keys for one folder version.
+/// One folder key version: a `wrappedKeys` row (the caller's own keys) or a
+/// `keyHistory` row; both share one shape.
 class WrappedKeyRow {
   WrappedKeyRow({
     required this.folderId,
@@ -333,13 +337,14 @@ class WrappedKeyRow {
     this.extra = const {},
   });
 
-  factory WrappedKeyRow.fromJson(Object? json) {
-    final r = JsonReader(json, 'wrappedKeys');
+  factory WrappedKeyRow.fromJson(Object? json, String what) {
+    final r = JsonReader(json, what);
+    final secret = r.opt<Map<String, Object?>>('secret');
     return WrappedKeyRow(
       folderId: r.uuid('folderId'),
       version: r.integer('version', min: 1),
       meta: Envelope.fromJson(r.object('meta')),
-      secret: _optEnvelope(r, 'secret'),
+      secret: secret == null ? null : Envelope.fromJson(secret),
       extra: r.extra(const {'folderId', 'version', 'meta', 'secret'}),
     );
   }
@@ -352,41 +357,6 @@ class WrappedKeyRow {
 
   WrappedFolderKeys get keys =>
       WrappedFolderKeys(version: version, meta: meta, secret: secret);
-
-  Map<String, Object?> toJson() => {
-    ...extra,
-    'folderId': folderId,
-    'version': version,
-    'meta': meta.toJson(),
-    'secret': secret?.toJson(),
-  };
-}
-
-class KeyHistoryRow {
-  KeyHistoryRow({
-    required this.folderId,
-    required this.version,
-    required this.meta,
-    this.secret,
-    this.extra = const {},
-  });
-
-  factory KeyHistoryRow.fromJson(Object? json) {
-    final r = JsonReader(json, 'keyHistory');
-    return KeyHistoryRow(
-      folderId: r.uuid('folderId'),
-      version: r.integer('version', min: 1),
-      meta: Envelope.fromJson(r.object('meta')),
-      secret: _optEnvelope(r, 'secret'),
-      extra: r.extra(const {'folderId', 'version', 'meta', 'secret'}),
-    );
-  }
-
-  final String folderId;
-  final int version;
-  final Envelope meta;
-  final Envelope? secret;
-  final Map<String, Object?> extra;
 
   FolderKeyHistory get history =>
       FolderKeyHistory(version: version, meta: meta, secret: secret);

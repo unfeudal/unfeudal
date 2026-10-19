@@ -32,14 +32,10 @@ enum UnauthorizedReason {
   const UnauthorizedReason(this.wire);
 
   final String wire;
-
-  /// Unknown or missing reads as [sessionExpired].
-  static UnauthorizedReason fromWire(String? wire) =>
-      values.where((r) => r.wire == wire).firstOrNull ?? sessionExpired;
 }
 
 /// `{error, message, item?, reason?, ...extra}`. An unknown [error] is kept
-/// as text; [code] is then null.
+/// as text.
 class ApiErrorBody {
   ApiErrorBody({
     required this.error,
@@ -47,7 +43,6 @@ class ApiErrorBody {
     this.item,
     this.reason,
     this.extra = const {},
-    this.itemSent = false,
   });
 
   factory ApiErrorBody.fromJson(Object? json) {
@@ -59,7 +54,6 @@ class ApiErrorBody {
       item: item == null ? null : Item.fromJson(item),
       reason: r.optText('reason', max: 64),
       extra: r.extra(const {'error', 'message', 'item', 'reason'}),
-      itemSent: (json as Map).containsKey('item'),
     );
   }
 
@@ -68,17 +62,4 @@ class ApiErrorBody {
   final Item? item;
   final String? reason;
   final Map<String, Object?> extra;
-
-  /// The body named `item`, even as null (a 409 whose current item is gone): written back as read.
-  final bool itemSent;
-
-  ApiErrorCode? get code => ApiErrorCode.fromWire(error);
-
-  Map<String, Object?> toJson() => {
-    ...extra,
-    'error': error,
-    'message': message,
-    if (item != null || itemSent) 'item': item?.toJson(),
-    if (reason != null) 'reason': reason,
-  };
 }

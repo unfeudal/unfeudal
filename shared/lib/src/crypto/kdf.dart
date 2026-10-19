@@ -60,13 +60,6 @@ class KdfParams {
   };
 }
 
-class MasterKeys {
-  const MasterKeys(this.authKey, this.encKey);
-
-  final Uint8List authKey; // sent as the login proof
-  final Uint8List encKey; // never leaves the device
-}
-
 String normalizePassword(String password) => unorm.nfc(password);
 
 /// Raw Argon2id v1.3 of NFC(password). Always enforces alg, ceiling and the testing floor;
@@ -100,14 +93,15 @@ Future<Uint8List> hkdf32(List<int> ikm, String info) async {
   return Uint8List.fromList(await key.extractBytes());
 }
 
-Future<MasterKeys> deriveMasterKeys(
+/// [authKey] is sent as the login proof; [encKey] never leaves the device.
+Future<({Uint8List authKey, Uint8List encKey})> deriveMasterKeys(
   String password,
   List<int> salt,
   KdfParams kdf,
 ) async {
   final argon = await argon2id(password, salt, kdf);
-  return MasterKeys(
-    await hkdf32(argon, 'unfeudal/auth/v1'),
-    await hkdf32(argon, 'unfeudal/enc/v1'),
+  return (
+    authKey: await hkdf32(argon, 'unfeudal/auth/v1'),
+    encKey: await hkdf32(argon, 'unfeudal/enc/v1'),
   );
 }

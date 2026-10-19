@@ -74,7 +74,7 @@ class ApiInfo {
 
   /// Validated, kept as text.
   static String _version(String text) {
-    Version.parse(text);
+    canonicalVersion(text);
     return text;
   }
 }
