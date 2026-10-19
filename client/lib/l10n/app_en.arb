@@ -1219,5 +1219,14 @@
     }
   },
   "trashKept": "Kept until restored.",
-  "trashRestore": "Restore"
+  "trashRestore": "Restore",
+  "orgRetentionServer": "Server: {value}",
+  "@orgRetentionServer": {
+    "placeholders": {
+      "value": {
+        "type": "int"
+      }
+    }
+  },
+  "orgRetentionUnlimited": "Server: unlimited"
 }
