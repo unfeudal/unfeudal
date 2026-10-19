@@ -77,6 +77,11 @@ flutter:
   # the material Icons class.
   generate: true
   uses-material-design: true
+  assets:
+    - assets/fonts/Alegreya-OFL.txt
+    - assets/fonts/HankenGrotesk-OFL.txt
+    - assets/fonts/JetBrainsMono-OFL.txt
+    - assets/fonts/Phosphor-LICENSE.txt
 
   # To add assets to your application, add an assets section, like this:
   # assets:

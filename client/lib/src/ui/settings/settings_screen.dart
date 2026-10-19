@@ -17,6 +17,7 @@ import '../manage_frame.dart';
 import '../onboarding/recovery_kit_view.dart';
 import 'delete_account_screen.dart';
 import 'export_screen.dart';
+import 'licenses_screen.dart';
 import 'password_change_screen.dart';
 
 /// Appearance, language and security of this device, the synced prefs, and the account's safety code.
@@ -365,6 +366,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
           section(l.settingsServer, [
             Text(state.stored?.serverUrl.toString() ?? ''),
             Text(l.settingsVersion(clientVersion, state.serverVersion ?? '?')),
+            OutlinedButton(
+              key: const Key('settings-licenses'),
+              onPressed: () => _push(const LicensesScreen()),
+              child: Text(l.settingsLicenses),
+            ),
             Wrap(
               spacing: 8,
               children: [
