@@ -26,6 +26,7 @@ export 'src/payload/member_pin.dart';
 export 'src/payload/payload.dart';
 export 'src/payload/profile.dart';
 export 'src/payload/snippet.dart';
+export 'src/permissions/resolver.dart';
 export 'src/protocol/api_error.dart';
 export 'src/protocol/api_info.dart';
 export 'src/protocol/compat.dart';
