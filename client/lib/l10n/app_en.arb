@@ -511,5 +511,7 @@
   "termSearchNext": "Next match",
   "termSearchClose": "Close search",
   "termCopy": "Copy",
-  "termPaste": "Paste"
+  "termPaste": "Paste",
+  "settingsTerminalFont": "Terminal font",
+  "settingsTerminalFontSize": "Text size"
 }
