@@ -341,6 +341,9 @@ class SyncEngine extends ChangeNotifier {
         );
         _failures = 0;
         _pushAfter = null;
+      } on NetworkException {
+        _backOff(null); // nothing counted on the entry; the round then marks the client offline
+        rethrow;
       } on ApiException catch (x) {
         if (x.status == 401) rethrow;
         trace(
