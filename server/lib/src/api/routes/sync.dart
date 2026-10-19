@@ -5,6 +5,7 @@ import 'package:shelf/shelf.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../../config/features.dart';
+import '../../orgs/org_block.dart';
 import '../app.dart';
 import '../errors.dart';
 import '../json.dart';
@@ -33,7 +34,7 @@ Future<Response> sync(Request request) async {
   final cursor = _cursorParam(request, 'cursor');
   final orgCursor = _cursorParam(request, 'orgCursor');
   final orgsOn = deps.features.enabled(Flag.orgs);
-  final rows = await deps.db.transaction(readOnly: true, (tx) async {
+  final (rows, block) = await deps.db.transaction(readOnly: true, (tx) async {
     final counters = {
       for (final r in await tx.query('SELECT name, value FROM counters'))
         r['name']: r['value']! as int,
@@ -47,11 +48,29 @@ Future<Response> sync(Request request) async {
         extra: {'reason': 'cursor_ahead'},
       );
     }
-    // Org hook: memberships and loadOrg, UNION ALL of the org branch, org block when org_seq > orgCursor.
-    return tx.query(
-      'SELECT seq, body FROM items WHERE owner_user_id = @u AND seq > @c ORDER BY seq LIMIT 501',
-      {'u': auth.userId, 'c': cursor},
-    );
+    final personal = [
+      for (final r in await tx.query(
+        'SELECT seq, body FROM items WHERE owner_user_id = @u AND seq > @c ORDER BY seq LIMIT 501',
+        {'u': auth.userId, 'c': cursor},
+      ))
+        (seq: r['seq']! as int, body: r['body']! as String),
+    ];
+    if (!orgsOn) return (personal, null);
+    // the same rows as one UNION ALL … ORDER BY seq LIMIT 501
+    final merged = [
+      ...personal,
+      for (final r in await visibleOrgItems(
+        tx,
+        auth.userId,
+        cursor,
+        limit: 501,
+      ))
+        (seq: r.seq, body: r.body!),
+    ]..sort((a, b) => a.seq.compareTo(b.seq));
+    final block = counters['org_seq']! > orgCursor
+        ? await buildOrgBlock(tx, auth.userId)
+        : null;
+    return (merged.take(501).toList(), block);
   });
   final page = rows.take(500).toList();
   // A separate write: the snapshot above is read-only.
@@ -59,8 +78,9 @@ Future<Response> sync(Request request) async {
     (tx) => touchDevice(tx, auth.deviceId, deps.clock.now()),
   );
   return jsonResponse({
-    'items': [for (final r in page) jsonDecode(r['body']! as String)],
-    'cursor': page.isEmpty ? cursor : page.last['seq'],
+    'items': [for (final r in page) jsonDecode(r.body)],
+    'cursor': page.isEmpty ? cursor : page.last.seq,
     'more': rows.length > 500,
+    if (block != null) 'org': block.toJson(),
   });
 }
