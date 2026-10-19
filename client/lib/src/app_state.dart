@@ -553,6 +553,28 @@ class AppState extends ChangeNotifier implements SshCallbacks {
     return serverHas('recovery_kit') ? regenerateRecoveryKit(next) : null;
   }
 
+  /// The password is proved here first; this device forgets the account only after the server deleted it.
+  Future<void> deleteAccount(String password) async {
+    final bundle = _cachedBundle().bundle;
+    await _crypto.unlock(bundle, password); // WrongPassword: nothing sent
+    final currentAuthKey = (await deriveMasterKeys(
+      password,
+      bundle.salt,
+      bundle.kdf,
+    )).authKey;
+    // 409 last_owner: ApiException.orgs, nothing wiped
+    await api!.deleteAccount(currentAuthKey: currentAuthKey);
+    await biometric?.disable();
+    await lock();
+    await sessions.clear();
+    mirror?.destroy();
+    mirror = null;
+    _mirrorUser = null;
+    stored = null;
+    stage = AppStage.login;
+    notifyListeners();
+  }
+
   /// New recovery key text; the server stores the new wrap (compare-and-swap on the bundle version).
   Future<String> regenerateRecoveryKit(String password) async {
     final (:bundle, :bundleVersion) = _cachedBundle();

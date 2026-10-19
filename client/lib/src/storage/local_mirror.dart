@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:sqlite3/sqlite3.dart' hide Version;
 import 'package:unfeudal_shared/unfeudal_shared.dart';
@@ -45,7 +46,7 @@ enum KvKey {
 
 /// Local SQLite mirror of one account: confirmed server items, the outbox of local writes, and a key-value table.
 class LocalMirror {
-  LocalMirror._(this._db) {
+  LocalMirror._(this._db, [this._path]) {
     final version =
         _db.select('PRAGMA user_version').single.values.single! as int;
     if (version > _schemaVersion) {
@@ -62,7 +63,8 @@ class LocalMirror {
     }
   }
 
-  factory LocalMirror.open(String path) => LocalMirror._(sqlite3.open(path));
+  factory LocalMirror.open(String path) =>
+      LocalMirror._(sqlite3.open(path), path);
 
   factory LocalMirror.inMemory() => LocalMirror._(sqlite3.openInMemory());
 
@@ -86,6 +88,9 @@ CREATE TABLE kv (
   ];
 
   final Database _db;
+
+  /// The file of a file mirror; null in memory.
+  final String? _path;
 
   List<Item> items() => [
     for (final r in _db.select('SELECT json FROM items')) _item(r),
@@ -193,6 +198,17 @@ CREATE TABLE kv (
       _deleteKv([KvKey.cursor, KvKey.orgCursor, KvKey.orgBlock, KvKey.anchors]);
 
   void close() => _db.close();
+
+  /// Closes the mirror and deletes its file and SQLite's side files: the account's data on this device.
+  void destroy() {
+    close();
+    final path = _path;
+    if (path == null) return;
+    for (final name in [path, '$path-wal', '$path-shm', '$path-journal']) {
+      final file = File(name);
+      if (file.existsSync()) file.deleteSync();
+    }
+  }
 
   void _deleteKv(List<KvKey> keys) => _transaction(() {
     for (final k in keys) {
