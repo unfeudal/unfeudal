@@ -63,8 +63,8 @@ class OrgWriter {
     final current = id == null ? null : vault.entry(id);
     final moved = current != null && current.folderId != target.folderId;
     if ((type != 'folder' && target.folderId == null) ||
-        !_canEdit(target.orgId, target.folderId) ||
-        (moved && !_canEdit(target.orgId, current.folderId))) {
+        !canEdit(target.orgId, target.folderId) ||
+        (moved && !canEdit(target.orgId, current.folderId))) {
       throw const OrgWriteRefused(OrgWriteRefusal.noEdit);
     }
     final itemId = id ?? newId();
@@ -94,7 +94,7 @@ class OrgWriter {
     required FolderMeta meta,
   }) async {
     if (!_online()) throw const OrgWriteRefused(OrgWriteRefusal.needsServer);
-    if (!_canEdit(orgId, parentId)) {
+    if (!canEdit(orgId, parentId)) {
       throw const OrgWriteRefused(OrgWriteRefusal.noEdit);
     }
     final id = newId();
@@ -176,7 +176,8 @@ class OrgWriter {
     );
   }
 
-  bool _canEdit(String orgId, String? folderId) {
+  /// `edit` on [folderId] (the org root: a confirmed owner or admin); the UI asks it before offering a write.
+  bool canEdit(String orgId, String? folderId) {
     final block = _block();
     if (block == null) return false;
     if (folderId == null) {
@@ -201,7 +202,7 @@ class OrgWriter {
     if (current.orgId == null || current.state != EntryState.ok) {
       throw StateError('not a readable org item');
     }
-    if (!_canEdit(current.orgId!, current.folderId)) {
+    if (!canEdit(current.orgId!, current.folderId)) {
       throw const OrgWriteRefused(OrgWriteRefusal.noEdit);
     }
     final json = current.item.toJson()

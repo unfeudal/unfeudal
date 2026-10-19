@@ -4,8 +4,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:unfeudal_client/src/app_state.dart';
 import 'package:unfeudal_client/src/ui/history/trash_screen.dart';
 import 'package:unfeudal_client/src/ui/shell/home_shell.dart';
+import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../support/fakes.dart';
+import '../support/org_fixtures.dart';
 import '../support/pump_app.dart';
 import '../support/sync_harness.dart';
 
@@ -62,6 +64,54 @@ void main() {
       );
     },
   );
+
+  testWidgets('an org item is restorable only with edit on its folder', (
+    t,
+  ) async {
+    for (final (allow, enabled) in [
+      (['view'], false),
+      (['view', 'edit'], true),
+    ]) {
+      final h = SyncHarness(capabilities: ['orgs', 'sync']);
+      final s = await signedInState(t, harness: h);
+      final me = s.stored!.userId;
+      final keys = FolderKeys.generate(1), f = newId();
+      h.orgMembers[testOrgId] = {me};
+      late Item host;
+      await t.runAsync(() async {
+        final pub = h.accounts.values.first.bundle.publicKey;
+        host = h.serverPutOrg(
+          await sealOrgItem(
+            keys,
+            folderId: f,
+            meta: hostJson('org-db'),
+            deleted: true,
+          ),
+        );
+        final folder = h.serverPutOrg(
+          await sealOrgItem(keys, id: f, type: 'folder', meta: folderJson('P')),
+        );
+        h.orgBlock = orgBlock(
+          members: [memberRow(me)],
+          folderTree: [node(f)],
+          acl: [aclRow(f, me, allow: allow)],
+          wrappedKeys: [await wrappedRow(keys, f, pub)],
+          itemIds: [host.id, folder.id],
+        );
+        await s.sync!.syncNow();
+      });
+      await pumpApp(t, state: s, child: const TrashScreen());
+      await pumpReal(t);
+      expect(
+        t
+                .widget<TextButton>(find.byKey(Key('trash-restore-${host.id}')))
+                .onPressed !=
+            null,
+        enabled,
+        reason: '$allow',
+      );
+    }
+  });
 
   testWidgets('the rail opens the trash', (t) async {
     final (_, s, gone, _) = await world(t);
