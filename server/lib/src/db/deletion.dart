@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import 'dart:convert';
+
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../api/errors.dart';
@@ -145,4 +147,73 @@ Future<void> deleteUser(
   );
   await tx.execute('DELETE FROM users WHERE id = @u', p);
   await audit?.call(AuditScope.instance, 'account.deleted', [userId]);
+}
+
+/// Retention step 4: [itemId] and, for a folder, its whole subtree become tombstones in the caller's transaction
+/// ("Org folder purged" order; personal folders the same without the org tables).
+Future<void> purgeItem(Tx tx, String itemId, AuditLog audit) async {
+  Future<int> nextSeq() async =>
+      (await tx.query(
+            "UPDATE counters SET value = value + 1 WHERE name = 'items_seq' RETURNING value",
+          )).single['value']!
+          as int;
+  var seq = await nextSeq(); // first statement: sync invariant
+  final root = (await tx.query(
+    'SELECT org_id, owner_user_id, type, purged FROM items WHERE id = @i',
+    {'i': itemId},
+  )).firstOrNull;
+  if (root == null || root['purged'] == 1) return;
+  final orgId = root['org_id'] as String?;
+  final ids = [itemId];
+  final seen = {itemId};
+  for (var i = 0; i < ids.length; i++) {
+    // breadth first; the seen-set stops a stored loop
+    for (final r in await tx.query(
+      'SELECT id FROM items WHERE folder_id = @f AND purged = 0',
+      {'f': ids[i]},
+    )) {
+      if (seen.add(r['id']! as String)) ids.add(r['id']! as String);
+    }
+  }
+  for (final (n, id) in ids.indexed) {
+    if (n > 0) seq = await nextSeq();
+    final row = (await tx.query(
+      'SELECT type, folder_id, body FROM items WHERE id = @i',
+      {'i': id},
+    )).single;
+    final tomb = Item.fromJson({
+      ...jsonDecode(row['body']! as String) as Map<String, Object?>,
+      'deleted': true,
+      'purged': true,
+      'meta': null,
+      'secret': null,
+    });
+    final text = jsonEncode(tomb.toJson());
+    await tx.execute(
+      'UPDATE items SET deleted = 1, purged = 1, body = @b, size = @z, seq = @q WHERE id = @i',
+      {'b': text, 'z': utf8.encode(text).length, 'q': seq, 'i': id},
+    );
+    await tx.execute('DELETE FROM item_revisions WHERE item_id = @i', {
+      'i': id,
+    });
+    if (orgId != null && row['type'] == 'folder') {
+      for (final t in [
+        'acl_entries',
+        'folder_keys',
+        'folder_key_history',
+        'pending_rotations',
+      ]) {
+        await tx.execute('DELETE FROM $t WHERE folder_id = @f', {'f': id});
+      }
+    }
+    await audit.append(
+      tx,
+      scope: orgId == null
+          ? AuditScope.user(root['owner_user_id']! as String)
+          : AuditScope.org(orgId),
+      action: 'item.purged',
+      targetIds: [id, if (row['folder_id'] case final String f) f],
+    );
+  }
+  if (orgId != null && root['type'] == 'folder') await bumpOrgSeq(tx);
 }
