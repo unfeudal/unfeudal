@@ -76,6 +76,55 @@ void main() {
   );
 
   testWidgets(
+    'a version whose secret does not open is never restored without it',
+    (t) async {
+      final h = SyncHarness(capabilities: ['item_history', 'sync']);
+      final s = await signedInState(t, harness: h);
+      late String id;
+      await t.runAsync(() async {
+        id = await s.vault!.upsertItem(
+          type: 'identity',
+          meta: pw,
+          secret: pwSecret('old'),
+        );
+        await s.sync!.syncNow();
+        await s.vault!.upsertItem(
+          id: id,
+          type: 'identity',
+          meta: {...pw, 'name': 'root-2'},
+          secret: pwSecret('new'),
+        );
+        await s.sync!.syncNow();
+      });
+      // the old secret was sealed under a key this device no longer holds
+      final old = h.revisionsOf[id]!.single;
+      final stranger = await sealItem(
+        SymmetricCipher.newKey(),
+        id: id,
+        type: 'identity',
+        meta: pw,
+        secret: pwSecret('old'),
+      );
+      h.revisionsOf[id] = [
+        Item.fromJson({...old.toJson(), 'secret': stranger.secret!.toJson()}),
+      ];
+      await pumpApp(
+        t,
+        state: s,
+        child: ItemHistoryPanel(itemId: id),
+      );
+      await pumpReal(t);
+      await t.tap(find.byKey(const Key('history-restore-1')));
+      await t.pump();
+      await t.tap(find.byKey(const Key('confirm-yes')));
+      await pumpReal(t);
+      expect(find.byKey(const Key('history-error')), findsOneWidget);
+      await t.runAsync(() => s.sync!.syncNow());
+      expect(h.serverItem(id)!.revision, 2, reason: 'nothing written');
+    },
+  );
+
+  testWidgets(
     'secrets stay hidden without reveal; revealing shows them and reports it',
     (t) async {
       for (final caps in [
