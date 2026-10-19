@@ -556,7 +556,7 @@
   "deleteSubmit": "Supprimer définitivement",
   "deleteLastOwner": "Seul propriétaire de : {orgs}. Transmettre la propriété ou supprimer ces organisations d'abord.",
   "settingsImportSshConfig": "Importer ~/.ssh/config",
-  "importCount": "{count, plural, =1{Importer 1 hôte} other{Importer {count} hôtes}}",
+  "importCount": "Importer {count, plural, =1{1 hôte} other{{count} hôtes}}",
   "importDuplicate": "Déjà dans le coffre",
   "importPassphrase": "Phrase secrète de {file}",
   "importEmpty": "Aucun hôte trouvé dans ce fichier.",
