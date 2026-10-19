@@ -374,6 +374,7 @@ class AppState extends ChangeNotifier implements SshCallbacks {
             .length,
       ),
     );
+    await _sendLocale();
   }
 
   /// Offline: the cached bundle opens the vault; the API resumes with the stored refresh token.
@@ -712,6 +713,7 @@ class AppState extends ChangeNotifier implements SshCallbacks {
     }
     _refreshLoquet();
     notifyListeners();
+    if (next.locale != previous.locale) await _sendLocale();
     final prefs = next.toPrefs(), before = previous.toPrefs();
     final v = vault;
     if (mapEquals(prefs, before) ||
@@ -789,6 +791,19 @@ class AppState extends ChangeNotifier implements SshCallbacks {
   }
 
   String? get _displayName => vault?.profile.displayName ?? stored?.displayName;
+
+  /// The language of the security mails; best effort, retried at the next sign-in or change.
+  Future<void> _sendLocale() async {
+    try {
+      await api?.setLocale(_uiLocale ?? 'en');
+    } on NetworkException {
+      // offline
+    } on ApiException {
+      // refused: the server keeps its value
+    } on ReadOnlyException {
+      // this client may not write to this server
+    }
+  }
 
   String? get _uiLocale {
     if (settings.locale case final locale?) return locale;
