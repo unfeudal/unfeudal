@@ -197,4 +197,29 @@ void main() {
       expect(() => AccountBundle.fromJson(bad), throwsFormatException);
     }
   });
+
+  test(
+    'unlockWithUserKey rebuilds the account and keeps the public key check',
+    () async {
+      final u = await crypto.unlockWithUserKey(
+        acc.bundle,
+        acc.unlocked.userKey,
+      );
+      expect((await u.keyPair.extractPublicKey()).bytes, acc.bundle.publicKey);
+      expect(u.userKey, acc.unlocked.userKey);
+      await expectLater(
+        crypto.unlockWithUserKey(acc.bundle, SymmetricCipher.newKey()),
+        throwsA(isA<WrongPassword>()),
+      );
+      final other = await crypto.create('another horse');
+      final forged = AccountBundle.fromJson({
+        ...acc.bundle.toJson(),
+        'publicKey': b64(other.bundle.publicKey),
+      });
+      await expectLater(
+        crypto.unlockWithUserKey(forged, acc.unlocked.userKey),
+        throwsA(isA<WrongPassword>()),
+      );
+    },
+  );
 }
