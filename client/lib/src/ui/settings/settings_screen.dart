@@ -31,6 +31,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
     text: AppScope.read(context).vault?.profile.displayName,
   );
 
+  /// Shown only when the hardware, the OS and the server allow it.
+  late final Future<bool> _biometricAvailable = AppScope.read(context)
+      .biometricAvailable();
+  late Future<bool> _biometricOn =
+      AppScope.read(context).biometric?.isEnabled() ?? Future.value(false);
+
+  Future<void> _setBiometric(bool on) async {
+    final state = AppScope.read(context);
+    on ? await state.enableBiometrics() : await state.disableBiometrics();
+    if (mounted) {
+      final on = state.biometric!.isEnabled();
+      setState(() {
+        _biometricOn = on;
+      });
+    }
+  }
+
   @override
   void dispose() {
     _displayName.dispose();
@@ -282,6 +299,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ]),
           section(l.settingsSecurity, [
+            FutureBuilder(
+              future: Future.wait([_biometricAvailable, _biometricOn]),
+              builder: (context, snapshot) {
+                final [available, on] = snapshot.data ?? const [false, false];
+                if (!available) return const SizedBox.shrink();
+                return SwitchListTile(
+                  key: const Key('settings-biometric'),
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(l.settingsBiometric),
+                  subtitle: Text(l.settingsBiometricBody),
+                  value: on,
+                  onChanged: _setBiometric,
+                );
+              },
+            ),
             Wrap(
               spacing: 8,
               runSpacing: 8,

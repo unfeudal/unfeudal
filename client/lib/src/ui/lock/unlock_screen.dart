@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../../../l10n/app_localizations.dart';
@@ -32,6 +34,13 @@ class _UnlockScreenState extends State<UnlockScreen> {
   /// The key derivation takes seconds: one at a time, the button waits for it.
   bool _busy = false;
   int _failures = 0;
+
+  /// A stored biometric wrap the server still allows.
+  late final Future<bool> _biometric = _biometricEnabled();
+
+  Future<bool> _biometricEnabled() async =>
+      _state.serverHas('biometric_unlock') &&
+      (await _state.biometric?.isEnabled() ?? false);
 
   @override
   void initState() {
@@ -137,6 +146,20 @@ class _UnlockScreenState extends State<UnlockScreen> {
               child: BusyLabel(busy: _busy, label: l.unlockSubmit),
             ),
             links: [
+              FutureBuilder(
+                future: _biometric,
+                builder: (context, enabled) => enabled.data ?? false
+                    ? TextButton(
+                        key: const Key('unlock-biometric'),
+                        onPressed: _busy ? null : _state.unlockWithBiometrics,
+                        child: Text(
+                          Platform.isMacOS
+                              ? l.unlockBiometricMac
+                              : l.unlockBiometricWindows,
+                        ),
+                      )
+                    : const SizedBox.shrink(),
+              ),
               TextButton(
                 onPressed: _state.signOut,
                 child: Text(l.unlockRelogin),
