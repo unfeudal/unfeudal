@@ -196,6 +196,14 @@ Handler buildHandler(AppDeps deps) {
     ..put(
       '/folders/<folder>/acl',
       (Request r, String folder) => _org((r) => putAcl(r, folder))(r),
+    )
+    ..put(
+      '/folders/<folder>/keys',
+      (Request r, String folder) => _org((r) => putFolderKeys(r, folder))(r),
+    )
+    ..post(
+      '/folders/<folder>/rotation/done',
+      (Request r, String folder) => _org((r) => rotationDone(r, folder))(r),
     );
   final root = Router(notFoundHandler: _notFound)
     ..get('/healthz', healthz)
