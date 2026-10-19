@@ -608,5 +608,13 @@
       }
     }
   },
-  "loquetReasonStaleSync": "No sync for over 7 days"
+  "loquetReasonStaleSync": "No sync for over 7 days",
+  "loquetBubbleLabel": "Loquet: {line}",
+  "@loquetBubbleLabel": {
+    "placeholders": {
+      "line": {
+        "type": "String"
+      }
+    }
+  }
 }
