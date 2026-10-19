@@ -105,6 +105,9 @@ AppDeps depsOf(Request request) => request.context[_depsKey]! as AppDeps;
 Never _notFound(Request _) =>
     throw ApiError(ApiErrorCode.notFound, 'Not found.');
 
+/// An org route: signed in, then the `orgs` flag.
+Handler _org(Handler inner) => requireAuth(requireFeature(Flag.orgs)(inner));
+
 /// withDeps → requestLog → securityHeaders → errorMapper → routes.
 Handler buildHandler(AppDeps deps) {
   final api = Router(notFoundHandler: _notFound)
@@ -132,17 +135,29 @@ Handler buildHandler(AppDeps deps) {
       (Request r, String id) => requireAuth((r) => putItem(r, id))(r),
     )
     ..get('/sync', requireAuth(sync))
-    ..post('/orgs', requireAuth(requireFeature(Flag.orgs)(createOrg)))
+    ..post('/orgs', _org(createOrg))
     ..put(
       '/orgs/<org>',
-      (Request r, String org) =>
-          requireAuth(requireFeature(Flag.orgs)((r) => updateOrg(r, org)))(r),
+      (Request r, String org) => _org((r) => updateOrg(r, org))(r),
     )
     ..delete(
       '/orgs/<org>',
-      (Request r, String org) => requireAuth(
-        requireFeature(Flag.orgs)((r) => deleteOrgRoute(r, org)),
-      )(r),
+      (Request r, String org) => _org((r) => deleteOrgRoute(r, org))(r),
+    )
+    ..put(
+      '/orgs/<org>/members/<user>',
+      (Request r, String org, String user) =>
+          _org((r) => setRole(r, org, user))(r),
+    )
+    ..delete(
+      '/orgs/<org>/members/<user>',
+      (Request r, String org, String user) =>
+          _org((r) => removeMemberRoute(r, org, user))(r),
+    )
+    ..post(
+      '/orgs/<org>/members/<user>/confirm',
+      (Request r, String org, String user) =>
+          _org((r) => confirmMember(r, org, user))(r),
     );
   final root = Router(notFoundHandler: _notFound)
     ..get('/healthz', healthz)
