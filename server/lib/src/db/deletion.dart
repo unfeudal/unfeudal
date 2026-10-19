@@ -2,6 +2,7 @@
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../api/errors.dart';
+import '../audit/audit_log.dart';
 import '../orgs/org_access.dart';
 import '../orgs/rotations.dart';
 import 'db.dart';
@@ -83,7 +84,12 @@ Future<void> deleteOrg(Tx tx, String orgId) async {
 }
 
 /// "User deleted": refusals, every org loaded before any delete, member removal per org, personal data.
-Future<void> deleteUser(Tx tx, String userId, {required String actor}) async {
+Future<void> deleteUser(
+  Tx tx,
+  String userId, {
+  required String actor,
+  AuditWrite? audit,
+}) async {
   final user = (await tx.query(
     'SELECT email, is_instance_owner FROM users WHERE id = @u',
     {'u': userId},
@@ -108,7 +114,7 @@ Future<void> deleteUser(Tx tx, String userId, {required String actor}) async {
     for (final o in orgIds) o: (await loadOrg(tx, o))!,
   }; // all loaded before any delete
   for (final MapEntry(key: orgId, value: org) in snapshots.entries) {
-    // Audit hook: member.removed [userId] (org scope), before the removal
+    await audit?.call(AuditScope.org(orgId), 'member.removed', [userId]);
     await removeMember(tx, orgId, userId, 'user_deleted', before: org);
   }
   final p = {'u': userId};
@@ -138,5 +144,5 @@ Future<void> deleteUser(Tx tx, String userId, {required String actor}) async {
     },
   );
   await tx.execute('DELETE FROM users WHERE id = @u', p);
-  // Audit hook: account.deleted [userId] (instance scope, actor)
+  await audit?.call(AuditScope.instance, 'account.deleted', [userId]);
 }

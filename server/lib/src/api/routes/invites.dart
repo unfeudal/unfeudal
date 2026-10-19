@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:shelf/shelf.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
+import '../../audit/audit_log.dart';
 import '../../auth/rate_limit.dart';
 import '../../auth/secret_hash.dart';
 import '../../auth/tokens.dart';
@@ -52,17 +53,20 @@ Future<Response> createOrgInvite(Request request, String org) async {
     ); // 3.
   }
   await deps.limiter.hit([inviteCreateKey(auth.userId)]); // 4.
-  final row = await deps.db.transaction(
-    (tx) => createInviteRow(
+  final row = await deps.db.transaction((tx) async {
+    final row = await createInviteRow(
       tx,
       deps,
       email: email,
       orgId: org,
       role: role.name,
       createdBy: auth.userId,
-    ),
-  );
-  // Audit hook: invite.created [inviteId]
+    );
+    await auditWriter(request, tx)(AuditScope.org(org), 'invite.created', [
+      row.id,
+    ]);
+    return row;
+  });
   final invite = await inviteBody(deps, row, email: email, role: role.name);
   final mailSent = await inviteMailSent(
     deps,
@@ -144,7 +148,11 @@ Future<Response> revokeInvite(Request request, String id) async {
         't': iso(deps.clock.now()),
         'i': id,
       });
-      // Audit hook: invite.revoked [inviteId] (org scope, or instance scope)
+      await auditWriter(request, tx)(
+        orgId == null ? AuditScope.instance : AuditScope.org(orgId),
+        'invite.revoked',
+        [id],
+      );
     }
   });
   return noContent();
@@ -268,8 +276,7 @@ Future<Response> acceptInvite(Request request) async {
       );
       await bumpOrgSeq(tx);
     }
-    // Audit hook: invite.accepted [inviteId, userId] (org or instance scope), then device.added after the session
-    return createSession(
+    final session = await createSession(
       deps,
       tx,
       userId: userId,
@@ -278,6 +285,19 @@ Future<Response> acceptInvite(Request request) async {
       bundleVersion: 0,
       device: device,
     );
+    // after the session exists: the new user and device are the actors
+    final audit = auditWriter(
+      request,
+      tx,
+      actor: (user: userId, device: session.deviceId),
+    );
+    await audit(
+      orgId == null ? AuditScope.instance : AuditScope.org(orgId),
+      'invite.accepted',
+      [again['id']! as String, userId],
+    );
+    await audit(AuditScope.user(userId), 'device.added', [session.deviceId]);
+    return session;
   });
   await deps.limiter.refund(inviteIpKey(net));
   return jsonResponse(session.toJson(), status: 201);
@@ -319,7 +339,10 @@ Future<Response> joinInvite(Request request) async {
       );
     }
     await bumpOrgSeq(tx);
-    // Audit hook: invite.accepted [inviteId, userId] (org scope)
+    await auditWriter(request, tx)(AuditScope.org(orgId), 'invite.accepted', [
+      inv['id']! as String,
+      auth.userId,
+    ]);
     return orgId;
   });
   await deps.limiter.refund(inviteIpKey(net));
