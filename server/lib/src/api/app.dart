@@ -24,6 +24,7 @@ import 'routes/admin.dart';
 import 'routes/audit.dart';
 import 'routes/auth.dart';
 import 'routes/devices.dart';
+import 'routes/events.dart';
 import 'routes/folders.dart';
 import 'routes/health.dart';
 import 'routes/info.dart';
@@ -239,6 +240,14 @@ Handler buildHandler(AppDeps deps) {
     ..get(
       '/orgs/<id>/settings/retention',
       (Request r, String id) => _org((r) => getRetention(r, id))(r),
+    )
+    ..post(
+      '/events/ssh',
+      requireAuth(requireFeature(Flag.clientEvents)(sshEvent)),
+    )
+    ..post(
+      '/events/reveal',
+      requireAuth(requireFeature(Flag.clientEvents)(revealEvent)),
     );
   final root = Router(notFoundHandler: _notFound)
     ..get('/healthz', healthz)
