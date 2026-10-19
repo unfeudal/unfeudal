@@ -1190,5 +1190,34 @@
         "type": "String"
       }
     }
-  }
+  },
+  "trashTitle": "Trash",
+  "railTrash": "Trash",
+  "trashEmpty": "The trash is empty.",
+  "trashDeletedOn": "Moved to trash on {date}",
+  "@trashDeletedOn": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "trashPurgeOn": "Deleted for good on {date}",
+  "@trashPurgeOn": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "trashPurgeBy": "Deleted for good by {date} at the latest",
+  "@trashPurgeBy": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "trashKept": "Kept until restored.",
+  "trashRestore": "Restore"
 }
