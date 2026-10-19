@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
+import 'package:cryptography/helpers.dart' show constantTimeBytesEquality;
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../api/errors.dart';
@@ -10,7 +11,6 @@ import '../api/session.dart';
 import '../db/db.dart';
 import '../util/clock.dart';
 import '../util/random.dart';
-import 'secret_hash.dart';
 
 List<int> _hmac(List<int> key, String msg) =>
     Hmac(sha256, key).convert(utf8.encode(msg)).bytes;
@@ -44,7 +44,7 @@ class AccessTokens {
     final parts = token.split('.');
     if (parts.length != 2) return null;
     try {
-      if (!constantTimeEquals(
+      if (!constantTimeBytesEquality.equals(
         _hmac(_secret, 'access:${parts[0]}'),
         unb64(parts[1]),
       )) {

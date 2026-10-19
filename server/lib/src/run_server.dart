@@ -2,6 +2,7 @@
 import 'dart:io';
 
 import 'package:shelf/shelf_io.dart' as shelf_io;
+import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import 'api/app.dart';
 import 'config/config.dart';
@@ -10,7 +11,6 @@ import 'db/maintenance.dart';
 import 'db/migrate.dart';
 import 'db/postgres_db.dart';
 import 'log/logger.dart';
-import 'util/random.dart';
 
 class RunningServer {
   RunningServer(this.port, this._close);

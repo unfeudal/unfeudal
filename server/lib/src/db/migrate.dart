@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import 'db.dart';
+import 'maintenance.dart';
 import 'migrations.dart';
 
 /// The database was migrated by a newer server: refuse to start rather than run against an unknown schema.
@@ -35,11 +36,7 @@ Future<void> migrate(Db db, [List<Migration> all = migrations]) async {
       for (final s in m.statements) {
         await tx.execute(s);
       }
-      await tx.execute(
-        "INSERT INTO meta (key, value) VALUES ('schema_version', @v) "
-        'ON CONFLICT (key) DO UPDATE SET value = excluded.value',
-        {'v': '${m.version}'},
-      );
+      await setMeta(tx, 'schema_version', '${m.version}');
     });
   }
 }
