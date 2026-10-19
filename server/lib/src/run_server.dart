@@ -5,6 +5,7 @@ import 'package:shelf/shelf_io.dart' as shelf_io;
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import 'api/app.dart';
+import 'audit/retention.dart';
 import 'config/config.dart';
 import 'db/db.dart';
 import 'db/maintenance.dart';
@@ -48,7 +49,9 @@ Future<RunningServer> runServer(
       config.listen.port,
     );
     log.info('listening', {'host': config.listen.host, 'port': server.port});
+    final retention = startRetentionTimer(deps);
     return RunningServer(server.port, () async {
+      retention.cancel();
       // ponytail: force close; drain in-flight requests on SIGTERM when it matters.
       await server.close(force: true);
       await db.close();

@@ -86,4 +86,17 @@ void main() {
       throwsA(isA<SchemaTooNew>()),
     );
   });
+
+  test('the retention job runs at start', () async {
+    final lines = <String>[];
+    final server = await runServer(
+      config,
+      log: Logger(LogLevel.info, lines.add),
+    );
+    await Future.doWhile(() async {
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      return !lines.any((l) => l.contains('retention done'));
+    }).timeout(const Duration(seconds: 10));
+    await server.close();
+  });
 }

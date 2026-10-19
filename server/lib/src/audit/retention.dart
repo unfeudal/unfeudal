@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:unfeudal_shared/unfeudal_shared.dart';
@@ -28,6 +29,16 @@ Future<Retention> retentionFor(Tx tx, Config config, String? orgId) async {
     auditDays: value(config.auditRetentionDays, 'auditDays'),
     maxVersions: value(config.itemHistoryMaxVersions, 'maxVersions'),
     trashDays: value(config.trashRetentionDays, 'trashDays'),
+  );
+}
+
+/// Runs the job now, then every 24 h until the returned timer is cancelled.
+Timer startRetentionTimer(AppDeps deps) {
+  final job = RetentionJob(deps);
+  unawaited(job.runOnce());
+  return Timer.periodic(
+    const Duration(hours: 24),
+    (_) => unawaited(job.runOnce()),
   );
 }
 
