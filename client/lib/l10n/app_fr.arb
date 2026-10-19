@@ -568,5 +568,9 @@
   "importProblemJumpUnresolved": "hôte de rebond absent du fichier, ignoré",
   "importProblemJumpLoop": "boucle d'hôtes de rebond, ignorée",
   "importProblemKeyUnreadable": "fichier de clé illisible, ignoré",
-  "importDone": "{count, plural, =1{1 hôte importé.} other{{count} hôtes importés.}}"
+  "importDone": "{count, plural, =1{1 hôte importé.} other{{count} hôtes importés.}}",
+  "settingsLicenses": "Licences",
+  "licenseClient": "Cette application est un logiciel libre sous licence Apache 2.0.",
+  "licenseServer": "Le serveur est un logiciel libre sous licence GNU AGPL 3.0 ou ultérieure. Son code source :",
+  "licensesAll": "Toutes les licences"
 }

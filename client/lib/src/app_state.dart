@@ -250,6 +250,9 @@ class AppState extends ChangeNotifier implements SshCallbacks {
   /// The effective trash retention in days (0 = never purged); null before the server said.
   int? get trashDays => (_lastInfo ?? _storedInfo)?.trashDays;
 
+  /// Where the server publishes its source (AGPL); null before the server said.
+  String? get serverSource => (_lastInfo ?? _storedInfo)?.source;
+
   /// The KDF this client uses for new wraps (and vault exports).
   KdfParams get kdf => _crypto.kdf;
 

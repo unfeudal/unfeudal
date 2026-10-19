@@ -1327,5 +1327,9 @@
         "type": "int"
       }
     }
-  }
+  },
+  "settingsLicenses": "Licences",
+  "licenseClient": "This app is free software under the Apache License 2.0.",
+  "licenseServer": "The server is free software under the GNU AGPL 3.0 or later. Its source:",
+  "licensesAll": "Every licence"
 }
