@@ -21,6 +21,7 @@ import 'middleware.dart';
 import 'routes/account.dart';
 import 'routes/auth.dart';
 import 'routes/devices.dart';
+import 'routes/folders.dart';
 import 'routes/health.dart';
 import 'routes/info.dart';
 import 'routes/invites.dart';
@@ -191,6 +192,10 @@ Handler buildHandler(AppDeps deps) {
       '/orgs/<org>/teams/<team>',
       (Request r, String org, String team) =>
           _team((r) => deleteTeamRoute(r, org, team))(r),
+    )
+    ..put(
+      '/folders/<folder>/acl',
+      (Request r, String folder) => _org((r) => putAcl(r, folder))(r),
     );
   final root = Router(notFoundHandler: _notFound)
     ..get('/healthz', healthz)
