@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
+import 'org_writer.dart';
 import 'vault.dart';
 
-/// Synced snippets of the vault, personal or org alike.
+/// Synced snippets of the vault, personal or org alike; org ones are written through [writer].
 class SnippetStore {
-  SnippetStore(this.vault);
+  SnippetStore(this.vault, {this.writer});
 
   final Vault vault;
+  final OrgWriter? writer;
 
   /// Readable snippets matching [query] (name, command or tag, any case), sorted by name; one that does not
   /// parse is skipped.
@@ -34,16 +36,26 @@ class SnippetStore {
     );
   }
 
-  /// Checks the limits first; an edit stays in its folder.
-  Future<String> save(SnippetMeta meta, {String? id}) async {
-    final parsed = SnippetMeta.fromJson(meta.toJson());
+  /// Checks the limits first; an edit stays where it is, a new snippet goes to [target] (personal when null).
+  Future<String> save(SnippetMeta meta, {String? id, OrgTarget? target}) async {
+    final parsed = SnippetMeta.fromJson(meta.toJson()).toJson();
+    final current = id == null ? null : vault.entry(id);
+    final org = current == null
+        ? target
+        : current.orgId == null
+        ? null
+        : OrgTarget(current.orgId!, current.folderId);
+    if (org != null) {
+      return writer!.upsert(type: 'snippet', id: id, target: org, meta: parsed);
+    }
     return vault.upsertItem(
       type: 'snippet',
       id: id,
-      folderId: id == null ? null : vault.entry(id)?.folderId,
-      meta: parsed.toJson(),
+      folderId: current?.folderId,
+      meta: parsed,
     );
   }
 
-  Future<void> delete(String id) => vault.trashItem(id);
+  Future<void> delete(String id) =>
+      vault.entry(id)?.orgId == null ? vault.trashItem(id) : writer!.trash(id);
 }

@@ -11,7 +11,11 @@ import '../../design/seal.dart';
 import '../../design/tokens.dart';
 import '../../events/app_events.dart';
 import '../../terminal/snippet_insertion.dart';
+import '../../vault/org_writer.dart';
 import '../../vault/snippet_store.dart';
+import '../../vault/vault.dart';
+import '../describe_error.dart';
+import '../history/item_history_panel.dart';
 import '../hosts/editor_frame.dart';
 import '../terminal/multiline_dialog.dart';
 
@@ -39,7 +43,7 @@ class _SnippetsPanelState extends State<SnippetsPanel> {
     final l = AppLocalizations.of(context);
     final state = AppScope.of(context);
     final colors = UfColors.of(context);
-    final store = SnippetStore(state.vault!);
+    final store = SnippetStore(state.vault!, writer: state.orgs?.writer);
     final readOnly = state.sync?.readOnly ?? true;
     final tab = state.tabs.isEmpty
         ? null
@@ -81,45 +85,47 @@ class _SnippetsPanelState extends State<SnippetsPanel> {
         if (snippets.isEmpty && _query.text.isEmpty)
           Text(l.snippetsEmpty, style: TextStyle(color: colors.muted)),
         for (final (:id, :meta) in snippets)
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            spacing: 2,
-            children: [
-              Text(meta.name, style: TextStyle(color: colors.text)),
-              if (meta.tags.isNotEmpty)
+          if (!readOnly && canEditEntry(state, state.vault!.entry(id)!)
+              case final editable)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              spacing: 2,
+              children: [
+                Text(meta.name, style: TextStyle(color: colors.text)),
+                if (meta.tags.isNotEmpty)
+                  Text(
+                    meta.tags.join(', '),
+                    style: small.copyWith(color: colors.muted),
+                  ),
                 Text(
-                  meta.tags.join(', '),
-                  style: small.copyWith(color: colors.muted),
+                  meta.command.trimLeft().split('\n').first,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: monoStyle.copyWith(fontSize: 12, color: colors.muted),
                 ),
-              Text(
-                meta.command.trimLeft().split('\n').first,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: monoStyle.copyWith(fontSize: 12, color: colors.muted),
-              ),
-              Row(
-                children: [
-                  TextButton(
-                    key: Key('snippet-insert-$id'),
-                    onPressed: canInsert ? () => insert(id, meta) : null,
-                    child: Text(l.snippetInsert),
-                  ),
-                  TextButton(
-                    key: Key('snippet-edit-$id'),
-                    onPressed: readOnly
-                        ? null
-                        : () => _edit(context, store, id: id, meta: meta),
-                    child: Text(l.snippetEdit),
-                  ),
-                  TextButton(
-                    key: Key('snippet-delete-$id'),
-                    onPressed: readOnly ? null : () => delete(id, meta),
-                    child: Text(l.snippetDelete),
-                  ),
-                ],
-              ),
-            ],
-          ),
+                Row(
+                  children: [
+                    TextButton(
+                      key: Key('snippet-insert-$id'),
+                      onPressed: canInsert ? () => insert(id, meta) : null,
+                      child: Text(l.snippetInsert),
+                    ),
+                    TextButton(
+                      key: Key('snippet-edit-$id'),
+                      onPressed: editable
+                          ? () => _edit(context, store, id: id, meta: meta)
+                          : null,
+                      child: Text(l.snippetEdit),
+                    ),
+                    TextButton(
+                      key: Key('snippet-delete-$id'),
+                      onPressed: editable ? () => delete(id, meta) : null,
+                      child: Text(l.snippetDelete),
+                    ),
+                  ],
+                ),
+              ],
+            ),
         Align(
           alignment: Alignment.centerLeft,
           child: TextButton(
@@ -165,6 +171,9 @@ class _SnippetEditorState extends State<_SnippetEditor> {
   );
   final _problems = <String, String>{};
 
+  /// A new snippet's org folder; null keeps it personal.
+  String? _folderId;
+
   @override
   void dispose() {
     for (final c in [_name, _command, _tags]) {
@@ -191,16 +200,33 @@ class _SnippetEditorState extends State<_SnippetEditor> {
           extra: widget.meta?.extra ?? const {},
         ),
         id: widget.id,
+        target: switch (_folderId) {
+          final folder? => OrgTarget(
+            widget.store.vault.entry(folder)!.orgId!,
+            folder,
+          ),
+          null => null,
+        },
       );
       if (mounted) Navigator.pop(context);
     } on FormatException {
       setState(() => _problems['name'] = l.fieldInvalid);
+    } on Exception catch (e) {
+      setState(() => _problems['name'] = describeError(l, e));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
+    final writer = widget.store.writer;
+    // where a new snippet may go: org folders the user can edit
+    final folders = widget.id != null || writer == null
+        ? const <VaultEntry>[]
+        : [
+            for (final e in widget.store.vault.ofKind(ItemKind.folder))
+              if (e.orgId != null && writer.canEdit(e.orgId!, e.id)) e,
+          ];
     return UfDialog(
       width: 480,
       title: widget.id == null ? l.snippetNew : l.snippetEdit,
@@ -233,6 +259,15 @@ class _SnippetEditorState extends State<_SnippetEditor> {
           label: l.snippetTags,
           child: TextField(key: const Key('snippet-tags'), controller: _tags),
         ),
+        if (folders.isNotEmpty)
+          entryPicker(
+            key: 'snippet-location',
+            label: l.snippetLocation,
+            none: l.snippetPersonal,
+            entries: folders,
+            value: _folderId,
+            onChanged: (v) => setState(() => _folderId = v),
+          ),
       ],
     );
   }
