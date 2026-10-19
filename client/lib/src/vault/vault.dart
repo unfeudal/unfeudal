@@ -424,6 +424,7 @@ class Vault extends ChangeNotifier {
     }; // the outbox overlays the server row
     final next = <String, VaultEntry>{};
     for (final item in rows.values) {
+      if (_key == null) return; // locked while this round ran
       if (item.purged || (item.scope == ItemScope.org && keyring == null)) {
         continue;
       }
