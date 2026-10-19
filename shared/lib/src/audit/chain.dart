@@ -1,0 +1,61 @@
+// SPDX-License-Identifier: Apache-2.0
+import 'dart:convert';
+
+import 'package:crypto/crypto.dart';
+
+import 'audit_event.dart';
+
+const genesisHash =
+    '0000000000000000000000000000000000000000000000000000000000000000';
+
+/// Keys sorted at every level, no spaces (jsonEncode's escaping); lists keep their order.
+String canonicalJson(Object? value) => jsonEncode(_sorted(value));
+
+Object? _sorted(Object? v) => switch (v) {
+  Map() => {
+    for (final k in v.keys.map((k) => k as String).toList()..sort())
+      k: _sorted(v[k]),
+  },
+  List() => [for (final x in v) _sorted(x)],
+  _ => v,
+};
+
+String auditHash(String prevHash, Map<String, Object?> fields) =>
+    sha256.convert(utf8.encode(prevHash + canonicalJson(fields))).toString();
+
+class ChainReport {
+  const ChainReport({this.brokenAt});
+  final int? brokenAt; // first seq that does not verify
+  bool get ok => brokenAt == null;
+}
+
+/// One whole chain (one scope). Starts at genesis (seq 1) or right after a checkpoint `[seq:N, hash:H]` of the
+/// same list with N = first seq − 1 and H = its prevHash; then contiguous seqs, linked hashes, recomputed hashes.
+ChainReport verifyChain(List<AuditEvent> events) {
+  if (events.isEmpty) return const ChainReport();
+  final sorted = [...events]..sort((a, b) => a.seq.compareTo(b.seq));
+  final first = sorted.first;
+  final anchored = first.seq == 1
+      ? first.prevHash == genesisHash
+      : sorted.any(
+          (e) =>
+              e.scope == first.scope &&
+              e.action == 'audit.checkpoint' &&
+              e.targetIds.length == 2 &&
+              e.targetIds[0] == 'seq:${first.seq - 1}' &&
+              e.targetIds[1] == 'hash:${first.prevHash}',
+        );
+  if (!anchored) return ChainReport(brokenAt: first.seq);
+  AuditEvent? prev;
+  for (final e in sorted) {
+    final linked =
+        prev == null || (e.seq == prev.seq + 1 && e.prevHash == prev.hash);
+    if (e.scope != first.scope ||
+        !linked ||
+        e.hash != auditHash(e.prevHash, e.hashFields())) {
+      return ChainReport(brokenAt: e.seq);
+    }
+    prev = e;
+  }
+  return const ChainReport();
+}
