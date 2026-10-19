@@ -8,6 +8,7 @@ import 'package:xterm2/xterm.dart';
 import '../debug_trace.dart';
 import '../design/seal.dart';
 import '../ssh/jump_connector.dart';
+import '../ssh/port_forwarder.dart';
 import '../ssh/ssh_connector.dart';
 
 /// One terminal tab. What the shell prints only goes to the terminal: never stored or inspected.
@@ -23,6 +24,9 @@ class TerminalSession extends ChangeNotifier {
 
   /// The hops and the target behind [_shell].
   JumpConnection? connection;
+
+  /// Port forwards over the target hop.
+  PortForwarder? forwarder;
   SshShell? _shell;
   final _subscriptions = <StreamSubscription<String>>[];
 
@@ -63,6 +67,7 @@ class TerminalSession extends ChangeNotifier {
       await s.cancel();
     }
     await _shell?.close();
+    await forwarder?.stopAll();
     await connection?.close();
   }
 }

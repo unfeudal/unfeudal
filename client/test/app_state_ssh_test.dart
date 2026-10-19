@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:unfeudal_client/src/app_state.dart';
 import 'package:unfeudal_client/src/design/seal.dart';
 import 'package:unfeudal_client/src/events/app_events.dart';
 import 'package:unfeudal_client/src/ssh/jump_connector.dart';
+import 'package:unfeudal_client/src/ssh/port_forwarder.dart';
 import 'package:unfeudal_client/src/ssh/ssh_connector.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
@@ -150,5 +153,83 @@ void main() {
       await s.closeTab(tab);
       expect(ssh.hops.map((h) => h.closed), [true, true]);
     });
+  });
+
+  group('forwards', () {
+    Map<String, Object?> f(int port, String remote, {bool auto = false}) => {
+      'localPort': port,
+      'remoteHost': remote,
+      'remotePort': 5432,
+      'autoStart': auto,
+    };
+
+    test('autoStart forwards start with the session over the target hop; the others wait', () async {
+      final (s, ssh, _) = await home();
+      final port1 = await freePort(), port2 = await freePort();
+      final web = await host(
+        s,
+        'web',
+        forwards: [f(port1, 'db.internal', auto: true), f(port2, 'cache')],
+      );
+      final events = <AppEvent>[];
+      s.events.listen(events.add);
+      final tab = await s.connect(web);
+      expect(tab.forwarder!.active.keys, [port1]);
+      final client = await Socket.connect(InternetAddress.loopbackIPv4, port1);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(ssh.hops.single.forwarded, ['db.internal:5432']);
+      client.destroy();
+      await s.startForward(tab, s.vault!.hostLookup(web)!.meta.forwards[1]);
+      expect(tab.forwarder!.active.keys, unorderedEquals([port1, port2]));
+      await s.stopForward(tab, port1);
+      await Future<void>.delayed(Duration.zero);
+      expect(
+        events.whereType<ForwardStarted>().map((e) => e.forward.localPort),
+        [port1, port2],
+      );
+      expect(events.whereType<ForwardStopped>().map((e) => e.localPort), [
+        port1,
+      ]);
+    });
+
+    test('a port in use: ForwardFailed, the session stays connected', () async {
+      final (s, _, _) = await home();
+      final blocker = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+      final events = <AppEvent>[];
+      s.events.listen(events.add);
+      final tab = await s.connect(
+        await host(s, 'web', forwards: [f(blocker.port, 'db', auto: true)]),
+      );
+      expect(tab.state, SealState.connected);
+      expect(tab.forwarder!.failed[blocker.port], isA<PortInUse>());
+      await Future<void>.delayed(Duration.zero);
+      expect(events.whereType<ForwardFailed>().single.localPort, blocker.port);
+      await blocker.close();
+    });
+
+    test(
+      'closing the tab and locking stop every forward and report it',
+      () async {
+        final (s, _, _) = await home();
+        final p = await freePort();
+        final web = await host(s, 'web', forwards: [f(p, 'db', auto: true)]);
+        final events = <AppEvent>[];
+        s.events.listen(events.add);
+        await s.closeTab(await s.connect(web));
+        await Future<void>.delayed(Duration.zero);
+        expect(events.whereType<ForwardStopped>().single.localPort, p);
+        await (await ServerSocket.bind(
+          InternetAddress.loopbackIPv4,
+          p,
+        )).close();
+        final again = await s.connect(web);
+        await s.lock();
+        expect(again.forwarder!.active, isEmpty);
+        await (await ServerSocket.bind(
+          InternetAddress.loopbackIPv4,
+          p,
+        )).close();
+      },
+    );
   });
 }
