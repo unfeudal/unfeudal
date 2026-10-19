@@ -195,6 +195,16 @@ void main() {
     );
   });
 
+  test('wrong password → SshAuthFailed', () async {
+    await expectLater(
+      SshConnector().connect(
+        target(),
+        Recorder(pinned: serverPin, password: 'wrong-password'),
+      ),
+      throwsA(isA<SshAuthFailed>()),
+    );
+  });
+
   test('key auth with the generated Ed25519 identity', () async {
     final identity = IdentitySecret(
       kind: IdentityKind.privateKey,

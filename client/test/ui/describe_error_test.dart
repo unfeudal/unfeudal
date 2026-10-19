@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: Apache-2.0
-import 'package:dartssh2/dartssh2.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:unfeudal_client/l10n/app_localizations.dart';
@@ -97,7 +96,8 @@ void main() {
       d(const HostKeyRejected(HostKeyDecision.unknown)),
       l.errorHostKeyUnknown,
     );
-    expect(d(SSHAuthFailError('no')), l.errorSshAuth);
+    expect(d(const SshAuthFailed()), l.errorSshAuth);
+    expect(d(const SshConnectionFailed()), l.errorSshConnection);
     expect(d(const MissingUser()), l.errorMissingUser);
     expect(d(const InvalidKey()), l.errorInvalidKey);
     expect(d(const MirrorTooNew(2)), l.errorMirrorTooNew);

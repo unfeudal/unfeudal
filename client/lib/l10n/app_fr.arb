@@ -39,6 +39,7 @@
   "errorHostKeyChanged": "La clé de l'hôte a changé. Connexion bloquée tant qu'elle n'est pas vérifiée.",
   "errorHostKeyUnknown": "Clé d'hôte non confirmée. Pas de connexion.",
   "errorSshAuth": "L'hôte a refusé les identifiants.",
+  "errorSshConnection": "La connexion SSH a échoué. Vérifier l'adresse, le port et que l'hôte est démarré.",
   "errorMissingUser": "Aucun utilisateur défini pour cet hôte ou ses dossiers.",
   "errorInvalidKey": "Clé illisible ou phrase secrète incorrecte. Les clés PuTTY ne sont pas prises en charge.",
   "errorMirrorTooNew": "Données locales écrites par une version plus récente. Mettre l'application à jour.",

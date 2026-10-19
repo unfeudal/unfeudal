@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: Apache-2.0
-import 'package:dartssh2/dartssh2.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../../l10n/app_localizations.dart';
@@ -25,7 +24,8 @@ String describeError(AppLocalizations l, Object e) => switch (e) {
   FormatException() => l.errorProtocol,
   HostKeyRejected(decision: HostKeyDecision.changed) => l.errorHostKeyChanged,
   HostKeyRejected() => l.errorHostKeyUnknown,
-  SSHAuthError() => l.errorSshAuth,
+  SshAuthFailed() => l.errorSshAuth,
+  SshConnectionFailed() => l.errorSshConnection,
   MissingUser() => l.errorMissingUser,
   InvalidKey() => l.errorInvalidKey,
   MirrorTooNew() => l.errorMirrorTooNew,

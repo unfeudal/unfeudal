@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
+import 'dart:async';
+import 'dart:typed_data';
 
+import 'package:dartssh2/dartssh2.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:unfeudal_client/src/ssh/ssh_connector.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
@@ -40,6 +43,22 @@ class Recorder implements SshCallbacks {
     String instruction,
     List<SshPrompt> prompts,
   ) async => null;
+}
+
+/// A server that hangs up before saying anything.
+class ClosedSocket implements SSHSocket {
+  @override
+  Stream<Uint8List> get stream => const Stream.empty();
+  @override
+  StreamSink<List<int>> get sink => StreamController<List<int>>().sink;
+  @override
+  Future<void> get done async {}
+  @override
+  Future<void> close() async {}
+  @override
+  void destroy() {}
+  @override
+  Future<void> flush() async {}
 }
 
 Future<bool> verify(
@@ -103,6 +122,26 @@ void main() {
       r.answer = true;
       expect(await verify(r, c: 'B'), isTrue);
       expect(r.pins.single, endsWith('B' * 43));
+    },
+  );
+
+  test(
+    'a connection closed before authentication throws SshConnectionFailed',
+    () async {
+      final connector = SshConnector(
+        openSocket: (_, _) async => ClosedSocket(),
+      );
+      final target = ConnectTarget(
+        hostId: host,
+        hostName: 'web',
+        address: 'web',
+        port: 22,
+        user: 'root',
+      );
+      await expectLater(
+        connector.connect(target, Recorder()),
+        throwsA(isA<SshConnectionFailed>()),
+      );
     },
   );
 
