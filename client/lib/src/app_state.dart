@@ -440,6 +440,41 @@ class AppState extends ChangeNotifier implements SshCallbacks {
   }
 
   /// New recovery key text; the server stores the new wrap (compare-and-swap on the bundle version).
+  /// The current password is proved locally before anything is sent; the userKey stays the same.
+  Future<void> changeMasterPassword(String current, String next) async {
+    final (:bundle, :bundleVersion) = _cachedBundle();
+    final unlocked = await _crypto.unlock(
+      bundle,
+      current,
+    ); // WrongPassword: nothing sent
+    final changed = await _crypto.changePassword(
+      unlocked,
+      bundle,
+      next,
+    ); // WeakPassword: nothing sent
+    final currentAuthKey = (await deriveMasterKeys(
+      current,
+      bundle.salt,
+      bundle.kdf,
+    )).authKey;
+    await api!.changePassword(
+      currentAuthKey: currentAuthKey,
+      bundle: changed.bundle,
+      bundleVersion: bundleVersion,
+      authKey: changed.authKey,
+    );
+    _saveBundle(
+      changed.bundle,
+      bundleVersion + 1,
+    ); // userKey unchanged: a biometric wrap stays valid
+  }
+
+  /// Password change, then a new recovery kit when the server allows it (null otherwise).
+  Future<String?> securityReset(String current, String next) async {
+    await changeMasterPassword(current, next);
+    return serverHas('recovery_kit') ? regenerateRecoveryKit(next) : null;
+  }
+
   Future<String> regenerateRecoveryKit(String password) async {
     final (:bundle, :bundleVersion) = _cachedBundle();
     final unlocked = await _crypto.unlock(bundle, password);
