@@ -130,9 +130,12 @@ Future<void> deleteUser(
     p,
   );
   await tx.execute('DELETE FROM items WHERE owner_user_id = @u', p);
-  await tx.execute('DELETE FROM audit_ips WHERE scope = @s', {
-    's': 'user:$userId',
-  });
+  // every raw IP of the user: their own chain, and the events they performed in org and instance chains
+  await tx.execute(
+    'DELETE FROM audit_ips WHERE scope = @s OR EXISTS (SELECT 1 FROM audit_events e '
+    'WHERE e.scope = audit_ips.scope AND e.seq = audit_ips.seq AND e.actor_user = @u)',
+    {'s': 'user:$userId', 'u': userId},
+  );
   final email = user['email']! as String;
   await tx.execute(
     "DELETE FROM login_attempts WHERE key IN (@a, @e, @ic, @m) OR key LIKE @ai ESCAPE '\\'",
