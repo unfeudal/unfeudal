@@ -537,5 +537,16 @@
   "unlockBiometricWindows": "Windows Hello",
   "unlockBiometricMac": "Touch ID",
   "settingsBiometric": "Déverrouiller avec Windows Hello ou Touch ID",
-  "settingsBiometricBody": "La clé du coffre reste sur cet appareil, scellée par le matériel sécurisé."
+  "settingsBiometricBody": "La clé du coffre reste sur cet appareil, scellée par le matériel sécurisé.",
+  "settingsExport": "Exporter le coffre",
+  "exportEncrypted": "Chiffré par une phrase secrète",
+  "exportPlain": "Non chiffré",
+  "exportPassphrase": "Phrase secrète de l'export",
+  "exportPassphraseConfirm": "Répéter la phrase secrète",
+  "exportPassphraseShort": "Au moins 12 caractères.",
+  "exportPlainWarning": "Chaque mot de passe et chaque clé sera lisible par quiconque obtient ce fichier.",
+  "exportPlainConfirm": "Fichier non chiffré : compris",
+  "exportSubmit": "Exporter",
+  "exportDone": "{count} éléments exportés.",
+  "exportSkipped": "{count} éléments illisibles ont été laissés de côté."
 }
