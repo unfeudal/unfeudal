@@ -622,7 +622,6 @@
   "settingsLoquetOff": "Off",
   "settingsLoquetForcedOff": "Turned off by the server or an organisation.",
   "errorMissingBinding": "Pick your own key for this host first.",
-  "hostIdentityMode": "Identity",
   "hostIdentityShared": "Shared org identity",
   "hostIdentityPerMember": "Each member's own key",
   "hostBindingLabel": "Your key for this host",
@@ -824,7 +823,6 @@
       }
     }
   },
-  "adminOrgOwners": "Owners",
   "adminOrgMembers": "{count} members",
   "@adminOrgMembers": {
     "placeholders": {
@@ -833,8 +831,6 @@
       }
     }
   },
-  "adminOrgStorage": "Storage",
-  "adminOrgActivity": "Last activity",
   "adminOrgDelete": "Delete organization",
   "sizeKb": "{n} KB",
   "@sizeKb": {
