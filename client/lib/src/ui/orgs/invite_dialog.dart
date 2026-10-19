@@ -113,6 +113,10 @@ class _InviteDialogState extends State<InviteDialog> {
           (o) => o.id == widget.orgId && o.role == OrgRole.owner.name,
         ) ??
         false;
+    final emails = {
+      for (final m in state.orgs?.block?.members ?? const <OrgMember>[])
+        m.userId: m.email,
+    };
     final created = _created;
     return UfDialog(
       title: l.inviteTitle,
@@ -156,7 +160,14 @@ class _InviteDialogState extends State<InviteDialog> {
         if (_pending.isNotEmpty) ...[
           Text(l.invitePending, style: Theme.of(context).textTheme.titleSmall),
           for (final p in _pending)
-            PendingInviteRow(invite: p, onRevoke: () => _revoke(p)),
+            PendingInviteRow(
+              invite: p,
+              creator: emails[p.createdBy],
+              // an admin or owner invite is revoked by a confirmed owner only
+              onRevoke: p.role == OrgRole.member || isOwner
+                  ? () => _revoke(p)
+                  : null,
+            ),
         ],
       ],
     );
@@ -217,10 +228,16 @@ class PendingInviteRow extends StatelessWidget {
     super.key,
     required this.invite,
     required this.onRevoke,
+    this.creator,
   });
 
   final PendingInvite invite;
-  final VoidCallback onRevoke;
+
+  /// Null disables the button: this user may not revoke it.
+  final VoidCallback? onRevoke;
+
+  /// The email of who sent it, when known.
+  final String? creator;
 
   @override
   Widget build(BuildContext context) {
@@ -232,6 +249,8 @@ class PendingInviteRow extends StatelessWidget {
           child: Text(
             [
               invite.email,
+              if (invite.role case final role?) roleLabel(l, role),
+              if (creator case final by?) l.inviteBy(by),
               dates.formatMediumDate(invite.expiresAt.toLocal()),
             ].join(' · '),
           ),
