@@ -18,6 +18,7 @@ void main() {
       env: {
         'UNFEUDAL_SMTP_HOST': 'smtp.test',
         'UNFEUDAL_SMTP_FROM': 'vault@example.org',
+        'UNFEUDAL_FEATURE_SECURITY_EMAILS': 'false', // invite mails only
       },
       mailer: mail,
     );
