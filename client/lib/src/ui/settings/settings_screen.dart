@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
 
+import '../../design/field.dart';
 import '../../design/motion.dart';
 import '../../design/tokens.dart';
 import '../../settings/settings.dart';
@@ -134,6 +136,59 @@ class _SettingsScreenState extends State<SettingsScreen> {
               settings.terminalTheme,
               (v) => update(settings.copyWith(terminalTheme: v)),
             ),
+            Row(
+              spacing: 16,
+              children: [
+                Flexible(
+                  child: UfField(
+                    label: l.settingsTerminalFont,
+                    child: DropdownButton<String>(
+                      key: const Key('terminal-font'),
+                      isExpanded: true,
+                      value: settings.terminalFont,
+                      items: [
+                        for (final family in {
+                          ..._terminalFonts,
+                          settings.terminalFont,
+                        })
+                          DropdownMenuItem(
+                            key: Key('terminal-font-$family'),
+                            value: family,
+                            child: Text(
+                              family == 'JetBrainsMono'
+                                  ? 'JetBrains Mono'
+                                  : family,
+                              style: TextStyle(fontFamily: family),
+                            ),
+                          ),
+                      ],
+                      onChanged: (v) =>
+                          update(settings.copyWith(terminalFont: v)),
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  width: 110,
+                  child: UfField(
+                    label: l.settingsTerminalFontSize,
+                    child: DropdownButton<int>(
+                      key: const Key('terminal-font-size'),
+                      value: settings.terminalFontSize,
+                      items: [
+                        for (var n = 10; n <= 24; n++)
+                          DropdownMenuItem(
+                            key: Key('terminal-font-size-$n'),
+                            value: n,
+                            child: Text(n.toString()),
+                          ),
+                      ],
+                      onChanged: (v) =>
+                          update(settings.copyWith(terminalFontSize: v)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ]),
           section(l.settingsLanguage, [
             choices<String?>(
@@ -258,3 +313,13 @@ class _TwoColumns extends StatelessWidget {
     },
   );
 }
+
+/// The bundled font first, then the platform's monospace families.
+List<String> get _terminalFonts => [
+  'JetBrainsMono',
+  ...switch (defaultTargetPlatform) {
+    TargetPlatform.macOS => ['Menlo', 'Monaco', 'SF Mono'],
+    TargetPlatform.windows => ['Cascadia Mono', 'Consolas', 'Courier New'],
+    _ => const <String>[],
+  },
+];

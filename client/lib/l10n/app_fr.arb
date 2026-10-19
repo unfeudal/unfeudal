@@ -286,5 +286,7 @@
   "termSearchNext": "Résultat suivant",
   "termSearchClose": "Fermer la recherche",
   "termCopy": "Copier",
-  "termPaste": "Coller"
+  "termPaste": "Coller",
+  "settingsTerminalFont": "Police du terminal",
+  "settingsTerminalFontSize": "Taille du texte"
 }
