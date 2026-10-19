@@ -8,6 +8,7 @@ import '../../auth/secret_hash.dart';
 import '../../audit/audit_log.dart';
 import '../../auth/tokens.dart';
 import '../../db/db.dart';
+import '../../mail/mailer.dart';
 import '../app.dart';
 import '../credentials.dart';
 import '../errors.dart';
@@ -167,8 +168,8 @@ Future<Response> changePassword(Request request) async {
       'account.password_changed',
       const [],
     );
-    // Mail hook: passwordChanged after commit.
   });
+  deps.notifier.notify(auth.userId, MailKind.passwordChanged);
   return noContent();
 }
 
@@ -233,8 +234,8 @@ Future<Response> recover(Request request) async {
       'account.recovery_used',
       const [],
     );
-    // Mail hook: recoveryUsed after commit.
   });
+  deps.notifier.notify(user.id, MailKind.recoveryUsed);
   // Only after every check passed.
   await clearCredentials(request, user.email);
   return noContent();
