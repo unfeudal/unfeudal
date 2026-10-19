@@ -16,6 +16,7 @@ import '../db/db.dart';
 import '../db/maintenance.dart';
 import '../log/logger.dart';
 import '../mail/mailer.dart';
+import '../mail/notifier.dart';
 import '../util/clock.dart';
 import 'errors.dart';
 import 'middleware.dart';
@@ -103,6 +104,7 @@ class AppDeps {
   final RateLimiter limiter;
   final SecretHashParams secretHash;
   final Mailer mailer;
+  late final SecurityNotifier notifier = SecurityNotifier(this);
 
   /// Tests only.
   final bool allowTestingKdf;

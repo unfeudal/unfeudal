@@ -7,6 +7,7 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 import '../../auth/secret_hash.dart';
 import '../../audit/audit_log.dart';
 import '../../auth/tokens.dart';
+import '../../mail/mailer.dart';
 import '../../net/client_ip.dart';
 import '../app.dart';
 import '../credentials.dart';
@@ -103,8 +104,11 @@ Future<Response> login(Request request) async {
       tx,
       actor: (user: userId, device: session.deviceId),
     )(AuditScope.user(userId), 'device.added', [session.deviceId]);
-    // Mail hook: newDevice after commit.
     return session;
+  });
+  deps.notifier.notify(userId, MailKind.newDevice, {
+    'device': device.name,
+    'platform': device.platform,
   });
   return jsonResponse(session.toJson());
 }
