@@ -7,6 +7,7 @@ import 'package:xterm2/xterm.dart';
 
 import '../debug_trace.dart';
 import '../design/seal.dart';
+import '../ssh/jump_connector.dart';
 import '../ssh/ssh_connector.dart';
 
 /// One terminal tab. What the shell prints only goes to the terminal: never stored or inspected.
@@ -19,6 +20,9 @@ class TerminalSession extends ChangeNotifier {
   SealState state = SealState.connecting;
   Object? error;
   VoidCallback? onUserInput;
+
+  /// The hops and the target behind [_shell].
+  JumpConnection? connection;
   SshShell? _shell;
   final _subscriptions = <StreamSubscription<String>>[];
 
@@ -59,5 +63,6 @@ class TerminalSession extends ChangeNotifier {
       await s.cancel();
     }
     await _shell?.close();
+    await connection?.close();
   }
 }
