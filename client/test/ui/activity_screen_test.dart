@@ -120,6 +120,40 @@ void main() {
     expect(find.byKey(const Key('activity-alert')), findsOneWidget);
   });
 
+  testWidgets(
+    'export verifies the chain and still saves a broken one, with a warning',
+    (t) async {
+      final h = SyncHarness(capabilities: ['audit', 'sync']);
+      final s = await signedInState(t, harness: h);
+      final me = s.stored!.userId;
+      for (var i = 0; i < 3; i++) {
+        h.appendAudit('user:$me', 'device.added', actorUser: me);
+      }
+      final i = h.auditLog.indexWhere(
+        (e) => e.scope == 'user:$me' && e.seq == 2,
+      );
+      h.auditLog[i] = AuditEvent.fromJson({
+        ...h.auditLog[i].toJson(),
+        'action': 'item.created',
+      }); // hash left as it was
+      final saved = <String>[];
+      await pumpApp(
+        t,
+        state: s,
+        child: ActivityScreen(
+          scope: 'user',
+          savePath: (name) async => '/tmp/$name',
+          writeFile: (path, bytes) async => saved.add(path),
+        ),
+      );
+      await pumpReal(t);
+      await t.tap(find.byKey(const Key('activity-export')));
+      await pumpReal(t);
+      expect(saved, hasLength(1));
+      expect(find.textContaining('breaks at event'), findsOneWidget);
+    },
+  );
+
   testWidgets('the rail shows Activity only when the server has audit', (
     t,
   ) async {
