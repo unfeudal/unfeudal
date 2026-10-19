@@ -7,3 +7,8 @@
 - Audit trail: tamper-evident activity chains for each account, organization and the instance, with SSH sessions, port forwards and secret reveals reported by clients, item version history, and a daily job that purges expired audit events, raw IP addresses, old versions and trash.
 - Mail over SMTP (STARTTLS, implicit TLS or plain): security notices for new sign-ins, password changes, recovery key use and sign-in lockouts, in English or French; account deletion; the `transfer-owner` command; a clean shutdown that lets open requests and queued mails finish.
 - The container image names its source and licence, and the documentation covers configuration, HTTPS, mail, backup, restore, upgrades and every command.
+
+### Fixed
+- A configuration file with broken YAML stops the server with exit code 2 and never prints its content.
+- A sign-in refused because the server is busy no longer counts as a failed attempt.
+- Deleting an account removes every raw IP address of its actions, in every activity chain.
