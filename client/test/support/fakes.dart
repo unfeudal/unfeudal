@@ -7,6 +7,7 @@ import 'dart:typed_data';
 import 'package:dartssh2/dartssh2.dart';
 
 import 'package:unfeudal_client/src/app_state.dart';
+import 'package:unfeudal_client/src/loquet/loquet_memory.dart';
 import 'package:unfeudal_client/src/session/session_store.dart';
 import 'package:unfeudal_client/src/settings/settings.dart';
 import 'package:unfeudal_client/src/ssh/jump_connector.dart';
@@ -336,6 +337,8 @@ AppState testAppState({
   Map<String, LocalMirror>? mirrors,
   SshConnector? ssh,
   SettingsStore? settingsStore,
+  LoquetMemory? loquetMemory,
+  DateTime Function()? loquetClock,
 }) {
   final h = harness ?? SyncHarness();
   final m = mirrors ?? <String, LocalMirror>{};
@@ -348,6 +351,9 @@ AppState testAppState({
 
     allowTestingKdf: true,
     kdf: KdfParams.testing,
+    loquetMemory: loquetMemory,
+    // a Thursday noon: no suite depends on the machine's hour, weekday or calendar
+    loquetClock: loquetClock ?? () => DateTime(2026, 10, 15, 12),
   );
 }
 
