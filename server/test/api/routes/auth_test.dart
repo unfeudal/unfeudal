@@ -107,10 +107,15 @@ void main() {
       owner.bundle.salt,
       owner.bundle.kdf,
     );
-    final answers = [
-      await loginWith(List.filled(32, 1)),
-      await loginWith(right.authKey, email: 'ghost@example.org'),
-    ];
+    final answers = [await loginWith(List.filled(32, 1))];
+    s.logLines.clear();
+    answers.add(await loginWith(right.authKey, email: 'ghost@example.org'));
+    expect(
+      s.logLines.where((l) => l.contains('unknown account')),
+      hasLength(1),
+      reason: 'an unknown email is logged, never audited',
+    );
+    expect(s.logLines.join(), isNot(contains('ghost')));
     await s.db.execute('UPDATE users SET disabled = 1');
     s.clock.advance(const Duration(seconds: 30)); // past the acct: delay
     answers.add(await loginWith(right.authKey));

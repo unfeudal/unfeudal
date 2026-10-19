@@ -56,6 +56,7 @@ Future<Response> login(Request request) async {
   // Always exactly one verification, known email or not.
   final ok = await verifySecret(stored, authKey);
   if (user == null || !ok || user['disabled'] != 0) {
+    if (user == null) deps.log.info('login refused: unknown account');
     if (user != null && !ok) {
       // own transaction, committed before the 401; an unknown email is never recorded
       await deps.db.transaction(
