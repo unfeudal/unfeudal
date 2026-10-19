@@ -2,6 +2,7 @@
 import 'package:shelf/shelf.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
+import '../../audit/audit_log.dart';
 import '../../auth/rate_limit.dart';
 import '../../db/deletion.dart';
 import '../../orgs/invites.dart';
@@ -88,7 +89,12 @@ Future<Response> setDisabled(Request request, String id) async {
       );
     }
     await bumpOrgSeq(tx);
-    // Audit hook: admin.user_disabled | admin.user_enabled [userId] (instance scope and each org scope of the user)
+    final audit = auditWriter(request, tx);
+    final action = disabled ? 'admin.user_disabled' : 'admin.user_enabled';
+    await audit(AuditScope.instance, action, [id]);
+    for (final o in orgIds) {
+      await audit(AuditScope.org(o), action, [id]);
+    }
   });
   return noContent();
 }
@@ -98,7 +104,10 @@ Future<Response> deleteUserRoute(Request request, String id) async {
   final deps = depsOf(request), auth = authOf(request);
   parseUuid(id);
   // deleteUser refuses the Instance Owner (1.), an unknown id (2.) and a last owner (409)
-  await deps.db.transaction((tx) => deleteUser(tx, id, actor: auth.userId));
+  await deps.db.transaction(
+    (tx) =>
+        deleteUser(tx, id, actor: auth.userId, audit: auditWriter(request, tx)),
+  );
   return noContent();
 }
 
@@ -175,7 +184,7 @@ Future<Response> adminDeleteOrg(Request request, String id) async {
       ); // 3.
     }
     await deleteOrg(tx, id);
-    // Audit hook: org.deleted [orgId] (instance scope)
+    await auditWriter(request, tx)(AuditScope.instance, 'org.deleted', [id]);
   });
   return noContent();
 }
@@ -197,7 +206,9 @@ Future<Response> createInstanceInvite(Request request) async {
               'u': auth.userId,
             })).single['locale']!
             as String;
-    // Audit hook: invite.created [inviteId] (instance scope)
+    await auditWriter(request, tx)(AuditScope.instance, 'invite.created', [
+      row.id,
+    ]);
     return (row, locale);
   });
   final invite = await inviteBody(deps, row, email: email);

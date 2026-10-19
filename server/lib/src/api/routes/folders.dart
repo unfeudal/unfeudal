@@ -5,6 +5,7 @@ import 'dart:math';
 import 'package:shelf/shelf.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
+import '../../audit/audit_log.dart';
 import '../../config/features.dart';
 import '../../db/db.dart';
 import '../../orgs/org_access.dart';
@@ -149,7 +150,9 @@ Future<Response> putAcl(Request request, String folder) async {
     }
     await recordRotations(tx, orgId, before, after, 'acl_change');
     await bumpOrgSeq(tx);
-    // Audit hook: acl.changed [folderId]
+    await auditWriter(request, tx)(AuditScope.org(orgId), 'acl.changed', [
+      folder,
+    ]);
   });
   return noContent();
 }
@@ -274,7 +277,11 @@ Future<Response> putFolderKeys(Request request, String folder) async {
       );
     }
     await bumpOrgSeq(tx);
-    // Audit hook: folder.keys_rotated (rotation) or folder.keys_shared [folderId]
+    await auditWriter(request, tx)(
+      AuditScope.org(orgId),
+      rotation ? 'folder.keys_rotated' : 'folder.keys_shared',
+      [folder],
+    );
   });
   return noContent();
 }
@@ -315,7 +322,11 @@ Future<Response> rotationDone(Request request, String folder) async {
       'f': folder,
     });
     await bumpOrgSeq(tx);
-    // Audit hook: folder.rotation_done [folderId]
+    await auditWriter(request, tx)(
+      AuditScope.org(orgId),
+      'folder.rotation_done',
+      [folder],
+    );
   });
   return noContent();
 }
