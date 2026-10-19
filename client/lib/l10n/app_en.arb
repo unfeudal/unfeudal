@@ -694,5 +694,75 @@
   "inviteRevoke": "Revoke",
   "roleOwner": "Owner",
   "roleAdmin": "Admin",
-  "roleMember": "Member"
+  "roleMember": "Member",
+  "teamsTitle": "Teams",
+  "teamNew": "New team",
+  "teamDelete": "Delete team",
+  "teamDeleteConfirm": "Delete the team {name}? Its members keep their own rights.",
+  "@teamDeleteConfirm": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "teamName": "Name",
+  "teamSave": "Save",
+  "aclTitle": "Access to {folder}",
+  "@aclTitle": {
+    "placeholders": {
+      "folder": {
+        "type": "String"
+      }
+    }
+  },
+  "aclAllow": "Allow",
+  "aclDeny": "Deny",
+  "permView": "View",
+  "permConnect": "Connect",
+  "permReveal": "Reveal",
+  "permEdit": "Edit",
+  "permManage": "Manage access",
+  "aclRevealNote": "Anyone who can connect holds the secret on their device: Reveal only hides the button.",
+  "aclSave": "Save",
+  "whyTitle": "Why these rights?",
+  "whyRole": "{role}: every right on every folder.",
+  "@whyRole": {
+    "placeholders": {
+      "role": {
+        "type": "String"
+      }
+    }
+  },
+  "whyEntry": "{principal} on {folder}: {rights}",
+  "@whyEntry": {
+    "placeholders": {
+      "principal": {
+        "type": "String"
+      },
+      "folder": {
+        "type": "String"
+      },
+      "rights": {
+        "type": "String"
+      }
+    }
+  },
+  "whyDenied": "Refused for this member: {rights}",
+  "@whyDenied": {
+    "placeholders": {
+      "rights": {
+        "type": "String"
+      }
+    }
+  },
+  "whyNone": "No right here.",
+  "whyResult": "Result: {rights}",
+  "@whyResult": {
+    "placeholders": {
+      "rights": {
+        "type": "String"
+      }
+    }
+  }
 }
