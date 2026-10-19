@@ -196,6 +196,18 @@ class AccountCrypto {
     }
   }
 
+  /// The device kept the userKey (biometric unlock): same rebuild and public key check as unlock.
+  Future<UnlockedAccount> unlockWithUserKey(
+    AccountBundle bundle,
+    Uint8List userKey,
+  ) async {
+    try {
+      return await _finish(bundle, userKey);
+    } on DecryptionFailed {
+      throw const WrongPassword();
+    }
+  }
+
   /// The rebuilt public key must equal bundle.publicKey: a server cannot pair our private key with its own public key.
   Future<UnlockedAccount> _finish(
     AccountBundle bundle,
