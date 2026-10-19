@@ -127,7 +127,6 @@
   "recoverKey": "Recovery key",
   "recoverNewPassword": "New master password",
   "recoverSubmit": "Reset the password",
-  "recoverDone": "Password reset. Every device was signed out: log in with the new password.",
   "railKeychain": "Keychain",
   "railDevices": "Devices",
   "railSettings": "Settings",
@@ -1239,5 +1238,6 @@
   "securityResetTitle": "Security reset",
   "securityResetBody": "For a lost device or an exposed recovery kit: new master password, every other device signed out, new recovery kit.",
   "securityResetNoKit": "Password changed. This server does not allow a new recovery kit.",
-  "settingsSecurity": "Security"
+  "settingsSecurity": "Security",
+  "recoverOpenKit": "Open the recovery kit file"
 }

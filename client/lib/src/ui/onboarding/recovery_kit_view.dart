@@ -31,6 +31,26 @@ String recoveryKitText(RecoveryKit kit) {
   return 'Server: $server\nAccount: $email\nCreated: $day\n\n$recoveryKey\n\n$instructions\n';
 }
 
+/// Reads back a text kit: the `Server:` and `Account:` lines and the key; anything missing is null.
+({Uri? server, String? email, String? recoveryKey}) parseRecoveryKitText(
+  String text,
+) {
+  final lines = [for (final line in text.split('\n')) line.trim()];
+  String? labelled(String label) => lines
+      .where((line) => line.startsWith('$label: '))
+      .map((line) => line.substring(label.length + 2).trim())
+      .firstOrNull;
+  final key = RegExp(r'^[A-Z2-7]{4}(-[A-Z2-7]{4}){12}-[A-Z2-7]$');
+  return (
+    server: switch (labelled('Server')) {
+      final url? => Uri.tryParse(url),
+      null => null,
+    },
+    email: labelled('Account'),
+    recoveryKey: lines.where(key.hasMatch).firstOrNull,
+  );
+}
+
 /// One A4 page rendering the lines of [recoveryKitText] under [title]; the key in JetBrains Mono, four groups per line.
 Future<Uint8List> buildRecoveryKitPdf(RecoveryKit kit, {String? title}) async {
   final recoveryKey = kit.recoveryKey;

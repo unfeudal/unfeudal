@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
@@ -12,7 +13,10 @@ import 'setup_screen.dart';
 
 /// A new master password from the recovery key; every device is signed out and a new key is shown.
 class RecoveryScreen extends StatefulWidget {
-  const RecoveryScreen({super.key});
+  const RecoveryScreen({super.key, this.readKitFile});
+
+  /// The text kit's content; a native "Open" dialog by default (a PDF kit is typed by hand).
+  final Future<String?> Function()? readKitFile;
 
   @override
   State<RecoveryScreen> createState() => _RecoveryScreenState();
@@ -46,6 +50,23 @@ class _RecoveryScreenState extends State<RecoveryScreen> {
     }
     super.dispose();
   }
+
+  Future<void> _openKit() async {
+    final text = await (widget.readKitFile ?? _openKitFile)();
+    if (text == null || !mounted) return;
+    final kit = parseRecoveryKitText(text);
+    setState(() {
+      if (kit.server case final server?) _server.text = '$server';
+      if (kit.email case final email?) _email.text = email;
+      if (kit.recoveryKey case final key?) _key.text = key;
+    });
+  }
+
+  static Future<String?> _openKitFile() async => (await openFile(
+    acceptedTypeGroups: const [
+      XTypeGroup(label: 'TXT', extensions: ['txt']),
+    ],
+  ))?.readAsString();
 
   /// A mistyped key is refused here, before any request.
   void _next() {
@@ -88,11 +109,23 @@ class _RecoveryScreenState extends State<RecoveryScreen> {
     }
   }
 
-  void _finish() {
+  /// Signs in on this device with the new password; a failure leaves the login screen to do it.
+  Future<void> _finish(({String key, Uri server, String email}) done) async {
+    final l = AppLocalizations.of(context);
+    final state = AppScope.read(context);
+    final navigator = Navigator.of(context);
     final messenger = ScaffoldMessenger.of(context);
-    final done = AppLocalizations.of(context).recoverDone;
-    Navigator.of(context).maybePop();
-    messenger.showSnackBar(SnackBar(content: Text(done)));
+    try {
+      await state.login(
+        server: done.server,
+        email: done.email,
+        password: _password.text,
+      );
+      navigator.maybePop();
+    } on Exception catch (e) {
+      navigator.maybePop();
+      messenger.showSnackBar(SnackBar(content: Text(describeError(l, e))));
+    }
   }
 
   @override
@@ -103,7 +136,7 @@ class _RecoveryScreenState extends State<RecoveryScreen> {
         recoveryKey: done.key,
         server: done.server,
         email: done.email,
-        onDone: _finish,
+        onDone: () => _finish(done),
       );
     }
     final first = _step == 1;
@@ -125,6 +158,14 @@ class _RecoveryScreenState extends State<RecoveryScreen> {
               _email,
               l.loginEmail,
               keyboard: TextInputType.emailAddress,
+            ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                key: const Key('recover-open-kit'),
+                onPressed: _openKit,
+                child: Text(l.recoverOpenKit),
+              ),
             ),
             keyedField(
               'recover-key',
