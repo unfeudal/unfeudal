@@ -15,6 +15,11 @@ import '../../loquet/line_bank.dart';
 import '../../loquet/loquet_pose.dart';
 import '../../loquet/loquet_spot.dart';
 import '../../vault/vault.dart';
+import '../orgs/acl_editor.dart';
+import '../orgs/members_screen.dart';
+import '../orgs/org_settings_screen.dart';
+import '../orgs/teams_screen.dart';
+import '../orgs/why_rights_view.dart';
 import 'shortcuts.dart';
 
 /// The selected vault (personal or an org) as a tree of folders and hosts, with a search over name, address and tags.
@@ -123,6 +128,32 @@ class _TreePanelState extends State<TreePanel> {
                     ],
                   ),
                 ),
+                if (org != null && !awaiting)
+                  PopupMenuButton<Widget Function()>(
+                    key: const Key('org-menu'),
+                    tooltip: l.orgMenu,
+                    icon: const Icon(UfIcons.users, size: 17),
+                    onSelected: (screen) => _push(context, screen()),
+                    itemBuilder: (_) => [
+                      PopupMenuItem(
+                        key: const Key('org-menu-members'),
+                        value: () => MembersScreen(orgId: org.id),
+                        child: Text(l.membersTitle),
+                      ),
+                      if (state.serverHas('teams') && orgs!.isAdmin(org.id))
+                        PopupMenuItem(
+                          key: const Key('org-menu-teams'),
+                          value: () => TeamsScreen(orgId: org.id),
+                          child: Text(l.teamsTitle),
+                        ),
+                      if (orgs!.isAdmin(org.id))
+                        PopupMenuItem(
+                          key: const Key('org-menu-settings'),
+                          value: () => OrgSettingsScreen(orgId: org.id),
+                          child: Text(l.orgSettingsTitle),
+                        ),
+                    ],
+                  ),
                 IconButton(
                   key: const Key('tree-hide'),
                   tooltip: l.treeHide,
@@ -227,6 +258,11 @@ class _TreePanelState extends State<TreePanel> {
     );
   }
 
+  /// Org screens open over the shell; their back arrow pops them.
+  static void _push(BuildContext context, Widget screen) =>
+      Navigator.of(context)
+          .push(MaterialPageRoute<void>(builder: (_) => screen));
+
   /// Hosts, folders, and the entries the tree must label (unreadable, newer type).
   static bool _shown(VaultEntry e) =>
       e.kind == ItemKind.host ||
@@ -300,6 +336,44 @@ class _TreePanelState extends State<TreePanel> {
     icon: const Icon(UfIcons.pencil),
   );
 
+  /// Access (with manage) and why, for an org folder.
+  List<Widget> _orgFolderButtons(BuildContext context, VaultEntry e) {
+    final l = AppLocalizations.of(context);
+    final state = AppScope.read(context);
+    final orgId = e.orgId!;
+    final manage = state.orgs!
+        .permissions(orgId, e.id)
+        .contains(Permission.manage);
+    Widget button(String key, String tooltip, IconData icon, Widget screen) =>
+        IconButton(
+          key: Key(key),
+          tooltip: tooltip,
+          visualDensity: VisualDensity.compact,
+          iconSize: 15,
+          onPressed: () => _push(context, screen),
+          icon: Icon(icon),
+        );
+    return [
+      if (manage)
+        button(
+          'folder-access-${e.id}',
+          l.aclTitle(e.name ?? ''),
+          UfIcons.users,
+          AclEditor(orgId: orgId, folderId: e.id),
+        ),
+      button(
+        'folder-why-${e.id}',
+        l.whyTitle,
+        UfIcons.info,
+        WhyRightsView(
+          orgId: orgId,
+          folderId: e.id,
+          userId: state.stored!.userId,
+        ),
+      ),
+    ];
+  }
+
   Widget _folderRow(
     BuildContext context,
     VaultEntry e,
@@ -334,6 +408,8 @@ class _TreePanelState extends State<TreePanel> {
                   color: colors.muted,
                 ),
                 Expanded(child: Text(e.name ?? '', style: style)),
+                if (selected && e.orgId != null)
+                  ..._orgFolderButtons(context, e),
                 if (selected)
                   _editButton(context, e)
                 else

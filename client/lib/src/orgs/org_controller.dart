@@ -129,6 +129,16 @@ class OrgController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Rotates the pending folders now (the banner's button).
+  Future<void> rotateNow() async {
+    final b = block;
+    if (b == null) return;
+    lastRotation = await rotation.run(
+      b,
+    ); // each folder's failure stays pending inside
+    notifyListeners();
+  }
+
   Set<Permission> permissions(
     String orgId,
     String folderId, {

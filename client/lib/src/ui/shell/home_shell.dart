@@ -23,6 +23,7 @@ import '../../ssh/ssh_connector.dart';
 import '../hosts/host_key_dialog.dart';
 import '../devices/devices_screen.dart';
 import '../keychain/keychain_screen.dart';
+import '../orgs/rotation_banner.dart';
 import '../settings/settings_screen.dart';
 import '../terminal/ssh_dialogs.dart';
 import '../terminal/terminal_tabs.dart';
@@ -347,7 +348,8 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
     ),
   );
 
-  /// Top to bottom: plain http, restore, read-only, update, rejected writes, offline, protocol, ledger reset.
+  /// Top to bottom: plain http, restore, read-only, update, rejected writes, offline, protocol, key rotations,
+  /// ledger reset.
   List<Widget> _banners(BuildContext context, AppState state) {
     final l = AppLocalizations.of(context);
     final sync = state.sync;
@@ -415,6 +417,7 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
         StatusBanner(tone: BannerTone.warn, message: l.bannerOffline),
       if (sync?.lastError is FormatException)
         StatusBanner(tone: BannerTone.warn, message: l.bannerProtocol),
+      if (RotationBanner.shows(state)) const RotationBanner(),
       if (state.ledgerReported && !_ledgerDismissed)
         StatusBanner(
           tone: BannerTone.warn,
