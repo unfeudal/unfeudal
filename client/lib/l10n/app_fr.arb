@@ -414,5 +414,19 @@
   "whyEntry": "{principal} sur {folder} : {rights}",
   "whyDenied": "Refusé pour ce membre : {rights}",
   "whyNone": "Aucun droit ici.",
-  "whyResult": "Résultat : {rights}"
+  "whyResult": "Résultat : {rights}",
+  "orgSettingsTitle": "Réglages de l'organisation",
+  "orgMascot": "Loquet pour les membres",
+  "orgAuditDays": "Conserver l'activité (jours)",
+  "orgMaxVersions": "Versions conservées par élément",
+  "orgTrashDays": "Conserver la corbeille (jours)",
+  "orgSettingsSave": "Enregistrer",
+  "orgDelete": "Supprimer l'organisation",
+  "orgDeleteConfirm": "Saisir {name} pour la supprimer avec tout son contenu.",
+  "rotationPending": "Les clés de {count} dossiers doivent changer.",
+  "rotationNow": "Changer maintenant",
+  "rotationBlocked": "Confirmer d'abord ces {count} membres : {emails}",
+  "rotationCredentials": "Les membres retirés ont pu copier des secrets de ces dossiers : changer ces mots de passe et clés.",
+  "keyAlert": "{count} clés ne correspondent pas à ce que connaît cet appareil. Rien n'a été partagé.",
+  "orgMenu": "Organisation"
 }
