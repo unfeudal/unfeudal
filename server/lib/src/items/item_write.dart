@@ -7,6 +7,8 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 import '../api/app.dart';
 import '../api/errors.dart';
 import '../api/middleware.dart';
+import '../audit/audit_log.dart';
+import '../audit/retention.dart';
 import '../config/features.dart';
 import '../db/db.dart';
 import '../orgs/org_access.dart';
@@ -45,8 +47,9 @@ Future<Item> writeItem(
   Tx tx,
   AuthContext auth,
   Item input,
-  int ifMatch,
-) async {
+  int ifMatch, {
+  String? ip,
+}) async {
   final seq =
       (await tx.query(
             "UPDATE counters SET value = value + 1 WHERE name = 'items_seq' RETURNING value",
@@ -216,7 +219,53 @@ Future<Item> writeItem(
         ..remove('type'),
     );
   }
-  // Revision hook: item_revisions (item_history), then audit item.created / deleted / restored / moved / updated.
+  if (cur != null && deps.features.enabled(Flag.itemHistory)) {
+    // write 4
+    await tx.execute(
+      'INSERT INTO item_revisions (item_id, revision, body, size, created_at) VALUES (@i, @r, @b, @z, @t)',
+      {
+        'i': input.id,
+        'r': revision,
+        'b': cur['body'],
+        'z': cur['size'],
+        't': iso(now),
+      },
+    );
+    await pruneRevisions(
+      tx,
+      input.id,
+      (await retentionFor(tx, deps.config, input.orgId)).maxVersions,
+    );
+  }
+  final at = [input.id, ?input.folderId]; // write 5
+  final wasDeleted = cur?['deleted'] == 1;
+  final (action, targets) = cur == null
+      ? ('item.created', at)
+      : !wasDeleted && input.deleted
+      ? ('item.deleted', at)
+      : wasDeleted && !input.deleted
+      ? ('item.restored', at)
+      : folderChanged
+      ? (
+          'item.moved',
+          [
+            input.id,
+            cur['folder_id'] as String? ?? 'root',
+            input.folderId ?? 'root',
+          ],
+        )
+      : ('item.updated', at);
+  await deps.audit.append(
+    tx,
+    scope: input.scope == ItemScope.personal
+        ? AuditScope.user(auth.userId)
+        : AuditScope.org(input.orgId!),
+    action: action,
+    actorUser: auth.userId,
+    actorDevice: auth.deviceId,
+    ip: ip,
+    targetIds: targets,
+  );
   return stored;
 }
 
@@ -269,6 +318,20 @@ Future<void> checkOrgWrite(
               KeyIds.folder(keyFolder, version, PayloadPart.secret))) {
     throw _bad('payloads must use the folder keys at version $version');
   }
+}
+
+/// Keeps the [max] newest revisions of [itemId] (0: all).
+Future<void> pruneRevisions(Tx tx, String itemId, int max) async {
+  if (max == 0) return;
+  final kept = await tx.query(
+    'SELECT revision FROM item_revisions WHERE item_id = @i ORDER BY revision DESC LIMIT 1 OFFSET @k',
+    {'i': itemId, 'k': max - 1},
+  );
+  if (kept.isEmpty) return;
+  await tx.execute(
+    'DELETE FROM item_revisions WHERE item_id = @i AND revision < @r',
+    {'i': itemId, 'r': kept.single['revision']},
+  );
 }
 
 /// Check 8, folder rule: folderId a live personal folder of the caller, not the item or below it.
