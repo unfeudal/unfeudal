@@ -7,6 +7,7 @@ import '../../app_scope.dart';
 import '../../design/dialog.dart';
 import '../../design/motion.dart';
 import '../../design/tokens.dart';
+import '../../vault/org_writer.dart';
 import '../../vault/vault.dart';
 import '../describe_error.dart';
 import '../fields.dart';
@@ -19,6 +20,7 @@ class FolderEditorPanel extends StatefulWidget {
     super.key,
     this.folderId,
     this.parentId,
+    this.orgId,
     this.onClose,
   });
 
@@ -27,6 +29,9 @@ class FolderEditorPanel extends StatefulWidget {
 
   /// Parent of a new folder.
   final String? parentId;
+
+  /// Org of a new folder; null for the personal vault.
+  final String? orgId;
   final VoidCallback? onClose;
 
   @override
@@ -73,6 +78,8 @@ class _FolderEditorPanelState extends State<FolderEditorPanel> {
       ? null
       : AppScope.read(context).vault!.entry(widget.folderId!);
 
+  String? get _orgId => _entry?.orgId ?? widget.orgId;
+
   /// The folder itself and every folder below it: never a valid parent.
   Set<String> _subtree(Vault vault) {
     final id = widget.folderId;
@@ -89,7 +96,8 @@ class _FolderEditorPanelState extends State<FolderEditorPanel> {
 
   Future<void> _save() async {
     final l = AppLocalizations.of(context);
-    final vault = AppScope.read(context).vault!;
+    final state = AppScope.read(context);
+    final vault = state.vault!;
     _problems.clear();
     if (_name.text.trim().isEmpty) _problems['name'] = l.fieldRequired;
     final port = _port.text.trim().isEmpty
@@ -126,7 +134,23 @@ class _FolderEditorPanelState extends State<FolderEditorPanel> {
     }
     if (meta == null) return setState(() => _failures++);
     try {
-      await vault.saveFolder(meta, id: widget.folderId, parentId: _parentId);
+      final orgId = _orgId;
+      if (orgId == null) {
+        await vault.saveFolder(meta, id: widget.folderId, parentId: _parentId);
+      } else if (widget.folderId == null) {
+        await state.orgs!.writer.createFolder(
+          orgId: orgId,
+          parentId: _parentId,
+          meta: meta,
+        );
+      } else {
+        await state.orgs!.writer.upsert(
+          type: 'folder',
+          id: widget.folderId,
+          target: OrgTarget(orgId, _parentId),
+          meta: meta.toJson(),
+        );
+      }
       widget.onClose?.call();
     } on Exception catch (e) {
       if (mounted) setState(() => _error = describeError(l, e));
@@ -135,14 +159,16 @@ class _FolderEditorPanelState extends State<FolderEditorPanel> {
 
   Future<void> _delete() async {
     final l = AppLocalizations.of(context);
-    final vault = AppScope.read(context).vault!;
+    final state = AppScope.read(context);
     final yes = await confirmDanger(
       context,
       question: l.folderDeleteConfirm(_name.text),
       action: l.folderDelete,
     );
     if (!yes) return;
-    await vault.deleteFolder(widget.folderId!);
+    _orgId == null
+        ? await state.vault!.deleteFolder(widget.folderId!)
+        : await state.orgs!.writer.trash(widget.folderId!);
     widget.onClose?.call();
   }
 
@@ -155,11 +181,14 @@ class _FolderEditorPanelState extends State<FolderEditorPanel> {
     final excluded = _subtree(vault);
     final parents = [
       for (final e in vault.ofKind(ItemKind.folder))
-        if (e.state == EntryState.ok && !excluded.contains(e.id)) e,
+        if (e.state == EntryState.ok &&
+            e.orgId == _orgId &&
+            !excluded.contains(e.id))
+          e,
     ];
     final identities = vault
         .ofKind(ItemKind.identity)
-        .where((e) => e.state == EntryState.ok)
+        .where((e) => e.state == EntryState.ok && e.orgId == _orgId)
         .toList();
     final parentName = vault.entry(_parentId ?? '')?.name;
     return EditorFrame(

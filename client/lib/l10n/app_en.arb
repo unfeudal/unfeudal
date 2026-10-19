@@ -626,5 +626,15 @@
   "hostIdentityMode": "Identity",
   "hostIdentityShared": "Shared org identity",
   "hostIdentityPerMember": "Each member's own key",
-  "hostBindingLabel": "Your key for this host"
+  "hostBindingLabel": "Your key for this host",
+  "railNewOrg": "New organization",
+  "railJoinOrg": "Join with an invitation",
+  "orgName": "Name",
+  "orgCreate": "Create",
+  "orgAwaiting": "Waiting for an admin to confirm you.",
+  "joinPaste": "Invitation link or file",
+  "orgJoinSubmit": "Join",
+  "joinInvalid": "Not an invitation link or file.",
+  "treeNewFolderOnline": "Creating an org folder needs the server.",
+  "treeAwaitingKey": "Waiting for a key from an admin"
 }

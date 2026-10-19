@@ -302,9 +302,13 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
   Widget _treePanel() => TreePanel(
     searchFocus: _searchFocus,
     onHide: () => setState(() => _treeVisible = false),
-    onNewHost: () => _openEditor((close) => HostEditorPanel(onClose: close)),
-    onNewFolder: () =>
-        _openEditor((close) => FolderEditorPanel(onClose: close)),
+    onNewHost: () => _openEditor(
+      (close) => HostEditorPanel(orgId: _state.orgs?.selected, onClose: close),
+    ),
+    onNewFolder: () => _openEditor(
+      (close) =>
+          FolderEditorPanel(orgId: _state.orgs?.selected, onClose: close),
+    ),
     onEdit: (e) => e.kind == ItemKind.folder
         ? _openEditor(
             (close) => FolderEditorPanel(

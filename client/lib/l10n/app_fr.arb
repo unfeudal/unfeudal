@@ -352,5 +352,15 @@
   "hostIdentityMode": "Identité",
   "hostIdentityShared": "Identité partagée de l'organisation",
   "hostIdentityPerMember": "Clé propre à chaque membre",
-  "hostBindingLabel": "Clé personnelle pour cet hôte"
+  "hostBindingLabel": "Clé personnelle pour cet hôte",
+  "railNewOrg": "Nouvelle organisation",
+  "railJoinOrg": "Rejoindre avec une invitation",
+  "orgName": "Nom",
+  "orgCreate": "Créer",
+  "orgAwaiting": "En attente de confirmation par un admin.",
+  "joinPaste": "Lien ou fichier d'invitation",
+  "orgJoinSubmit": "Rejoindre",
+  "joinInvalid": "Ni un lien ni un fichier d'invitation.",
+  "treeNewFolderOnline": "Créer un dossier d'organisation demande le serveur.",
+  "treeAwaitingKey": "En attente d'une clé d'un admin"
 }
