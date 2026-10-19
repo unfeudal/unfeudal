@@ -1,11 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
+
+import 'package:dartssh2/dartssh2.dart';
 
 import 'package:unfeudal_client/src/app_state.dart';
 import 'package:unfeudal_client/src/session/session_store.dart';
 import 'package:unfeudal_client/src/settings/settings.dart';
+import 'package:unfeudal_client/src/ssh/jump_connector.dart';
 import 'package:unfeudal_client/src/ssh/ssh_connector.dart';
 import 'package:unfeudal_client/src/storage/local_mirror.dart';
 import 'package:unfeudal_client/src/sync/ledger_store.dart';
@@ -196,9 +200,14 @@ class FakeSshConnector extends SshConnector {
   Object? failWith;
   final targets = <ConnectTarget>[];
   final shells = <FakeShell>[];
+  final hops = <FakeHop>[];
 
   @override
-  Future<SshShell> connect(ConnectTarget target, SshCallbacks callbacks) async {
+  Future<HopClient> connectHop(
+    ConnectTarget target,
+    SshCallbacks callbacks, {
+    SSHSocket? over,
+  }) async {
     targets.add(target);
     if (failWith case final error?) throw error;
     final decision = decideHostKey(
@@ -213,11 +222,74 @@ class FakeSshConnector extends SshConnector {
       fingerprint: fingerprint,
       callbacks: callbacks,
     );
-    if (!ok) throw HostKeyRejected(decision);
+    if (!ok) throw HostKeyRejected(decision, hostId: target.hostId);
+    final hop = FakeHop(target.hostId, shells);
+    hops.add(hop);
+    return hop;
+  }
+}
+
+/// A forwarded channel that carries nothing.
+class FakeChannel implements SSHSocket {
+  FakeChannel([this.label]);
+
+  final String? label;
+  final _in = StreamController<Uint8List>();
+  final _out = StreamController<List<int>>();
+
+  @override
+  Stream<Uint8List> get stream => _in.stream;
+
+  @override
+  StreamSink<List<int>> get sink => _out.sink;
+
+  @override
+  Future<void> get done => _out.done;
+
+  @override
+  Future<void> close() async {
+    await _in.close();
+    await _out.close();
+  }
+
+  @override
+  void destroy() => close();
+
+  @override
+  Future<void> flush() async {}
+}
+
+class FakeHop implements HopClient {
+  FakeHop(this.hostId, this.shells);
+
+  final String hostId;
+  final List<FakeShell> shells;
+  final forwarded = <String>[];
+  bool closed = false;
+
+  @override
+  Future<SSHSocket> forwardLocal(String host, int port) async {
+    forwarded.add('$host:$port');
+    return FakeChannel('$hostId>$host');
+  }
+
+  @override
+  Future<SshShell> shell() async {
     final shell = FakeShell();
     shells.add(shell);
     return shell;
   }
+
+  @override
+  Future<void> close() async => closed = true;
+}
+
+/// A loopback port that was free a moment ago.
+Future<int> freePort() async {
+  final s = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+  final port = s.port;
+  await s.close();
+  return port;
 }
 
 class FakeShell implements SshShell {
