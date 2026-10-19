@@ -103,15 +103,6 @@ class _InviteDialogState extends State<InviteDialog> {
     }
   }
 
-  Future<void> _saveFile(String content) async {
-    const name = 'unfeudal-invite.unfeudal-enroll';
-    final path = await (widget.saveLocation ?? _pickSaveLocation)(name);
-    if (path != null) await File(path).writeAsString(content);
-  }
-
-  static Future<String?> _pickSaveLocation(String suggestedName) async =>
-      (await getSaveLocation(suggestedName: suggestedName))?.path;
-
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
@@ -123,7 +114,6 @@ class _InviteDialogState extends State<InviteDialog> {
         ) ??
         false;
     final created = _created;
-    final dates = MaterialLocalizations.of(context);
     return UfDialog(
       title: l.inviteTitle,
       actions: [
@@ -161,44 +151,96 @@ class _InviteDialogState extends State<InviteDialog> {
         ),
         if (_error case final error?)
           Text(error, style: TextStyle(color: colors.danger)),
-        if (created != null) ...[
-          Text(created.mailSent ? l.inviteMailSent : l.inviteShare),
-          Text(created.link, style: monoStyle.copyWith(fontSize: 12)),
-          Row(
-            spacing: 8,
-            children: [
-              TextButton(
-                key: const Key('invite-copy-link'),
-                onPressed: () =>
-                    Clipboard.setData(ClipboardData(text: created.link)),
-                child: Text(l.inviteCopyLink),
-              ),
-              TextButton(
-                key: const Key('invite-save-file'),
-                onPressed: () => _saveFile(created.file),
-                child: Text(l.inviteSaveFile),
-              ),
-            ],
-          ),
-        ],
+        if (created != null)
+          InviteResult(created: created, saveLocation: widget.saveLocation),
         if (_pending.isNotEmpty) ...[
           Text(l.invitePending, style: Theme.of(context).textTheme.titleSmall),
           for (final p in _pending)
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    '${p.email} · ${dates.formatMediumDate(p.expiresAt.toLocal())}',
-                  ),
-                ),
-                TextButton(
-                  key: Key('invite-revoke-${p.id}'),
-                  onPressed: () => _revoke(p),
-                  child: Text(l.inviteRevoke),
-                ),
-              ],
-            ),
+            PendingInviteRow(invite: p, onRevoke: () => _revoke(p)),
         ],
+      ],
+    );
+  }
+}
+
+/// A new invitation, shown once: whether a mail left, the link to copy and the file to save.
+class InviteResult extends StatelessWidget {
+  const InviteResult({super.key, required this.created, this.saveLocation});
+
+  final InviteCreated created;
+
+  /// Where to save the invitation file; a native "Save" dialog by default.
+  final Future<String?> Function(String suggestedName)? saveLocation;
+
+  Future<void> _saveFile() async {
+    const name = 'unfeudal-invite.unfeudal-enroll';
+    final path = await (saveLocation ?? _pickSaveLocation)(name);
+    if (path != null) await File(path).writeAsString(created.file);
+  }
+
+  static Future<String?> _pickSaveLocation(String suggestedName) async =>
+      (await getSaveLocation(suggestedName: suggestedName))?.path;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      spacing: 8,
+      children: [
+        Text(created.mailSent ? l.inviteMailSent : l.inviteShare),
+        Text(created.link, style: monoStyle.copyWith(fontSize: 12)),
+        Row(
+          spacing: 8,
+          children: [
+            TextButton(
+              key: const Key('invite-copy-link'),
+              onPressed: () =>
+                  Clipboard.setData(ClipboardData(text: created.link)),
+              child: Text(l.inviteCopyLink),
+            ),
+            TextButton(
+              key: const Key('invite-save-file'),
+              onPressed: _saveFile,
+              child: Text(l.inviteSaveFile),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// A pending invitation: email, expiry and revoke.
+class PendingInviteRow extends StatelessWidget {
+  const PendingInviteRow({
+    super.key,
+    required this.invite,
+    required this.onRevoke,
+  });
+
+  final PendingInvite invite;
+  final VoidCallback onRevoke;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    final dates = MaterialLocalizations.of(context);
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            [
+              invite.email,
+              dates.formatMediumDate(invite.expiresAt.toLocal()),
+            ].join(' · '),
+          ),
+        ),
+        TextButton(
+          key: Key('invite-revoke-${invite.id}'),
+          onPressed: onRevoke,
+          child: Text(l.inviteRevoke),
+        ),
       ],
     );
   }
