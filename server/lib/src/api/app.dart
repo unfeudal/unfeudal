@@ -67,7 +67,7 @@ class AppDeps {
   }) async {
     final serverSecret = await loadServerSecret(config.secretFile);
     final audit = AuditLog(clock, config.features, serverSecret);
-    return AppDeps._(
+    final deps = AppDeps._(
       config: config,
       db: db,
       clock: clock,
@@ -88,6 +88,8 @@ class AppDeps {
       allowTestingKdf: allowTestingKdf,
       mailer: mailer,
     );
+    deps.limiter.onLockout = deps.notifier.lockout;
+    return deps;
   }
 
   final Config config;
