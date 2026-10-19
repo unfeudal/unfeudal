@@ -8,21 +8,17 @@ import '../config/config.dart';
 import '../db/db.dart';
 
 class MemberRow {
-  const MemberRow({
-    required this.role,
-    required this.status,
-    required this.disabled,
-    required this.email,
-    required this.publicKey,
-  });
-
-  /// Role and status only, for a caller that already passed requireAuth.
+  /// Reads role and status; disabled, email and bundle when the query selects them.
   MemberRow.fromRow(Map<String, Object?> row)
     : role = OrgRole.values.byName(row['role']! as String),
       status = MemberStatus.values.byName(row['status']! as String),
-      disabled = false,
-      email = '',
-      publicKey = null;
+      disabled = row['disabled'] == 1,
+      email = row['email'] as String? ?? '',
+      publicKey = switch (row['bundle']) {
+        final String bundle =>
+          (jsonDecode(bundle) as Map)['publicKey'] as String?,
+        _ => null,
+      };
 
   final OrgRole role;
   final MemberStatus status;
@@ -37,14 +33,12 @@ class MemberRow {
 }
 
 typedef OrgTeam = ({String name, Set<String> memberIds});
-typedef OrgFolder = ({String? parentId, bool deleted});
 
 /// One org as the permission rules see it, read in one transaction.
 class OrgSnapshot {
   const OrgSnapshot({
     required this.orgId,
     required this.name,
-    required this.settings,
     required this.members,
     required this.teams,
     required this.acl,
@@ -53,15 +47,14 @@ class OrgSnapshot {
 
   final String orgId;
   final String name;
-  final Map<String, Object?> settings;
   final Map<String, MemberRow> members;
   final Map<String, OrgTeam> teams;
   final List<AclEntry> acl;
 
-  /// Live folders: trashed ones included, purged ones out.
-  final Map<String, OrgFolder> folders;
+  /// Live folders to their parent: trashed ones included, purged ones out.
+  final Map<String, String?> folders;
 
-  String? parentOf(String id) => folders[id]?.parentId;
+  String? parentOf(String id) => folders[id];
 
   Set<String> teamIdsOf(String userId) => {
     for (final MapEntry(:key, :value) in teams.entries)
@@ -76,7 +69,7 @@ class OrgSnapshot {
       if (!seen.add(id)) return;
       out.add(id);
       for (final MapEntry(:key, :value) in folders.entries) {
-        if (value.parentId == id) walk(key);
+        if (value == id) walk(key);
       }
     }
 
@@ -103,7 +96,6 @@ class OrgSnapshot {
   OrgSnapshot without(String userId) => OrgSnapshot(
     orgId: orgId,
     name: name,
-    settings: settings,
     members: {...members}..remove(userId),
     teams: {
       for (final MapEntry(:key, :value) in teams.entries)
@@ -124,24 +116,20 @@ class OrgSnapshot {
   OrgSnapshot withParent(String folderId, String? parentId) => OrgSnapshot(
     orgId: orgId,
     name: name,
-    settings: settings,
     members: members,
     teams: teams,
     acl: acl,
-    folders: {
-      ...folders,
-      folderId: (parentId: parentId, deleted: folders[folderId]!.deleted),
-    },
+    folders: {...folders, folderId: parentId},
   );
 }
 
 Set<Permission> _permissions(Object? json) => {
   for (final name in jsonDecode(json! as String) as List<Object?>)
-    ...Permission.values.where((p) => p.name == name),
+    ?Permission.values.asNameMap()[name],
 };
 
 Future<OrgSnapshot?> loadOrg(Tx tx, String orgId) async {
-  final org = await tx.query('SELECT name, settings FROM orgs WHERE id = @o', {
+  final org = await tx.query('SELECT name FROM orgs WHERE id = @o', {
     'o': orgId,
   });
   if (org.isEmpty) return null;
@@ -151,14 +139,7 @@ Future<OrgSnapshot?> loadOrg(Tx tx, String orgId) async {
       'FROM org_members m JOIN users u ON u.id = m.user_id WHERE m.org_id = @o',
       {'o': orgId},
     ))
-      r['user_id']! as String: MemberRow(
-        role: OrgRole.values.byName(r['role']! as String),
-        status: MemberStatus.values.byName(r['status']! as String),
-        disabled: r['disabled'] == 1,
-        email: r['email']! as String,
-        publicKey:
-            (jsonDecode(r['bundle']! as String) as Map)['publicKey'] as String?,
-      ),
+      r['user_id']! as String: MemberRow.fromRow(r),
   };
   final teams = <String, OrgTeam>{};
   for (final r in await tx.query(
@@ -188,19 +169,14 @@ Future<OrgSnapshot?> loadOrg(Tx tx, String orgId) async {
   ];
   final folders = {
     for (final r in await tx.query(
-      "SELECT id, folder_id, deleted FROM items WHERE org_id = @o AND type = 'folder' AND purged = 0",
+      "SELECT id, folder_id FROM items WHERE org_id = @o AND type = 'folder' AND purged = 0",
       {'o': orgId},
     ))
-      r['id']! as String: (
-        parentId: r['folder_id'] as String?,
-        deleted: r['deleted'] == 1,
-      ),
+      r['id']! as String: r['folder_id'] as String?,
   };
   return OrgSnapshot(
     orgId: orgId,
     name: org.single['name']! as String,
-    settings:
-        jsonDecode(org.single['settings']! as String) as Map<String, Object?>,
     members: members,
     teams: teams,
     acl: acl,
@@ -233,7 +209,7 @@ Future<MemberRow> requireMember(
   bool owner = false,
 }) async {
   final rows = await tx.query(
-    'SELECT m.role, m.status, u.disabled, u.email, u.bundle FROM org_members m '
+    'SELECT m.role, m.status, u.disabled FROM org_members m '
     'JOIN users u ON u.id = m.user_id WHERE m.org_id = @o AND m.user_id = @u',
     {'o': orgId, 'u': userId},
   );
@@ -243,15 +219,7 @@ Future<MemberRow> requireMember(
   if (status == null || (confirmed && status == MemberStatus.accepted)) {
     throw ApiError(ApiErrorCode.notFound, 'No such organization.');
   }
-  final r = rows.single;
-  final row = MemberRow(
-    role: OrgRole.values.byName(r['role']! as String),
-    status: status,
-    disabled: r['disabled'] == 1,
-    email: r['email']! as String,
-    publicKey:
-        (jsonDecode(r['bundle']! as String) as Map)['publicKey'] as String?,
-  );
+  final row = MemberRow.fromRow(rows.single);
   if ((admin && row.role == OrgRole.member) ||
       (owner && row.role != OrgRole.owner)) {
     throw ApiError(ApiErrorCode.forbidden, 'Your role does not allow this.');
@@ -316,6 +284,23 @@ Future<void> bumpOrgSeq(Tx tx) async {
   await tx.execute(
     "UPDATE counters SET value = value + 1 WHERE name = 'org_seq'",
   );
+}
+
+/// The next `items_seq` value; each item write or purge takes one.
+Future<int> nextItemSeq(Tx tx) async =>
+    (await tx.query(
+          "UPDATE counters SET value = value + 1 WHERE name = 'items_seq' RETURNING value",
+        )).single['value']!
+        as int;
+
+/// The org of a live (not purged) org folder, else 404.
+Future<String> liveOrgFolder(Tx tx, String folderId) async {
+  final rows = await tx.query(
+    "SELECT org_id FROM items WHERE id = @f AND type = 'folder' AND org_id IS NOT NULL AND purged = 0",
+    {'f': folderId},
+  );
+  if (rows.isEmpty) throw ApiError.notFound();
+  return rows.single['org_id']! as String;
 }
 
 /// `max_orgs_per_user` (0: no cap) counts every membership row.

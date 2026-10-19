@@ -2,6 +2,7 @@
 import 'dart:convert';
 
 import 'package:shelf/shelf.dart';
+import 'package:shelf_router/shelf_router.dart';
 
 import '../../orgs/org_access.dart';
 import '../app.dart';
@@ -10,7 +11,8 @@ import '../middleware.dart';
 import '../validate.dart';
 
 /// The server values and the org's own (null when unset), for the org settings screen.
-Future<Response> getRetention(Request request, String id) async {
+Future<Response> getRetention(Request request) async {
+  final id = request.params['id']!;
   final deps = depsOf(request), auth = authOf(request);
   parseUuid(id); // 1.
   final settings = await deps.db.transaction(readOnly: true, (tx) async {

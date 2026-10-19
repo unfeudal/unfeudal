@@ -61,8 +61,7 @@ Middleware clientVersionGate() =>
     (inner) => (request) {
       final String version;
       try {
-        version = Version.parse(request.headers['x-unfeudal-client'] ?? '')
-            .toString();
+        version = canonicalVersion(request.headers['x-unfeudal-client'] ?? '');
       } on FormatException {
         throw ApiError(
           ApiErrorCode.invalidRequest,

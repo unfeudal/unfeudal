@@ -78,7 +78,7 @@ void main() {
   test('a failing migration rolls back entirely', () async {
     final broken = [
       ...migrations,
-      const Migration(5, 'broken', ['CREATE TABLE z (a TEXT)', 'NOT SQL']),
+      const Migration(5, ['CREATE TABLE z (a TEXT)', 'NOT SQL']),
     ];
     await expectLater(migrate(db, broken), throwsA(anything));
     expect(await version(db), '4');

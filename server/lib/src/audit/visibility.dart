@@ -26,7 +26,6 @@ Future<AuditQuery> resolveAuditQuery(
   String scope,
 ) async {
   final io = auth.isInstanceOwner;
-  ApiError notFound() => ApiError(ApiErrorCode.notFound, 'Not found.');
   if (scope == 'me') return AuditQuery(actor: auth.userId, rawIps: io);
   if (scope == 'user') {
     return AuditQuery(scope: 'user:${auth.userId}', rawIps: io);
@@ -44,7 +43,8 @@ Future<AuditQuery> resolveAuditQuery(
     if ((await tx.query('SELECT 1 AS x FROM orgs WHERE id = @o', {
       'o': id,
     })).isEmpty) {
-      if (!io) throw notFound(); // a deleted org's chain: Instance Owner only
+      // a deleted org's chain: Instance Owner only
+      if (!io) throw ApiError.notFound();
       return AuditQuery(scope: 'org:$id', rawIps: true);
     }
     await requireMember(
@@ -55,13 +55,7 @@ Future<AuditQuery> resolveAuditQuery(
     ); // not a confirmed member → 404, not admin → 403
     return AuditQuery(scope: 'org:$id', rawIps: io);
   }
-  final folder =
-      (await tx.query(
-        "SELECT org_id FROM items WHERE id = @f AND type = 'folder' AND org_id IS NOT NULL AND purged = 0",
-        {'f': id},
-      )).firstOrNull ??
-      (throw notFound());
-  final orgId = folder['org_id']! as String;
+  final orgId = await liveOrgFolder(tx, id);
   await requireMember(tx, orgId, auth.userId); // 404
   final org = (await loadOrg(tx, orgId))!;
   if (!permissionsOf(org, auth.userId, id).contains(Permission.manage)) {

@@ -5,6 +5,13 @@ import 'sqlite_db.dart';
 enum DbEngine { sqlite, postgres }
 
 /// Statements with `@name` parameters; booleans are bound as 1/0.
+/// Booleans as 1/0, every other value as is.
+Object? dbValue(Object? value) => switch (value) {
+  true => 1,
+  false => 0,
+  final other => other,
+};
+
 abstract class Tx {
   Future<List<Map<String, Object?>>> query(
     String sql, [

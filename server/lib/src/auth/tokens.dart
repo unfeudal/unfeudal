@@ -11,17 +11,15 @@ import '../api/session.dart';
 import '../audit/audit_log.dart';
 import '../db/db.dart';
 import '../util/clock.dart';
-import '../util/random.dart';
 
 List<int> _hmac(List<int> key, String msg) =>
     Hmac(sha256, key).convert(utf8.encode(msg)).bytes;
 
 class AccessClaims {
-  const AccessClaims(this.userId, this.deviceId, this.exp);
+  const AccessClaims(this.userId, this.deviceId);
 
   final String userId;
   final String deviceId;
-  final DateTime exp;
 }
 
 /// `b64(json{u, d, exp ms}) . b64(HMAC-SHA256(server_secret, "access:" + payload))`.
@@ -62,16 +60,15 @@ class AccessTokens {
         return null;
       }
       if (_clock.now().millisecondsSinceEpoch >= exp) return null;
-      return AccessClaims(
-        u,
-        d,
-        DateTime.fromMillisecondsSinceEpoch(exp, isUtc: true),
-      );
+      return AccessClaims(u, d);
     } on FormatException {
       return null;
     }
   }
 }
+
+/// 32 random bytes in base64url (43 characters).
+String randomToken() => b64(secureBytes(32));
 
 /// Stored form of refresh, setup and invite tokens.
 String hashToken(String token) => b64(sha256.convert(utf8.encode(token)).bytes);

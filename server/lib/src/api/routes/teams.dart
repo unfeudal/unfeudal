@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import 'package:shelf/shelf.dart';
+import 'package:shelf_router/shelf_router.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../../audit/audit_log.dart';
@@ -59,10 +60,11 @@ Future<void> _requireTeam(Tx tx, String org, String team) async {
     'SELECT 1 AS x FROM teams WHERE org_id = @o AND id = @t',
     {'o': org, 't': team},
   );
-  if (rows.isEmpty) throw ApiError(ApiErrorCode.notFound, 'Not found.');
+  if (rows.isEmpty) throw ApiError.notFound();
 }
 
-Future<Response> createTeam(Request request, String org) async {
+Future<Response> createTeam(Request request) async {
+  final org = request.params['org']!;
   final deps = depsOf(request), auth = authOf(request);
   parseUuid(org);
   final body = await readJson(request);
@@ -88,7 +90,8 @@ Future<Response> createTeam(Request request, String org) async {
   }, status: 201);
 }
 
-Future<Response> updateTeam(Request request, String org, String team) async {
+Future<Response> updateTeam(Request request) async {
+  final org = request.params['org']!, team = request.params['team']!;
   final deps = depsOf(request), auth = authOf(request);
   parseUuid(org);
   parseUuid(team);
@@ -125,11 +128,8 @@ Future<Response> updateTeam(Request request, String org, String team) async {
   return noContent();
 }
 
-Future<Response> deleteTeamRoute(
-  Request request,
-  String org,
-  String team,
-) async {
+Future<Response> deleteTeamRoute(Request request) async {
+  final org = request.params['org']!, team = request.params['team']!;
   final deps = depsOf(request), auth = authOf(request);
   parseUuid(org);
   parseUuid(team);

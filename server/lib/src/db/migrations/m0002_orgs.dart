@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import '../migrations.dart';
 
-const orgsMigration = Migration(2, 'orgs', [
+const orgsMigration = Migration(2, [
   r"""CREATE TABLE org_members (
   org_id     TEXT NOT NULL REFERENCES orgs(id),
   user_id    TEXT NOT NULL REFERENCES users(id),

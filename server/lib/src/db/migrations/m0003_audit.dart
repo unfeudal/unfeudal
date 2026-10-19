@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import '../migrations.dart';
 
-const auditMigration = Migration(3, 'audit', [
+const auditMigration = Migration(3, [
   r"""CREATE TABLE audit_events (
   scope        TEXT NOT NULL,
   seq          BIGINT NOT NULL,

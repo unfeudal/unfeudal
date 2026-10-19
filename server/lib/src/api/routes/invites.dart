@@ -2,6 +2,7 @@
 import 'dart:convert';
 
 import 'package:shelf/shelf.dart';
+import 'package:shelf_router/shelf_router.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../../audit/audit_log.dart';
@@ -20,13 +21,14 @@ import '../middleware.dart';
 import '../session.dart';
 import '../validate.dart';
 
-Future<Response> createOrgInvite(Request request, String org) async {
+Future<Response> createOrgInvite(Request request) async {
+  final org = request.params['org']!;
   final deps = depsOf(request), auth = authOf(request);
   parseUuid(org);
   final body = await readJson(request);
   final email = normalizeEmail(body['email']); // 1.
   final role = body.containsKey('role')
-      ? OrgRole.values.where((r) => r.name == body['role']).firstOrNull ??
+      ? OrgRole.values.asNameMap()[body['role']] ??
             (throw ApiError(
               ApiErrorCode.invalidRequest,
               'role must be owner, admin or member.',
@@ -39,11 +41,7 @@ Future<Response> createOrgInvite(Request request, String org) async {
               'o': org,
             })).single['name']!
             as String;
-    final locale =
-        (await tx.query('SELECT locale FROM users WHERE id = @u', {
-              'u': auth.userId,
-            })).single['locale']!
-            as String;
+    final locale = await localeOf(tx, auth.userId);
     return (caller, name, locale);
   });
   if (role != OrgRole.member && caller.role != OrgRole.owner) {
@@ -78,34 +76,19 @@ Future<Response> createOrgInvite(Request request, String org) async {
 }
 
 /// Pending invites only (not accepted, revoked or expired), by expiresAt.
-Future<Response> listOrgInvites(Request request, String org) async {
+Future<Response> listOrgInvites(Request request) async {
+  final org = request.params['org']!;
   final deps = depsOf(request), auth = authOf(request);
   parseUuid(org);
-  final rows = await deps.db.transaction((tx) async {
+  final invites = await deps.db.transaction((tx) async {
     await requireMember(tx, org, auth.userId, admin: true);
-    return tx.query(
-      'SELECT id, email, role, created_by, created_at, expires_at FROM invites '
-      'WHERE org_id = @o AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at > @now '
-      'ORDER BY expires_at, id',
-      {'o': org, 'now': iso(deps.clock.now())},
-    );
+    return pendingInvites(tx, deps, org);
   });
-  return jsonResponse({
-    'invites': [
-      for (final r in rows)
-        {
-          'id': r['id'],
-          'email': r['email'],
-          'role': r['role'],
-          'createdBy': r['created_by'],
-          'createdAt': r['created_at'],
-          'expiresAt': r['expires_at'],
-        },
-    ],
-  });
+  return jsonResponse({'invites': invites});
 }
 
-Future<Response> revokeInvite(Request request, String id) async {
+Future<Response> revokeInvite(Request request) async {
+  final id = request.params['id']!;
   final deps = depsOf(request), auth = authOf(request);
   parseUuid(id);
   await deps.db.transaction((tx) async {
@@ -125,12 +108,9 @@ Future<Response> revokeInvite(Request request, String id) async {
     final mayManage =
         inv != null &&
         (orgId == null ? auth.isInstanceOwner : caller?.isAdmin == true);
-    if (!mayManage) throw ApiError(ApiErrorCode.notFound, 'Not found.'); // 1.
+    if (!mayManage) throw ApiError.notFound(); // 1.
     if (orgId != null && !deps.features.enabled(Flag.orgs)) {
-      throw ApiError(
-        ApiErrorCode.featureDisabled,
-        'Organizations are off on this server.',
-      ); // 2.
+      throw ApiError.orgsOff(); // 2.
     }
     if (orgId != null &&
         inv['role'] != 'member' &&
@@ -195,10 +175,7 @@ Future<void> _claim(Tx tx, Map<String, Object?> inv, DateTime now) async {
 void _orgGates(AppDeps deps, Map<String, Object?> inv) {
   if (inv['org_id'] == null) return;
   if (!deps.features.enabled(Flag.orgs)) {
-    throw ApiError(
-      ApiErrorCode.featureDisabled,
-      'Organizations are off on this server.',
-    );
+    throw ApiError.orgsOff();
   }
   if (!deps.features.enabled(Flag.invitesFromOrgs) && inv['by_io'] != 1) {
     throw ApiError(ApiErrorCode.notFound, _invalid);

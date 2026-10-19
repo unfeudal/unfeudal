@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import 'package:shelf/shelf.dart';
+import 'package:shelf_router/shelf_router.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../../audit/audit_log.dart';
@@ -38,7 +39,8 @@ Future<Response> listDevices(Request request) async {
 }
 
 /// Own devices only (another account's is 404); idempotent; its tokens stop working at once.
-Future<Response> deleteDevice(Request request, String id) async {
+Future<Response> deleteDevice(Request request) async {
+  final id = request.params['id']!;
   final deps = depsOf(request);
   final auth = authOf(request);
   parseUuid(id);
@@ -47,7 +49,7 @@ Future<Response> deleteDevice(Request request, String id) async {
       'SELECT id FROM devices WHERE id = @d AND user_id = @u',
       {'d': id, 'u': auth.userId},
     );
-    if (rows.isEmpty) throw ApiError(ApiErrorCode.notFound, 'Not found.');
+    if (rows.isEmpty) throw ApiError.notFound();
     await revokeDevice(tx, id, deps.clock.now());
     await auditWriter(request, tx)(
       AuditScope.user(auth.userId),

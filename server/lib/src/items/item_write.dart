@@ -50,11 +50,8 @@ Future<Item> writeItem(
   int ifMatch, {
   String? ip,
 }) async {
-  final seq =
-      (await tx.query(
-            "UPDATE counters SET value = value + 1 WHERE name = 'items_seq' RETURNING value",
-          )).single['value']
-          as int; // first statement: one seq space, commit order = seq order
+  // first statement: one seq space, commit order = seq order
+  final seq = await nextItemSeq(tx);
   final rows = await tx.query(
     'SELECT owner_user_id, org_id, folder_id, type, revision, deleted, purged, size, created_at, body FROM items WHERE id = @id',
     {'id': input.id},
@@ -78,10 +75,7 @@ Future<Item> writeItem(
     }
   } else {
     if (!deps.features.enabled(Flag.orgs)) {
-      throw ApiError(
-        ApiErrorCode.featureDisabled,
-        'Organizations are off on this server.',
-      );
+      throw ApiError.orgsOff();
     }
     if (cur != null && cur['org_id'] != input.orgId) {
       throw ApiError(ApiErrorCode.forbidden, 'Not this organization\'s item.');
@@ -90,7 +84,7 @@ Future<Item> writeItem(
       "SELECT 1 AS x FROM org_members WHERE org_id = @o AND user_id = @u AND status = 'confirmed'",
       {'o': input.orgId, 'u': auth.userId},
     );
-    if (member.isEmpty) throw ApiError(ApiErrorCode.notFound, 'Not found.');
+    if (member.isEmpty) throw ApiError.notFound();
   }
   if (cur != null && cur['purged'] == 1) {
     throw conflict(); // 5. tombstone, whatever If-Match

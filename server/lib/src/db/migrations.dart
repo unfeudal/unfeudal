@@ -5,9 +5,8 @@ import 'migrations/m0003_audit.dart';
 import 'migrations/m0004_locale.dart';
 
 class Migration {
-  const Migration(this.version, this.name, this.statements);
+  const Migration(this.version, this.statements);
   final int version;
-  final String name;
   final List<String> statements;
 }
 

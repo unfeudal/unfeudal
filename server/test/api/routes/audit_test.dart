@@ -80,7 +80,7 @@ void main() {
         ),
         isTrue,
       );
-      expect(verifyChain(chain).ok, isTrue);
+      expect(verifyChain(chain), isNull);
     },
   );
 
@@ -94,7 +94,7 @@ void main() {
         'DELETE FROM audit_events WHERE scope = @s AND seq = 2',
         {'s': 'user:${w.id('mia')}'},
       );
-      expect(verifyChain(await all(w['mia'], 'user')).brokenAt, 3);
+      expect(verifyChain(await all(w['mia'], 'user')), 3);
     },
   );
 
@@ -128,7 +128,7 @@ void main() {
       'item.created',
     ]);
     expect(chain.every((e) => e.ipAddress == null), isTrue);
-    expect(verifyChain(chain).ok, isTrue);
+    expect(verifyChain(chain), isNull);
     expect(
       (await s.delete(
         '/api/v1/orgs/${w.orgId}',

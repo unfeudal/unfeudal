@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import 'package:timezone/data/latest_all.dart';
 import 'package:timezone/timezone.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
+import '../config/config.dart';
 import 'mailer.dart';
 
 typedef _Template = ({String subject, String text});
@@ -88,8 +88,6 @@ const _instanceInvite = {
   ),
 };
 
-bool _zonesLoaded = false;
-
 /// Plain text in the user's language (`en` unless `fr`); `{time}` is shown in [timezone].
 ({String subject, String text}) renderMail(Mail mail, String timezone) {
   final locale = mail.locale == 'fr' ? 'fr' : 'en';
@@ -108,11 +106,7 @@ bool _zonesLoaded = false;
 }
 
 String _localTime(String time, String timezone) {
-  if (!_zonesLoaded) {
-    initializeTimeZones();
-    _zonesLoaded = true;
-  }
-  final t = TZDateTime.from(parseIso(time), getLocation(timezone));
+  final t = TZDateTime.from(parseIso(time), timeZoneNamed(timezone));
   String two(int n) => n.toString().padLeft(2, '0');
   return '${t.year}-${two(t.month)}-${two(t.day)} ${two(t.hour)}:${two(t.minute)} ($timezone)';
 }

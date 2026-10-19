@@ -289,20 +289,10 @@ Future<Response> deleteAccount(Request request) async {
     ); // 2.
   }
   final body = await readJson(request); // 3.
-  final user = (await deps.db.query(
-    'SELECT email, auth_hash FROM users WHERE id = @u',
-    {'u': auth.userId},
-  )).single;
-  final email = user['email']! as String;
-  await limitCredentials(request, email); // 4. counted before the key is read
-  final current = reqKey32(body, 'currentAuthKey');
-  if (!await verifySecret(user['auth_hash']! as String, current)) {
-    throw ApiError(ApiErrorCode.forbidden, 'Current master password is wrong.');
-  }
-  await clearCredentials(
-    request,
-    email,
-  ); // the key was right, whatever refuses next
+  final user = await _userById(deps.db, auth.userId);
+  // 4. counted before the key is read
+  await limitCredentials(request, user.email);
+  await _requireCurrentAuthKey(request, user, body);
   await deps.db.transaction(
     (tx) => deleteUser(
       tx,

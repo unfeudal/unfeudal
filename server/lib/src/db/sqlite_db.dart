@@ -86,12 +86,7 @@ class SqliteDb implements Db {
   }
 
   static Map<String, Object?> _bind(Map<String, Object?> p) => {
-    for (final e in p.entries)
-      '@${e.key}': switch (e.value) {
-        true => 1,
-        false => 0,
-        final v => v,
-      },
+    for (final e in p.entries) '@${e.key}': dbValue(e.value),
   };
 
   @override

@@ -51,7 +51,7 @@ void main() {
       'deleted': true,
     }, 1);
     s.clock.advance(const Duration(days: 8));
-    await RetentionJob(s.deps).runOnce();
+    await runRetention(s.deps);
     expect(
       [
         for (final id in [
@@ -65,7 +65,7 @@ void main() {
       [0, 1, 1, 1],
     );
     s.clock.advance(const Duration(days: 23));
-    await RetentionJob(s.deps).runOnce();
+    await runRetention(s.deps);
     expect(await purged(mine['id']), 1);
   });
 
@@ -75,7 +75,7 @@ void main() {
     );
     final item = await trashed(keep, await keep.setupOwner());
     keep.clock.advance(const Duration(days: 3650));
-    await RetentionJob(keep.deps).runOnce();
+    await runRetention(keep.deps);
     expect(
       (await keep.db.query('SELECT purged FROM items WHERE id = @i', {
         'i': item['id'],
@@ -133,7 +133,7 @@ void main() {
         },
       );
     }
-    await RetentionJob(s.deps).runOnce();
+    await runRetention(s.deps);
     expect(
       (await s.db.query(
         "SELECT key FROM login_attempts WHERE key IN ('ip:1', 'ip:2', 'ip:3') ORDER BY key",
@@ -161,7 +161,7 @@ void main() {
       "INSERT INTO login_attempts (key, count, window_start) SELECT 'x:' || i, 1, @w FROM n",
       {'w': iso(s.clock.now().subtract(const Duration(days: 2)))},
     );
-    await RetentionJob(s.deps).runOnce();
+    await runRetention(s.deps);
     expect((await s.db.query('PRAGMA freelist_count')).single.values.single, 0);
   });
 
@@ -169,7 +169,7 @@ void main() {
     final mine = await trashed(s, w['olivia']);
     await s.db.execute('DROP TABLE audit_ips');
     s.clock.advance(const Duration(days: 31));
-    await RetentionJob(s.deps).runOnce();
+    await runRetention(s.deps);
     expect(
       s.logLines.any(
         (l) => l.contains('retention step failed') && l.contains('ips'),

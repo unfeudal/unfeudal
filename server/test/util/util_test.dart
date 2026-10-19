@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import 'package:test/test.dart';
-import 'package:unfeudal_server/src/util/random.dart';
+import 'package:unfeudal_server/src/auth/tokens.dart';
 import 'package:unfeudal_server/src/version.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
@@ -10,7 +10,7 @@ void main() {
   test(
     'server constants are X.Y.Z and the default min_client_version fits',
     () {
-      expect(Version.parse(serverVersion).toString(), serverVersion);
+      expect(canonicalVersion(serverVersion), serverVersion);
       expect(
         compareVersions('0.1.0', latestClientVersion),
         lessThanOrEqualTo(0),
@@ -29,11 +29,8 @@ void main() {
   test('newSetupToken is 26 base32 chars; grouped form normalises back', () {
     final s = newSetupToken();
     expect(s, matches(RegExp(r'^[A-Z2-7]{26}$')));
-    expect(
-      groupSetupToken(s),
-      matches(RegExp(r'^([A-Z2-7]{4}-){6}[A-Z2-7]{2}$')),
-    );
-    expect(normalizeSetupToken(groupSetupToken(s)), s);
+    expect(groupBy4(s), matches(RegExp(r'^([A-Z2-7]{4}-){6}[A-Z2-7]{2}$')));
+    expect(normalizeSetupToken(groupBy4(s)), s);
   });
 
   test('FakeClock advances without waiting', () {

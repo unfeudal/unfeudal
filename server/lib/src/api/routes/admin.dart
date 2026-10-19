@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import 'package:shelf/shelf.dart';
+import 'package:shelf_router/shelf_router.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../../audit/audit_log.dart';
@@ -40,7 +41,8 @@ Future<Response> listUsers(Request request) async {
   });
 }
 
-Future<Response> setDisabled(Request request, String id) async {
+Future<Response> setDisabled(Request request) async {
+  final id = request.params['id']!;
   _requireIo(request);
   final deps = depsOf(request);
   parseUuid(id);
@@ -62,7 +64,7 @@ Future<Response> setDisabled(Request request, String id) async {
         'The Instance Owner cannot be disabled.',
       ); // 2.
     }
-    if (user == null) throw ApiError(ApiErrorCode.notFound, 'Not found.'); // 3.
+    if (user == null) throw ApiError.notFound(); // 3.
     if (disabled) {
       final last = await lastOwnerOrgs(tx, id);
       if (last.isNotEmpty) throw lastOwnerError(last); // 4.
@@ -99,7 +101,8 @@ Future<Response> setDisabled(Request request, String id) async {
   return noContent();
 }
 
-Future<Response> deleteUserRoute(Request request, String id) async {
+Future<Response> deleteUserRoute(Request request) async {
+  final id = request.params['id']!;
   _requireIo(request);
   final deps = depsOf(request), auth = authOf(request);
   parseUuid(id);
@@ -161,7 +164,8 @@ Future<Response> listOrgs(Request request) async {
 }
 
 /// The exact name confirms a deletion the Instance Owner cannot see inside.
-Future<Response> adminDeleteOrg(Request request, String id) async {
+Future<Response> adminDeleteOrg(Request request) async {
+  final id = request.params['id']!;
   _requireIo(request);
   final deps = depsOf(request);
   parseUuid(id);
@@ -176,7 +180,7 @@ Future<Response> adminDeleteOrg(Request request, String id) async {
     final org = (await tx.query('SELECT name FROM orgs WHERE id = @o', {
       'o': id,
     })).firstOrNull;
-    if (org == null) throw ApiError(ApiErrorCode.notFound, 'Not found.'); // 2.
+    if (org == null) throw ApiError.notFound(); // 2.
     if (org['name'] != confirmName) {
       throw ApiError(
         ApiErrorCode.invalidRequest,
@@ -201,11 +205,7 @@ Future<Response> createInstanceInvite(Request request) async {
       email: email,
       createdBy: auth.userId,
     );
-    final locale =
-        (await tx.query('SELECT locale FROM users WHERE id = @u', {
-              'u': auth.userId,
-            })).single['locale']!
-            as String;
+    final locale = await localeOf(tx, auth.userId);
     await auditWriter(request, tx)(AuditScope.instance, 'invite.created', [
       row.id,
     ]);
@@ -225,22 +225,5 @@ Future<Response> createInstanceInvite(Request request) async {
 Future<Response> listInstanceInvites(Request request) async {
   _requireIo(request);
   final deps = depsOf(request);
-  final rows = await deps.db.query(
-    'SELECT id, email, created_by, created_at, expires_at FROM invites '
-    'WHERE org_id IS NULL AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at > @now '
-    'ORDER BY expires_at, id',
-    {'now': iso(deps.clock.now())},
-  );
-  return jsonResponse({
-    'invites': [
-      for (final r in rows)
-        {
-          'id': r['id'],
-          'email': r['email'],
-          'createdBy': r['created_by'],
-          'createdAt': r['created_at'],
-          'expiresAt': r['expires_at'],
-        },
-    ],
-  });
+  return jsonResponse({'invites': await pendingInvites(deps.db, deps, null)});
 }

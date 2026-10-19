@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import 'package:shelf/shelf.dart';
+import 'package:shelf_router/shelf_router.dart';
 
 import '../../items/item_write.dart';
 import '../../net/client_ip.dart';
@@ -9,7 +10,8 @@ import '../middleware.dart';
 import '../validate.dart';
 
 /// Creates or updates one item under optimistic concurrency (`If-Match: <revision>`, 0 = create).
-Future<Response> putItem(Request request, String id) async {
+Future<Response> putItem(Request request) async {
+  final id = request.params['id']!;
   final deps = depsOf(request);
   parseUuid(id);
   final ifMatch = parseIfMatch(request.headers['if-match']);

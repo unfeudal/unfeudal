@@ -3,11 +3,11 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:shelf/shelf.dart';
+import 'package:shelf_router/shelf_router.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../../audit/audit_log.dart';
 import '../../config/features.dart';
-import '../../db/db.dart';
 import '../../orgs/org_access.dart';
 import '../../orgs/rotations.dart';
 import '../app.dart';
@@ -16,16 +16,6 @@ import '../json.dart';
 import '../middleware.dart';
 import '../validate.dart';
 
-/// The org of a live (not purged) org folder, else 404; shared by the folder routes.
-Future<String> liveOrgFolder(Tx tx, String folderId) async {
-  final rows = await tx.query(
-    "SELECT org_id FROM items WHERE id = @f AND type = 'folder' AND org_id IS NOT NULL AND purged = 0",
-    {'f': folderId},
-  );
-  if (rows.isEmpty) throw ApiError(ApiErrorCode.notFound, 'Not found.');
-  return rows.single['org_id']! as String;
-}
-
 Never _bad(String rule) =>
     throw ApiError(ApiErrorCode.invalidRequest, 'entries: $rule');
 
@@ -33,8 +23,7 @@ Set<Permission> _permissionList(Object? v) {
   if (v is! List) _bad('allow and deny must be lists');
   return {
     for (final name in v)
-      Permission.values.where((p) => p.name == name).firstOrNull ??
-          _bad('unknown permission'),
+      Permission.values.asNameMap()[name] ?? _bad('unknown permission'),
   };
 }
 
@@ -50,9 +39,7 @@ List<AclEntry> _parseEntries(
   final out = <AclEntry>[];
   for (final e in raw) {
     final type =
-        PrincipalType.values
-            .where((t) => t.name == e['principalType'])
-            .firstOrNull ??
+        PrincipalType.values.asNameMap()[e['principalType']] ??
         _bad('principalType must be user or team');
     final id = e['principalId'];
     if (id is! String || !isUuid(id)) _bad('principalId must be a UUID');
@@ -83,7 +70,8 @@ List<AclEntry> _parseEntries(
   return out;
 }
 
-Future<Response> putAcl(Request request, String folder) async {
+Future<Response> putAcl(Request request) async {
+  final folder = request.params['folder']!;
   final deps = depsOf(request), auth = authOf(request);
   parseUuid(folder);
   final raw = (await readJson(request))['entries'];
@@ -157,7 +145,8 @@ Future<Response> putAcl(Request request, String folder) async {
   return noContent();
 }
 
-Future<Response> putFolderKeys(Request request, String folder) async {
+Future<Response> putFolderKeys(Request request) async {
+  final folder = request.params['folder']!;
   final deps = depsOf(request), auth = authOf(request);
   parseUuid(folder);
   final body = await readJson(request);
@@ -286,7 +275,8 @@ Future<Response> putFolderKeys(Request request, String folder) async {
   return noContent();
 }
 
-Future<Response> rotationDone(Request request, String folder) async {
+Future<Response> rotationDone(Request request) async {
+  final folder = request.params['folder']!;
   final deps = depsOf(request), auth = authOf(request);
   parseUuid(folder);
   await deps.db.transaction((tx) async {

@@ -36,7 +36,7 @@ void main() {
     final old = await auditEvents(s, 'instance');
     s.clock.advance(const Duration(days: 61));
     await append(s, AuditScope.instance, 'new', ip: '203.0.113.8');
-    await RetentionJob(s.deps).runOnce();
+    await runRetention(s.deps);
     final kept = await auditEvents(s, 'instance');
     expect(
       [
@@ -47,12 +47,12 @@ void main() {
         [5, 'audit.checkpoint', 'seq:3', 'hash:${old.last.hash}'],
       ],
     );
-    expect([verifyChain(kept).ok, kept.last.actorUser], [true, null]);
+    expect([verifyChain(kept), kept.last.actorUser], [null, null]);
     expect(
       (await s.db.query('SELECT seq FROM audit_ips')).map((r) => r['seq']),
       [4],
     );
-    await RetentionJob(s.deps).runOnce();
+    await runRetention(s.deps);
     expect(
       await auditEvents(s, 'instance'),
       hasLength(2),
@@ -76,7 +76,7 @@ void main() {
       await append(s, AuditScope.org(live), 'old');
       await append(s, AuditScope.org(gone), 'old');
       s.clock.advance(const Duration(days: 31));
-      await RetentionJob(s.deps).runOnce();
+      await runRetention(s.deps);
       expect(
         [
           (await actions(s, 'org:$live')).map((a) => a.first),
@@ -88,7 +88,7 @@ void main() {
         ],
       );
       s.clock.advance(const Duration(days: 30));
-      await RetentionJob(s.deps).runOnce();
+      await runRetention(s.deps);
       expect((await actions(s, 'org:$gone')).map((a) => a.first), [
         'audit.checkpoint',
       ]);
@@ -113,7 +113,7 @@ void main() {
         "INSERT INTO audit_heads (scope, seq, hash) VALUES ('instance', 1, 'h')",
       );
       other.clock.advance(const Duration(days: 3650));
-      await RetentionJob(other.deps).runOnce();
+      await runRetention(other.deps);
       expect(await actions(other, 'instance'), [
         ['a'],
       ], reason: '$env');
@@ -124,7 +124,7 @@ void main() {
   test('raw IPs older than audit_ip_retention_days go; the event and its pseudonym stay', () async {
     await append(s, AuditScope.instance, 'a', ip: '203.0.113.7');
     s.clock.advance(const Duration(days: 8));
-    await RetentionJob(s.deps).runOnce();
+    await runRetention(s.deps);
     final e = (await auditEvents(s, 'instance')).single;
     expect([e.ipAddress, e.ip!.startsWith('ip:')], [null, true]);
   });
@@ -147,7 +147,7 @@ void main() {
         {'i': item['id'], 'r': rev, 't': iso(h.clock.now())},
       );
     }
-    await RetentionJob(h.deps).runOnce();
+    await runRetention(h.deps);
     expect(
       (await h.db.query(
         'SELECT revision FROM item_revisions ORDER BY revision',

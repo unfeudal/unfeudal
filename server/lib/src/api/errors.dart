@@ -9,6 +9,14 @@ import 'json.dart';
 class ApiError implements Exception {
   ApiError(this.code, this.message, {this.extra = const {}, this.retryAfter});
 
+  ApiError.notFound() : this(ApiErrorCode.notFound, 'Not found.');
+
+  ApiError.orgsOff()
+    : this(
+        ApiErrorCode.featureDisabled,
+        'Organizations are off on this server.',
+      );
+
   final ApiErrorCode code;
 
   /// Never contains a submitted value.

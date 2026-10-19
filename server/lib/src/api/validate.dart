@@ -4,19 +4,18 @@ import 'dart:typed_data';
 import 'package:collection/collection.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
+import '../util/email.dart';
 import 'errors.dart';
 
 // Every failure is 400 `<field>: <rule>`, never the submitted value.
 Never _bad(String field, String rule) =>
     throw ApiError(ApiErrorCode.invalidRequest, '$field: $rule');
 
-final _email = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
-
 /// Trimmed and lowercased; at most 254 code points.
 String normalizeEmail(Object? v) {
   if (v is! String) _bad('email', 'must be a string');
   final email = v.trim().toLowerCase();
-  if (email.runes.length > 254 || !_email.hasMatch(email)) {
+  if (email.runes.length > 254 || !isEmailAddress(email)) {
     _bad('email', 'must be an email address');
   }
   return email;

@@ -31,26 +31,25 @@ Future<(AuditScope, String?)> _usable(
   String id,
   Permission need,
 ) async {
-  ApiError notFound() => ApiError(ApiErrorCode.notFound, 'Not found.');
   final r =
       (await tx.query(
         'SELECT owner_user_id, org_id, folder_id, type FROM items WHERE id = @i AND deleted = 0 AND purged = 0',
         {'i': id},
       )).firstOrNull ??
-      (throw notFound());
+      (throw ApiError.notFound());
   final (orgId, folderId) = (r['org_id'] as String?, r['folder_id'] as String?);
   if (orgId == null) {
-    if (r['owner_user_id'] != auth.userId) throw notFound();
+    if (r['owner_user_id'] != auth.userId) throw ApiError.notFound();
     return (AuditScope.user(auth.userId), folderId);
   }
-  if (!deps.features.enabled(Flag.orgs)) throw notFound();
-  final org = await loadOrg(tx, orgId) ?? (throw notFound());
+  if (!deps.features.enabled(Flag.orgs)) throw ApiError.notFound();
+  final org = await loadOrg(tx, orgId) ?? (throw ApiError.notFound());
   if (!permissionsOf(
     org,
     auth.userId,
     r['type'] == 'folder' ? id : folderId!,
   ).contains(need)) {
-    throw notFound();
+    throw ApiError.notFound();
   }
   return (AuditScope.org(orgId), folderId);
 }

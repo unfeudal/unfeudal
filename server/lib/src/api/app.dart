@@ -4,7 +4,6 @@ import 'dart:typed_data';
 
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
-import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../audit/audit_log.dart';
 import '../auth/rate_limit.dart';
@@ -125,8 +124,7 @@ Middleware withDeps(AppDeps deps) =>
 
 AppDeps depsOf(Request request) => request.context[_depsKey]! as AppDeps;
 
-Never _notFound(Request _) =>
-    throw ApiError(ApiErrorCode.notFound, 'Not found.');
+Never _notFound(Request _) => throw ApiError.notFound();
 
 /// An org route: signed in, then the `orgs` flag.
 Handler _org(Handler inner) => requireAuth(requireFeature(Flag.orgs)(inner));
@@ -154,100 +152,35 @@ Handler buildHandler(AppDeps deps) {
     ..put('/account/locale', requireAuth(setLocale))
     ..delete('/account', requireAuth(deleteAccount))
     ..get('/devices', requireAuth(listDevices))
-    ..delete(
-      '/devices/<id>',
-      (Request r, String id) => requireAuth((r) => deleteDevice(r, id))(r),
-    )
-    ..put(
-      '/items/<id>',
-      (Request r, String id) => requireAuth((r) => putItem(r, id))(r),
-    )
+    ..delete('/devices/<id>', requireAuth(deleteDevice))
+    ..put('/items/<id>', requireAuth(putItem))
     ..get('/sync', requireAuth(sync))
     ..post('/orgs', _org(createOrg))
-    ..put(
-      '/orgs/<org>',
-      (Request r, String org) => _org((r) => updateOrg(r, org))(r),
-    )
-    ..delete(
-      '/orgs/<org>',
-      (Request r, String org) => _org((r) => deleteOrgRoute(r, org))(r),
-    )
-    ..put(
-      '/orgs/<org>/members/<user>',
-      (Request r, String org, String user) =>
-          _org((r) => setRole(r, org, user))(r),
-    )
-    ..delete(
-      '/orgs/<org>/members/<user>',
-      (Request r, String org, String user) =>
-          _org((r) => removeMemberRoute(r, org, user))(r),
-    )
-    ..post(
-      '/orgs/<org>/members/<user>/confirm',
-      (Request r, String org, String user) =>
-          _org((r) => confirmMember(r, org, user))(r),
-    )
-    ..post(
-      '/orgs/<org>/invites',
-      (Request r, String org) => _org((r) => createOrgInvite(r, org))(r),
-    )
-    ..get(
-      '/orgs/<org>/invites',
-      (Request r, String org) => _org((r) => listOrgInvites(r, org))(r),
-    )
-    ..delete(
-      '/invites/<id>',
-      (Request r, String id) => requireAuth((r) => revokeInvite(r, id))(r),
-    )
+    ..put('/orgs/<org>', _org(updateOrg))
+    ..delete('/orgs/<org>', _org(deleteOrgRoute))
+    ..put('/orgs/<org>/members/<user>', _org(setRole))
+    ..delete('/orgs/<org>/members/<user>', _org(removeMemberRoute))
+    ..post('/orgs/<org>/members/<user>/confirm', _org(confirmMember))
+    ..post('/orgs/<org>/invites', _org(createOrgInvite))
+    ..get('/orgs/<org>/invites', _org(listOrgInvites))
+    ..delete('/invites/<id>', requireAuth(revokeInvite))
     ..post('/invites/accept', acceptInvite)
     ..post('/invites/join', requireAuth(joinInvite))
-    ..post(
-      '/orgs/<org>/teams',
-      (Request r, String org) => _team((r) => createTeam(r, org))(r),
-    )
-    ..put(
-      '/orgs/<org>/teams/<team>',
-      (Request r, String org, String team) =>
-          _team((r) => updateTeam(r, org, team))(r),
-    )
-    ..delete(
-      '/orgs/<org>/teams/<team>',
-      (Request r, String org, String team) =>
-          _team((r) => deleteTeamRoute(r, org, team))(r),
-    )
-    ..put(
-      '/folders/<folder>/acl',
-      (Request r, String folder) => _org((r) => putAcl(r, folder))(r),
-    )
-    ..put(
-      '/folders/<folder>/keys',
-      (Request r, String folder) => _org((r) => putFolderKeys(r, folder))(r),
-    )
-    ..post(
-      '/folders/<folder>/rotation/done',
-      (Request r, String folder) => _org((r) => rotationDone(r, folder))(r),
-    )
+    ..post('/orgs/<org>/teams', _team(createTeam))
+    ..put('/orgs/<org>/teams/<team>', _team(updateTeam))
+    ..delete('/orgs/<org>/teams/<team>', _team(deleteTeamRoute))
+    ..put('/folders/<folder>/acl', _org(putAcl))
+    ..put('/folders/<folder>/keys', _org(putFolderKeys))
+    ..post('/folders/<folder>/rotation/done', _org(rotationDone))
     ..get('/admin/users', requireAuth(listUsers))
-    ..put(
-      '/admin/users/<id>',
-      (Request r, String id) => requireAuth((r) => setDisabled(r, id))(r),
-    )
-    ..delete(
-      '/admin/users/<id>',
-      (Request r, String id) => requireAuth((r) => deleteUserRoute(r, id))(r),
-    )
+    ..put('/admin/users/<id>', requireAuth(setDisabled))
+    ..delete('/admin/users/<id>', requireAuth(deleteUserRoute))
     ..get('/admin/orgs', requireAuth(listOrgs))
-    ..delete(
-      '/admin/orgs/<id>',
-      (Request r, String id) => requireAuth((r) => adminDeleteOrg(r, id))(r),
-    )
+    ..delete('/admin/orgs/<id>', requireAuth(adminDeleteOrg))
     ..post('/admin/invites', requireAuth(createInstanceInvite))
     ..get('/admin/invites', requireAuth(listInstanceInvites))
     ..get('/audit', requireAuth(requireFeature(Flag.audit)(getAudit)))
-    ..get(
-      '/orgs/<id>/settings/retention',
-      (Request r, String id) => _org((r) => getRetention(r, id))(r),
-    )
+    ..get('/orgs/<id>/settings/retention', _org(getRetention))
     ..post(
       '/events/ssh',
       requireAuth(requireFeature(Flag.clientEvents)(sshEvent)),
@@ -258,9 +191,7 @@ Handler buildHandler(AppDeps deps) {
     )
     ..get(
       '/items/<id>/revisions',
-      (Request r, String id) => requireAuth(
-        requireFeature(Flag.itemHistory)((r) => listRevisions(r, id)),
-      )(r),
+      requireAuth(requireFeature(Flag.itemHistory)(listRevisions)),
     );
   final root = Router(notFoundHandler: _notFound)
     ..get('/healthz', healthz)

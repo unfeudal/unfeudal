@@ -45,7 +45,7 @@ Future<RunningServer> runServer(
     final deps = await AppDeps.create(config, db, log: log, mailer: mailer);
     final token = await ensureSetupToken(db, config.setupToken);
     // Printed once, raw: redaction would hide it.
-    if (token != null) log.sink('Setup token: ${groupSetupToken(token)}');
+    if (token != null) log.sink('Setup token: ${groupBy4(token)}');
     final handler = buildHandler(deps);
     final server = await HttpServer.bind(
       config.listen.host,

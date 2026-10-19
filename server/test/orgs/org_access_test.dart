@@ -45,7 +45,6 @@ void main() {
   test('loadOrg: members with status and disabled, teams, ACL, live folders (trashed in, purged out)', () async {
     final o = await snap();
     expect(o.name, 'Acme');
-    expect(o.settings, isEmpty);
     expect(o.members[w.id('ana')]!.status, MemberStatus.accepted);
     expect(
       (o.members[w.id('dis')]!.disabled, o.members[w.id('mia')]!.email),
@@ -59,10 +58,7 @@ void main() {
       w.folder('db'),
       w.folder('bin'),
     });
-    expect(
-      (o.parentOf(w.folder('db')), o.folders[w.folder('bin')]!.deleted),
-      (w.folder('prod'), true),
-    );
+    expect(o.parentOf(w.folder('db')), w.folder('prod'));
     expect(await s.db.transaction((tx) => loadOrg(tx, newId())), isNull);
   });
 

@@ -96,7 +96,7 @@ Future<void> deleteUser(
     'SELECT email, is_instance_owner FROM users WHERE id = @u',
     {'u': userId},
   )).firstOrNull;
-  if (user == null) throw ApiError(ApiErrorCode.notFound, 'Not found.');
+  if (user == null) throw ApiError.notFound();
   if (user['is_instance_owner'] == 1) {
     throw ApiError(
       ApiErrorCode.forbidden,
@@ -155,12 +155,7 @@ Future<void> deleteUser(
 /// Turns [itemId] and, for a folder, its whole subtree into tombstones in the caller's transaction; an org
 /// folder also loses its ACL, keys, key history and pending rotation (a personal folder has none).
 Future<void> purgeItem(Tx tx, String itemId, AuditLog audit) async {
-  Future<int> nextSeq() async =>
-      (await tx.query(
-            "UPDATE counters SET value = value + 1 WHERE name = 'items_seq' RETURNING value",
-          )).single['value']!
-          as int;
-  var seq = await nextSeq(); // first statement: sync invariant
+  var seq = await nextItemSeq(tx); // first statement: sync invariant
   final root = (await tx.query(
     'SELECT org_id, owner_user_id, type, purged FROM items WHERE id = @i',
     {'i': itemId},
@@ -179,7 +174,7 @@ Future<void> purgeItem(Tx tx, String itemId, AuditLog audit) async {
     }
   }
   for (final (n, id) in ids.indexed) {
-    if (n > 0) seq = await nextSeq();
+    if (n > 0) seq = await nextItemSeq(tx);
     final row = (await tx.query(
       'SELECT type, folder_id, body FROM items WHERE id = @i',
       {'i': id},

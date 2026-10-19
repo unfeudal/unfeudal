@@ -7,6 +7,7 @@ import 'package:yaml/yaml.dart';
 
 import '../log/logger.dart';
 import '../net/client_ip.dart';
+import '../util/email.dart';
 import '../version.dart';
 import 'features.dart';
 
@@ -409,17 +410,11 @@ class _Reader {
     return uri;
   }
 
-  static bool _zonesLoaded = false;
-
   /// An IANA name; times shown in mails only.
   String timezone(String key) {
     final name = _text(key) ?? 'UTC';
-    if (!_zonesLoaded) {
-      initializeTimeZones();
-      _zonesLoaded = true;
-    }
     try {
-      getLocation(name);
+      timeZoneNamed(name);
     } on LocationNotFoundException {
       throw ConfigError(key, 'must be an IANA time zone name');
     }
@@ -428,7 +423,7 @@ class _Reader {
 
   String minClientVersion(String key) {
     final text = _text(key) ?? '0.1.0';
-    _orError(key, 'must be X.Y.Z', () => Version.parse(text));
+    _orError(key, 'must be X.Y.Z', () => canonicalVersion(text));
     if (compareVersions(text, latestClientVersion) > 0) {
       throw ConfigError(key, 'must not exceed $latestClientVersion');
     }
@@ -441,7 +436,6 @@ class _Reader {
     _ => throw ConfigError(key, 'must be all or instance_owner'),
   };
 
-  static final _email = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
   static final _host = RegExp(r'^[^\s/]+$');
 
   /// Every given SMTP key is validated; mail is on only with smtp_host, which then requires smtp_from.
@@ -461,7 +455,7 @@ class _Reader {
     final user = limitedText('smtp_user', 256);
     final password = limitedText('smtp_password', 256);
     final from = _text('smtp_from');
-    if (from != null && (from.length > 254 || !_email.hasMatch(from))) {
+    if (from != null && (from.length > 254 || !isEmailAddress(from))) {
       throw ConfigError('smtp_from', 'must be an email address');
     }
     final host = _text('smtp_host');
@@ -489,6 +483,17 @@ class _Reader {
     }
     return text;
   }
+}
+
+bool _zonesLoaded = false;
+
+/// The IANA zone [name]; the zone database loads on first use.
+Location timeZoneNamed(String name) {
+  if (!_zonesLoaded) {
+    initializeTimeZones();
+    _zonesLoaded = true;
+  }
+  return getLocation(name);
 }
 
 T _orError<T>(String key, String message, T Function() parse) {

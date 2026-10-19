@@ -15,11 +15,11 @@ List<String> statementsOf(String sql) => sql
 void main() {
   test('every entry holds one statement per string', () {
     for (final m in migrations) {
-      expect(m.statements, isNotEmpty, reason: m.name);
+      expect(m.statements, isNotEmpty, reason: 'v${m.version}');
       expect(
         m.statements.every((s) => statementsOf(s).length == 1),
         isTrue,
-        reason: m.name,
+        reason: 'v${m.version}',
       );
     }
   });

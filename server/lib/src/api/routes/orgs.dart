@@ -2,6 +2,7 @@
 import 'dart:convert';
 
 import 'package:shelf/shelf.dart';
+import 'package:shelf_router/shelf_router.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../../audit/audit_log.dart';
@@ -48,7 +49,8 @@ Future<Response> createOrg(Request request) async {
 
 const _settingKeys = {'mascot', 'auditDays', 'maxVersions', 'trashDays'};
 
-Future<Response> updateOrg(Request request, String org) async {
+Future<Response> updateOrg(Request request) async {
+  final org = request.params['org']!;
   final deps = depsOf(request), auth = authOf(request);
   parseUuid(org);
   final body = await readJson(request);
@@ -127,7 +129,8 @@ int _retention(String key, Object? value, int server) {
   return value;
 }
 
-Future<Response> deleteOrgRoute(Request request, String org) async {
+Future<Response> deleteOrgRoute(Request request) async {
+  final org = request.params['org']!;
   final deps = depsOf(request), auth = authOf(request);
   parseUuid(org);
   await deps.db.transaction((tx) async {
@@ -140,13 +143,14 @@ Future<Response> deleteOrgRoute(Request request, String org) async {
 
 const _privileged = {OrgRole.owner, OrgRole.admin};
 
-Future<Response> setRole(Request request, String org, String user) async {
+Future<Response> setRole(Request request) async {
+  final org = request.params['org']!, user = request.params['user']!;
   final deps = depsOf(request), auth = authOf(request);
   parseUuid(org);
   parseUuid(user);
   final body = await readJson(request);
   final newRole =
-      OrgRole.values.where((r) => r.name == body['role']).firstOrNull ??
+      OrgRole.values.asNameMap()[body['role']] ??
       (throw ApiError(
         ApiErrorCode.invalidRequest,
         'role must be owner, admin or member.',
@@ -154,9 +158,7 @@ Future<Response> setRole(Request request, String org, String user) async {
   await deps.db.transaction((tx) async {
     final caller = await requireMember(tx, org, auth.userId, admin: true); // 2.
     final before = (await loadOrg(tx, org))!;
-    final target =
-        before.members[user] ??
-        (throw ApiError(ApiErrorCode.notFound, 'Not found.')); // 3.
+    final target = before.members[user] ?? (throw ApiError.notFound()); // 3.
     if ((_privileged.contains(target.role) || _privileged.contains(newRole)) &&
         caller.role != OrgRole.owner) {
       throw ApiError(
@@ -186,11 +188,8 @@ Future<Response> setRole(Request request, String org, String user) async {
   return noContent();
 }
 
-Future<Response> removeMemberRoute(
-  Request request,
-  String org,
-  String user,
-) async {
+Future<Response> removeMemberRoute(Request request) async {
+  final org = request.params['org']!, user = request.params['user']!;
   final deps = depsOf(request), auth = authOf(request);
   parseUuid(org);
   parseUuid(user);
@@ -206,9 +205,7 @@ Future<Response> removeMemberRoute(
       throw ApiError(ApiErrorCode.forbidden, 'Admins only.'); // 2.
     }
     final before = (await loadOrg(tx, org))!;
-    final target =
-        before.members[user] ??
-        (throw ApiError(ApiErrorCode.notFound, 'Not found.')); // 3.
+    final target = before.members[user] ?? (throw ApiError.notFound()); // 3.
     if (!self &&
         _privileged.contains(target.role) &&
         caller.role != OrgRole.owner) {
@@ -233,7 +230,8 @@ Future<Response> removeMemberRoute(
   return noContent();
 }
 
-Future<Response> confirmMember(Request request, String org, String user) async {
+Future<Response> confirmMember(Request request) async {
+  final org = request.params['org']!, user = request.params['user']!;
   final deps = depsOf(request), auth = authOf(request);
   parseUuid(org);
   parseUuid(user);
@@ -243,7 +241,7 @@ Future<Response> confirmMember(Request request, String org, String user) async {
       'SELECT status FROM org_members WHERE org_id = @o AND user_id = @u',
       {'o': org, 'u': user},
     );
-    if (rows.isEmpty) throw ApiError(ApiErrorCode.notFound, 'Not found.'); // 2.
+    if (rows.isEmpty) throw ApiError.notFound(); // 2.
     if (rows.single['status'] != MemberStatus.accepted.name) {
       throw ApiError(ApiErrorCode.invalidRequest, 'Already confirmed.'); // 3.
     }
