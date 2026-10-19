@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 import 'package:flutter_test/flutter_test.dart';
 import 'package:unfeudal_client/src/storage/local_mirror.dart';
+import 'package:unfeudal_client/src/vault/org_writer.dart';
 import 'package:unfeudal_client/src/vault/snippet_store.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../support/fakes.dart';
+import '../support/org_fixtures.dart';
 
 void main() {
   final key = SymmetricCipher.newKey();
@@ -82,4 +84,47 @@ void main() {
       );
     },
   );
+
+  test('org snippets: created in a folder, edited and trashed through the org writer', () async {
+    final c = await ClientOrg.start();
+    final f = newId();
+    await c.keyring.put(f, FolderKeys.generate(1));
+    final block = orgBlock(
+      role: 'member',
+      members: [c.me(role: 'member')],
+      folderTree: [node(f)],
+      acl: [
+        aclRow(f, c.userId, allow: ['edit']),
+      ],
+    );
+    final writer = OrgWriter(
+      vault: c.vault,
+      mirror: c.mirror,
+      keyring: c.keyring,
+      api: c.api,
+      block: () => block,
+      userId: c.userId,
+      publicKey: c.publicKey,
+      write: c.write,
+      online: () => true,
+      emit: c.events.add,
+    );
+    final store = SnippetStore(c.vault, writer: writer);
+    final id = await store.save(
+      SnippetMeta(name: 'deploy', command: 'make deploy'),
+      target: OrgTarget(testOrgId, f),
+    );
+    Item queued() => c.mirror.outbox().singleWhere((e) => e.item.id == id).item;
+    expect((queued().scope, queued().folderId), (ItemScope.org, f));
+    await c.vault.reload();
+    await store.save(
+      SnippetMeta(name: 'deploy all', command: 'make all'),
+      id: id,
+    );
+    expect(queued().scope, ItemScope.org);
+    await c.vault.reload();
+    expect(store.list().single.meta.name, 'deploy all');
+    await store.delete(id);
+    expect(queued().deleted, isTrue);
+  });
 }

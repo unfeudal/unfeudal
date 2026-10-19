@@ -10,10 +10,106 @@ import 'package:unfeudal_client/src/vault/snippet_store.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../support/fakes.dart';
+import '../support/org_fixtures.dart';
 import '../support/pump_app.dart';
 import '../support/sync_harness.dart';
 
 void main() {
+  testWidgets(
+    'org snippets: read-only without edit; a new one can go to an editable org folder',
+    (t) async {
+      final h = SyncHarness(capabilities: ['orgs', 'sync']);
+      final s = await signedInState(t, harness: h);
+      final me = s.stored!.userId;
+      final keys = FolderKeys.generate(1), ro = newId(), rw = newId();
+      h.orgMembers[testOrgId] = {me};
+      late Item snippet;
+      await t.runAsync(() async {
+        final pub = h.accounts.values.first.bundle.publicKey;
+        snippet = h.serverPutOrg(
+          await sealOrgItem(
+            keys,
+            type: 'snippet',
+            folderId: ro,
+            meta: {
+              'schemaVersion': 1,
+              'name': 'org uptime',
+              'command': 'uptime',
+              'tags': <String>[],
+            },
+          ),
+        );
+        final folders = [
+          h.serverPutOrg(
+            await sealOrgItem(
+              keys,
+              id: ro,
+              type: 'folder',
+              meta: folderJson('Read'),
+            ),
+          ),
+          h.serverPutOrg(
+            await sealOrgItem(
+              keys,
+              id: rw,
+              type: 'folder',
+              meta: folderJson('Ops'),
+            ),
+          ),
+        ];
+        h.orgBlock = orgBlock(
+          members: [memberRow(me)],
+          folderTree: [node(ro), node(rw)],
+          acl: [
+            aclRow(ro, me, allow: ['view']),
+            aclRow(rw, me, allow: ['view', 'edit']),
+          ],
+          wrappedKeys: [
+            await wrappedRow(keys, ro, pub),
+            await wrappedRow(keys, rw, pub),
+          ],
+          itemIds: [snippet.id, ...folders.map((e) => e.id)],
+        );
+        await s.sync!.syncNow();
+      });
+      await pumpApp(t, state: s, child: const SnippetsPanel());
+      await pumpReal(t);
+      for (final k in [
+        'snippet-edit-${snippet.id}',
+        'snippet-delete-${snippet.id}',
+      ]) {
+        expect(
+          t.widget<TextButton>(find.byKey(Key(k))).onPressed,
+          isNull,
+          reason: k,
+        );
+      }
+      await t.tap(find.byKey(const Key('snippet-new')));
+      await t.pumpAndSettle();
+      await t.enterText(find.byKey(const Key('snippet-name')), 'deploy');
+      await t.enterText(
+        find.byKey(const Key('snippet-command')),
+        'make deploy',
+      );
+      await t.tap(find.byKey(const Key('snippet-location')));
+      await t.pumpAndSettle();
+      expect(
+        find.byKey(Key('snippet-location-$ro')),
+        findsNothing,
+        reason: 'view only',
+      );
+      await t.tap(find.byKey(Key('snippet-location-$rw')).last);
+      await t.pumpAndSettle();
+      await t.tap(find.byKey(const Key('snippet-save')));
+      await pumpReal(t, rounds: 10);
+      await t.runAsync(() => s.sync!.syncNow());
+      final made = s.vault!
+          .ofKind(ItemKind.snippet)
+          .firstWhere((e) => e.name == 'deploy');
+      expect((made.orgId, made.folderId), (testOrgId, rw));
+    },
+  );
+
   testWidgets(
     'create: name and command required, command kept as typed, tags split',
     (t) async {
