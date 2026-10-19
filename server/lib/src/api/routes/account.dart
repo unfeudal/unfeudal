@@ -8,6 +8,7 @@ import '../../auth/secret_hash.dart';
 import '../../audit/audit_log.dart';
 import '../../auth/tokens.dart';
 import '../../db/db.dart';
+import '../../db/deletion.dart';
 import '../../mail/mailer.dart';
 import '../app.dart';
 import '../credentials.dart';
@@ -275,5 +276,37 @@ Future<Response> setLocale(Request request) async {
     'l': locale,
     'u': authOf(request).userId,
   });
+  return noContent();
+}
+
+Future<Response> deleteAccount(Request request) async {
+  final deps = depsOf(request);
+  final auth = authOf(request); // 1. requireAuth wraps this handler
+  if (auth.isInstanceOwner) {
+    throw ApiError(
+      ApiErrorCode.forbidden,
+      'The Instance Owner cannot be deleted.',
+    ); // 2.
+  }
+  final body = await readJson(request); // 3.
+  final user = (await deps.db.query(
+    'SELECT email, auth_hash FROM users WHERE id = @u',
+    {'u': auth.userId},
+  )).single;
+  final email = user['email']! as String;
+  await limitCredentials(request, email); // 4. counted before the key is read
+  final current = reqKey32(body, 'currentAuthKey');
+  if (!await verifySecret(user['auth_hash']! as String, current)) {
+    throw ApiError(ApiErrorCode.forbidden, 'Current master password is wrong.');
+  }
+  await deps.db.transaction(
+    (tx) => deleteUser(
+      tx,
+      auth.userId,
+      actor: auth.userId,
+      audit: auditWriter(request, tx),
+    ),
+  ); // 5. last owner → 409 inside
+  await clearCredentials(request, email);
   return noContent();
 }
