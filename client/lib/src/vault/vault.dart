@@ -391,7 +391,7 @@ class Vault extends ChangeNotifier {
     final next = <String, VaultEntry>{};
     for (final item in rows.values) {
       if (item.scope != ItemScope.personal || item.purged) {
-        continue; // org items: p6
+        continue; // Org hook: org items are not read yet
       }
       final fromServer = !queued.containsKey(item.id);
       final built = await _build(item, fromServer: fromServer);

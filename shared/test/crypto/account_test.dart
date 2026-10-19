@@ -22,7 +22,7 @@ void main() {
     expect(u.bundle, same(bundle));
   });
 
-  test('bundle uses the contract keyIds and holds no clear key', () async {
+  test('bundle uses the fixed keyIds and holds no clear key', () async {
     final b = acc.bundle;
     expect(
       [

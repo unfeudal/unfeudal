@@ -28,7 +28,7 @@ Map<String, Object?> fwd([Map<String, Object?> over = const {}]) => {
 
 void main() {
   test('full host round-trips in field order, unknown fields first', () {
-    // Written in contract field order: host() would append the optional keys last.
+    // Written in wire field order: host() would append the optional keys last.
     final json = {
       'colorLabel': 'red',
       'schemaVersion': 1,

@@ -55,7 +55,7 @@ void main() {
   });
 
   test(
-    'levels filter lines; request lines carry exactly the contract fields',
+    'levels filter lines; request lines carry exactly the listed fields',
     () {
       final lines = <String>[];
       final log = Logger(LogLevel.info, lines.add);

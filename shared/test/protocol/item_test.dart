@@ -36,7 +36,7 @@ Map<String, Object?> item([Map<String, Object?> over = const {}]) => {
 };
 
 void main() {
-  test('server item round-trips in contract order, unknown fields first', () {
+  test('server item round-trips in wire order, unknown fields first', () {
     final json = {'pinnedBy': 'future', ...item()};
     final i = Item.fromJson(json);
     expect(
