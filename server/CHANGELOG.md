@@ -6,3 +6,4 @@ User-facing changes to the Unfeudal server. The format follows [Keep a Changelog
 
 ### Added
 - Organizations: shared vaults with owners, admins and members, teams, per-folder access rules, invitations by link or email, folder key handoff and rotation, and Instance Owner administration of accounts, organizations and invitations.
+- Audit trail: tamper-evident activity chains for each account, organization and the instance, with SSH sessions, port forwards and secret reveals reported by clients, item version history, and a daily job that purges expired audit events, raw IP addresses, old versions and trash.
