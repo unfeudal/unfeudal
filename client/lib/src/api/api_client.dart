@@ -198,6 +198,33 @@ class ApiClient {
     },
   );
 
+  /// Every other device of the account is signed out by the server.
+  Future<void> changePassword({
+    required List<int> currentAuthKey,
+    required AccountBundle bundle,
+    required int bundleVersion,
+    required List<int> authKey,
+  }) => _send(
+    'POST',
+    '/account/password',
+    body: {
+      'currentAuthKey': b64(currentAuthKey),
+      'bundle': bundle.toJson(),
+      'bundleVersion': bundleVersion,
+      'authKey': b64(authKey),
+    },
+  );
+
+  Future<void> deleteAccount({required List<int> currentAuthKey}) => _send(
+    'DELETE',
+    '/account',
+    body: {'currentAuthKey': b64(currentAuthKey)},
+  );
+
+  /// The language of the security mails.
+  Future<void> setLocale(String locale) =>
+      _send('PUT', '/account/locale', body: {'locale': locale});
+
   Future<List<Device>> devices() async {
     final json = await _send('GET', '/devices');
     if (json case {'devices': final List<Object?> devices}) {
