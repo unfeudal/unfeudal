@@ -24,6 +24,25 @@ String roleLabel(AppLocalizations l, OrgRole role) => switch (role) {
 OrgRole? _roleOf(String wire) =>
     OrgRole.values.where((r) => r.name == wire).firstOrNull;
 
+/// Asks, then leaves [orgId]: allowed to any member, confirmed or not.
+Future<void> confirmAndLeaveOrg(
+  BuildContext context,
+  String orgId,
+  String orgName,
+) async {
+  final l = AppLocalizations.of(context);
+  final state = AppScope.read(context);
+  final yes = await confirmDanger(
+    context,
+    question: l.orgLeaveConfirm(orgName),
+    action: l.orgLeave,
+  );
+  if (!yes) return;
+  await state.api!.removeMember(orgId, state.stored!.userId);
+  state.orgs!.select(null);
+  await state.sync!.syncNow();
+}
+
 /// The org's members from the cached block: admins see status and keys, confirm and verify through the safety code.
 class MembersScreen extends StatefulWidget {
   const MembersScreen({super.key, required this.orgId, this.onBack});
@@ -107,20 +126,8 @@ class _MembersScreenState extends State<MembersScreen> {
     });
   }
 
-  Future<void> _leave(String orgName) async {
-    final l = AppLocalizations.of(context);
-    final yes = await confirmDanger(
-      context,
-      question: l.orgLeaveConfirm(orgName),
-      action: l.orgLeave,
-    );
-    if (!yes) return;
-    await _run((state) async {
-      await state.api!.removeMember(widget.orgId, state.stored!.userId);
-      state.orgs!.select(null);
-      await state.sync!.syncNow();
-    });
-  }
+  Future<void> _leave(String orgName) =>
+      _run((state) => confirmAndLeaveOrg(context, widget.orgId, orgName));
 
   /// Pins live in the vault: its changes redraw the badges.
   @override
