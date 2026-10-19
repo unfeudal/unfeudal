@@ -342,5 +342,10 @@
   "loquetReasonConflicts": "{count, plural, =1{1 copie en conflit à trier} other{{count} copies en conflit à trier}}",
   "loquetReasonOldKeys": "{count, plural, =1{1 clé de plus de 5 ans} other{{count} clés de plus de 5 ans}}",
   "loquetReasonStaleSync": "Aucune synchronisation depuis plus de 7 jours",
-  "loquetBubbleLabel": "Loquet : {line}"
+  "loquetBubbleLabel": "Loquet : {line}",
+  "settingsLoquet": "Loquet",
+  "settingsLoquetOn": "Activé",
+  "settingsLoquetSober": "Sobre",
+  "settingsLoquetOff": "Désactivé",
+  "settingsLoquetForcedOff": "Désactivé par le serveur ou une organisation."
 }

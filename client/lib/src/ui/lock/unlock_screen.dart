@@ -89,6 +89,7 @@ class _UnlockScreenState extends State<UnlockScreen> {
       body: LockFrame(
         title: l.unlockTitle,
         subtitle: stored?.serverUrl.host,
+        eyeX: (_password.text.length / 30).clamp(0, 1),
         children: [
           if (stored != null)
             UfField(
@@ -111,7 +112,10 @@ class _UnlockScreenState extends State<UnlockScreen> {
                 focusNode: _focus,
                 obscureText: !peeking,
                 readOnly: _busy,
-                onChanged: (_) => _machine.input(),
+                onChanged: (_) {
+                  _machine.input();
+                  setState(() {});
+                },
                 onSubmitted: (_) => _submit(),
                 decoration: InputDecoration(
                   suffixIcon: IconButton(
