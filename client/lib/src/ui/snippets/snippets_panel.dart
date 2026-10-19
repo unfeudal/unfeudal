@@ -263,7 +263,7 @@ class _SnippetEditorState extends State<_SnippetEditor> {
           entryPicker(
             key: 'snippet-location',
             label: l.snippetLocation,
-            none: l.snippetPersonal,
+            none: l.vaultPersonal,
             entries: folders,
             value: _folderId,
             onChanged: (v) => setState(() => _folderId = v),
