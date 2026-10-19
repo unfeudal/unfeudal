@@ -9,6 +9,7 @@ import '../../design/tokens.dart';
 import '../../vault/vault.dart';
 import '../describe_error.dart';
 import '../manage_frame.dart';
+import 'item_history_panel.dart';
 
 /// Items in the trash, with when the server deletes them for good; restoring puts back what was inside a folder.
 class TrashScreen extends StatefulWidget {
@@ -115,7 +116,10 @@ class _TrashScreenState extends State<TrashScreen> {
                     ),
                     trailing: TextButton(
                       key: Key('trash-restore-${e.id}'),
-                      onPressed: readOnly || e.state != EntryState.ok
+                      onPressed:
+                          readOnly ||
+                              e.state != EntryState.ok ||
+                              !canEditEntry(state, e)
                           ? null
                           : () => _restore(e),
                       child: Text(l.trashRestore),
