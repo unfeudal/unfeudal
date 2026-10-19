@@ -260,5 +260,8 @@
   "forwardLowPort": "Un port inférieur à 1024 demande l'autorisation.",
   "forwardDuplicate": "Une autre redirection utilise déjà ce port local.",
   "hostJump": "Hôte de rebond",
-  "jumpNone": "Aucun"
+  "jumpNone": "Aucun",
+  "multilineTitle": "Plusieurs lignes",
+  "multilineBody": "Ce terminal ne protège pas le texte collé : chaque ligne peut s'exécuter dès son arrivée.",
+  "multilineSend": "Envoyer quand même"
 }
