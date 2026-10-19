@@ -23,6 +23,7 @@ import 'routes/auth.dart';
 import 'routes/devices.dart';
 import 'routes/health.dart';
 import 'routes/info.dart';
+import 'routes/invites.dart';
 import 'routes/items.dart';
 import 'routes/orgs.dart';
 import 'routes/setup.dart';
@@ -158,6 +159,18 @@ Handler buildHandler(AppDeps deps) {
       '/orgs/<org>/members/<user>/confirm',
       (Request r, String org, String user) =>
           _org((r) => confirmMember(r, org, user))(r),
+    )
+    ..post(
+      '/orgs/<org>/invites',
+      (Request r, String org) => _org((r) => createOrgInvite(r, org))(r),
+    )
+    ..get(
+      '/orgs/<org>/invites',
+      (Request r, String org) => _org((r) => listOrgInvites(r, org))(r),
+    )
+    ..delete(
+      '/invites/<id>',
+      (Request r, String id) => requireAuth((r) => revokeInvite(r, id))(r),
     );
   final root = Router(notFoundHandler: _notFound)
     ..get('/healthz', healthz)

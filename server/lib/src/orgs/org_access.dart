@@ -16,6 +16,14 @@ class MemberRow {
     required this.publicKey,
   });
 
+  /// Role and status only, for a caller that already passed requireAuth.
+  MemberRow.fromRow(Map<String, Object?> row)
+    : role = OrgRole.values.byName(row['role']! as String),
+      status = MemberStatus.values.byName(row['status']! as String),
+      disabled = false,
+      email = '',
+      publicKey = null;
+
   final OrgRole role;
   final MemberStatus status;
   final bool disabled;
