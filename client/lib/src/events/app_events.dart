@@ -127,3 +127,14 @@ final class SnippetInserted extends AppEvent {
   const SnippetInserted({required this.snippetId});
   final String snippetId;
 }
+
+final class SharedVaultCreated extends AppEvent {
+  const SharedVaultCreated({required this.orgId});
+  final String orgId;
+}
+
+final class KeyRotated extends AppEvent {
+  const KeyRotated({required this.orgId, required this.folderId});
+  final String orgId;
+  final String folderId;
+}
