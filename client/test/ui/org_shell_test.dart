@@ -74,10 +74,19 @@ void main() {
   testWidgets('an accepted member sees the org name and a waiting note', (
     t,
   ) async {
-    await withOrg(t, status: 'accepted');
+    final (h, _, _) = await withOrg(t, status: 'accepted');
     await t.tap(find.byKey(const Key('vault-org-$testOrgId')));
     await t.pump();
     expect(find.text('Waiting for an admin to confirm you.'), findsOneWidget);
+    // leaving needs no confirmation by an admin
+    await t.tap(find.byKey(const Key('org-awaiting-leave')));
+    await t.pumpAndSettle();
+    await t.tap(find.byKey(const Key('confirm-yes')));
+    await pumpReal(t);
+    expect(
+      h.orgCalls.first.route,
+      startsWith('DELETE /orgs/$testOrgId/members/'),
+    );
   });
 
   testWidgets('no org UI without the orgs capability', (t) async {
