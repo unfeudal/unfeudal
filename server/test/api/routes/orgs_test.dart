@@ -215,7 +215,9 @@ void main() {
         'settings': {'unknown': 1},
       },
       {
-        'settings': {'mascot': null}, // only the retention values clear with null
+        'settings': {
+          'mascot': null,
+        }, // only the retention values clear with null
       },
       {
         'settings': {'mascot': 'yes'},
