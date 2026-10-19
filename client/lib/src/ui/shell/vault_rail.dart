@@ -12,7 +12,7 @@ import '../orgs/create_org_dialog.dart';
 import '../orgs/join_org_dialog.dart';
 
 /// A screen that replaces the tree and terminals while the rail stays.
-enum ShellPage { keychain, devices, admin, settings }
+enum ShellPage { keychain, activity, devices, admin, settings }
 
 /// The 60 px rail: the personal vault pill, one pill per org, then keychain, devices, settings and lock at the bottom.
 class VaultRail extends StatelessWidget {
@@ -189,6 +189,13 @@ class VaultRail extends StatelessWidget {
           ],
           const Spacer(),
           item(ShellPage.keychain, l.railKeychain, UfIcons.key),
+          if (state.serverHas('audit'))
+            item(
+              ShellPage.activity,
+              l.railActivity,
+              UfIcons.clockCounterClockwise,
+              key: const Key('rail-activity'),
+            ),
           item(ShellPage.devices, l.railDevices, UfIcons.devices),
           if (state.stored?.isInstanceOwner ?? false)
             item(
