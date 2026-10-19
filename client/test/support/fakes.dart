@@ -8,6 +8,7 @@ import 'package:dartssh2/dartssh2.dart';
 
 import 'package:unfeudal_client/src/app_state.dart';
 import 'package:unfeudal_client/src/loquet/loquet_memory.dart';
+import 'package:unfeudal_client/src/session/biometrics.dart';
 import 'package:unfeudal_client/src/session/session_store.dart';
 import 'package:unfeudal_client/src/settings/settings.dart';
 import 'package:unfeudal_client/src/ssh/jump_connector.dart';
@@ -385,4 +386,29 @@ class FakeDialogs implements SshDialogs {
     String instruction,
     List<SshPrompt> prompts,
   ) async => null;
+}
+
+class FakeBiometricBackend implements BiometricBackend {
+  FakeBiometricBackend({this.isAvailable = true});
+  bool isAvailable;
+  bool cancel = false;
+  Uint8List? secretBytes; // the "hardware" secret
+  int deleted = 0;
+  @override
+  Future<bool> available() async => isAvailable;
+  @override
+  Future<Uint8List?> secret({
+    required bool create,
+    required String reason,
+  }) async {
+    if (cancel || !isAvailable) return null;
+    if (create) secretBytes ??= SymmetricCipher.newKey();
+    return secretBytes;
+  }
+
+  @override
+  Future<void> delete() async {
+    deleted++;
+    secretBytes = null;
+  }
 }
