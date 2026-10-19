@@ -151,6 +151,7 @@ Handler buildHandler(AppDeps deps) {
       '/account/recovery-kit',
       requireAuth(requireFeature(Flag.recoveryKit)(recoveryKit)),
     )
+    ..put('/account/locale', requireAuth(setLocale))
     ..get('/devices', requireAuth(listDevices))
     ..delete(
       '/devices/<id>',

@@ -265,3 +265,15 @@ Future<Response> recoveryKit(Request request) async {
   });
   return noContent();
 }
+
+/// The language of the mails this account receives.
+Future<Response> setLocale(Request request) async {
+  final deps = depsOf(request);
+  final body = await readJson(request);
+  final locale = parseLocale(body['locale']);
+  await deps.db.execute('UPDATE users SET locale = @l WHERE id = @u', {
+    'l': locale,
+    'u': authOf(request).userId,
+  });
+  return noContent();
+}
