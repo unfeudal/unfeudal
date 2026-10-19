@@ -6,6 +6,7 @@ import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
+import '../audit/audit_log.dart';
 import '../auth/rate_limit.dart';
 import '../auth/secret_hash.dart';
 import '../auth/tokens.dart';
@@ -41,6 +42,7 @@ class AppDeps {
     required this.log,
     required this.serverSecret,
     required this.instanceEpoch,
+    required this.audit,
     required this.access,
     required this.refresh,
     required this.limiter,
@@ -66,6 +68,7 @@ class AppDeps {
       log: log ?? Logger(config.logLevel, stdout.writeln),
       serverSecret: serverSecret,
       instanceEpoch: await ensureInstanceEpoch(db),
+      audit: AuditLog(clock, config.features, serverSecret),
       access: AccessTokens(serverSecret, clock, config.accessTokenTtl),
       refresh: RefreshTokens(db, clock, config.refreshTokenTtl, serverSecret),
       limiter: RateLimiter(db, clock, config),
@@ -83,6 +86,7 @@ class AppDeps {
 
   /// Cached for `/api/info`.
   final String instanceEpoch;
+  final AuditLog audit;
   final AccessTokens access;
   final RefreshTokens refresh;
   final RateLimiter limiter;
