@@ -468,5 +468,8 @@
   "forwardLowPort": "Ports below 1024 need the opt-in.",
   "forwardDuplicate": "Another forward already uses this local port.",
   "hostJump": "Jump host",
-  "jumpNone": "None"
+  "jumpNone": "None",
+  "multilineTitle": "Several lines",
+  "multilineBody": "This terminal does not protect pasted text: each line may run as soon as it arrives.",
+  "multilineSend": "Send anyway"
 }
