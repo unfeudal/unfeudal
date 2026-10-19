@@ -79,8 +79,14 @@ class ActivityModel extends ChangeNotifier {
 
   Future<ChainReport> verify() async => verifyChain(await wholeChain());
 
-  Future<String> exportJson() async =>
-      jsonEncode([for (final e in await wholeChain()) e.toJson()]);
+  /// The whole chain as JSON, verified on the way: a broken chain is still saved (it is the evidence).
+  Future<({String json, ChainReport report})> exportJson() async {
+    final chain = await wholeChain();
+    return (
+      json: jsonEncode([for (final e in chain) e.toJson()]),
+      report: verifyChain(chain),
+    );
+  }
 
   /// Errors land in [error], never thrown to the UI.
   Future<void> _guard(Future<void> Function() action) async {

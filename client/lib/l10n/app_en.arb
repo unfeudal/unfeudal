@@ -1338,5 +1338,16 @@
         "type": "String"
       }
     }
+  },
+  "activityExportedBroken": "Saved to {path}, but the chain breaks at event {seq}: keep this file as evidence.",
+  "@activityExportedBroken": {
+    "placeholders": {
+      "path": {
+        "type": "String"
+      },
+      "seq": {
+        "type": "int"
+      }
+    }
   }
 }
