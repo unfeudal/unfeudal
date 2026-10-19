@@ -20,6 +20,7 @@ import '../util/clock.dart';
 import 'errors.dart';
 import 'middleware.dart';
 import 'routes/account.dart';
+import 'routes/revisions.dart';
 import 'routes/admin.dart';
 import 'routes/audit.dart';
 import 'routes/auth.dart';
@@ -248,6 +249,12 @@ Handler buildHandler(AppDeps deps) {
     ..post(
       '/events/reveal',
       requireAuth(requireFeature(Flag.clientEvents)(revealEvent)),
+    )
+    ..get(
+      '/items/<id>/revisions',
+      (Request r, String id) => requireAuth(
+        requireFeature(Flag.itemHistory)((r) => listRevisions(r, id)),
+      )(r),
     );
   final root = Router(notFoundHandler: _notFound)
     ..get('/healthz', healthz)
