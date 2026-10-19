@@ -24,6 +24,25 @@ void main() {
     );
   });
 
+  test(
+    'broken YAML refuses to start, names the file, never echoes its text',
+    () {
+      for (final yaml in [
+        'smtp_password: s3cret-value\nsmtp_host: [unclosed',
+        'smtp_password: s3cret-value\nsmtp_password: other-value',
+      ]) {
+        expect(
+          () => load(const {}, yaml),
+          throwsA(
+            isA<ConfigError>()
+                .having((e) => e.key, 'key', 'UNFEUDAL_CONFIG_FILE')
+                .having((e) => '$e', 'text', isNot(contains('value'))),
+          ),
+        );
+      }
+    },
+  );
+
   test('public_url is required', () {
     expect(() => Config.load(const {}), errorOn('public_url'));
   });

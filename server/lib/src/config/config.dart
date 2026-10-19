@@ -180,7 +180,14 @@ class Config {
   ) {
     final values = <String, Object>{};
     final flags = <Flag, bool>{};
-    final Object? doc = yamlText == null ? null : loadYaml(yamlText);
+    final Object? doc;
+    try {
+      doc = yamlText == null ? null : loadYaml(yamlText);
+    } on YamlException catch (e) {
+      // the parser's message quotes the offending line, which may hold a secret: only its number
+      final line = e.span == null ? '' : ' at line ${e.span!.start.line + 1}';
+      throw ConfigError('UNFEUDAL_CONFIG_FILE', 'invalid YAML$line');
+    }
     if (doc != null && doc is! YamlMap) {
       throw ConfigError('UNFEUDAL_CONFIG_FILE', 'not a YAML map');
     }
