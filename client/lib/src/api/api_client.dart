@@ -9,6 +9,7 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../debug_trace.dart';
 import '../version.dart';
+import 'admin_models.dart';
 
 /// A non-2xx answer. [code] keeps an unknown wire code; [known] is null for it.
 class ApiException implements Exception {
@@ -219,6 +220,170 @@ class ApiClient {
           headers: {'if-match': '$ifMatch'},
         ),
       );
+
+  Future<({String id, String name, String role})> createOrg(String name) async {
+    final json = await _send('POST', '/orgs', body: {'name': name});
+    if (json case {
+      'org': {
+        'id': final String id,
+        'name': final String name,
+        'role': final String role,
+      },
+    }) {
+      return (id: id, name: name, role: role);
+    }
+    throw const FormatException('orgs: unexpected body');
+  }
+
+  Future<void> updateOrg(
+    String orgId, {
+    String? name,
+    Map<String, Object?>? settings,
+  }) => _send(
+    'PUT',
+    '/orgs/$orgId',
+    body: {'name': ?name, 'settings': ?settings},
+  );
+
+  Future<void> deleteOrg(String orgId) => _send('DELETE', '/orgs/$orgId');
+
+  Future<void> setMemberRole(String orgId, String userId, OrgRole role) =>
+      _send('PUT', '/orgs/$orgId/members/$userId', body: {'role': role.name});
+
+  Future<void> removeMember(String orgId, String userId) =>
+      _send('DELETE', '/orgs/$orgId/members/$userId');
+
+  Future<void> confirmMember(String orgId, String userId) =>
+      _send('POST', '/orgs/$orgId/members/$userId/confirm');
+
+  Future<InviteCreated> createInvite(
+    String orgId, {
+    required String email,
+    OrgRole role = OrgRole.member,
+  }) async => InviteCreated.fromJson(
+    await _send(
+      'POST',
+      '/orgs/$orgId/invites',
+      body: {'email': email, 'role': role.name},
+    ),
+  );
+
+  Future<List<PendingInvite>> orgInvites(String orgId) async =>
+      _invites(await _send('GET', '/orgs/$orgId/invites'));
+
+  Future<void> revokeInvite(String id) => _send('DELETE', '/invites/$id');
+
+  /// Joins the org of an invite with the signed-in account; returns its id.
+  Future<String> joinInvite(String token) async {
+    final json = await _send('POST', '/invites/join', body: {'token': token});
+    if (json case {'orgId': final String orgId}) return orgId;
+    throw const FormatException('invites/join: unexpected body');
+  }
+
+  Future<OrgTeam> createTeam(
+    String orgId, {
+    required String name,
+    List<String> memberIds = const [],
+  }) async {
+    final json = await _send(
+      'POST',
+      '/orgs/$orgId/teams',
+      body: {'name': name, 'memberIds': memberIds},
+    );
+    if (json case {'team': final Map<String, Object?> team}) {
+      return OrgTeam.fromJson({...team, 'orgId': orgId});
+    }
+    throw const FormatException('teams: unexpected body');
+  }
+
+  Future<void> updateTeam(
+    String orgId,
+    String teamId, {
+    String? name,
+    List<String>? memberIds,
+  }) => _send(
+    'PUT',
+    '/orgs/$orgId/teams/$teamId',
+    body: {'name': ?name, 'memberIds': ?memberIds},
+  );
+
+  Future<void> deleteTeam(String orgId, String teamId) =>
+      _send('DELETE', '/orgs/$orgId/teams/$teamId');
+
+  Future<void> putAcl(String folderId, List<AclEntry> entries) => _send(
+    'PUT',
+    '/folders/$folderId/acl',
+    body: {
+      'entries': [
+        for (final e in entries)
+          {
+            'principalType': e.principalType.name,
+            'principalId': e.principalId,
+            'allow': [for (final p in e.allow) p.name],
+            'deny': [for (final p in e.deny) p.name],
+          },
+      ],
+    },
+  );
+
+  /// Each wrap carries its recipient's `userId`.
+  Future<void> putFolderKeys(
+    String folderId, {
+    required int version,
+    required List<WrappedFolderKeys> wrapped,
+    FolderKeyHistory? history,
+  }) => _send(
+    'PUT',
+    '/folders/$folderId/keys',
+    body: {
+      'version': version,
+      'wrapped': [for (final w in wrapped) w.toJson()],
+      'history': history?.toJson(),
+    },
+  );
+
+  Future<void> rotationDone(String folderId) =>
+      _send('POST', '/folders/$folderId/rotation/done');
+
+  Future<List<AdminUser>> adminUsers() async {
+    final json = await _send('GET', '/admin/users');
+    if (json case {'users': final List<Object?> users}) {
+      return [for (final u in users) AdminUser.fromJson(u)];
+    }
+    throw const FormatException('admin/users: unexpected body');
+  }
+
+  Future<void> adminSetDisabled(String userId, bool disabled) =>
+      _send('PUT', '/admin/users/$userId', body: {'disabled': disabled});
+
+  Future<void> adminDeleteUser(String userId) =>
+      _send('DELETE', '/admin/users/$userId');
+
+  Future<List<AdminOrg>> adminOrgs() async {
+    final json = await _send('GET', '/admin/orgs');
+    if (json case {'orgs': final List<Object?> orgs}) {
+      return [for (final o in orgs) AdminOrg.fromJson(o)];
+    }
+    throw const FormatException('admin/orgs: unexpected body');
+  }
+
+  Future<void> adminDeleteOrg(String orgId, String confirmName) =>
+      _send('DELETE', '/admin/orgs/$orgId', body: {'confirmName': confirmName});
+
+  Future<InviteCreated> adminInvite(String email) async =>
+      InviteCreated.fromJson(
+        await _send('POST', '/admin/invites', body: {'email': email}),
+      );
+
+  Future<List<PendingInvite>> adminInvites() async =>
+      _invites(await _send('GET', '/admin/invites'));
+
+  static List<PendingInvite> _invites(Object? json) {
+    if (json case {'invites': final List<Object?> invites}) {
+      return [for (final i in invites) PendingInvite.fromJson(i)];
+    }
+    throw const FormatException('invites: unexpected body');
+  }
 
   /// `GET /api/info` with the token. A public answer while signed in (a refresh token held; right after
   /// an unlock there is no access token yet) means the token is stale or missing: refresh once and ask
