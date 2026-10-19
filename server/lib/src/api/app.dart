@@ -21,6 +21,7 @@ import 'errors.dart';
 import 'middleware.dart';
 import 'routes/account.dart';
 import 'routes/admin.dart';
+import 'routes/audit.dart';
 import 'routes/auth.dart';
 import 'routes/devices.dart';
 import 'routes/folders.dart';
@@ -232,7 +233,8 @@ Handler buildHandler(AppDeps deps) {
       (Request r, String id) => requireAuth((r) => adminDeleteOrg(r, id))(r),
     )
     ..post('/admin/invites', requireAuth(createInstanceInvite))
-    ..get('/admin/invites', requireAuth(listInstanceInvites));
+    ..get('/admin/invites', requireAuth(listInstanceInvites))
+    ..get('/audit', requireAuth(requireFeature(Flag.audit)(getAudit)));
   final root = Router(notFoundHandler: _notFound)
     ..get('/healthz', healthz)
     ..get('/api/info', info)
