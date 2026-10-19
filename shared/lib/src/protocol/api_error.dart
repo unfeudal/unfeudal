@@ -47,6 +47,7 @@ class ApiErrorBody {
     this.item,
     this.reason,
     this.extra = const {},
+    this.itemSent = false,
   });
 
   factory ApiErrorBody.fromJson(Object? json) {
@@ -58,6 +59,7 @@ class ApiErrorBody {
       item: item == null ? null : Item.fromJson(item),
       reason: r.optText('reason', max: 64),
       extra: r.extra(const {'error', 'message', 'item', 'reason'}),
+      itemSent: (json as Map).containsKey('item'),
     );
   }
 
@@ -67,13 +69,16 @@ class ApiErrorBody {
   final String? reason;
   final Map<String, Object?> extra;
 
+  /// The body named `item`, even as null (a 409 whose current item is gone): written back as read.
+  final bool itemSent;
+
   ApiErrorCode? get code => ApiErrorCode.fromWire(error);
 
   Map<String, Object?> toJson() => {
     ...extra,
     'error': error,
     'message': message,
-    if (item != null) 'item': item!.toJson(),
+    if (item != null || itemSent) 'item': item?.toJson(),
     if (reason != null) 'reason': reason,
   };
 }
