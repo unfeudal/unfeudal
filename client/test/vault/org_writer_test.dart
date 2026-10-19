@@ -95,6 +95,26 @@ void main() {
     },
   );
 
+  test('an edit keeps the unknown fields of the wire item', () async {
+    final id = await writer.upsert(
+      type: 'host',
+      target: OrgTarget(testOrgId, f),
+      meta: hostJson('db'),
+    );
+    final stored = confirmOutbox(c.mirror).single;
+    c.mirror.upsertItems([
+      Item.fromJson({...stored.toJson(), 'pinnedBy': 'newer'}),
+    ]);
+    await c.vault.reload();
+    await writer.upsert(
+      id: id,
+      type: 'host',
+      target: OrgTarget(testOrgId, f),
+      meta: hostJson('db-1'),
+    );
+    expect((await queued(id)).extra, {'pinnedBy': 'newer'});
+  });
+
   test('a move needs edit on both folders and re-seals both parts with the new folder keys', () async {
     final id = await writer.upsert(
       type: 'identity',
