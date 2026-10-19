@@ -7,6 +7,8 @@ import '../api/app.dart';
 import '../config/config.dart';
 import '../config/features.dart';
 import '../db/db.dart';
+import '../db/deletion.dart';
+import '../db/maintenance.dart';
 import '../items/item_write.dart';
 import 'audit_log.dart';
 
@@ -41,6 +43,8 @@ class RetentionJob {
       ('audit', _audit),
       ('ips', _ips),
       ('revisions', _revisions),
+      ('trash', _trash),
+      ('cleanup', _cleanup),
     ]) {
       try {
         await step();
@@ -119,6 +123,45 @@ class RetentionJob {
         )).maxVersions;
         await pruneRevisions(tx, r['item_id']! as String, max);
       });
+    }
+  }
+
+  /// Trashed items past their scope's effective trashDays (0: never), one transaction each.
+  Future<void> _trash() async {
+    final now = deps.clock.now();
+    final groups = <(String, int, Map<String, Object?>)>[
+      ('owner_user_id IS NOT NULL', deps.config.trashRetentionDays, {}),
+    ];
+    for (final r in await deps.db.query('SELECT id FROM orgs ORDER BY id')) {
+      final orgId = r['id']! as String;
+      final days = (await deps.db.transaction(
+        readOnly: true,
+        (tx) => retentionFor(tx, deps.config, orgId),
+      )).trashDays;
+      groups.add(('org_id = @o', days, {'o': orgId}));
+    }
+    for (final (where, days, params) in groups) {
+      if (days == 0) continue; // never purged
+      final due = await deps.db.query(
+        'SELECT id FROM items WHERE deleted = 1 AND purged = 0 AND updated_at < @cutoff AND $where ORDER BY updated_at',
+        {...params, 'cutoff': iso(now.subtract(Duration(days: days)))},
+      );
+      for (final r in due) {
+        await deps.db.transaction(
+          (tx) => purgeItem(tx, r['id']! as String, deps.audit),
+        ); // re-checks purged: subtrees overlap
+      }
+    }
+  }
+
+  /// Expired limiter windows, dead refresh tokens and stale invites; then SQLite hands freed pages back.
+  Future<void> _cleanup() async {
+    await deps.db.transaction(
+      (tx) => runCleanup(tx, deps.clock.now(), deps.config),
+    );
+    // outside the transaction: SQLite refuses incremental_vacuum inside one
+    if (deps.db.engine == DbEngine.sqlite) {
+      await deps.db.execute('PRAGMA incremental_vacuum');
     }
   }
 }
