@@ -92,6 +92,16 @@ class SyncHarness {
         String,
         Set<String>
       >{}; // orgId → userIds who read (sync) and write that org's items
+  final auditLog =
+      <AuditEvent>[]; // every scope; GET /audit filters it like the server
+  final _auditHeads = <String, (int, String)>{};
+  final reported =
+      <({String route, Map<String, Object?> body})>[]; // accepted events
+  int? eventStatus; // answer events with this error status instead
+  final revisionsOf =
+      <String, List<Item>>{}; // older versions, newest first (filled by _store)
+  final retention =
+      <String, Map<String, Object?>>{}; // orgId → GET …/settings/retention body
   String? syncBodyOverride; // raw 200 body for malformed answers
   int itemsSeq = 0;
   final _items = <String, (Item, String, int)>{}; // id → (item, owner, seq)
@@ -173,6 +183,65 @@ class SyncHarness {
       (serverItem(item.id)?.revision ?? 0) + 1,
       a.userId,
       deviceId ?? newId(),
+    );
+  }
+
+  /// Appends a valid event to [scope]'s chain; ts = now + 1 s per event.
+  AuditEvent appendAudit(
+    String scope,
+    String action, {
+    List<String> targets = const [],
+    String? actorUser,
+    String? ipAddress,
+  }) {
+    final (seq, prev) = _auditHeads[scope] ?? (0, genesisHash);
+    final fields = <String, Object?>{
+      'scope': scope,
+      'seq': seq + 1,
+      'ts': iso(now.add(Duration(seconds: auditLog.length))),
+      'actorUser': actorUser,
+      'actorDevice': null,
+      'ip': null,
+      'action': action,
+      'targetIds': targets,
+    };
+    final e = AuditEvent.fromJson({
+      ...fields,
+      'prevHash': prev,
+      'hash': auditHash(prev, fields),
+      'ipAddress': ?ipAddress,
+    });
+    auditLog.add(e);
+    _auditHeads[scope] = (e.seq, e.hash);
+    return e;
+  }
+
+  /// Hostile server: rewrites event [seq] of [scope] and re-links the rest, so the chain verifies again.
+  void rewriteAudit(String scope, int seq, String action) {
+    final chain = auditLog.where((e) => e.scope == scope).toList();
+    auditLog.removeWhere((e) => e.scope == scope);
+    var prev = chain.first.prevHash;
+    for (final e in chain) {
+      final fields = {...e.hashFields(), if (e.seq == seq) 'action': action};
+      final next = AuditEvent.fromJson({
+        ...fields,
+        'prevHash': prev,
+        'hash': auditHash(prev, fields),
+      });
+      auditLog.add(next);
+      prev = next.hash;
+    }
+    _auditHeads[scope] = (chain.last.seq, prev);
+  }
+
+  /// Retention: drops events up to [upTo] and appends the checkpoint naming it.
+  void purgeAudit(String scope, int upTo) {
+    final last = auditLog.firstWhere((e) => e.scope == scope && e.seq == upTo);
+    auditLog.removeWhere((e) => e.scope == scope && e.seq <= upTo);
+    appendAudit(
+      scope,
+      'audit.checkpoint',
+      targets: ['seq:$upTo', 'hash:${last.hash}'],
     );
   }
 
@@ -259,6 +328,9 @@ class SyncHarness {
       j['secret'] = keepSecret.toJson();
     }
     final stored = Item.fromJson(j);
+    if (_items[body.id] case (final prev, _, _)) {
+      (revisionsOf[body.id] ??= []).insert(0, prev);
+    }
     _items[body.id] = (stored, owner, ++itemsSeq);
     return stored;
   }
@@ -560,6 +632,77 @@ class SyncHarness {
           by: me.userId,
           keepSecret: current?.$1.secret,
         ).toJson(),
+      );
+    }
+    if (route == 'GET /audit') {
+      final q = r.url.queryParameters;
+      final scope = q['scope'] ?? 'me';
+      final limit = int.parse(q['limit'] ?? '100');
+      final chain = scope != 'me' && !scope.startsWith('folder:');
+      bool inView(AuditEvent e) => scope == 'me'
+          ? e.actorUser == me.userId
+          : scope.startsWith('folder:')
+          ? e.targetIds.contains(scope.substring(7))
+          : e.scope == (scope == 'user' ? 'user:${me.userId}' : scope);
+      int cmp(AuditEvent e, AuditCursor c) => chain
+          ? e.seq.compareTo(c.q)
+          : [
+              e.ts.compareTo(c.t),
+              e.scope.compareTo(c.s),
+              e.seq.compareTo(c.q),
+            ].firstWhere((x) => x != 0, orElse: () => 0);
+      final all = auditLog.where(inView).toList()
+        ..sort((a, b) => cmp(a, AuditCursor(t: b.ts, s: b.scope, q: b.seq)));
+      final after = q['after'] == null ? null : AuditCursor.decode(q['after']!);
+      final rest = [
+        for (final e in all)
+          if (after == null || cmp(e, after) > 0) e,
+      ];
+      final page = rest.take(limit).toList();
+      return _json({
+        'events': [for (final e in page) e.toJson()],
+        'next': rest.length > limit
+            ? AuditCursor(
+                t: page.last.ts,
+                s: page.last.scope,
+                q: page.last.seq,
+              ).encode()
+            : null,
+      });
+    }
+    if (route == 'POST /events/ssh' || route == 'POST /events/reveal') {
+      if (eventStatus case final status?) {
+        return _error(status, _codeFor(status));
+      }
+      reported.add((route: route, body: body));
+      return http.Response('', 204);
+    }
+    if (r.method == 'GET' &&
+        RegExp(r'^/api/v1/items/[^/]+/revisions$').hasMatch(path)) {
+      final id = path.split('/')[4];
+      final current = _items[id];
+      if (current == null) return _error(404, 'not_found');
+      return _json({
+        'revisions': current.$1.purged
+            ? []
+            : [
+                current.$1.toJson(),
+                for (final i in revisionsOf[id] ?? <Item>[]) i.toJson(),
+              ],
+      });
+    }
+    if (r.method == 'GET' &&
+        RegExp(r'^/api/v1/orgs/[^/]+/settings/retention$').hasMatch(path)) {
+      return _json(
+        retention[path.split('/')[4]] ??
+            {
+              'server': {'auditDays': 365, 'maxVersions': 50, 'trashDays': 30},
+              'org': {
+                'auditDays': null,
+                'maxVersions': null,
+                'trashDays': null,
+              },
+            },
       );
     }
     final orgRoute =

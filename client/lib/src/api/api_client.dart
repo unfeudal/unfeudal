@@ -55,6 +55,12 @@ class ReadOnlyException implements Exception {
 
 typedef DeviceInput = ({String name, String platform});
 
+/// The server's retention values and the org's own (null = the server's applies).
+typedef OrgRetention = ({
+  ({int auditDays, int maxVersions, int trashDays}) server,
+  ({int? auditDays, int? maxVersions, int? trashDays}) org,
+});
+
 class ApiClient {
   ApiClient(this.baseUrl, this._http);
 
@@ -220,6 +226,87 @@ class ApiClient {
           headers: {'if-match': '$ifMatch'},
         ),
       );
+
+  /// One page of an audit view; [next] is the opaque cursor of the next page, null on the last one.
+  Future<({List<AuditEvent> events, String? next})> audit({
+    String scope = 'me',
+    String? after,
+    int limit = 100,
+  }) async {
+    final json = await _send(
+      'GET',
+      '/audit',
+      query: {'scope': scope, 'after': ?after, 'limit': '$limit'},
+    );
+    if (json case {
+      'events': final List<Object?> events,
+      'next': final String? next,
+    }) {
+      return (
+        events: [for (final e in events) AuditEvent.fromJson(e)],
+        next: next,
+      );
+    }
+    throw const FormatException('audit: unexpected body');
+  }
+
+  /// The current version first, then the older ones, newest first.
+  Future<List<Item>> revisions(String itemId) async {
+    final json = await _send('GET', '/items/$itemId/revisions');
+    if (json case {'revisions': final List<Object?> revisions}) {
+      return [for (final i in revisions) Item.fromJson(i)];
+    }
+    throw const FormatException('revisions: unexpected body');
+  }
+
+  Future<void> reportSsh({
+    required String event,
+    required String hostItemId,
+    int? localPort,
+    List<String> jumpHostItemIds = const [],
+  }) => _send(
+    'POST',
+    '/events/ssh',
+    body: {
+      'event': event,
+      'hostItemId': hostItemId,
+      'localPort': ?localPort,
+      if (jumpHostItemIds.isNotEmpty) 'jumpHostItemIds': jumpHostItemIds,
+    },
+  );
+
+  Future<void> reportReveal(String itemId) =>
+      _send('POST', '/events/reveal', body: {'itemId': itemId});
+
+  Future<OrgRetention> orgRetention(String orgId) async {
+    final json = await _send('GET', '/orgs/$orgId/settings/retention');
+    if (json case {
+      'server': {
+        'auditDays': final int auditDays,
+        'maxVersions': final int maxVersions,
+        'trashDays': final int trashDays,
+      },
+      'org': {
+        'auditDays': final int? orgAuditDays,
+        'maxVersions': final int? orgMaxVersions,
+        'trashDays': final int? orgTrashDays,
+      },
+    }) {
+      return (
+        server: (
+          auditDays: auditDays,
+          maxVersions: maxVersions,
+          trashDays: trashDays,
+        ),
+        org: (
+          auditDays: orgAuditDays,
+          maxVersions: orgMaxVersions,
+          trashDays: orgTrashDays,
+        ),
+      );
+    }
+    throw const FormatException('retention: unexpected body');
+  }
 
   Future<({String id, String name, String role})> createOrg(String name) async {
     final json = await _send('POST', '/orgs', body: {'name': name});
