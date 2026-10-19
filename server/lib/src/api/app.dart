@@ -28,6 +28,7 @@ import 'routes/items.dart';
 import 'routes/orgs.dart';
 import 'routes/setup.dart';
 import 'routes/sync.dart';
+import 'routes/teams.dart';
 
 /// Everything a request handler needs, built once at start.
 class AppDeps {
@@ -109,6 +110,9 @@ Never _notFound(Request _) =>
 /// An org route: signed in, then the `orgs` flag.
 Handler _org(Handler inner) => requireAuth(requireFeature(Flag.orgs)(inner));
 
+/// A team route: an org route, then the `teams` flag.
+Handler _team(Handler inner) => _org(requireFeature(Flag.teams)(inner));
+
 /// withDeps → requestLog → securityHeaders → errorMapper → routes.
 Handler buildHandler(AppDeps deps) {
   final api = Router(notFoundHandler: _notFound)
@@ -173,7 +177,21 @@ Handler buildHandler(AppDeps deps) {
       (Request r, String id) => requireAuth((r) => revokeInvite(r, id))(r),
     )
     ..post('/invites/accept', acceptInvite)
-    ..post('/invites/join', requireAuth(joinInvite));
+    ..post('/invites/join', requireAuth(joinInvite))
+    ..post(
+      '/orgs/<org>/teams',
+      (Request r, String org) => _team((r) => createTeam(r, org))(r),
+    )
+    ..put(
+      '/orgs/<org>/teams/<team>',
+      (Request r, String org, String team) =>
+          _team((r) => updateTeam(r, org, team))(r),
+    )
+    ..delete(
+      '/orgs/<org>/teams/<team>',
+      (Request r, String org, String team) =>
+          _team((r) => deleteTeamRoute(r, org, team))(r),
+    );
   final root = Router(notFoundHandler: _notFound)
     ..get('/healthz', healthz)
     ..get('/api/info', info)
