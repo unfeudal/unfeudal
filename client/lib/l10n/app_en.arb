@@ -1098,5 +1098,70 @@
       }
     }
   },
-  "activityRoot": "top level"
+  "activityRoot": "top level",
+  "activityTitle": "Activity",
+  "railActivity": "Activity",
+  "activityScopeMe": "My actions",
+  "activityScopeAccount": "My account",
+  "activityScopeInstance": "This server",
+  "activityScopeFolder": "Folder {name}",
+  "@activityScopeFolder": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "activityYou": "You",
+  "activityMore": "Load more",
+  "activityVerify": "Verify the chain",
+  "activityVerified": "Chain verified: {count} events.",
+  "@activityVerified": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "activityBroken": "The chain breaks at event {seq}.",
+  "@activityBroken": {
+    "placeholders": {
+      "seq": {
+        "type": "int"
+      }
+    }
+  },
+  "activityExport": "Export",
+  "activityExported": "Saved to {path}.",
+  "@activityExported": {
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "activityRewritten": "The server changed history this device had already seen ({scope}, event {seq}).",
+  "@activityRewritten": {
+    "placeholders": {
+      "scope": {
+        "type": "String"
+      },
+      "seq": {
+        "type": "int"
+      }
+    }
+  },
+  "activityVanished": "Events this device had already seen are gone without a checkpoint ({scope}, event {seq}).",
+  "@activityVanished": {
+    "placeholders": {
+      "scope": {
+        "type": "String"
+      },
+      "seq": {
+        "type": "int"
+      }
+    }
+  },
+  "activitySshNote": "SSH sessions, forwards and shown secrets are reported by the app: a modified app can leave them out.",
+  "activityEmpty": "No activity yet."
 }

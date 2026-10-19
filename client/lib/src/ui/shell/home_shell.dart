@@ -16,6 +16,7 @@ import '../../design/motion.dart';
 import '../../storage/local_mirror.dart';
 import '../../sync/sync_engine.dart';
 import '../../version.dart';
+import '../activity/activity_screen.dart';
 import '../admin/instance_admin_screen.dart';
 import '../describe_error.dart';
 import '../hosts/folder_editor_panel.dart';
@@ -251,6 +252,7 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
             Expanded(
               child: switch (page) {
                 ShellPage.keychain => KeychainScreen(onBack: back),
+                ShellPage.activity => ActivityScreen(onBack: back),
                 ShellPage.devices => DevicesScreen(onBack: back),
                 ShellPage.admin => InstanceAdminScreen(onBack: back),
                 ShellPage.settings => SettingsScreen(onBack: back),

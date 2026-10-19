@@ -8,6 +8,7 @@ abstract final class UfIcons {
   static const caretDown = IconData(0xe136, fontFamily: _family);
   static const caretLeft = IconData(0xe138, fontFamily: _family);
   static const caretRight = IconData(0xe13a, fontFamily: _family);
+  static const clockCounterClockwise = IconData(0xe1a0, fontFamily: _family);
   static const copy = IconData(0xe1ca, fontFamily: _family);
   static const copySimple = IconData(0xe1cc, fontFamily: _family);
   static const devices = IconData(0xeba4, fontFamily: _family);
