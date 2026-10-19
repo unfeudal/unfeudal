@@ -860,5 +860,243 @@
         "type": "int"
       }
     }
-  }
+  },
+  "actSetupCompleted": "Server set up",
+  "actAccountDeleted": "Account {t} deleted",
+  "@actAccountDeleted": {
+    "placeholders": {
+      "t": {
+        "type": "String"
+      }
+    }
+  },
+  "actOrgCreated": "Organization created",
+  "actOrgUpdated": "Organization settings changed",
+  "actOrgDeleted": "Organization {t} deleted",
+  "@actOrgDeleted": {
+    "placeholders": {
+      "t": {
+        "type": "String"
+      }
+    }
+  },
+  "actInviteCreated": "Invitation created",
+  "actInviteRevoked": "Invitation revoked",
+  "actInviteAccepted": "Invitation accepted by {x}",
+  "@actInviteAccepted": {
+    "placeholders": {
+      "x": {
+        "type": "String"
+      }
+    }
+  },
+  "actAdminUserDisabled": "Account {t} disabled",
+  "@actAdminUserDisabled": {
+    "placeholders": {
+      "t": {
+        "type": "String"
+      }
+    }
+  },
+  "actAdminUserEnabled": "Account {t} enabled",
+  "@actAdminUserEnabled": {
+    "placeholders": {
+      "t": {
+        "type": "String"
+      }
+    }
+  },
+  "actAuditCheckpoint": "Events up to #{t} removed by retention",
+  "@actAuditCheckpoint": {
+    "placeholders": {
+      "t": {
+        "type": "String"
+      }
+    }
+  },
+  "actDeviceAdded": "A device signed in",
+  "actDeviceRevoked": "A device was revoked",
+  "actAuthLoginFailed": "Failed sign-in attempt",
+  "actAuthRefreshReplay": "Stolen session detected, device revoked",
+  "actAccountPasswordChanged": "Master password changed",
+  "actAccountRecoveryUsed": "Account recovered with the recovery key",
+  "actAccountRecoveryKitChanged": "Recovery kit replaced",
+  "actItemCreated": "{t} created",
+  "@actItemCreated": {
+    "placeholders": {
+      "t": {
+        "type": "String"
+      }
+    }
+  },
+  "actItemUpdated": "{t} edited",
+  "@actItemUpdated": {
+    "placeholders": {
+      "t": {
+        "type": "String"
+      }
+    }
+  },
+  "actItemDeleted": "{t} moved to trash",
+  "@actItemDeleted": {
+    "placeholders": {
+      "t": {
+        "type": "String"
+      }
+    }
+  },
+  "actItemRestored": "{t} restored",
+  "@actItemRestored": {
+    "placeholders": {
+      "t": {
+        "type": "String"
+      }
+    }
+  },
+  "actItemPurged": "{t} deleted for good",
+  "@actItemPurged": {
+    "placeholders": {
+      "t": {
+        "type": "String"
+      }
+    }
+  },
+  "actItemMoved": "{t} moved to {x}",
+  "@actItemMoved": {
+    "placeholders": {
+      "t": {
+        "type": "String"
+      },
+      "x": {
+        "type": "String"
+      }
+    }
+  },
+  "actItemRevealed": "Secret of {t} shown",
+  "@actItemRevealed": {
+    "placeholders": {
+      "t": {
+        "type": "String"
+      }
+    }
+  },
+  "actSshSessionOpened": "Connected to {t}",
+  "@actSshSessionOpened": {
+    "placeholders": {
+      "t": {
+        "type": "String"
+      }
+    }
+  },
+  "actSshSessionClosed": "Disconnected from {t}",
+  "@actSshSessionClosed": {
+    "placeholders": {
+      "t": {
+        "type": "String"
+      }
+    }
+  },
+  "actSshForwardStarted": "Forward {x} started on {t}",
+  "@actSshForwardStarted": {
+    "placeholders": {
+      "t": {
+        "type": "String"
+      },
+      "x": {
+        "type": "String"
+      }
+    }
+  },
+  "actSshForwardStopped": "Forward {x} stopped on {t}",
+  "@actSshForwardStopped": {
+    "placeholders": {
+      "t": {
+        "type": "String"
+      },
+      "x": {
+        "type": "String"
+      }
+    }
+  },
+  "actMemberRoleChanged": "Role of {t} changed",
+  "@actMemberRoleChanged": {
+    "placeholders": {
+      "t": {
+        "type": "String"
+      }
+    }
+  },
+  "actMemberConfirmed": "{t} confirmed",
+  "@actMemberConfirmed": {
+    "placeholders": {
+      "t": {
+        "type": "String"
+      }
+    }
+  },
+  "actMemberRemoved": "{t} left or was removed",
+  "@actMemberRemoved": {
+    "placeholders": {
+      "t": {
+        "type": "String"
+      }
+    }
+  },
+  "actTeamCreated": "Team {t} created",
+  "@actTeamCreated": {
+    "placeholders": {
+      "t": {
+        "type": "String"
+      }
+    }
+  },
+  "actTeamUpdated": "Team {t} changed",
+  "@actTeamUpdated": {
+    "placeholders": {
+      "t": {
+        "type": "String"
+      }
+    }
+  },
+  "actTeamDeleted": "Team {t} deleted",
+  "@actTeamDeleted": {
+    "placeholders": {
+      "t": {
+        "type": "String"
+      }
+    }
+  },
+  "actAclChanged": "Access to {t} changed",
+  "@actAclChanged": {
+    "placeholders": {
+      "t": {
+        "type": "String"
+      }
+    }
+  },
+  "actFolderKeysRotated": "Keys of {t} changed",
+  "@actFolderKeysRotated": {
+    "placeholders": {
+      "t": {
+        "type": "String"
+      }
+    }
+  },
+  "actFolderKeysShared": "Keys of {t} shared",
+  "@actFolderKeysShared": {
+    "placeholders": {
+      "t": {
+        "type": "String"
+      }
+    }
+  },
+  "actFolderRotationDone": "Every item of {t} uses the new keys",
+  "@actFolderRotationDone": {
+    "placeholders": {
+      "t": {
+        "type": "String"
+      }
+    }
+  },
+  "activityRoot": "top level"
 }
