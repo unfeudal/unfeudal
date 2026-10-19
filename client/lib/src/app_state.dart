@@ -23,6 +23,7 @@ import 'loquet/loquet_memory.dart';
 import 'loquet/loquet_mode.dart';
 import 'loquet/mood.dart';
 import 'loquet/reaction_engine.dart';
+import 'orgs/org_controller.dart';
 import 'ssh/jump_connector.dart';
 import 'ssh/port_forwarder.dart';
 import 'ssh/ssh_connector.dart';
@@ -127,6 +128,7 @@ class AppState extends ChangeNotifier implements SshCallbacks {
   LocalMirror? mirror;
   Vault? vault;
   SyncEngine? sync;
+  OrgController? orgs;
   final lockMachine = LockMachine();
   final tabs = <TerminalSession>[];
   int activeTab = 0;
@@ -182,7 +184,7 @@ class AppState extends ChangeNotifier implements SshCallbacks {
   void _refreshLoquet() {
     final mode = effectiveLoquetMode(
       serverHas('mascot'),
-      const [],
+      orgs?.orgs ?? const [],
       settings.loquetMode,
     );
     if (mode != loquet.mode) loquet.mode = mode;
@@ -401,6 +403,7 @@ class AppState extends ChangeNotifier implements SshCallbacks {
     activeTab = 0;
     sync?.stop();
     _autoLock?.stop();
+    orgs?.lock();
     vault?.lock();
     lockMachine.reset();
     stage = AppStage.unlock;
@@ -811,27 +814,49 @@ class AppState extends ChangeNotifier implements SshCallbacks {
     sync?.dispose();
     vault?.removeListener(_applySyncedPrefs);
     vault?.removeListener(_refreshHealth);
+    orgs?.removeListener(_onOrgsChanged);
     api.onTokens = (t) => sessions.saveRefreshToken(t.refreshToken);
     final engine = SyncEngine(api: api, mirror: m, deviceId: stored!.deviceId);
     final v = Vault(mirror: m, ledger: LedgerStore(m), write: engine.write);
     final suffix =
         ' ${lookupAppLocalizations(Locale(_uiLocale ?? 'en')).conflictSuffix}';
+    final o = OrgController(
+      mirror: m,
+      vault: v,
+      api: api,
+      sync: engine,
+      userId: stored!.userId,
+      publicKey: accountPublicKey,
+      emit: emit,
+      online: () => engine.online,
+    );
     engine
       ..copyOf = ((mine, {required personal}) =>
-          v.conflictCopy(mine, suffix: suffix))
+          mine.scope == ItemScope.org && !personal
+          ? o.writer.conflictCopy(mine, suffix: suffix)
+          : v.conflictCopy(mine, suffix: suffix))
+      ..onOrgBlock = o.onBlock
       ..onChanged = v.reload
       ..onUnauthorized = ((reason) => unawaited(_sessionEnded(reason)))
       ..onRestoreAccepted = v.ledger.reset;
     this.api = api;
     sync = engine;
     vault = v;
+    orgs = o;
 
     ledgerReported = !await v.unlock(unlocked.userKey);
+    await o.unlock(unlocked);
+    o.addListener(_onOrgsChanged);
     v.addListener(_applySyncedPrefs);
     v.addListener(_refreshHealth);
     engine.addListener(_onSyncChanged);
     _applySyncedPrefs();
     _refreshHealth();
+  }
+
+  void _onOrgsChanged() {
+    _refreshLoquet();
+    notifyListeners();
   }
 
   /// The server ended the session: back to login, mirror, outbox and stored session kept.

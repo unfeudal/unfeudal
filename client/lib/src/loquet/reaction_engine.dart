@@ -328,6 +328,10 @@ class ReactionEngine {
           );
         }
         return _out(Reaction(baseline, line: LineKey.idleClick));
+      case SharedVaultCreated():
+        return milestone('sharedVault', LineKey.sharedVault);
+      case KeyRotated():
+        return milestone('firstKeyRotation', LineKey.firstKeyRotation);
       default:
         return null;
     }
