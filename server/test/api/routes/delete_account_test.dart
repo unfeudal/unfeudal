@@ -128,6 +128,13 @@ void main() {
     expect(r.body['reason'], 'last_owner');
     expect(r.body['orgs'], ['Acme']);
     expect(
+      await s.db.query(
+        "SELECT key FROM login_attempts WHERE key LIKE 'acct:%'",
+      ),
+      isEmpty,
+      reason: 'the key was right: the acct keys reset whatever check refuses after it',
+    );
+    expect(
       await w.count('org_members', 'user_id = @u', {'u': w.id('olivia')}),
       1,
     );

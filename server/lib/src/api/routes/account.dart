@@ -299,6 +299,10 @@ Future<Response> deleteAccount(Request request) async {
   if (!await verifySecret(user['auth_hash']! as String, current)) {
     throw ApiError(ApiErrorCode.forbidden, 'Current master password is wrong.');
   }
+  await clearCredentials(
+    request,
+    email,
+  ); // the key was right, whatever refuses next
   await deps.db.transaction(
     (tx) => deleteUser(
       tx,
@@ -307,6 +311,5 @@ Future<Response> deleteAccount(Request request) async {
       audit: auditWriter(request, tx),
     ),
   ); // 5. last owner → 409 inside
-  await clearCredentials(request, email);
   return noContent();
 }
