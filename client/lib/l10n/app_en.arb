@@ -809,5 +809,56 @@
       }
     }
   },
-  "orgMenu": "Organization"
+  "orgMenu": "Organization",
+  "railAdmin": "Administration",
+  "adminAccounts": "Accounts",
+  "adminInvites": "Invitations",
+  "adminOrgs": "Organizations",
+  "adminDisable": "Disable",
+  "adminEnable": "Enable",
+  "adminDelete": "Delete account",
+  "adminDeleteConfirm": "Delete {email} and everything personal to it?",
+  "@adminDeleteConfirm": {
+    "placeholders": {
+      "email": {
+        "type": "String"
+      }
+    }
+  },
+  "adminOrgOwners": "Owners",
+  "adminOrgMembers": "{count} members",
+  "@adminOrgMembers": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "adminOrgStorage": "Storage",
+  "adminOrgActivity": "Last activity",
+  "adminOrgDelete": "Delete organization",
+  "sizeKb": "{n} KB",
+  "@sizeKb": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "sizeMb": "{n} MB",
+  "@sizeMb": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "sizeGb": "{n} GB",
+  "@sizeGb": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  }
 }

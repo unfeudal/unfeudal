@@ -24,6 +24,7 @@ abstract final class UfIcons {
   static const minus = IconData(0xe32a, fontFamily: _family);
   static const pencil = IconData(0xe3b4, fontFamily: _family);
   static const plus = IconData(0xe3d4, fontFamily: _family);
+  static const shieldCheck = IconData(0xe40c, fontFamily: _family);
   static const sidebarSimple = IconData(0xec24, fontFamily: _family);
   static const square = IconData(0xe45e, fontFamily: _family);
   static const trash = IconData(0xe4a6, fontFamily: _family);

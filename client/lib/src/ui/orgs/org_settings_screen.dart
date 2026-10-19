@@ -95,7 +95,12 @@ class _OrgSettingsScreenState extends State<OrgSettingsScreen> {
     final yes = await showUfDialog<bool>(
       context,
       alert: true,
-      (_) => _DeleteOrgDialog(name: name),
+      (_) => ConfirmNameDialog(
+        name: name,
+        title: AppLocalizations.of(context).orgDelete,
+        fieldKey: const Key('org-delete-confirm'),
+        okKey: const Key('org-delete-ok'),
+      ),
     );
     if (yes != true || !mounted) return;
     final l = AppLocalizations.of(context);
@@ -171,16 +176,26 @@ class _OrgSettingsScreenState extends State<OrgSettingsScreen> {
   }
 }
 
-/// Enabled only once the exact org name is typed.
-class _DeleteOrgDialog extends StatefulWidget {
-  const _DeleteOrgDialog({required this.name});
+/// An org deletion: the danger button is enabled only once the exact org name is typed.
+class ConfirmNameDialog extends StatefulWidget {
+  const ConfirmNameDialog({
+    super.key,
+    required this.name,
+    required this.title,
+    required this.fieldKey,
+    required this.okKey,
+  });
+
   final String name;
+  final String title;
+  final Key fieldKey;
+  final Key okKey;
 
   @override
-  State<_DeleteOrgDialog> createState() => _DeleteOrgDialogState();
+  State<ConfirmNameDialog> createState() => _ConfirmNameDialogState();
 }
 
-class _DeleteOrgDialogState extends State<_DeleteOrgDialog> {
+class _ConfirmNameDialogState extends State<ConfirmNameDialog> {
   final _typed = TextEditingController();
 
   @override
@@ -194,22 +209,22 @@ class _DeleteOrgDialogState extends State<_DeleteOrgDialog> {
     final l = AppLocalizations.of(context);
     final colors = UfColors.of(context);
     return UfDialog(
-      title: l.orgDelete,
+      title: widget.title,
       message: l.orgDeleteConfirm(widget.name),
       actions: [
         CancelButton(onPressed: () => Navigator.pop(context, false)),
         FilledButton(
-          key: const Key('org-delete-ok'),
+          key: widget.okKey,
           style: dangerButtonStyle(colors),
           onPressed: _typed.text == widget.name
               ? () => Navigator.pop(context, true)
               : null,
-          child: Text(l.orgDelete),
+          child: Text(widget.title),
         ),
       ],
       children: [
         TextField(
-          key: const Key('org-delete-confirm'),
+          key: widget.fieldKey,
           controller: _typed,
           autofocus: true,
           onChanged: (_) => setState(() {}),
