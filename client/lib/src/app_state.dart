@@ -19,6 +19,7 @@ import 'session/lock_machine.dart';
 import 'session/session_store.dart';
 import 'settings/settings.dart';
 import 'ssh/jump_connector.dart';
+import 'ssh/port_forwarder.dart';
 import 'ssh/ssh_connector.dart';
 import 'storage/local_mirror.dart';
 import 'sync/ledger_store.dart';
@@ -342,7 +343,7 @@ class AppState extends ChangeNotifier implements SshCallbacks {
   /// Keys, entries and terminal tabs go; the stage is set at once, the tabs close behind it.
   Future<void> lock() async {
     trace(TraceArea.session, 'lock (${tabs.length} tabs closed)');
-    final closing = [for (final tab in tabs) tab.close()];
+    final closing = [for (final tab in tabs) _closeSession(tab)];
     tabs.clear();
     activeTab = 0;
     sync?.stop();
@@ -493,6 +494,14 @@ class AppState extends ChangeNotifier implements SshCallbacks {
           tags: found.meta.tags,
         ),
       );
+      tab.forwarder = PortForwarder(conn.target.forwardLocal);
+      for (final f in found.meta.forwards.where((f) => f.autoStart)) {
+        try {
+          await startForward(tab, f);
+        } on Exception {
+          // already recorded and reported; the shell stays
+        }
+      }
     } on HostKeyRejected catch (e) {
       tab.fail(
         e,
@@ -522,7 +531,30 @@ class AppState extends ChangeNotifier implements SshCallbacks {
     tabs.remove(tab);
     activeTab = tabs.isEmpty ? 0 : activeTab.clamp(0, tabs.length - 1);
     notifyListeners();
+    await _closeSession(tab);
+  }
+
+  /// Reports every running forward as stopped, then closes the shell, forwards and hops.
+  Future<void> _closeSession(TerminalSession tab) async {
+    for (final port in tab.forwarder?.active.keys ?? const <int>[]) {
+      emit(ForwardStopped(hostId: tab.hostId, localPort: port));
+    }
     await tab.close();
+  }
+
+  Future<void> startForward(TerminalSession tab, PortForward f) async {
+    try {
+      await tab.forwarder!.start(f);
+    } on Exception catch (e) {
+      emit(ForwardFailed(hostId: tab.hostId, localPort: f.localPort, error: e));
+      rethrow;
+    }
+    emit(ForwardStarted(hostId: tab.hostId, forward: f));
+  }
+
+  Future<void> stopForward(TerminalSession tab, int localPort) async {
+    await tab.forwarder!.stop(localPort);
+    emit(ForwardStopped(hostId: tab.hostId, localPort: localPort));
   }
 
   /// The live tab's state; else `verify` until a key is trusted, then `offline`.

@@ -6,6 +6,7 @@ import '../api/api_client.dart';
 import '../app_state.dart';
 import '../keys/key_tools.dart';
 import '../ssh/jump_connector.dart';
+import '../ssh/port_forwarder.dart';
 import '../ssh/ssh_connector.dart';
 import '../storage/local_mirror.dart';
 
@@ -29,6 +30,8 @@ String describeError(AppLocalizations l, Object e) => switch (e) {
   SshConnectionFailed() => l.errorSshConnection,
   MissingUser() => l.errorMissingUser,
   JumpLoop() => l.errorJumpLoop,
+  PortInUse(:final port) => l.errorPortInUse(port),
+  ForwardBindFailed(:final port) => l.errorForwardBind(port),
   JumpTooDeep() => l.errorJumpTooDeep,
   JumpHostMissing() => l.errorJumpMissing,
   JumpChainFailed(:final hostName, :final cause) => l.errorJumpHop(
