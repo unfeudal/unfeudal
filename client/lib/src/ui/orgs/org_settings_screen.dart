@@ -30,6 +30,9 @@ class _OrgSettingsScreenState extends State<OrgSettingsScreen> {
 
   /// What the server holds, as last read or saved.
   late Map<String, Object?> _saved;
+
+  /// The server's retention values, shown next to each field; null until read.
+  Map<String, int>? _server;
   String? _error;
 
   OrgSummary? get _org =>
@@ -50,6 +53,33 @@ class _OrgSettingsScreenState extends State<OrgSettingsScreen> {
     _mascot = _saved['mascot']! as bool;
     for (final k in _retention) {
       _fields[k]!.text = _saved[k] == null ? '' : '${_saved[k]}';
+    }
+    _loadRetention();
+  }
+
+  /// The org's values start the fields; a failed read leaves them as they are, without the server's values.
+  Future<void> _loadRetention() async {
+    try {
+      final r = await AppScope.read(context).api!.orgRetention(widget.orgId);
+      if (!mounted) return;
+      final org = {
+        'auditDays': r.org.auditDays,
+        'maxVersions': r.org.maxVersions,
+        'trashDays': r.org.trashDays,
+      };
+      setState(() {
+        _server = {
+          'auditDays': r.server.auditDays,
+          'maxVersions': r.server.maxVersions,
+          'trashDays': r.server.trashDays,
+        };
+        for (final k in _retention) {
+          _saved[k] = org[k];
+          _fields[k]!.text = org[k] == null ? '' : '${org[k]}';
+        }
+      });
+    } on Exception {
+      // the screen stays usable without them
     }
   }
 
@@ -127,7 +157,14 @@ class _OrgSettingsScreenState extends State<OrgSettingsScreen> {
       controller: _fields[settingKey],
       keyboardType: TextInputType.number,
       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-      decoration: InputDecoration(labelText: label),
+      decoration: InputDecoration(
+        labelText: label,
+        helperText: switch (_server?[settingKey]) {
+          null => null,
+          0 => l.orgRetentionUnlimited,
+          final days => l.orgRetentionServer(days),
+        },
+      ),
     );
     return ManageFrame(
       title: l.orgSettingsTitle,
