@@ -35,7 +35,7 @@ Map<String, Object?> Function(Object?) parserFor(String name) => switch (name) {
 void main() {
   final dir = Directory('test/fixtures');
 
-  test('v0 holds exactly the contract list', () {
+  test('v0 holds exactly the fixed list', () {
     final found = Directory('${dir.path}/v0')
         .listSync()
         .map((f) => f.uri.pathSegments.last)

@@ -251,7 +251,7 @@ extension Accounts on TestServer {
     );
   }
 
-  /// Inserts the account directly (accounts otherwise come from invites, p6), then logs in.
+  /// Inserts the account directly (accounts otherwise come from invites), then logs in.
   Future<TestSession> createUser(
     String email, {
     String password = testPassword,

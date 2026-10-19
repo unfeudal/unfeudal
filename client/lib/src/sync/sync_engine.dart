@@ -218,7 +218,10 @@ class SyncEngine extends ChangeNotifier {
       if (page.org case final org?) {
         mirror
           ..setKv(KvKey.orgBlock, jsonEncode(org.toJson()))
-          ..setKv(KvKey.orgCursor, '${org.orgCursor}'); // itemIds rule: p6
+          ..setKv(
+            KvKey.orgCursor,
+            '${org.orgCursor}',
+          ); // Org hook: the itemIds rule
         orgCursor = org.orgCursor;
       }
       trace(
@@ -278,7 +281,8 @@ class SyncEngine extends ChangeNotifier {
   Future<void> acceptRestore() async {
     trace(TraceArea.sync, 'restore accepted: full pull');
     mirror.resetForRestore(); // cursor, orgCursor, orgBlock reset; anchors emptied
-    await onRestoreAccepted?.call(); // LedgerStore.reset: marks emptied, pins kept (p6, p7 add theirs)
+    await onRestoreAccepted
+        ?.call(); // LedgerStore.reset: marks emptied, pins kept
     _pending = false;
     _accepting = true;
     try {

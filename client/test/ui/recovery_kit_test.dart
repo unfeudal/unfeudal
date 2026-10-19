@@ -11,7 +11,7 @@ const sampleWords =
     'ABCD-EFGH-IJKL-MNOP-QRST-UVWX-YZ23-4567-ABCD-EFGH-IJKL-MNOP-Q';
 
 void main() {
-  test('text kit: the contract lines', () {
+  test('text kit: the fixed lines', () {
     final text = recoveryKitText((
       server: Uri.parse('https://vault.example.org'),
       email: 'camille@example.org',
