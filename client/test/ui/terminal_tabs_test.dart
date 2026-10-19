@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:unfeudal_client/l10n/app_localizations.dart';
 import 'package:unfeudal_client/src/design/seal.dart';
+import 'package:unfeudal_client/src/loquet/loquet.dart';
+import 'package:unfeudal_client/src/loquet/loquet_pose.dart';
 import 'package:unfeudal_client/src/ssh/ssh_connector.dart';
 import 'package:unfeudal_client/src/ui/hosts/host_key_dialog.dart';
 import 'package:unfeudal_client/src/ui/shell/home_shell.dart';
@@ -91,9 +93,47 @@ void main() {
     expect(find.text(l.errorSshAuth), findsOneWidget);
     expect(find.text(l.tabErrorTitle('web')), findsOneWidget);
     expect(find.byKey(const Key('tab-edit-host')), findsOneWidget);
+    final face = t.widget<Loquet>(
+      find.descendant(
+        of: find.byKey(const Key('tab-error-card')),
+        matching: find.byType(Loquet),
+      ),
+    );
+    expect(
+      (face.mood, face.size),
+      (LoquetMood.sad, 88.0),
+      reason: 'an error state, 80-96 px',
+    );
     await t.tap(find.byKey(const Key('tab-retry')));
     await pumpReal(t, rounds: 5);
     expect(ssh.targets, hasLength(2));
     expect(s.tabs, hasLength(1));
+  });
+
+  testWidgets('a refused changed host key shows Loquet alert, not sad', (
+    t,
+  ) async {
+    final ssh = FakeSshConnector()
+      ..failWith = const HostKeyRejected(HostKeyDecision.changed);
+    final s = await signedInState(t, ssh: ssh);
+    late String id;
+    await t.runAsync(
+      () async => id = await s.vault!.upsertItem(
+        type: 'host',
+        meta: hostJson('web', user: 'root'),
+      ),
+    );
+    await pumpApp(t, state: s);
+    await pumpReal(t, rounds: 5);
+    await t.tap(find.byKey(Key('host-$id')));
+    await t.sendKeyEvent(LogicalKeyboardKey.enter);
+    await pumpReal(t, rounds: 5);
+    final face = t.widget<Loquet>(
+      find.descendant(
+        of: find.byKey(const Key('tab-error-card')),
+        matching: find.byType(Loquet),
+      ),
+    );
+    expect(face.mood, LoquetMood.alert);
   });
 }
