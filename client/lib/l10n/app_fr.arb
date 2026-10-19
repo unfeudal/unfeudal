@@ -511,5 +511,13 @@
   "historyRestore": "Restaurer cette version",
   "historyRestoreConfirm": "Réécrire cette version comme la plus récente ? L'actuelle reste dans l'historique.",
   "identityReveal": "Afficher le secret",
-  "identityRevealTitle": "Secret de {name}"
+  "identityRevealTitle": "Secret de {name}",
+  "trashTitle": "Corbeille",
+  "railTrash": "Corbeille",
+  "trashEmpty": "La corbeille est vide.",
+  "trashDeletedOn": "Mis à la corbeille le {date}",
+  "trashPurgeOn": "Suppression définitive le {date}",
+  "trashPurgeBy": "Suppression définitive au plus tard le {date}",
+  "trashKept": "Conservé jusqu'à restauration.",
+  "trashRestore": "Restaurer"
 }
