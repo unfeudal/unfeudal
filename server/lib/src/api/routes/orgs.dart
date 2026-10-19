@@ -71,15 +71,14 @@ Future<Response> updateOrg(Request request, String org) async {
       'trashDays': config.trashRetentionDays,
     };
     for (final MapEntry(:key, :value) in sent.entries) {
-      if (value == null) continue;
       if (key == 'mascot') {
         if (value is! bool) {
           throw ApiError(
             ApiErrorCode.invalidRequest,
-            'mascot must be a boolean or null.',
+            'mascot must be a boolean.',
           ); // 4.
         }
-      } else {
+      } else if (value != null) {
         _retention(key, value, server[key]!); // 5.
       }
     }
