@@ -8,10 +8,12 @@ import '../../design/field.dart';
 import '../../design/motion.dart';
 import '../../design/tokens.dart';
 import '../../events/app_events.dart';
+import '../../vault/org_writer.dart';
 import '../../vault/vault.dart';
 import '../describe_error.dart';
 import 'editor_frame.dart';
 import 'forwards_editor.dart';
+import 'host_binding_field.dart';
 import 'jump_host_picker.dart';
 
 /// Edits a host; empty port, user and key show the inherited value and where it comes from.
@@ -40,6 +42,7 @@ class _HostEditorPanelState extends State<HostEditorPanel> {
   String? _identityId;
   String? _folderId;
   String? _jumpHostId;
+  IdentityMode _identityMode = IdentityMode.shared;
 
   /// Null while a forward row has a problem.
   List<PortForward>? _forwards = const [];
@@ -68,6 +71,9 @@ class _HostEditorPanelState extends State<HostEditorPanel> {
     _identityId = meta['identityId'] as String?;
     _folderId = _entry?.folderId ?? widget.folderId;
     _jumpHostId = meta['jumpHostId'] as String?;
+    if (meta['identityMode'] == IdentityMode.perMember.name) {
+      _identityMode = IdentityMode.perMember;
+    }
     if (widget.hostId case final id?) {
       _forwards =
           AppScope.read(context).vault!.hostLookup(id)?.meta.forwards ??
@@ -121,6 +127,7 @@ class _HostEditorPanelState extends State<HostEditorPanel> {
         for (final f in _forwards ?? const <PortForward>[]) f.toJson(),
       ],
       'jumpHostId': _jumpHostId,
+      if (_entry?.orgId != null) 'identityMode': _identityMode.name,
     };
     // written only when set
     if (_forwards?.isEmpty ?? true) meta.remove('forwards');
@@ -135,12 +142,20 @@ class _HostEditorPanelState extends State<HostEditorPanel> {
     if (_problems.isNotEmpty) return setState(() => _failures++);
     try {
       final isNew = widget.hostId == null;
-      final id = await vault.upsertItem(
-        type: 'host',
-        id: widget.hostId,
-        folderId: _folderId,
-        meta: meta,
-      );
+      final orgId = _entry?.orgId;
+      final id = orgId == null
+          ? await vault.upsertItem(
+              type: 'host',
+              id: widget.hostId,
+              folderId: _folderId,
+              meta: meta,
+            )
+          : await state.orgs!.writer.upsert(
+              type: 'host',
+              id: widget.hostId,
+              target: OrgTarget(orgId, _folderId),
+              meta: meta,
+            );
       if (isNew) {
         state.emit(
           HostCreated(
@@ -218,9 +233,10 @@ class _HostEditorPanelState extends State<HostEditorPanel> {
       );
     }
 
+    final orgId = entry?.orgId;
     final identities = vault
         .ofKind(ItemKind.identity)
-        .where((e) => e.state == EntryState.ok)
+        .where((e) => e.state == EntryState.ok && e.orgId == orgId)
         .toList();
     final folders = vault
         .ofKind(ItemKind.folder)
@@ -305,6 +321,29 @@ class _HostEditorPanelState extends State<HostEditorPanel> {
           source: _identityId == null ? source('identityId') : null,
           onChanged: editable ? (v) => setState(() => _identityId = v) : null,
         ),
+        if (orgId != null)
+          Wrap(
+            key: const Key('host-identity-mode'),
+            spacing: 8,
+            children: [
+              for (final (mode, label) in [
+                (IdentityMode.shared, l.hostIdentityShared),
+                (IdentityMode.perMember, l.hostIdentityPerMember),
+              ])
+                ChoiceChip(
+                  key: Key('identity-mode-${mode.name}'),
+                  label: Text(label),
+                  selected: _identityMode == mode,
+                  onSelected: editable
+                      ? (_) => setState(() => _identityMode = mode)
+                      : null,
+                ),
+            ],
+          ),
+        if (orgId != null &&
+            _identityMode == IdentityMode.perMember &&
+            widget.hostId != null)
+          HostBindingField(hostId: widget.hostId!),
         JumpHostPicker(
           key: const Key('jump-picker'),
           hostId: widget.hostId,
