@@ -7,7 +7,10 @@ String b64(List<int> bytes) => base64Url.encode(bytes).replaceAll('=', '');
 /// Strict: url alphabet only, canonical (re-encodes to the same text), so a round-trip is lossless.
 Uint8List unb64(String text) {
   final s = text.replaceFirst(RegExp(r'={1,2}$'), '');
-  if (!RegExp(r'^[A-Za-z0-9_-]*$').hasMatch(s) || s.length % 4 == 1) {
+  final padded = s.length != text.length;
+  if (!RegExp(r'^[A-Za-z0-9_-]*$').hasMatch(s) ||
+      s.length % 4 == 1 ||
+      (padded && text.length % 4 != 0)) {
     throw const FormatException('invalid base64url');
   }
   final bytes = base64Url.decode(base64Url.normalize(s));
