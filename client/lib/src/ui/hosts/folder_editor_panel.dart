@@ -11,6 +11,7 @@ import '../../vault/vault.dart';
 import '../describe_error.dart';
 import '../fields.dart';
 import 'editor_frame.dart';
+import 'jump_host_picker.dart';
 
 /// Edits a folder: name, parent (never itself or inside itself) and defaults for the hosts inside.
 class FolderEditorPanel extends StatefulWidget {
@@ -38,6 +39,7 @@ class _FolderEditorPanelState extends State<FolderEditorPanel> {
   final _user = TextEditingController();
   String? _parentId;
   String? _identityId;
+  String? _jumpHostId;
   final _problems = <String, String>{};
   String? _error;
   int _failures = 0;
@@ -55,6 +57,7 @@ class _FolderEditorPanelState extends State<FolderEditorPanel> {
     _port.text = defaults['port'] == null ? '' : '${defaults['port']}';
     _user.text = (defaults['user'] as String?) ?? '';
     _identityId = defaults['identityId'] as String?;
+    _jumpHostId = defaults['jumpHostId'] as String?;
     _parentId = entry?.folderId ?? widget.parentId;
   }
 
@@ -110,6 +113,7 @@ class _FolderEditorPanelState extends State<FolderEditorPanel> {
         'port': port,
         'user': _user.text.trim().isEmpty ? null : _user.text.trim(),
         'identityId': _identityId,
+        'jumpHostId': _jumpHostId,
       },
     };
     FolderMeta? meta;
@@ -211,6 +215,13 @@ class _FolderEditorPanelState extends State<FolderEditorPanel> {
           entries: identities,
           value: _identityId,
           onChanged: (v) => setState(() => _identityId = v),
+        ),
+        JumpHostPicker(
+          key: const Key('folder-jump'),
+          hostId: null,
+          folderId: widget.folderId,
+          value: _jumpHostId,
+          onChanged: (v) => setState(() => _jumpHostId = v),
         ),
         if (_error case final error?)
           Text(error, style: TextStyle(color: UfColors.of(context).danger)),
