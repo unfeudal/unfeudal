@@ -139,11 +139,15 @@ class _HostEditorPanelState extends State<HostEditorPanel> {
         for (final f in _forwards ?? const <PortForward>[]) f.toJson(),
       ],
       'jumpHostId': _jumpHostId,
-      if (_orgId != null) 'identityMode': _identityMode.name,
+      'identityMode': _identityMode.name,
     };
     // written only when set
     if (_forwards?.isEmpty ?? true) meta.remove('forwards');
     if (_jumpHostId == null) meta.remove('jumpHostId');
+    if (port == null) meta.remove('port'); // inherited
+    if (_orgId == null || _identityMode == IdentityMode.shared) {
+      meta.remove('identityMode');
+    }
     if (_problems.isEmpty) {
       try {
         HostMeta.fromJson(meta);
