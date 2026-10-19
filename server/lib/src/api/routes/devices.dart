@@ -2,6 +2,7 @@
 import 'package:shelf/shelf.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
+import '../../audit/audit_log.dart';
 import '../../auth/tokens.dart';
 import '../app.dart';
 import '../errors.dart';
@@ -48,7 +49,11 @@ Future<Response> deleteDevice(Request request, String id) async {
     );
     if (rows.isEmpty) throw ApiError(ApiErrorCode.notFound, 'Not found.');
     await revokeDevice(tx, id, deps.clock.now());
-    // Audit hook: device.revoked.
+    await auditWriter(request, tx)(
+      AuditScope.user(auth.userId),
+      'device.revoked',
+      [id],
+    );
   });
   return noContent();
 }

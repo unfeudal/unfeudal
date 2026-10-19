@@ -140,10 +140,6 @@ void main() {
         {'k': key, 't': t},
       );
     }
-    await s.db.execute(
-      "INSERT INTO audit_ips (scope, seq, ip) VALUES (@s, 1, '1.2.3.4')",
-      {'s': 'user:${mia.userId}'},
-    );
     await s.db.transaction(
       (tx) => deleteUser(tx, mia.userId, actor: w.io.userId),
     );
@@ -157,7 +153,10 @@ void main() {
     );
     expect(await w.count('items', 'id = @i', {'i': mine['id']}), 0);
     expect(await w.count('org_members', 'user_id = @u', p), 0);
-    expect(await w.count('audit_ips'), 0);
+    expect(
+      await w.count('audit_ips', 'scope = @s', {'s': 'user:${mia.userId}'}),
+      0,
+    );
     expect(
       (await s.db.query(
         "SELECT key FROM login_attempts WHERE key <> 'ip:203.0.113.7' ORDER BY key",
