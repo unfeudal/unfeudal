@@ -138,3 +138,13 @@ final class KeyRotated extends AppEvent {
   final String orgId;
   final String folderId;
 }
+
+final class SessionClosed extends AppEvent {
+  const SessionClosed({required this.hostId});
+  final String hostId;
+}
+
+final class SecretRevealed extends AppEvent {
+  const SecretRevealed({required this.itemId});
+  final String itemId;
+}
