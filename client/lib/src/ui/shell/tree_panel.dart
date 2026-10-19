@@ -186,7 +186,20 @@ class _TreePanelState extends State<TreePanel> {
           ),
           Expanded(
             child: awaiting
-                ? EmptyState(title: org.name, body: l.orgAwaiting)
+                ? Column(
+                    children: [
+                      Expanded(
+                        child: EmptyState(title: org.name, body: l.orgAwaiting),
+                      ),
+                      TextButton(
+                        key: const Key('org-awaiting-leave'),
+                        onPressed: () =>
+                            confirmAndLeaveOrg(context, org.id, org.name),
+                        child: Text(l.orgLeave),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                  )
                 : rows.isEmpty
                 ? Center(
                     child: Padding(
