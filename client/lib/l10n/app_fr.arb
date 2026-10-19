@@ -532,5 +532,10 @@
   "securityResetBody": "En cas d'appareil perdu ou de kit de récupération exposé : nouveau mot de passe maître, tous les autres appareils déconnectés, nouveau kit de récupération.",
   "securityResetNoKit": "Mot de passe changé. Ce serveur ne permet pas de nouveau kit de récupération.",
   "settingsSecurity": "Sécurité",
-  "recoverOpenKit": "Ouvrir le fichier du kit de récupération"
+  "recoverOpenKit": "Ouvrir le fichier du kit de récupération",
+  "biometricReason": "Déverrouiller le coffre Unfeudal",
+  "unlockBiometricWindows": "Windows Hello",
+  "unlockBiometricMac": "Touch ID",
+  "settingsBiometric": "Déverrouiller avec Windows Hello ou Touch ID",
+  "settingsBiometricBody": "La clé du coffre reste sur cet appareil, scellée par le matériel sécurisé."
 }

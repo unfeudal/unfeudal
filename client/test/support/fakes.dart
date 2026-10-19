@@ -340,6 +340,7 @@ AppState testAppState({
   SettingsStore? settingsStore,
   LoquetMemory? loquetMemory,
   DateTime Function()? loquetClock,
+  BiometricBackend? biometrics,
 }) {
   final h = harness ?? SyncHarness();
   final m = mirrors ?? <String, LocalMirror>{};
@@ -355,6 +356,7 @@ AppState testAppState({
     loquetMemory: loquetMemory,
     // a Thursday noon: no suite depends on the machine's hour, weekday or calendar
     loquetClock: loquetClock ?? () => DateTime(2026, 10, 15, 12),
+    biometrics: biometrics,
   );
 }
 

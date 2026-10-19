@@ -1239,5 +1239,10 @@
   "securityResetBody": "For a lost device or an exposed recovery kit: new master password, every other device signed out, new recovery kit.",
   "securityResetNoKit": "Password changed. This server does not allow a new recovery kit.",
   "settingsSecurity": "Security",
-  "recoverOpenKit": "Open the recovery kit file"
+  "recoverOpenKit": "Open the recovery kit file",
+  "biometricReason": "Unlock the Unfeudal vault",
+  "unlockBiometricWindows": "Windows Hello",
+  "unlockBiometricMac": "Touch ID",
+  "settingsBiometric": "Unlock with Windows Hello or Touch ID",
+  "settingsBiometricBody": "The vault key is kept on this device, sealed by the secure hardware."
 }
