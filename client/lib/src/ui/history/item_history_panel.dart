@@ -16,6 +16,10 @@ import '../../vault/org_writer.dart';
 import '../../vault/vault.dart';
 import '../describe_error.dart';
 
+/// Whether [e] may be rewritten (restored): always for personal items, `edit` on its parent folder for org items.
+bool canEditEntry(AppState s, VaultEntry e) =>
+    e.orgId == null || (s.orgs?.writer.canEdit(e.orgId!, e.folderId) ?? false);
+
 /// Whether [e]'s secrets may be shown here: the server's reveal flag, and `reveal` on the folder for org items.
 bool canReveal(AppState s, VaultEntry e) {
   if (!s.serverHas('reveal')) return false; // client-only flag
@@ -178,6 +182,7 @@ class _ItemHistoryPanelState extends State<ItemHistoryPanel> {
     final restorable =
         entry != null &&
         entry.state == EntryState.ok &&
+        canEditEntry(state, entry) &&
         !state.vault!.isTrashed(entry.id) &&
         !(state.sync?.readOnly ?? true);
     final reveal = entry != null && canReveal(state, entry);
