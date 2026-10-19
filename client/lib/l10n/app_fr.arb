@@ -573,5 +573,7 @@
   "snippetLocation": "Enregistré dans",
   "keychainPlace": "Clés de",
   "inviteBy": "par {email}",
-  "activityExportedBroken": "Enregistré dans {path}, mais la chaîne se rompt à l'événement {seq} : gardez ce fichier comme preuve."
+  "activityExportedBroken": "Enregistré dans {path}, mais la chaîne se rompt à l'événement {seq} : gardez ce fichier comme preuve.",
+  "activityScopeDeletedOrg": "Organisation supprimée {id}",
+  "activityOpenDeletedOrg": "Voir son activité"
 }

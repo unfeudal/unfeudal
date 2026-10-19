@@ -5,6 +5,7 @@ import 'package:unfeudal_client/src/ui/activity/activity_screen.dart';
 import 'package:unfeudal_client/src/ui/shell/home_shell.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
+import '../support/fakes.dart';
 import '../support/org_fixtures.dart';
 import '../support/pump_app.dart';
 import '../support/sync_harness.dart';
@@ -151,6 +152,35 @@ void main() {
       await pumpReal(t);
       expect(saved, hasLength(1));
       expect(find.textContaining('breaks at event'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'the Instance Owner opens a deleted org\'s chain from its deletion event',
+    (t) async {
+      final h = SyncHarness(capabilities: ['audit', 'sync']);
+      final s = await signedInState(
+        t,
+        harness: h,
+      ); // the first account is the Instance Owner
+      final gone = newId();
+      h.appendAudit('org:$gone', 'org.created', actorUser: s.stored!.userId);
+      h.appendAudit(
+        'instance',
+        'org.deleted',
+        actorUser: s.stored!.userId,
+        targets: [gone],
+      );
+      await pumpApp(
+        t,
+        state: s,
+        child: const ActivityScreen(scope: 'instance'),
+      );
+      await pumpReal(t);
+      await t.tap(find.byKey(Key('activity-open-org-$gone')));
+      await pumpReal(t);
+      expect(h.requests.where((r) => r == 'GET /api/v1/audit'), hasLength(2));
+      expect(find.byKey(Key('activity-scope-org:$gone')), findsWidgets);
     },
   );
 
