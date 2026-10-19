@@ -27,6 +27,7 @@ abstract final class UfIcons {
   static const sidebarSimple = IconData(0xec24, fontFamily: _family);
   static const square = IconData(0xe45e, fontFamily: _family);
   static const trash = IconData(0xe4a6, fontFamily: _family);
+  static const users = IconData(0xe4d6, fontFamily: _family);
   static const warning = IconData(0xe4e0, fontFamily: _family);
   static const warningOctagon = IconData(0xe4e4, fontFamily: _family);
   static const x = IconData(0xe4f6, fontFamily: _family);

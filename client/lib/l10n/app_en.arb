@@ -764,5 +764,50 @@
         "type": "String"
       }
     }
-  }
+  },
+  "orgSettingsTitle": "Organization settings",
+  "orgMascot": "Loquet for members",
+  "orgAuditDays": "Keep activity (days)",
+  "orgMaxVersions": "Versions kept per item",
+  "orgTrashDays": "Keep trash (days)",
+  "orgSettingsSave": "Save",
+  "orgDelete": "Delete organization",
+  "orgDeleteConfirm": "Type {name} to delete it and everything in it.",
+  "@orgDeleteConfirm": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "rotationPending": "Keys of {count} folders must change.",
+  "@rotationPending": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "rotationNow": "Rotate now",
+  "rotationBlocked": "Confirm these {count} members first: {emails}",
+  "@rotationBlocked": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "emails": {
+        "type": "String"
+      }
+    }
+  },
+  "rotationCredentials": "Removed members may have copied secrets from these folders: change those passwords and keys.",
+  "keyAlert": "{count} keys did not match what this device knows. Nothing was shared.",
+  "@keyAlert": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "orgMenu": "Organization"
 }
