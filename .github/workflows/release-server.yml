@@ -76,10 +76,7 @@ jobs:
         with: {persist-credentials: false}
       - uses: dart-lang/setup-dart@6afc89df92d6eb3834022f73cd65adc8cdfcb92d # v1.8.1
       - run: cd tool && dart pub get && dart run bin/changelog.dart server "${GITHUB_REF_NAME#server-v}" > ../notes.md
-      # draft first, published last: immutable releases freeze what is published
-      - run: |
-          gh release create "$GITHUB_REF_NAME" --draft --verify-tag --title "$GITHUB_REF_NAME" --notes-file notes.md
-          gh release edit "$GITHUB_REF_NAME" --draft=false
+      - run: gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" --notes-file notes.md
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - run: |

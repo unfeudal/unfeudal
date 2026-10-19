@@ -149,19 +149,13 @@ void _copyFixtures(Directory root, String version) {
   final fixtures = Directory('${root.path}/shared/test/fixtures');
   final target = Directory('${fixtures.path}/v$version');
   if (target.existsSync()) return;
-  List<int> parts(Directory d) => d.path
+  String sortKey(Directory d) => d.path
       .split(RegExp(r'[/\\]'))
       .last
       .substring(1)
       .split('.')
-      .map(int.parse)
-      .toList();
-  int compare(List<int> a, List<int> b) {
-    for (var i = 0; i < a.length && i < b.length; i++) {
-      if (a[i] != b[i]) return a[i] - b[i];
-    }
-    return a.length - b.length;
-  }
+      .map((n) => n.padLeft(6, '0'))
+      .join('.');
 
   final versions =
       fixtures
@@ -169,7 +163,7 @@ void _copyFixtures(Directory root, String version) {
           .whereType<Directory>()
           .where((d) => RegExp(r'[/\\]v[\d.]+$').hasMatch(d.path))
           .toList()
-        ..sort((a, b) => compare(parts(a), parts(b)));
+        ..sort((a, b) => sortKey(a).compareTo(sortKey(b)));
   if (versions.isEmpty) return;
   for (final f in versions.last.listSync(recursive: true).whereType<File>()) {
     final relative = f.path.substring(versions.last.path.length + 1);

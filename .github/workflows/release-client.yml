@@ -26,10 +26,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: {persist-credentials: false}
-      - shell: bash
-        run: |
-          git clone --depth 1 --branch 3.47.7 https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
-          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+      - uses: ./.github/actions/flutter
       - run: cd client && flutter build windows --release
       - shell: pwsh
         run: |
@@ -51,10 +48,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: {persist-credentials: false}
-      - shell: bash
-        run: |
-          git clone --depth 1 --branch 3.47.7 https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
-          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+      - uses: ./.github/actions/flutter
       - run: cd client && flutter build macos --release
       - run: |
           v="${GITHUB_REF_NAME#client-v}"
@@ -86,10 +80,7 @@ jobs:
         with:
           subject-path: dist/*
       - run: cd tool && dart pub get && dart run bin/changelog.dart client "${GITHUB_REF_NAME#client-v}" > ../notes.md
-      # draft with every file, then published: immutable releases freeze what is published
-      - run: |
-          gh release create "$GITHUB_REF_NAME" dist/* --draft --verify-tag --title "$GITHUB_REF_NAME" --notes-file notes.md
-          gh release edit "$GITHUB_REF_NAME" --draft=false
+      - run: gh release create "$GITHUB_REF_NAME" dist/* --verify-tag --title "$GITHUB_REF_NAME" --notes-file notes.md
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - run: |

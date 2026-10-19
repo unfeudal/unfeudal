@@ -1,7 +1,6 @@
 # syntax=docker/dockerfile:1
 # Build context: the repository root (server/ depends on ../shared).
-ARG DART_VERSION=stable
-FROM dart:${DART_VERSION} AS build
+FROM dart:stable AS build
 WORKDIR /src
 COPY shared/pubspec.yaml shared/
 COPY server/pubspec.yaml server/pubspec.lock server/
@@ -29,5 +28,4 @@ USER 10001
 VOLUME /data
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s CMD ["unfeudal-server", "healthcheck"]
-STOPSIGNAL SIGTERM
 ENTRYPOINT ["unfeudal-server"]

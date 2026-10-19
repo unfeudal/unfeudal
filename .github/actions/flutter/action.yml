@@ -1,0 +1,9 @@
+name: flutter
+description: Installs the pinned Flutter SDK and puts it on the PATH.
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        git clone --depth 1 --branch 3.47.7 https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+        echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
