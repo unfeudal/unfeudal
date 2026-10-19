@@ -22,6 +22,7 @@ import '../describe_error.dart';
 import '../hosts/folder_editor_panel.dart';
 import '../hosts/host_editor_panel.dart';
 import '../../ssh/ssh_connector.dart';
+import '../history/trash_screen.dart';
 import '../hosts/host_key_dialog.dart';
 import '../devices/devices_screen.dart';
 import '../keychain/keychain_screen.dart';
@@ -253,6 +254,7 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
               child: switch (page) {
                 ShellPage.keychain => KeychainScreen(onBack: back),
                 ShellPage.activity => ActivityScreen(onBack: back),
+                ShellPage.trash => TrashScreen(onBack: back),
                 ShellPage.devices => DevicesScreen(onBack: back),
                 ShellPage.admin => InstanceAdminScreen(onBack: back),
                 ShellPage.settings => SettingsScreen(onBack: back),

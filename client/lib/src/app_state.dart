@@ -234,6 +234,9 @@ class AppState extends ChangeNotifier implements SshCallbacks {
   };
 
   /// From the last ApiInfo seen (a sync round or [checkServer]), else the stored one; false when none.
+  /// The effective trash retention in days (0 = never purged); null before the server said.
+  int? get trashDays => (_lastInfo ?? _storedInfo)?.trashDays;
+
   bool serverHas(String capability) =>
       (_lastInfo ?? _storedInfo)?.has(capability) ?? false;
 
