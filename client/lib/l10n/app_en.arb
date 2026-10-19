@@ -1282,5 +1282,50 @@
         "type": "String"
       }
     }
+  },
+  "settingsImportSshConfig": "Import ~/.ssh/config",
+  "importCount": "{count, plural, =1{Import 1 host} other{Import {count} hosts}}",
+  "@importCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "importDuplicate": "Already in the vault",
+  "importPassphrase": "Passphrase of {file}",
+  "@importPassphrase": {
+    "placeholders": {
+      "file": {
+        "type": "String"
+      }
+    }
+  },
+  "importEmpty": "No host found in this file.",
+  "importWarning": "Line {line}: {problem}",
+  "@importWarning": {
+    "placeholders": {
+      "line": {
+        "type": "int"
+      },
+      "problem": {
+        "type": "String"
+      }
+    }
+  },
+  "importProblemInclude": "Include is not followed",
+  "importProblemMatch": "Match blocks are skipped",
+  "importProblemUnsupported": "option not supported, left out",
+  "importProblemBadValue": "invalid value, left out",
+  "importProblemJumpUnresolved": "jump host not in this file, left out",
+  "importProblemJumpLoop": "jump host loop, left out",
+  "importProblemKeyUnreadable": "key file unreadable, left out",
+  "importDone": "{count, plural, =1{1 host imported.} other{{count} hosts imported.}}",
+  "@importDone": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   }
 }

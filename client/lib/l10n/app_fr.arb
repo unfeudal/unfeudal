@@ -554,5 +554,19 @@
   "deletePassword": "Mot de passe maître",
   "deleteConfirmEmail": "Saisir l'e-mail du compte",
   "deleteSubmit": "Supprimer définitivement",
-  "deleteLastOwner": "Seul propriétaire de : {orgs}. Transmettre la propriété ou supprimer ces organisations d'abord."
+  "deleteLastOwner": "Seul propriétaire de : {orgs}. Transmettre la propriété ou supprimer ces organisations d'abord.",
+  "settingsImportSshConfig": "Importer ~/.ssh/config",
+  "importCount": "{count, plural, =1{Importer 1 hôte} other{Importer {count} hôtes}}",
+  "importDuplicate": "Déjà dans le coffre",
+  "importPassphrase": "Phrase secrète de {file}",
+  "importEmpty": "Aucun hôte trouvé dans ce fichier.",
+  "importWarning": "Ligne {line} : {problem}",
+  "importProblemInclude": "Include n'est pas suivi",
+  "importProblemMatch": "Les blocs Match sont ignorés",
+  "importProblemUnsupported": "option non prise en charge, ignorée",
+  "importProblemBadValue": "valeur invalide, ignorée",
+  "importProblemJumpUnresolved": "hôte de rebond absent du fichier, ignoré",
+  "importProblemJumpLoop": "boucle d'hôtes de rebond, ignorée",
+  "importProblemKeyUnreadable": "fichier de clé illisible, ignoré",
+  "importDone": "{count, plural, =1{1 hôte importé.} other{{count} hôtes importés.}}"
 }
