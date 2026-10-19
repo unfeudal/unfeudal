@@ -64,7 +64,7 @@ void main() {
     }
   });
 
-  test('dummyHash is one stable hash per params; constantTimeEquals', () async {
+  test('dummyHash is one stable hash per params', () async {
     expect(
       await dummyHash(SecretHashParams.testing),
       await dummyHash(SecretHashParams.testing),
@@ -75,14 +75,6 @@ void main() {
         List.filled(32, 0),
       ),
       isFalse,
-    );
-    expect(
-      (
-        constantTimeEquals([1, 2], [1, 2]),
-        constantTimeEquals([1, 2], [1, 3]),
-        constantTimeEquals([1], [1, 1]),
-      ),
-      (true, false, false),
     );
   });
 

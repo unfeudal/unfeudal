@@ -21,12 +21,8 @@ enum Flag {
 
   final String wire;
 
-  static Flag? fromWire(String wire) {
-    for (final flag in values) {
-      if (flag.wire == wire) return flag;
-    }
-    return null;
-  }
+  static Flag? fromWire(String wire) =>
+      values.where((f) => f.wire == wire).firstOrNull;
 }
 
 /// All flags on by default except [Flag.plainHttpLan].

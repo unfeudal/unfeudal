@@ -5,7 +5,6 @@ import 'dart:typed_data';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../auth/tokens.dart';
-import '../util/random.dart';
 import 'db.dart';
 
 /// Creates [path] empty and owner-only before anything secret is written to it.
@@ -23,7 +22,7 @@ Future<Uint8List> loadServerSecret(String path) async {
   final file = File(path);
   if (!file.existsSync()) {
     await _createPrivate(path);
-    await file.writeAsBytes(randomBytes(32), flush: true);
+    await file.writeAsBytes(secureBytes(32), flush: true);
   }
   final secret = await file.readAsBytes();
   if (secret.length != 32) {
@@ -36,21 +35,24 @@ Future<String> ensureInstanceEpoch(Db db) async {
   await db.execute(
     "INSERT INTO meta (key, value) VALUES ('instance_epoch', @v) "
     'ON CONFLICT (key) DO NOTHING',
-    {'v': b64(randomBytes(16))},
+    {'v': b64(secureBytes(16))},
   );
   return (await db.query("SELECT value FROM meta WHERE key = 'instance_epoch'"))
           .single['value']!
       as String;
 }
 
+/// Inserts or replaces one `meta` row.
+Future<void> setMeta(Tx tx, String key, String value) => tx.execute(
+  'INSERT INTO meta (key, value) VALUES (@k, @v) '
+  'ON CONFLICT (key) DO UPDATE SET value = excluded.value',
+  {'k': key, 'v': value},
+);
+
 /// Clients then see a restored server and run their restore flow.
 Future<String> newInstanceEpoch(Db db) async {
-  final epoch = b64(randomBytes(16));
-  await db.execute(
-    "INSERT INTO meta (key, value) VALUES ('instance_epoch', @v) "
-    'ON CONFLICT (key) DO UPDATE SET value = excluded.value',
-    {'v': epoch},
-  );
+  final epoch = b64(secureBytes(16));
+  await setMeta(db, 'instance_epoch', epoch);
   return epoch;
 }
 
@@ -61,10 +63,10 @@ Future<String?> ensureSetupToken(Db db, String? configured) =>
       final users = await tx.query('SELECT 1 AS one FROM users LIMIT 1');
       if (users.isNotEmpty) return null;
       if (configured != null) {
-        await tx.execute(
-          "INSERT INTO meta (key, value) VALUES ('setup_token_hash', @v) "
-          'ON CONFLICT (key) DO UPDATE SET value = excluded.value',
-          {'v': hashToken(normalizeSetupToken(configured))},
+        await setMeta(
+          tx,
+          'setup_token_hash',
+          hashToken(normalizeSetupToken(configured)),
         );
         return null;
       }

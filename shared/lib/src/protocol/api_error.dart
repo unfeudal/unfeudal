@@ -20,12 +20,8 @@ enum ApiErrorCode {
   final int status;
 
   /// Null for a code this version does not know.
-  static ApiErrorCode? fromWire(String wire) {
-    for (final code in values) {
-      if (code.wire == wire) return code;
-    }
-    return null;
-  }
+  static ApiErrorCode? fromWire(String wire) =>
+      values.where((c) => c.wire == wire).firstOrNull;
 }
 
 enum UnauthorizedReason {
@@ -38,12 +34,8 @@ enum UnauthorizedReason {
   final String wire;
 
   /// Unknown or missing reads as [sessionExpired].
-  static UnauthorizedReason fromWire(String? wire) {
-    for (final reason in values) {
-      if (reason.wire == wire) return reason;
-    }
-    return sessionExpired;
-  }
+  static UnauthorizedReason fromWire(String? wire) =>
+      values.where((r) => r.wire == wire).firstOrNull ?? sessionExpired;
 }
 
 /// `{error, message, item?, reason?, ...extra}`. An unknown [error] is kept

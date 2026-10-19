@@ -23,7 +23,7 @@ void main() {
     expect(t, matches(RegExp(r'^[A-Za-z0-9_-]{43}$')));
     expect(unb64(t), hasLength(32));
     expect(randomToken(), isNot(t));
-    expect(randomBytes(16), hasLength(16));
+    expect(secureBytes(16), hasLength(16));
   });
 
   test('newSetupToken is 26 base32 chars; grouped form normalises back', () {

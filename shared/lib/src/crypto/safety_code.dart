@@ -21,10 +21,5 @@ String keyFingerprint(List<int> publicKey) {
   if (publicKey.length != 32) {
     throw ArgumentError('public key must be 32 bytes');
   }
-  return sha256
-      .convert(publicKey)
-      .bytes
-      .take(20)
-      .map((b) => b.toRadixString(16).padLeft(2, '0'))
-      .join();
+  return '${sha256.convert(publicKey)}'.substring(0, 40);
 }

@@ -107,21 +107,17 @@ class HostMeta extends Payload {
 
   factory HostMeta.fromJson(Object? json) {
     final r = JsonReader(json, 'host');
-    final tags = r.opt<List<Object?>>('tags') == null
-        ? const <String>[]
-        : r.list<String>('tags', max: PayloadLimits.tags);
+    final tags = r.optList<String>('tags', max: PayloadLimits.tags);
     if (tags.any((t) => t.runes.length > PayloadLimits.tag)) {
       throw const FormatException('host.tags: tag too long');
     }
-    final forwards = r.opt<List<Object?>>('forwards') == null
-        ? const <PortForward>[]
-        : [
-            for (final f in r.list<Object>(
-              'forwards',
-              max: PayloadLimits.forwards,
-            ))
-              PortForward.fromJson(f),
-          ];
+    final forwards = [
+      for (final f in r.optList<Object>(
+        'forwards',
+        max: PayloadLimits.forwards,
+      ))
+        PortForward.fromJson(f),
+    ];
     if (validateForwards(forwards).isNotEmpty) {
       throw const FormatException('host.forwards: low port or duplicate');
     }
