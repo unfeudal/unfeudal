@@ -105,6 +105,24 @@ void main() {
     },
   );
 
+  test('an edit and a move keep the unknown fields of the wire item', () async {
+    final m = LocalMirror.inMemory();
+    final folder = await sealItem(key, type: 'folder', meta: folderJson('A'));
+    final sealed = await sealItem(key, meta: hostJson('web'), revision: 2);
+    final host = Item.fromJson({...sealed.toJson(), 'pinnedBy': 'newer'});
+    m.upsertItems([folder, host]);
+    final v = await testVault(key, m);
+    await v.upsertItem(id: host.id, type: 'host', meta: hostJson('web-1'));
+    expect(m.outbox().single.item.extra, {'pinnedBy': 'newer'});
+    await v.upsertItem(
+      id: host.id,
+      type: 'host',
+      folderId: folder.id,
+      meta: hostJson('web-1'),
+    );
+    expect(m.outbox().single.item.extra, {'pinnedBy': 'newer'});
+  });
+
   test(
     'read-only, unreadable and unsupported entries are never rewritten',
     () async {

@@ -483,13 +483,16 @@ class Vault extends ChangeNotifier {
       KeyIds.user,
       seq: seq,
     )).toJson();
+    // a rewrite keeps the wire item's unknown fields and schemaVersion as read
+    final current = _entries[id]?.item;
     return Item.fromJson({
+      ...?current?.extra,
       'id': id,
       'type': type,
       'scope': 'personal',
       'orgId': null,
       'folderId': folderId,
-      'schemaVersion': 1,
+      'schemaVersion': current?.schemaVersion ?? 1,
       'revision': revision,
       'deleted': deleted,
       'meta': await sealPart(PayloadPart.meta, meta),
