@@ -579,5 +579,5 @@
   "trashMoveOut": "Sortir du dossier",
   "trashMoveOutTitle": "Sortir « {name} » du dossier supprimé",
   "trashMoveOutPick": "Choisir un dossier",
-  "trashMoveOutNowhere": "Aucun dossier de cette organisation que vous pouvez modifier."
+  "trashMoveOutNowhere": "Aucun dossier modifiable dans cette organisation."
 }
