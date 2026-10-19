@@ -67,20 +67,25 @@ class DeviceInput {
 
 final _control = RegExp(r'\p{Cc}', unicode: true);
 
-DeviceInput parseDevice(Object? raw) {
-  if (raw is! Map<String, Object?>) _bad('device', 'must be an object');
-  final name = raw['name'];
-  if (name is! String) _bad('device.name', 'must be a string');
-  final trimmed = name.trim();
+/// Trimmed, 1 to 100 code points, no control character: device, org and team names.
+String parseName(Object? v, [String field = 'name']) {
+  if (v is! String) _bad(field, 'must be a string');
+  final trimmed = v.trim();
   final length = trimmed.runes.length;
   if (length < 1 || length > 100 || _control.hasMatch(trimmed)) {
-    _bad('device.name', 'must be 1 to 100 printable characters');
+    _bad(field, 'must be 1 to 100 printable characters');
   }
+  return trimmed;
+}
+
+DeviceInput parseDevice(Object? raw) {
+  if (raw is! Map<String, Object?>) _bad('device', 'must be an object');
+  final name = parseName(raw['name'], 'device.name');
   final platform = raw['platform'];
   if (platform is! String || !devicePlatforms.contains(platform)) {
     _bad('device.platform', 'unknown platform');
   }
-  return DeviceInput(trimmed, platform);
+  return DeviceInput(name, platform);
 }
 
 final _ifMatch = RegExp(r'^\s*"?(\d{1,15})"?\s*$');

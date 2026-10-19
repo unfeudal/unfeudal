@@ -24,6 +24,7 @@ import 'routes/devices.dart';
 import 'routes/health.dart';
 import 'routes/info.dart';
 import 'routes/items.dart';
+import 'routes/orgs.dart';
 import 'routes/setup.dart';
 import 'routes/sync.dart';
 
@@ -130,7 +131,19 @@ Handler buildHandler(AppDeps deps) {
       '/items/<id>',
       (Request r, String id) => requireAuth((r) => putItem(r, id))(r),
     )
-    ..get('/sync', requireAuth(sync));
+    ..get('/sync', requireAuth(sync))
+    ..post('/orgs', requireAuth(requireFeature(Flag.orgs)(createOrg)))
+    ..put(
+      '/orgs/<org>',
+      (Request r, String org) =>
+          requireAuth(requireFeature(Flag.orgs)((r) => updateOrg(r, org)))(r),
+    )
+    ..delete(
+      '/orgs/<org>',
+      (Request r, String org) => requireAuth(
+        requireFeature(Flag.orgs)((r) => deleteOrgRoute(r, org)),
+      )(r),
+    );
   final root = Router(notFoundHandler: _notFound)
     ..get('/healthz', healthz)
     ..get('/api/info', info)
