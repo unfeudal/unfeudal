@@ -1358,5 +1358,16 @@
       }
     }
   },
-  "activityOpenDeletedOrg": "Open its activity"
+  "activityOpenDeletedOrg": "Open its activity",
+  "trashMoveOut": "Move out",
+  "trashMoveOutTitle": "Move « {name} » out of the trashed folder",
+  "@trashMoveOutTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "trashMoveOutPick": "Choose a folder",
+  "trashMoveOutNowhere": "No folder of this organization you can edit."
 }

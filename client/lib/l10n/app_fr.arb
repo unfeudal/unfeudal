@@ -575,5 +575,9 @@
   "inviteBy": "par {email}",
   "activityExportedBroken": "Enregistré dans {path}, mais la chaîne se rompt à l'événement {seq} : gardez ce fichier comme preuve.",
   "activityScopeDeletedOrg": "Organisation supprimée {id}",
-  "activityOpenDeletedOrg": "Voir son activité"
+  "activityOpenDeletedOrg": "Voir son activité",
+  "trashMoveOut": "Sortir du dossier",
+  "trashMoveOutTitle": "Sortir « {name} » du dossier supprimé",
+  "trashMoveOutPick": "Choisir un dossier",
+  "trashMoveOutNowhere": "Aucun dossier de cette organisation que vous pouvez modifier."
 }
