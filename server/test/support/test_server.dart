@@ -10,10 +10,12 @@ import 'package:unfeudal_server/src/db/db.dart';
 import 'package:unfeudal_server/src/db/maintenance.dart';
 import 'package:unfeudal_server/src/db/migrate.dart';
 import 'package:unfeudal_server/src/log/logger.dart';
+import 'package:unfeudal_server/src/mail/mailer.dart';
 import 'package:unfeudal_server/src/net/client_ip.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import 'fake_clock.dart';
+import 'fake_mailer.dart';
 import 'peer.dart';
 import 'test_db.dart';
 
@@ -45,7 +47,10 @@ class TestServer {
   final List<String> logLines;
   final Directory _dir;
 
-  static Future<TestServer> start({Map<String, String> env = const {}}) async {
+  static Future<TestServer> start({
+    Map<String, String> env = const {},
+    Mailer? mailer,
+  }) async {
     final dir = Directory.systemTemp.createTempSync('unfeudal_test_');
     final config = Config.load({
       'UNFEUDAL_PUBLIC_URL': 'https://vault.test',
@@ -64,6 +69,7 @@ class TestServer {
       log: Logger(LogLevel.debug, lines.add),
       secretHash: SecretHashParams.testing,
       allowTestingKdf: true,
+      mailer: mailer ?? FakeMailer(),
     );
     await ensureSetupToken(db, config.setupToken);
     return TestServer._(db, clock, deps, buildHandler(deps), lines, dir);

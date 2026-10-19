@@ -11,6 +11,7 @@ import 'db/maintenance.dart';
 import 'db/migrate.dart';
 import 'db/postgres_db.dart';
 import 'log/logger.dart';
+import 'mail/mailer.dart';
 
 class RunningServer {
   RunningServer(this.port, this._close);
@@ -23,7 +24,11 @@ class RunningServer {
 
 /// Opens and migrates the database (a newer schema refuses to start), prints
 /// the setup token once, then serves.
-Future<RunningServer> runServer(Config config, {Logger? log}) async {
+Future<RunningServer> runServer(
+  Config config, {
+  Logger? log,
+  Mailer mailer = const NoMailer(),
+}) async {
   log ??= Logger(config.logLevel, stdout.writeln);
   final db = await openDb(config.databaseUrl);
   try {
@@ -33,7 +38,7 @@ Future<RunningServer> runServer(Config config, {Logger? log}) async {
         "database collation is not C: create it with TEMPLATE template0 LC_COLLATE 'C' LC_CTYPE 'C'",
       );
     }
-    final deps = await AppDeps.create(config, db, log: log);
+    final deps = await AppDeps.create(config, db, log: log, mailer: mailer);
     final token = await ensureSetupToken(db, config.setupToken);
     // Printed once, raw: redaction would hide it.
     if (token != null) log.sink('Setup token: ${groupSetupToken(token)}');
