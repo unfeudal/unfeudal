@@ -160,4 +160,18 @@ void main() {
     expect(results.where((ok) => ok), hasLength(3));
     expect(await count(ip), 3);
   });
+
+  test('onLockout fires once with the email when an acct|ip key locks; an ip lock alone fires nothing', () async {
+    final locked = <String>[];
+    limiter.onLockout = locked.add;
+    for (var i = 0; i < 3; i++) {
+      await limiter.hit([ip, acctIp, acct]);
+      clock.advance(const Duration(seconds: 30)); // past the acct: delay
+    }
+    expect(locked, ['a@b.c']);
+    for (var i = 0; i < 3; i++) {
+      await limiter.hit([ipKey('198.51.100.9')]);
+    }
+    expect(locked, ['a@b.c']);
+  });
 }

@@ -32,6 +32,9 @@ class RateLimiter {
   final Clock clock;
   final Config config;
 
+  /// Called after commit with the email of each `acct:<email>|ip:<net>` key the hit locked.
+  void Function(String email)? onLockout;
+
   _Limit _limitOf(String key) {
     final login = _Limit(
       config.loginMaxAttempts,
@@ -77,6 +80,7 @@ class RateLimiter {
   Future<void> hit(List<String> keys) async {
     final now = clock.now();
     final sorted = {...keys}.toList()..sort();
+    final lockedKeys = <String>[];
     await db.transaction((tx) async {
       for (final k in sorted.where(
         (k) => k.startsWith('ip:') || k.startsWith('invite-ip:'),
@@ -121,6 +125,7 @@ class RateLimiter {
             : count >= limit.max!
             ? iso(now.add(limit.lock))
             : null;
+        if (lock != null) lockedKeys.add(k);
         await tx.execute(
           'UPDATE login_attempts SET count = @c, window_start = @ws, locked_until = @lu WHERE key = @k',
           {
@@ -132,6 +137,11 @@ class RateLimiter {
         );
       }
     });
+    for (final k in lockedKeys) {
+      if (k.startsWith('acct:') && k.contains('|ip:')) {
+        onLockout?.call(k.substring(5, k.indexOf('|ip:')));
+      }
+    }
   }
 
   /// Lowers a count once; used for `invite-ip:` only, never for quotas.
