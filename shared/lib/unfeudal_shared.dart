@@ -14,6 +14,7 @@ export 'src/crypto/payload_crypto.dart';
 export 'src/crypto/recovery_key.dart';
 export 'src/crypto/safety_code.dart';
 export 'src/crypto/sealed_box.dart';
+export 'src/crypto/vault_export.dart';
 export 'src/enroll/enrollment.dart';
 export 'src/ids.dart';
 export 'src/net/lan.dart';
