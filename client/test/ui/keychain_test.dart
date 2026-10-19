@@ -7,9 +7,87 @@ import 'package:unfeudal_client/src/keys/key_tools.dart';
 import 'package:unfeudal_client/src/ui/keychain/keychain_screen.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
+import '../support/fakes.dart';
+import '../support/org_fixtures.dart';
 import '../support/pump_app.dart';
+import '../support/sync_harness.dart';
 
 void main() {
+  testWidgets(
+    'shared org identities: listed per folder, created with edit, read-only without',
+    (t) async {
+      final h = SyncHarness(capabilities: ['orgs', 'sync']);
+      final s = await signedInState(t, harness: h);
+      final me = s.stored!.userId;
+      final keys = FolderKeys.generate(1), ro = newId(), rw = newId();
+      h.orgMembers[testOrgId] = {me};
+      await t.runAsync(() async {
+        final pub = h.accounts.values.first.bundle.publicKey;
+        final folders = [
+          h.serverPutOrg(
+            await sealOrgItem(
+              keys,
+              id: ro,
+              type: 'folder',
+              meta: folderJson('Read'),
+            ),
+          ),
+          h.serverPutOrg(
+            await sealOrgItem(
+              keys,
+              id: rw,
+              type: 'folder',
+              meta: folderJson('Ops'),
+            ),
+          ),
+        ];
+        h.orgBlock = orgBlock(
+          members: [memberRow(me)],
+          folderTree: [node(ro), node(rw)],
+          acl: [
+            aclRow(ro, me, allow: ['view']),
+            aclRow(rw, me, allow: ['view', 'edit', 'connect']),
+          ],
+          wrappedKeys: [
+            await wrappedRow(keys, ro, pub, secret: true),
+            await wrappedRow(keys, rw, pub, secret: true),
+          ],
+          itemIds: folders.map((e) => e.id).toList(),
+        );
+        await s.sync!.syncNow();
+      });
+      await pumpApp(t, state: s, child: const KeychainScreen());
+      await pumpReal(t);
+      Future<void> place(String id) async {
+        await t.tap(find.byKey(const Key('keychain-place')));
+        await t.pumpAndSettle();
+        await t.tap(find.byKey(Key('keychain-place-$id')).last);
+        await t.pumpAndSettle();
+      }
+
+      await place(ro);
+      expect(
+        t
+            .widget<OutlinedButton>(find.byKey(const Key('key-password')))
+            .onPressed,
+        isNull,
+      );
+      await place(rw);
+      await t.tap(find.byKey(const Key('key-password')));
+      await t.pumpAndSettle();
+      await t.enterText(find.byKey(const Key('pw-name')), 'shared root');
+      await t.enterText(find.byKey(const Key('pw-value')), 'hunter2');
+      await t.tap(find.byKey(const Key('pw-save')));
+      await pumpReal(t, rounds: 10);
+      final made = s.vault!.ofKind(ItemKind.identity).single;
+      expect(
+        (made.orgId, made.folderId, made.name),
+        (testOrgId, rw, 'shared root'),
+      );
+      expect(find.text('shared root'), findsWidgets);
+    },
+  );
+
   testWidgets('generate Ed25519 (default) with a passphrase', (t) async {
     final s = await signedInState(t);
     await pumpApp(t, state: s, child: const KeychainScreen());

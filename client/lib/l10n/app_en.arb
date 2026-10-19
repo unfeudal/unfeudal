@@ -131,7 +131,7 @@
   "railDevices": "Devices",
   "railSettings": "Settings",
   "railLock": "Lock",
-  "vaultPersonal": "Personal",
+  "vaultPersonal": "Personal vault",
   "treeSearch": "Search ({shortcut})",
   "@treeSearch": {
     "placeholders": {
@@ -1330,5 +1330,5 @@
   "licensesAll": "Every licence",
   "historySecretUnreadable": "This version's secret does not open on this device: nothing was restored.",
   "snippetLocation": "Saved in",
-  "snippetPersonal": "Personal vault"
+  "keychainPlace": "Keys of"
 }

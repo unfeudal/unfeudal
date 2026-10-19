@@ -7,6 +7,7 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
+import '../../app_state.dart';
 import '../../design/empty_state.dart';
 import '../../design/dialog.dart';
 import '../../design/icons.dart';
@@ -14,27 +15,90 @@ import '../../design/motion.dart';
 import '../../design/tokens.dart';
 import '../../events/app_events.dart';
 import '../../keys/key_tools.dart';
+import '../../vault/org_writer.dart';
 import '../../vault/vault.dart';
 import '../form_dialog.dart';
 import '../history/item_history_panel.dart';
+import '../hosts/editor_frame.dart';
 import '../manage_frame.dart';
 
-/// SSH keys and passwords of the vault: generate, import, add a password, copy a public key, rename, trash.
-class KeychainScreen extends StatelessWidget {
+/// Where the keychain reads and writes: the personal vault, or one org folder (shared identities).
+class _Place {
+  _Place(this.state, this.folderId);
+
+  final AppState state;
+  final String? folderId;
+
+  VaultEntry? get _folder =>
+      folderId == null ? null : state.vault!.entry(folderId!);
+
+  bool get editable =>
+      folderId == null ||
+      (state.orgs?.writer.canEdit(_folder!.orgId!, folderId) ?? false);
+
+  bool holds(VaultEntry e) =>
+      folderId == null ? e.orgId == null : e.folderId == folderId;
+
+  Future<void> save(
+    Map<String, Object?> meta, {
+    Map<String, Object?>? secret,
+    String? id,
+  }) async {
+    if (folderId == null) {
+      await state.vault!.upsertItem(
+        type: 'identity',
+        id: id,
+        meta: meta,
+        secret: secret,
+      );
+    } else {
+      await state.orgs!.writer.upsert(
+        type: 'identity',
+        id: id,
+        target: OrgTarget(_folder!.orgId!, folderId),
+        meta: meta,
+        secret: secret,
+      );
+    }
+  }
+
+  Future<void> trash(String id) => folderId == null
+      ? state.vault!.trashItem(id)
+      : state.orgs!.writer.trash(id);
+}
+
+/// SSH keys and passwords: generate, import, add a password, copy a public key, rename, trash; personal, or
+/// shared in an org folder.
+class KeychainScreen extends StatefulWidget {
   const KeychainScreen({super.key, this.onBack});
 
   final VoidCallback? onBack;
+
+  @override
+  State<KeychainScreen> createState() => _KeychainScreenState();
+}
+
+class _KeychainScreenState extends State<KeychainScreen> {
+  String? _folderId;
 
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
     final state = AppScope.of(context);
     final vault = state.vault!;
-    final readOnly = state.sync?.readOnly ?? true;
+    final orgFolders = [
+      for (final e in vault.ofKind(ItemKind.folder))
+        if (e.orgId != null && e.state == EntryState.ok) e,
+    ];
+    if (_folderId != null && !orgFolders.any((e) => e.id == _folderId)) {
+      _folderId = null; // the folder left this vault
+    }
+    final place = _Place(state, _folderId);
+    final readOnly = (state.sync?.readOnly ?? true) || !place.editable;
     final identities =
         vault
             .ofKind(ItemKind.identity)
-            .where((e) => e.state == EntryState.ok && e.orgId == null)
+            .where((e) => e.state == EntryState.ok && place.holds(e))
             .toList()
           ..sort((a, b) => (a.name ?? '').compareTo(b.name ?? ''));
     Future<void> form(
@@ -56,11 +120,26 @@ class KeychainScreen extends StatelessWidget {
     );
     return ManageFrame(
       title: l.keychainTitle,
-      onBack: onBack,
+      onBack: widget.onBack,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         spacing: 16,
         children: [
+          if (orgFolders.isNotEmpty)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: SizedBox(
+                width: 320,
+                child: entryPicker(
+                  key: 'keychain-place',
+                  label: l.keychainPlace,
+                  none: l.vaultPersonal,
+                  entries: orgFolders,
+                  value: _folderId,
+                  onChanged: (v) => setState(() => _folderId = v),
+                ),
+              ),
+            ),
           Wrap(
             spacing: 8,
             children: [
@@ -86,7 +165,7 @@ class KeychainScreen extends StatelessWidget {
                           ),
                         ],
                         'gen-save',
-                        (v) => _generate(vault, v),
+                        (v) => _generate(place, v),
                       ),
                 label: Text(l.keyGenerate),
               ),
@@ -111,7 +190,7 @@ class KeychainScreen extends StatelessWidget {
                           ),
                         ],
                         'import-save',
-                        (v) => _import(vault, v),
+                        (v) => _import(place, v),
                       ),
                 child: Text(l.keyImport),
               ),
@@ -130,7 +209,7 @@ class KeychainScreen extends StatelessWidget {
                           ),
                         ],
                         'pw-save',
-                        (v) => _password(vault, v),
+                        (v) => _password(place, v),
                       ),
                 child: Text(l.keyPassword),
               ),
@@ -150,16 +229,16 @@ class KeychainScreen extends StatelessWidget {
                             l.keyRename,
                             [FormDialogField('identity-name', l.keyName)],
                             'identity-name-save',
-                            (v) => vault.updateIdentity(
-                              e.id,
+                            (v) => place.save(
                               IdentityMeta.fromJson({
                                 ...?e.meta,
                                 'name': v['identity-name']!.trim(),
-                              }),
+                              }).toJson(),
+                              id: e.id,
                             ),
                             initial: {'identity-name': e.name ?? ''},
                           ),
-                          onDelete: () => _confirmTrash(context, vault, e),
+                          onDelete: () => _confirmTrash(context, place, e),
                           onReveal: canReveal(state, e)
                               ? () => _reveal(context, e)
                               : null,
@@ -190,7 +269,7 @@ class KeychainScreen extends StatelessWidget {
     );
   }
 
-  static Future<void> _generate(Vault vault, Map<String, String> v) async {
+  static Future<void> _generate(_Place place, Map<String, String> v) async {
     final passphrase = v['gen-passphrase']!.isEmpty
         ? null
         : v['gen-passphrase'];
@@ -199,7 +278,7 @@ class KeychainScreen extends StatelessWidget {
         ? await generateRsa4096(comment: name, passphrase: passphrase)
         : await generateEd25519(comment: name, passphrase: passphrase);
     await _savePrivateKey(
-      vault,
+      place,
       name,
       key.privateKeyPem,
       passphrase,
@@ -208,14 +287,14 @@ class KeychainScreen extends StatelessWidget {
   }
 
   /// The key is read (and its passphrase checked) before anything is stored; the original text is kept.
-  static Future<void> _import(Vault vault, Map<String, String> v) async {
+  static Future<void> _import(_Place place, Map<String, String> v) async {
     final passphrase = v['import-passphrase']!.isEmpty
         ? null
         : v['import-passphrase'];
     final pem = v['import-pem']!.trim();
     final publicKey = publicKeyOf(pem, passphrase: passphrase);
     await _savePrivateKey(
-      vault,
+      place,
       v['import-name']!.trim(),
       pem,
       passphrase,
@@ -224,14 +303,13 @@ class KeychainScreen extends StatelessWidget {
   }
 
   static Future<void> _savePrivateKey(
-    Vault vault,
+    _Place place,
     String name,
     String pem,
     String? passphrase,
     String publicKey,
-  ) => vault.upsertItem(
-    type: 'identity',
-    meta: IdentityMeta(
+  ) => place.save(
+    IdentityMeta(
       name: name,
       kind: IdentityKind.privateKey,
       publicKey: publicKey,
@@ -243,10 +321,9 @@ class KeychainScreen extends StatelessWidget {
     ).toJson(),
   );
 
-  static Future<void> _password(Vault vault, Map<String, String> v) =>
-      vault.upsertItem(
-        type: 'identity',
-        meta: IdentityMeta(
+  static Future<void> _password(_Place place, Map<String, String> v) =>
+      place.save(
+        IdentityMeta(
           name: v['pw-name']!.trim(),
           kind: IdentityKind.password,
         ).toJson(),
@@ -258,7 +335,7 @@ class KeychainScreen extends StatelessWidget {
 
   static Future<void> _confirmTrash(
     BuildContext context,
-    Vault vault,
+    _Place place,
     VaultEntry e,
   ) async {
     final l = AppLocalizations.of(context);
@@ -267,7 +344,7 @@ class KeychainScreen extends StatelessWidget {
       question: l.keyDeleteConfirm(e.name ?? ''),
       action: l.keyDelete,
     );
-    if (yes) await vault.trashItem(e.id);
+    if (yes) await place.trash(e.id);
   }
 }
 
