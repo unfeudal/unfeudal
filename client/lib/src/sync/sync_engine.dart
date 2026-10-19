@@ -38,6 +38,10 @@ class SyncEngine extends ChangeNotifier {
   /// An accepted server restore: the ledger empties its replay marks (pins stay).
   Future<void> Function()? onRestoreAccepted;
 
+  /// Called with each block that arrives, after its pages and the itemIds rule are applied.
+  Future<void> Function(OrgBlock block)? onOrgBlock;
+  bool _resyncing = false;
+
   bool online = true;
   Object? lastError;
   DateTime? lastSyncAt;
@@ -205,6 +209,8 @@ class SyncEngine extends ChangeNotifier {
     var cursor = full ? 0 : int.parse(mirror.getKv(KvKey.cursor) ?? '0');
     var orgCursor = full ? 0 : int.parse(mirror.getKv(KvKey.orgCursor) ?? '0');
     final seen = <String>{};
+    OrgBlock? arrived;
+    final later = <String>{}; // ids received after the block's response: their seq is above its cursor
     for (var more = true; more;) {
       final page = await api.sync(
         cursor: cursor,
@@ -215,14 +221,14 @@ class SyncEngine extends ChangeNotifier {
         acceptOlder: acceptOlder,
       );
       seen.addAll(page.items.map((i) => i.id));
+      if (arrived != null) later.addAll(page.items.map((i) => i.id));
       if (page.org case final org?) {
         mirror
           ..setKv(KvKey.orgBlock, jsonEncode(org.toJson()))
-          ..setKv(
-            KvKey.orgCursor,
-            '${org.orgCursor}',
-          ); // Org hook: the itemIds rule
+          ..setKv(KvKey.orgCursor, '${org.orgCursor}');
         orgCursor = org.orgCursor;
+        arrived = org;
+        later.clear();
       }
       trace(
         TraceArea.sync,
@@ -240,6 +246,28 @@ class SyncEngine extends ChangeNotifier {
           if (!seen.contains(i.id) && !queued.contains(i.id)) i.id,
       ]);
     }
+    if (arrived == null) return;
+    final visible = arrived.itemIds.toSet();
+    final queued = {for (final e in mirror.outbox()) e.item.id};
+    mirror.deleteItems([
+      for (final i in mirror.items())
+        if (i.scope == ItemScope.org &&
+            !visible.contains(i.id) &&
+            !queued.contains(i.id) &&
+            !later.contains(i.id))
+          i.id,
+    ]);
+    final held = {for (final i in mirror.items()) i.id};
+    if (!full && !_resyncing && visible.any((id) => !held.contains(id))) {
+      _resyncing =
+          true; // once: a server that keeps listing a missing id cannot loop us
+      try {
+        return await _pull(full: true, acceptOlder: acceptOlder);
+      } finally {
+        _resyncing = false;
+      }
+    }
+    await onOrgBlock?.call(arrived);
   }
 
   String? _seenEpoch; // epoch of the last /api/info, for a refusal
