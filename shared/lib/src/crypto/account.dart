@@ -2,6 +2,7 @@
 import 'dart:typed_data';
 
 import 'package:cryptography/cryptography.dart';
+import 'package:cryptography/helpers.dart' show constantTimeBytesEquality;
 
 import '../bytes.dart';
 import '../util/json_reader.dart';
@@ -205,7 +206,7 @@ class AccountCrypto {
       bundle.wrappedPrivateKey,
     );
     final keyPair = await _x25519.newKeyPairFromSeed(seed);
-    if (!constantTimeEquals(
+    if (!constantTimeBytesEquality.equals(
       (await keyPair.extractPublicKey()).bytes,
       bundle.publicKey,
     )) {

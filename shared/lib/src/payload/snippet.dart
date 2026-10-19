@@ -17,9 +17,7 @@ class SnippetMeta extends Payload {
     if (command.trim().isEmpty) {
       throw const FormatException('snippet.command: empty');
     }
-    final tags = r.opt<List<Object?>>('tags') == null
-        ? const <String>[]
-        : r.list<String>('tags', max: PayloadLimits.tags);
+    final tags = r.optList<String>('tags', max: PayloadLimits.tags);
     if (tags.any((t) => t.runes.length > PayloadLimits.tag)) {
       throw const FormatException('snippet.tags: tag too long');
     }

@@ -6,10 +6,10 @@ import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'package:cryptography/cryptography.dart';
+import 'package:cryptography/helpers.dart' show constantTimeBytesEquality;
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../api/errors.dart';
-import '../util/random.dart';
 
 class SecretHashParams {
   const SecretHashParams(this.m, this.t, this.p);
@@ -84,7 +84,7 @@ Future<Uint8List> _argon2id(
 
 /// Stored as `argon2id$m$t$p$<b64 salt>$<b64 hash>`.
 Future<String> hashSecret(List<int> secret, SecretHashParams params) async {
-  final salt = randomBytes(16);
+  final salt = secureBytes(16);
   final hash = await _argon2id(secret, salt, params.m, params.t, params.p);
   return 'argon2id\$${params.m}\$${params.t}\$${params.p}\$${b64(salt)}\$${b64(hash)}';
 }
@@ -117,21 +117,14 @@ Future<bool> verifySecret(String stored, List<int> secret) async {
     return false;
   }
   if (salt.length < 8 || expected.length != 32) return false;
-  return constantTimeEquals(await _argon2id(secret, salt, m, t, p), expected);
+  return constantTimeBytesEquality.equals(
+    await _argon2id(secret, salt, m, t, p),
+    expected,
+  );
 }
 
 final _dummies = <SecretHashParams, Future<String>>{};
 
 /// Hash checked when the email is unknown, so every login costs one Argon2id.
 Future<String> dummyHash(SecretHashParams params) =>
-    _dummies.putIfAbsent(params, () => hashSecret(randomBytes(32), params));
-
-/// Time depends on the length only, never on where the bytes differ.
-bool constantTimeEquals(List<int> a, List<int> b) {
-  if (a.length != b.length) return false;
-  var diff = 0;
-  for (var i = 0; i < a.length; i++) {
-    diff |= a[i] ^ b[i];
-  }
-  return diff == 0;
-}
+    _dummies.putIfAbsent(params, () => hashSecret(secureBytes(32), params));

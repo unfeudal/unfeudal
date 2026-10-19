@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import 'dart:convert';
 
+import 'package:cryptography/helpers.dart' show constantTimeBytesEquality;
 import 'package:shelf/shelf.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
@@ -42,7 +43,7 @@ Future<Response> setup(Request request) async {
     "SELECT value FROM meta WHERE key = 'setup_token_hash'",
   );
   if (stored.isEmpty ||
-      !constantTimeEquals(
+      !constantTimeBytesEquality.equals(
         utf8.encode(stored.single['value']! as String),
         utf8.encode(h),
       )) {

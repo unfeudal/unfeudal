@@ -8,6 +8,7 @@ import '../crypto/envelope.dart';
 import '../crypto/errors.dart';
 import '../crypto/kdf.dart';
 import '../net/lan.dart';
+import '../util/base32.dart';
 import '../util/json_reader.dart';
 import '../util/secure.dart';
 
@@ -15,6 +16,17 @@ enum EnrollKind { setup, invite }
 
 String normalizeSetupToken(String t) =>
     t.toUpperCase().replaceAll(RegExp(r'[\s-]'), '');
+
+/// RFC 4648 base32 of 16 random bytes, no padding: 26 characters.
+String newSetupToken() => base32Encode(secureBytes(16));
+
+/// Groups of 4 joined by `-`, for display; [normalizeSetupToken] reverts it.
+String groupSetupToken(String t) => groupBy4(t);
+
+/// A normalized setup token: 26 base32 characters.
+bool isSetupToken(String t) => _setupToken.hasMatch(t);
+
+final _setupToken = RegExp(r'^[A-Z2-7]{26}$');
 
 /// A server URL and a setup or invite token, carried by a link or a file.
 class Enrollment {
@@ -35,8 +47,10 @@ class Enrollment {
     final normalized = kind == EnrollKind.setup
         ? normalizeSetupToken(token)
         : token;
-    final pattern = kind == EnrollKind.setup ? _setupToken : _inviteToken;
-    if (!pattern.hasMatch(normalized)) {
+    final valid = kind == EnrollKind.setup
+        ? isSetupToken(normalized)
+        : _inviteToken.hasMatch(normalized);
+    if (!valid) {
       throw const FormatException('enroll.token: invalid');
     }
     return Enrollment._(server, normalized, kind);
@@ -59,7 +73,6 @@ class Enrollment {
   }
 
   static const _info = 'unfeudal/enroll/v1';
-  static final _setupToken = RegExp(r'^[A-Z2-7]{26}$');
   static final _inviteToken = RegExp(r'^[A-Za-z0-9_-]{43}$');
 
   final Uri server;

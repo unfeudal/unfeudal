@@ -64,6 +64,12 @@ class JsonReader {
     return List<T>.from(value);
   }
 
+  /// [list], or empty when the key is absent.
+  List<T> optList<T extends Object>(String key, {required int max}) =>
+      opt<List<Object?>>(key) == null
+      ? List<T>.empty()
+      : list<T>(key, max: max);
+
   Map<String, Object?> object(String key) => req<Map<String, Object?>>(key);
 
   /// Base64url text, exactly [length] bytes when given.

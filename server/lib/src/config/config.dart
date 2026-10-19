@@ -223,13 +223,7 @@ class Config {
       }
       final key = name.substring(9).toLowerCase();
       if (!keys.contains(key)) throw ConfigError(name, 'unknown variable');
-      values[key] = key == 'trusted_proxies'
-          ? value
-                .split(',')
-                .map((s) => s.trim())
-                .where((s) => s.isNotEmpty)
-                .toList()
-          : value;
+      values[key] = value;
     }
     return (values: values, flags: flags);
   }
@@ -244,7 +238,6 @@ class _Reader {
   static final _duration = RegExp(r'^(\d{1,9})([smhd])$');
   static final _size = RegExp(r'^(\d{1,9})(KB|MB|GB)$');
   static final _count = RegExp(r'^\d{1,9}$');
-  static final _setupToken = RegExp(r'^[A-Z2-7]{26}$');
 
   String? _text(String key) => switch (_values[key]) {
     final String s => s,
@@ -300,7 +293,7 @@ class _Reader {
     final text = _text(key);
     if (text == null) return null;
     final token = normalizeSetupToken(text);
-    if (!_setupToken.hasMatch(token)) {
+    if (!isSetupToken(token)) {
       throw ConfigError(key, 'must be 26 base32 characters');
     }
     return token;
