@@ -101,4 +101,22 @@ void main() {
     expect(peak, 1);
     await gate.run(work);
   });
+
+  test('Argon2Gate.refuseIfFull: the same 429 before any work, nothing when a place is free', () async {
+    final gate = Argon2Gate(1);
+    final release = Completer<void>();
+    expect(gate.refuseIfFull, returnsNormally);
+    final admitted = [
+      for (var i = 0; i < 5; i++) gate.run(() => release.future),
+    ];
+    expect(
+      gate.refuseIfFull,
+      throwsA(
+        isA<ApiError>().having((e) => e.code, 'code', ApiErrorCode.rateLimited),
+      ),
+    );
+    release.complete();
+    await Future.wait(admitted);
+    expect(gate.refuseIfFull, returnsNormally);
+  });
 }
