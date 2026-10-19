@@ -96,7 +96,12 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
         if (_state.tabs.isNotEmpty) {
           unawaited(_state.closeTab(_state.tabs[_state.activeTab]));
         }
-      case null:
+      // handled by the focused terminal
+      case UfShortcut.copy ||
+          UfShortcut.paste ||
+          UfShortcut.find ||
+          UfShortcut.reconnect ||
+          null:
         return false;
     }
     return true;

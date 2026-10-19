@@ -18,6 +18,7 @@ class TerminalSession extends ChangeNotifier {
   final String hostId;
   final String title;
   final terminal = Terminal(maxLines: 10000);
+  final controller = TerminalController();
   SealState state = SealState.connecting;
   Object? error;
   VoidCallback? onUserInput;

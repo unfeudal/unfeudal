@@ -2,9 +2,18 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
-enum UfShortcut { toggleTree, focusSearch, newTab, closeTab }
+enum UfShortcut {
+  toggleTree,
+  focusSearch,
+  newTab,
+  closeTab,
+  copy,
+  paste,
+  find,
+  reconnect,
+}
 
-/// ⌘ + B/K/T/W on macOS; Ctrl+Shift + B/K/T/W elsewhere, plus plain Ctrl+B/K outside the terminal
+/// ⌘ + B/K/T/W/C/V/F/R on macOS; Ctrl+Shift + the same letters elsewhere, plus plain Ctrl+B/K outside the terminal
 /// (inside it, Ctrl+letters belong to the shell).
 abstract final class UfShortcuts {
   static final _keys = {
@@ -12,6 +21,10 @@ abstract final class UfShortcuts {
     LogicalKeyboardKey.keyK: UfShortcut.focusSearch,
     LogicalKeyboardKey.keyT: UfShortcut.newTab,
     LogicalKeyboardKey.keyW: UfShortcut.closeTab,
+    LogicalKeyboardKey.keyC: UfShortcut.copy,
+    LogicalKeyboardKey.keyV: UfShortcut.paste,
+    LogicalKeyboardKey.keyF: UfShortcut.find,
+    LogicalKeyboardKey.keyR: UfShortcut.reconnect,
   };
 
   static UfShortcut? resolve(

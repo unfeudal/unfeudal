@@ -92,4 +92,57 @@ void main() {
     expect(UfShortcuts.label(UfShortcut.focusSearch), '⌘K');
     debugDefaultTargetPlatformOverride = null;
   });
+
+  test('terminal shortcuts: Ctrl+Shift or Cmd only; plain Ctrl+C/V/F/R stay the shell\'s', () {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    for (final (k, s) in [
+      (LogicalKeyboardKey.keyC, UfShortcut.copy),
+      (LogicalKeyboardKey.keyV, UfShortcut.paste),
+      (LogicalKeyboardKey.keyF, UfShortcut.find),
+      (LogicalKeyboardKey.keyR, UfShortcut.reconnect),
+    ]) {
+      expect(
+        UfShortcuts.resolve(
+          down(k),
+          ctrl: true,
+          shift: true,
+          meta: false,
+          inTerminal: true,
+        ),
+        s,
+      );
+      expect(
+        UfShortcuts.resolve(
+          down(k),
+          ctrl: true,
+          shift: false,
+          meta: false,
+          inTerminal: true,
+        ),
+        isNull,
+      );
+    }
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    expect(
+      UfShortcuts.resolve(
+        down(LogicalKeyboardKey.keyV),
+        ctrl: false,
+        shift: false,
+        meta: true,
+        inTerminal: true,
+      ),
+      UfShortcut.paste,
+    );
+    expect(
+      UfShortcuts.resolve(
+        down(LogicalKeyboardKey.keyC),
+        ctrl: true,
+        shift: false,
+        meta: false,
+        inTerminal: true,
+      ),
+      isNull,
+    );
+    debugDefaultTargetPlatformOverride = null;
+  });
 }

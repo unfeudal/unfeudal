@@ -232,4 +232,20 @@ void main() {
       },
     );
   });
+
+  test(
+    'reconnect closes the previous session first and keeps the tab position',
+    () async {
+      final (s, ssh, _) = await home();
+      final a = await s.connect(await host(s, 'a'));
+      final b = await s.connect(await host(s, 'b'));
+      ssh.shells.first.hangUp();
+      await Future<void>.delayed(Duration.zero);
+      final again = await s.reconnect(a);
+      expect(s.tabs, [again, b]);
+      expect(s.activeTab, 0);
+      expect(again.state, SealState.connected);
+      expect(ssh.hops.first.closed, isTrue);
+    },
+  );
 }

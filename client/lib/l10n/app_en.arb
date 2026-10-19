@@ -491,5 +491,25 @@
     }
   },
   "snippetInsert": "Insert",
-  "snippetNoTerminal": "Open a terminal to insert a snippet."
+  "snippetNoTerminal": "Open a terminal to insert a snippet.",
+  "termReconnect": "Reconnect",
+  "termClosed": "Session closed.",
+  "termSearch": "Search the terminal",
+  "termSearchCount": "{current}/{total}",
+  "@termSearchCount": {
+    "placeholders": {
+      "current": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "termSearchNone": "No match",
+  "termSearchPrev": "Previous match",
+  "termSearchNext": "Next match",
+  "termSearchClose": "Close search",
+  "termCopy": "Copy",
+  "termPaste": "Paste"
 }
