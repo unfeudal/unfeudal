@@ -9,6 +9,7 @@ import '../../design/motion.dart';
 import '../../design/seal.dart';
 import '../../design/tokens.dart';
 import '../shell/shortcuts.dart';
+import 'forwards_badge.dart';
 import 'terminal_pane.dart';
 
 /// The tab strip over the terminals; the active tab shares the terminal's background.
@@ -78,6 +79,16 @@ class TerminalTabs extends StatelessWidget {
                           selected: i == active,
                           onSelect: () => state.selectTab(i),
                           onClose: () => state.closeTab(state.tabs[i]),
+                          badge: ForwardsBadge(
+                            tab: state.tabs[i],
+                            configured:
+                                state.vault
+                                    ?.hostLookup(state.tabs[i].hostId)
+                                    ?.meta
+                                    .forwards ??
+                                const [],
+                            index: i,
+                          ),
                         ),
                       ),
                   ],
@@ -126,6 +137,7 @@ class _TabChip extends StatelessWidget {
     required this.selected,
     required this.onSelect,
     required this.onClose,
+    required this.badge,
   });
 
   final int index;
@@ -134,6 +146,7 @@ class _TabChip extends StatelessWidget {
   final bool selected;
   final VoidCallback onSelect;
   final VoidCallback onClose;
+  final Widget badge;
 
   @override
   Widget build(BuildContext context) {
@@ -165,6 +178,7 @@ class _TabChip extends StatelessWidget {
                       color: selected ? colors.text : colors.muted,
                     ),
                   ),
+                  badge,
                   IconButton(
                     key: Key('tab-close-$index'),
                     tooltip: AppLocalizations.of(context).tabClose,

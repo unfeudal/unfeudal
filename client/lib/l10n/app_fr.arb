@@ -245,5 +245,8 @@
   "errorJumpMissing": "Un hôte de rebond de cette chaîne n'existe plus. En choisir un autre.",
   "errorJumpHop": "Hôte de rebond {host} : {reason}",
   "errorPortInUse": "Le port {port} est déjà utilisé sur cet ordinateur. Choisir un autre port local.",
-  "errorForwardBind": "Impossible d'ouvrir le port local {port}."
+  "errorForwardBind": "Impossible d'ouvrir le port local {port}.",
+  "forwardsActive": "{count, plural, =1{1 redirection active} other{{count} redirections actives}}",
+  "forwardStart": "Démarrer",
+  "forwardStop": "Arrêter"
 }
