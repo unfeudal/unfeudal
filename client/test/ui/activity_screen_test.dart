@@ -5,7 +5,6 @@ import 'package:unfeudal_client/src/ui/activity/activity_screen.dart';
 import 'package:unfeudal_client/src/ui/shell/home_shell.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
-import '../support/fakes.dart';
 import '../support/org_fixtures.dart';
 import '../support/pump_app.dart';
 import '../support/sync_harness.dart';
