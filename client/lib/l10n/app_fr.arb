@@ -519,5 +519,7 @@
   "trashPurgeOn": "Suppression définitive le {date}",
   "trashPurgeBy": "Suppression définitive au plus tard le {date}",
   "trashKept": "Conservé jusqu'à restauration.",
-  "trashRestore": "Restaurer"
+  "trashRestore": "Restaurer",
+  "orgRetentionServer": "Serveur : {value}",
+  "orgRetentionUnlimited": "Serveur : illimité"
 }
