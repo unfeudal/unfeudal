@@ -42,7 +42,7 @@ void main() {
     ),
   );
   Future<JumpConnection> chain(FakeSshCallbacks pins) => connectChain(
-    sshHopOpener(SshConnector(), pins),
+    (hop, {over}) => SshConnector().connectHop(hop, pins, over: over),
     [hop(bastion, '127.0.0.1', 22220)],
     hop(target, targetName, 2222),
   );

@@ -59,7 +59,7 @@ void main() {
       hostItemId: id,
       localPort: 5432,
     );
-    api.readOnly = true;
+    api.isReadOnly = () => true;
     await api.reportReveal(id);
     expect(
       [
@@ -89,14 +89,7 @@ void main() {
       'org': {'auditDays': 90, 'maxVersions': null, 'trashDays': null},
     };
     final r = await api.orgRetention(testOrgId);
-    expect(
-      [
-        r.server.auditDays,
-        r.server.maxVersions,
-        r.org.auditDays,
-        r.org.trashDays,
-      ],
-      [365, 0, 90, null],
-    );
+    expect(r.server, {'auditDays': 365, 'maxVersions': 0, 'trashDays': 30});
+    expect(r.org, {'auditDays': 90, 'maxVersions': null, 'trashDays': null});
   });
 }

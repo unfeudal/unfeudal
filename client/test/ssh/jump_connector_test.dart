@@ -90,13 +90,15 @@ void main() {
     expect(conn.hops, isEmpty);
   });
 
-  test('sshHopOpener checks each hop with its own id; a refused bastion key stops before the target', () async {
+  test('connectHop checks each hop with its own id; a refused bastion key stops before the target', () async {
     final ssh = FakeSshConnector()
       ..keyType = 'ssh-ed25519'
       ..fingerprint = 'SHA256:${'A' * 43}';
     final cb = FakeSshCallbacks();
     await expectLater(
-      connectChain(sshHopOpener(ssh, cb), [t('bastion')], t('web')),
+      connectChain((hop, {over}) => ssh.connectHop(hop, cb, over: over), [
+        t('bastion'),
+      ], t('web')),
       throwsA(
         isA<JumpChainFailed>()
             .having((e) => e.hostId, 'hostId', 'bastion')

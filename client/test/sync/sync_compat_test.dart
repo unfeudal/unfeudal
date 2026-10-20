@@ -32,10 +32,11 @@ void main() {
   });
 
   test('client_too_old on a write switches to read-only', () async {
+    // /api/info still says compatible.
     final h = SyncHarness(
       minClient: '9.0.0',
       infoExtra: {'minClient': '0.1.0'},
-    ); // info still says compatible
+    );
     final (e, m, _) = await h.engine();
     await e.write(wireItem(newId(), revision: 0));
     await e.syncNow();

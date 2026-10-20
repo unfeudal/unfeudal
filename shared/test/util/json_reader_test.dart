@@ -16,15 +16,21 @@ void main() {
     'x': 'extra',
   }, 'thing');
 
-  test('type mismatches are FormatException, never TypeError', () {
+  test('a non-object root is a FormatException', () {
     expect(() => JsonReader('str', 'thing'), throwsFormatException);
     expect(() => JsonReader([1], 'thing'), throwsFormatException);
+  });
+
+  test('type mismatches are FormatException, never TypeError', () {
     expect(() => r.req<String>('n'), throwsFormatException);
     expect(() => r.req<int>('d'), throwsFormatException);
     expect(() => r.req<int>('missing'), throwsFormatException);
     expect(() => r.list<int>('l', max: 5), throwsFormatException);
     expect(() => r.object('l'), throwsFormatException);
     expect(() => r.flag('n'), throwsFormatException);
+  });
+
+  test('an optional null or missing field reads as null', () {
     expect(r.opt<int>('nul'), isNull);
     expect(r.opt<int>('missing'), isNull);
   });

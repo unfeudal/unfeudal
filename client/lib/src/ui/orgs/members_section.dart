@@ -11,7 +11,7 @@ import '../../design/icons.dart';
 import '../../design/motion.dart';
 import '../../design/rows.dart';
 import '../../design/tokens.dart';
-import '../describe_error.dart';
+import '../busy_action.dart';
 import '../manage_frame.dart';
 import 'acl_editor.dart';
 import 'invite_dialog.dart';
@@ -23,7 +23,7 @@ import 'why_rights_view.dart';
 
 enum MembersGroup { members, invitations, teams, folders, organization }
 
-/// Membres et accès of an org vault: a group list beside members, invitations, teams, folder access and the
+/// The members and access section of an org vault: a group list beside members, invitations, teams, folder access and the
 /// org's settings; folder keys waiting to rotate stay announced above every group.
 class MembersSection extends StatefulWidget {
   const MembersSection({super.key, required this.orgId, this.onBack});
@@ -38,7 +38,7 @@ class MembersSection extends StatefulWidget {
 class _MembersSectionState extends State<MembersSection> {
   MembersGroup _group = MembersGroup.members;
 
-  /// Bumped after an invitation is created, so the pending list reloads.
+  // Bumped after an invitation is created, so the pending list reloads.
   int _invites = 0;
 
   @override
@@ -51,7 +51,7 @@ class _MembersSectionState extends State<MembersSection> {
     final groups = [
       (MembersGroup.members, l.membersTitle),
       if (isAdmin) (MembersGroup.invitations, l.adminInvites),
-      if (isAdmin && state.serverHas('teams'))
+      if (isAdmin && state.serverHas(Flag.teams))
         (MembersGroup.teams, l.teamsTitle),
       (MembersGroup.folders, l.membersGroupFolders),
       (MembersGroup.organization, l.orgMenu),
@@ -136,9 +136,8 @@ class PendingInvites extends StatefulWidget {
   State<PendingInvites> createState() => _PendingInvitesState();
 }
 
-class _PendingInvitesState extends State<PendingInvites> {
+class _PendingInvitesState extends State<PendingInvites> with BusyAction {
   List<PendingInvite>? _pending;
-  String? _error;
 
   @override
   void initState() {
@@ -146,34 +145,23 @@ class _PendingInvitesState extends State<PendingInvites> {
     _load();
   }
 
-  Future<void> _load() async {
-    try {
-      final pending = await AppScope.read(context).api!
-          .orgInvites(widget.orgId);
-      if (mounted) setState(() => _pending = pending);
-    } on Exception catch (e) {
-      if (!mounted) return;
-      setState(() => _error = describeError(AppLocalizations.of(context), e));
-    }
-  }
+  Future<void> _load() => run(() async {
+    final pending = await AppScope.read(context).api!.orgInvites(widget.orgId);
+    if (mounted) setState(() => _pending = pending);
+  });
 
-  /// The list is updated here, not fetched again.
-  Future<void> _revoke(PendingInvite invite) async {
-    final l = AppLocalizations.of(context);
-    try {
-      await AppScope.read(context).api!.revokeInvite(invite.id);
-      if (mounted) {
-        setState(
-          () => _pending = [
-            for (final p in _pending!)
-              if (p.id != invite.id) p,
-          ],
-        );
-      }
-    } on Exception catch (e) {
-      if (mounted) setState(() => _error = describeError(l, e));
+  // The list is updated here, not fetched again.
+  Future<void> _revoke(PendingInvite invite) => run(() async {
+    await AppScope.read(context).api!.revokeInvite(invite.id);
+    if (mounted) {
+      setState(
+        () => _pending = [
+          for (final p in _pending!)
+            if (p.id != invite.id) p,
+        ],
+      );
     }
-  }
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -189,7 +177,7 @@ class _PendingInvitesState extends State<PendingInvites> {
     return ListView(
       padding: const EdgeInsets.only(bottom: 40),
       children: [
-        if (_error case final error?)
+        if (problem case final error?)
           StatusBanner(tone: BannerTone.danger, message: error),
         if (pending != null && pending.isEmpty)
           Text(

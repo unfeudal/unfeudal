@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import 'package:flutter/material.dart';
 
-/// The named ramps; components never read them, only the roles of [UfColors].
+// The named ramps; components never read them, only the roles of UfColors.
 abstract final class _Ramp {
   // pierre: green-tinted greys, light (0) to dark (990)
   static const p0 = Color(0xFFFFFFFF);
@@ -287,7 +287,8 @@ abstract final class UfElevation {
   ];
 }
 
-/// Radii: 4 keys, badges · 6 controls, rows, tooltips · 8 menus, notifications, cards · 10 dialogs.
+/// Radii: 4 for keys and badges; 6 for controls, rows and tooltips; 8 for menus, notifications and cards;
+/// 10 for dialogs.
 abstract final class UfRadius {
   static const key = BorderRadius.all(Radius.circular(4));
   static const control = BorderRadius.all(Radius.circular(6));
@@ -300,6 +301,9 @@ const monoStyle = TextStyle(fontFamily: 'JetBrainsMono');
 
 /// The text of a mono input: keys, fingerprints, commands.
 final monoField = monoStyle.copyWith(fontSize: 12);
+
+/// What a field shows when it has no value.
+const noValue = '\u2014';
 
 const _ui = 'HankenGrotesk';
 const _titles = 'Alegreya';
@@ -502,7 +506,7 @@ ThemeData ufTheme(Brightness brightness) {
         fontWeight: FontWeight.w600,
       ),
       // the only border: the state-specific ones would take precedence over it
-      border: _FieldBorder({
+      border: WidgetStateInputBorder.fromMap({
         WidgetState.disabled: edge(c.line),
         WidgetState.error & WidgetState.focused: edge(c.danger, 2),
         WidgetState.focused: edge(c.focus, 2),
@@ -515,30 +519,6 @@ ThemeData ufTheme(Brightness brightness) {
       suffixIconConstraints: const BoxConstraints(minWidth: 28, minHeight: 28),
       hoverColor: Colors.transparent,
     ),
-    chipTheme: ChipThemeData(
-      color: WidgetStateProperty<Color>.fromMap({
-        WidgetState.selected: c.select,
-        WidgetState.hovered: c.neutral,
-        WidgetState.any: Colors.transparent,
-      }),
-      labelStyle: text.bodyMedium!.copyWith(
-        fontSize: 13,
-        color: _StateColor({
-          WidgetState.disabled: c.disabledFg,
-          WidgetState.selected: c.accentText,
-          WidgetState.any: c.text,
-        }),
-      ),
-      secondaryLabelStyle: text.labelLarge!.copyWith(color: c.accentText),
-      side: WidgetStateBorderSide.fromMap({
-        WidgetState.selected: const BorderSide(color: Colors.transparent),
-        WidgetState.any: BorderSide(color: c.line),
-      }),
-      shape: const RoundedRectangleBorder(borderRadius: UfRadius.control),
-      showCheckmark: true,
-      checkmarkColor: c.accentText,
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-    ),
     checkboxTheme: CheckboxThemeData(
       fillColor: checked,
       checkColor: WidgetStateProperty<Color>.fromMap({
@@ -548,29 +528,6 @@ ThemeData ufTheme(Brightness brightness) {
       side: boxEdge,
       overlayColor: const WidgetStatePropertyAll(Colors.transparent),
       shape: const RoundedRectangleBorder(borderRadius: UfRadius.key),
-    ),
-    radioTheme: RadioThemeData(
-      fillColor: WidgetStateProperty<Color>.fromMap({
-        WidgetState.disabled: c.line,
-        WidgetState.selected: c.accent,
-        WidgetState.any: c.edge,
-      }),
-      overlayColor: const WidgetStatePropertyAll(Colors.transparent),
-    ),
-    switchTheme: SwitchThemeData(
-      trackColor: WidgetStateProperty<Color>.fromMap({
-        WidgetState.disabled: c.disabledBg,
-        WidgetState.selected: c.accent,
-        WidgetState.hovered: c.muted,
-        WidgetState.any: c.edge,
-      }),
-      thumbColor: WidgetStateProperty<Color>.fromMap({
-        WidgetState.selected: c.accentFg,
-        WidgetState.any: c.isDark ? c.text : c.panel,
-      }),
-      trackOutlineColor: const WidgetStatePropertyAll(Colors.transparent),
-      overlayColor: const WidgetStatePropertyAll(Colors.transparent),
-      thumbIcon: const WidgetStatePropertyAll(null),
     ),
     tooltipTheme: TooltipThemeData(
       decoration: BoxDecoration(color: c.text, borderRadius: UfRadius.control),
@@ -591,17 +548,6 @@ ThemeData ufTheme(Brightness brightness) {
         borderRadius: UfRadius.card,
         side: BorderSide(color: c.line),
       ),
-    ),
-    popupMenuTheme: PopupMenuThemeData(
-      color: c.panel,
-      elevation: 8,
-      shadowColor: menuShadow,
-      shape: RoundedRectangleBorder(
-        borderRadius: UfRadius.card,
-        side: BorderSide(color: c.line),
-      ),
-      textStyle: text.bodyMedium!.copyWith(fontSize: 13.5),
-      menuPadding: const EdgeInsets.all(4),
     ),
     menuTheme: MenuThemeData(
       style: MenuStyle(
@@ -634,9 +580,6 @@ ThemeData ufTheme(Brightness brightness) {
         overlayColor: const WidgetStatePropertyAll(Colors.transparent),
         mouseCursor: cursor,
       ),
-    ),
-    dropdownMenuTheme: DropdownMenuThemeData(
-      textStyle: text.bodyMedium!.copyWith(fontSize: 13.5),
     ),
     listTileTheme: ListTileThemeData(
       dense: true,
@@ -695,8 +638,8 @@ ThemeData ufTheme(Brightness brightness) {
   );
 }
 
-/// A colour per state that is also a real [Color], its last value: themes lerp colour slots, which a
-/// [WidgetStateColor.fromMap] cannot do.
+// A colour per state that is also a real Color, its last value: themes lerp colour slots, which a
+// WidgetStateColor.fromMap cannot do.
 class _StateColor extends WidgetStateColor {
   _StateColor(WidgetStateMap<Color> map)
     : _states = WidgetStateMapper(map),
@@ -710,27 +653,6 @@ class _StateColor extends WidgetStateColor {
   @override
   bool operator ==(Object other) =>
       other is _StateColor && other._states == _states;
-
-  @override
-  int get hashCode => _states.hashCode;
-}
-
-/// An input border per state that is also a real [OutlineInputBorder]: DropdownButton reads the theme's
-/// border as one, which a [WidgetStateInputBorder.fromMap] cannot answer.
-class _FieldBorder extends OutlineInputBorder
-    implements WidgetStateInputBorder {
-  _FieldBorder(WidgetStateMap<InputBorder> map)
-    : _states = WidgetStateMapper(map),
-      super(borderRadius: UfRadius.control);
-
-  final WidgetStateMapper<InputBorder> _states;
-
-  @override
-  InputBorder resolve(Set<WidgetState> states) => _states.resolve(states);
-
-  @override
-  bool operator ==(Object other) =>
-      other is _FieldBorder && other._states == _states;
 
   @override
   int get hashCode => _states.hashCode;

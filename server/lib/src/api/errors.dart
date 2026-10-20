@@ -11,6 +11,8 @@ class ApiError implements Exception {
 
   ApiError.notFound() : this(ApiErrorCode.notFound, 'Not found.');
 
+  ApiError.invalid(String message) : this(ApiErrorCode.invalidRequest, message);
+
   ApiError.orgsOff()
     : this(
         ApiErrorCode.featureDisabled,
@@ -30,14 +32,16 @@ class ApiError implements Exception {
   String toString() => 'ApiError(${code.wire}): $message';
 }
 
-/// ApiError → its JSON body and status; anything else → 500, logging only the path and the type.
+/// Maps an ApiError to its JSON body and status; anything else gives a 500,
+/// logging only the path and the type.
 Middleware errorMapper() =>
     (inner) => (request) async {
       try {
         return await inner(request);
       } on ApiError catch (e) {
         return _respond(e);
-      } catch (e) {
+      } on Object catch (e) {
+        // Top-level guard: any unexpected failure becomes a 500 without leaking details.
         depsOf(request).log.error('internal', {
           'path': request.url.path,
           'type': '${e.runtimeType}',

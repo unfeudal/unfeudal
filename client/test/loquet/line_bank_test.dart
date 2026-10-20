@@ -47,7 +47,7 @@ void main() {
         final words = bank
             .text(fr, k, params)
             .toLowerCase()
-            .split(RegExp(r"[\s.,;:?!'’]+"));
+            .split(RegExp(r"[\s.,;:?!'\u2019]+"));
         expect(words.where(banned.contains), isEmpty, reason: '$k');
       }
     }

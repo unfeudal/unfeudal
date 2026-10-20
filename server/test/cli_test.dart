@@ -97,7 +97,7 @@ void main() {
       );
     }
     await db.close();
-    final ok = await cli(['transfer-owner', 'b@vault.test'], env);
+    final ok = await cli(['transfer-owner', ' B@Vault.test '], env);
     expect(ok.exitCode, 0);
     expect('${ok.stdout}', contains('b@vault.test'));
   });

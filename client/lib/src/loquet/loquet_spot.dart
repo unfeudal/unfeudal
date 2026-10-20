@@ -84,7 +84,7 @@ class _LoquetSpotState extends State<LoquetSpot> {
     super.dispose();
   }
 
-  /// The text is chosen once per fixed line, else once per reaction, so rebuilds never swap variants.
+  // The text is chosen once per fixed line, else once per reaction, so rebuilds never swap variants.
   String? _line(AppLocalizations l, AppState state) {
     final loquet = state.loquet;
     final key = widget.line ?? loquet.line;
@@ -114,15 +114,9 @@ class _LoquetSpotState extends State<LoquetSpot> {
       builder: (context, _) {
         if (!loquet.visible) return UfLogo(size: size);
         final mood = widget.mood ?? loquet.mood;
-        final bubbles =
-            loquet.mode == LoquetMode.on &&
-            widget.placement != LoquetPlacement.titleBar &&
-            widget.placement !=
-                LoquetPlacement.sidebar; // the footer prints the line itself
         final text =
-            bubbles ||
-                (widget.placement == LoquetPlacement.sidebar &&
-                    loquet.mode == LoquetMode.on)
+            loquet.mode == LoquetMode.on &&
+                widget.placement != LoquetPlacement.titleBar
             ? _line(l, state)
             : null;
         final lively = loquet.mode == LoquetMode.on && !still;
@@ -145,7 +139,7 @@ class _LoquetSpotState extends State<LoquetSpot> {
           child: Transform.translate(
             offset: _drag,
             child: Transform.rotate(
-              // dangles with the finger, ±15°
+              // Dangles with the finger, up to 15 degrees either way.
               angle: (_drag.dx / 120).clamp(-0.26, 0.26),
               child: Loquet(
                 mood: mood,
@@ -220,8 +214,9 @@ class _LoquetSpotState extends State<LoquetSpot> {
           children: [
             face,
             if (text != null)
+              // Above his head, so the layout never shifts.
               Positioned(
-                bottom: size + 6, // above his head: the layout never shifts
+                bottom: size + 6,
                 child: LoquetBubble(text: text),
               ),
           ],

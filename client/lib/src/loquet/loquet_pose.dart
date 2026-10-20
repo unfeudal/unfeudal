@@ -76,7 +76,7 @@ class LoquetPose {
     this.lookX = 0,
   });
 
-  /// [eyeX] (0 left … 1 right) only moves the eyes of [LoquetMood.watching].
+  /// [eyeX] (0 left to 1 right) only moves the eyes of [LoquetMood.watching].
   factory LoquetPose.of(LoquetMood mood, {double eyeX = 0.5}) => switch (mood) {
     LoquetMood.idle => const LoquetPose(LoquetEyes.open, LoquetMouth.smile),
     LoquetMood.watching => LoquetPose(
@@ -151,7 +151,7 @@ class LoquetPose {
   final Set<LoquetExtra> extras;
   final LoquetTone tone;
 
-  /// Horizontal eye offset in viewBox units (−6 … 6).
+  /// Horizontal eye offset in viewBox units, from -6 to 6.
   final double lookX;
 
   /// The same pose looking [lookX] units aside (idle life).

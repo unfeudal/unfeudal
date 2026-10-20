@@ -12,13 +12,13 @@ Future<void> limitCredentials(Request request, String email) async {
   // ponytail: checked, not reserved; a queue that fills between here and the hash still counts that attempt
   refuseIfArgon2Busy();
   final deps = depsOf(request);
-  final net = netOf(clientIp(request, deps.config.trustedProxies));
+  final net = netOf(clientIpOf(request));
   await deps.limiter.hit([ipKey(net), acctIpKey(email, net), acctKey(email)]);
 }
 
 /// After the right credential: reset the acct keys. ip: stays counted.
 Future<void> clearCredentials(Request request, String email) async {
   final deps = depsOf(request);
-  final net = netOf(clientIp(request, deps.config.trustedProxies));
+  final net = netOf(clientIpOf(request));
   await deps.limiter.reset([acctIpKey(email, net), acctKey(email)]);
 }

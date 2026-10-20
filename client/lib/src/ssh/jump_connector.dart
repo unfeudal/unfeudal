@@ -58,6 +58,7 @@ Future<JumpConnection> connectChain(
         );
       }
     } catch (e) {
+      // Any failure, whatever its type, closes the open hops and is wrapped with the failing hop.
       for (final c in opened.reversed) {
         await c.close().catchError((Object _) {});
       }
@@ -66,6 +67,3 @@ Future<JumpConnection> connectChain(
   }
   return JumpConnection(opened.last, opened.sublist(0, opened.length - 1));
 }
-
-HopOpener sshHopOpener(SshConnector connector, SshCallbacks callbacks) =>
-    (target, {over}) => connector.connectHop(target, callbacks, over: over);

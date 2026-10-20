@@ -24,7 +24,7 @@ class SecretHashParams {
   static const testing = SecretHashParams(1024, 1, 1);
 }
 
-/// Bounds memory and CPU before authentication: [slots] hashes at once, 4 × [slots] waiting, the next → 429.
+/// Bounds memory and CPU before authentication: [slots] hashes at once, 4 times [slots] waiting, the next gets 429.
 class Argon2Gate {
   Argon2Gate(this.slots);
 
@@ -71,7 +71,7 @@ final _gate = Argon2Gate(Platform.numberOfProcessors);
 /// A full Argon2 queue is a 429 that counts nothing: credential checks call this before the rate limiter.
 void refuseIfArgon2Busy() => _gate.refuseIfFull();
 
-/// Argon2id in another isolate: the pure-Dart hash would otherwise block every request.
+// Argon2id runs in another isolate: the pure-Dart hash would otherwise block every request.
 Future<Uint8List> _argon2id(
   List<int> secret,
   List<int> salt,

@@ -87,7 +87,10 @@ void main() {
     'the seed is valid and a 24-character time is accepted everywhere',
     () async {
       for (final (table, column) in timeColumns) {
-        await db.execute('UPDATE $table SET $column = @v', {'v': t0});
+        await expectLater(
+          db.execute('UPDATE $table SET $column = @v', {'v': t0}),
+          completes,
+        );
       }
     },
   );

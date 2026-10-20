@@ -26,7 +26,7 @@ import 'export_screen.dart';
 import 'licenses_screen.dart';
 import 'password_change_screen.dart';
 
-/// Réglages: a group list (appearance, security, devices, data, account, account activity, server, licenses)
+/// Settings: a group list (appearance, security, devices, data, account, account activity, server, licenses)
 /// beside the chosen group's settings.
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key, this.onBack, this.initialGroup});
@@ -53,7 +53,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  /// Shown only when the hardware, the OS and the server allow it.
+  // Shown only when the hardware, the OS and the server allow it.
   late final Future<bool> _biometricAvailable = AppScope.read(context)
       .biometricAvailable();
   late Future<bool> _biometricOn =
@@ -125,7 +125,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ('devices', l.devicesTitle),
       ('data', l.settingsData),
       ('account', l.settingsAccount),
-      if (state.serverHas('audit')) ('activity', l.settingsAccountActivity),
+      if (state.serverHas(Flag.audit)) ('activity', l.settingsAccountActivity),
       if (state.stored?.isInstanceOwner ?? false) ('server', l.settingsServer),
       ('licenses', l.settingsLicenses),
     ];
@@ -371,7 +371,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           child: Text(l.settingsChangePassword),
         ),
       ),
-      if (state.serverHas('recovery_kit'))
+      if (state.serverHas(Flag.recoveryKit))
         SettingRow(
           label: l.settingsRecoveryKit,
           hint: l.settingsRecoveryKitBody,
@@ -414,7 +414,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final l = AppLocalizations.of(context);
     final state = AppScope.of(context);
     return [
-      if (state.serverHas('ssh_config_import'))
+      if (state.serverHas(Flag.sshConfigImport))
         SettingRow(
           label: l.settingsImportSshConfig,
           trailing: OutlinedButton(
@@ -520,7 +520,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 }
 
-/// The bundled font first, then the platform's monospace families.
+// The bundled font first, then the platform's monospace families.
 List<String> get _terminalFonts => [
   'JetBrainsMono',
   ...switch (defaultTargetPlatform) {

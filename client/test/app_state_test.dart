@@ -41,7 +41,7 @@ void main() {
       settingsStore: s.settingsStore,
       openMirror: (_) async => throw const MirrorTooNew(2),
       httpClient: h.client,
-      allowTestingKdf: true,
+      kdfFloor: KdfParams.testing,
       kdf: KdfParams.testing,
     );
     await tooNew.boot();
@@ -61,19 +61,18 @@ void main() {
       displayName: 'Camille',
     );
     expect(s.stage, AppStage.setup);
-    expect(
-      s.recoveryKey!.replaceAll('-', ''),
-      hasLength(53),
-    ); // 53 base32 characters in groups of 4
+    // 53 base32 characters in groups of 4.
+    expect(s.recoveryKey!.replaceAll('-', ''), hasLength(53));
     expect(jsonDecode(s.mirror!.getKv(KvKey.bundle)!)['bundleVersion'], 0);
     s.finishOnboarding();
     expect((s.stage, s.recoveryKey), (AppStage.home, null));
     expect(s.stored!.isInstanceOwner, isTrue);
+    // The device is named after its OS, never the hostname.
     expect([
       'Windows',
       'macOS',
       'Linux',
-    ], contains(h.devices.values.single.name)); // never the hostname
+    ], contains(h.devices.values.single.name));
   });
 
   test(
@@ -99,7 +98,7 @@ void main() {
         return asked.length > 1;
       };
       await expectLater(s.checkServer(lan), throwsA(isA<PlainHttpRefused>()));
-      expect((await s.checkServer(lan)).has('plain_http_lan'), isTrue);
+      expect((await s.checkServer(lan)).has(Flag.plainHttpLan), isTrue);
       expect(asked, [lan, lan]);
       expect(
         await s.checkServer(Uri.parse('https://vault.example.org')),
@@ -111,10 +110,8 @@ void main() {
 
   test('weak prelogin KDF is refused before derivation', () async {
     final h = SyncHarness();
-    await h.createAccount(
-      email,
-      password,
-    ); // KdfParams.testing: below the floor in production
+    // The harness uses KdfParams.testing, below the floor in production.
+    await h.createAccount(email, password);
     final s = AppState(
       sessions: SessionStore(FakeSecureKv()),
       settingsStore: FakeSettingsStore(),
@@ -156,8 +153,8 @@ void main() {
     await s.unlock(password);
     await s.sync!.syncNow();
     expect(
-      (s.stage, s.deviceRevoked, h.devices.values.single.revokedAt),
-      (AppStage.home, false, null),
+      (s.stage, s.signedOutBecause, h.devices.values.single.revokedAt),
+      (AppStage.home, null, null),
     );
   });
 
@@ -194,12 +191,12 @@ void main() {
       h.offline = false;
       h.devices.values.first.revokedAt = h.now;
       await s.sync!.syncNow();
+      await pumpEventQueue(); // the session ends behind the sync round
       expect(
-        (s.stage, s.deviceRevoked, s.sessionExpired),
-        (AppStage.login, true, false),
+        (s.stage, s.signedOutBecause),
+        (AppStage.login, SignOutReason.deviceRevoked),
       );
       expect(mirrors.values.single.outbox(), hasLength(1));
-      await pumpEventQueue(); // the session ends behind the sync round
       final kept = (await s.sessions.load())!;
       expect((kept.refreshToken, kept.email), (null, s.stored!.email));
       await s.boot(); // a relaunch skips the unlock a dead token would fail
@@ -207,11 +204,11 @@ void main() {
       final (h2, s2, _, _) = await loggedIn();
       h2.expireSessions();
       await s2.sync!.syncNow();
-      expect(
-        (s2.stage, s2.deviceRevoked, s2.sessionExpired),
-        (AppStage.login, false, true),
-      );
       await pumpEventQueue();
+      expect(
+        (s2.stage, s2.signedOutBecause),
+        (AppStage.login, SignOutReason.sessionExpired),
+      );
       expect((await s2.sessions.load())!.refreshToken, isNull);
     },
   );

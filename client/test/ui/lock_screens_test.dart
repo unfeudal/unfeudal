@@ -68,7 +68,7 @@ void main() {
       t,
       state: testAppState()
         ..stage = AppStage.login
-        ..deviceRevoked = true,
+        ..signedOutBecause = SignOutReason.deviceRevoked,
     );
     expect(find.text(l10n(t).loginDeviceRevoked), findsOneWidget);
     expect(s.stage, AppStage.login);
@@ -108,10 +108,8 @@ void main() {
       final states = <LockScreenState>[];
       s.lockMachine.addListener(() => states.add(s.lockMachine.state));
       await pumpApp(t, state: s);
-      expect(
-        find.text(testEmail),
-        findsOneWidget,
-      ); // account chip on a known device
+      // The account chip on a known device.
+      expect(find.text(testEmail), findsOneWidget);
       await t.tap(find.byKey(const Key('unlock-password')));
       await t.pump();
       await t.tap(find.byKey(const Key('unlock-peek')));

@@ -10,10 +10,8 @@ import '../json.dart';
 /// expiry only: it reveals nothing secret). An invalid token is ignored.
 Response info(Request request) {
   final deps = depsOf(request);
-  final header = request.headers['authorization'] ?? '';
   final full =
-      header.startsWith('Bearer ') &&
-      deps.access.verify(header.substring(7)) != null;
+      deps.access.verifyHeader(request.headers['authorization']) != null;
   final config = deps.config;
   return jsonResponse(
     ApiInfo(

@@ -4,7 +4,7 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 import '../settings/settings.dart';
 
 /// Server flag, then any org, then the user: strongest first; a user can only lower it.
-/// [serverFlag] = `AppState.serverHas('mascot')`; [orgSettings] = every membership of the org block.
+/// [serverFlag] = `AppState.serverHas(Flag.mascot)`; [orgSettings] = every membership of the org block.
 LoquetMode effectiveLoquetMode(
   bool serverFlag,
   Iterable<OrgSummary> orgSettings,

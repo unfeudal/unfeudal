@@ -25,7 +25,7 @@ class _SetupScreenState extends State<SetupScreen> with BusyAction {
   final _confirm = TextEditingController();
   final _name = TextEditingController();
 
-  /// 1: server and token; 2: the owner account. A setup link fills step 1 and opens on step 2.
+  // 1: server and token; 2: the owner account. A setup link fills step 1 and opens on step 2.
   late int _step = _token.text.isEmpty ? 1 : 2;
 
   @override
@@ -44,7 +44,7 @@ class _SetupScreenState extends State<SetupScreen> with BusyAction {
     super.dispose();
   }
 
-  /// Checked here, the server is only reached by the final submit (one plain-http prompt, not two).
+  // Checked here, the server is only reached by the final submit (one plain-http prompt, not two).
   void _next() {
     final l = AppLocalizations.of(context);
     final server = Uri.tryParse(_server.text.trim());
@@ -71,7 +71,7 @@ class _SetupScreenState extends State<SetupScreen> with BusyAction {
         password: _password.text,
         displayName: _name.text.trim().isEmpty ? null : _name.text.trim(),
       );
-      if (!state.serverHas('recovery_kit')) state.finishOnboarding();
+      if (!state.serverHas(Flag.recoveryKit)) state.finishOnboarding();
     });
   }
 
@@ -150,10 +150,11 @@ class _SetupScreenState extends State<SetupScreen> with BusyAction {
             )
           else
             LockActions(
-              primary: FilledButton(
+              primary: BusyButton(
                 key: const Key('setup-submit'),
-                onPressed: busy ? null : _submit,
-                child: BusyLabel(busy: busy, label: l.setupSubmit),
+                busy: busy,
+                onPressed: _submit,
+                label: l.setupSubmit,
               ),
               links: [
                 TextButton(

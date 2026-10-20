@@ -98,5 +98,6 @@ void main() {
       return !lines.any((l) => l.contains('retention done'));
     }).timeout(const Duration(seconds: 10));
     await server.close();
+    expect(lines, contains(contains('retention done')));
   });
 }

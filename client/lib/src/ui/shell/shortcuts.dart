@@ -13,7 +13,7 @@ enum UfShortcut {
   reconnect,
 }
 
-/// ⌘ + B/K/T/W/C/V/F/R on macOS; Ctrl+Shift + the same letters elsewhere, plus plain Ctrl+B/K outside the terminal
+/// Cmd + B/K/T/W/C/V/F/R on macOS; Ctrl+Shift + the same letters elsewhere, plus plain Ctrl+B/K outside the terminal
 /// (inside it, Ctrl+letters belong to the shell).
 abstract final class UfShortcuts {
   static final _keys = {
@@ -54,10 +54,10 @@ abstract final class UfShortcuts {
     return _mac ? '⌘$letter' : 'Ctrl+Shift+$letter';
   }
 
-  /// Ctrl K outside the terminal (⌘K on macOS); the Ctrl+Shift form is only needed inside it.
+  /// Ctrl K outside the terminal (Cmd K on macOS); the Ctrl+Shift form is only needed inside it.
   static String get searchLabel => _mac ? '⌘K' : 'Ctrl K';
 
-  /// The vault switch for position [n] (1…9).
+  /// The vault switch for position [n] (1 to 9).
   static String vaultLabel(int n) => _mac ? '⌘$n' : 'Ctrl $n';
 
   static bool get _mac => defaultTargetPlatform == TargetPlatform.macOS;

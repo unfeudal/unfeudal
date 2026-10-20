@@ -114,6 +114,7 @@ void main() {
           meta: hostJson(n, user: 'root'),
         ),
     ];
+    await s.sync!.syncNow();
     await s.closeTab(await s.connect(a));
     await s.connect(b);
     ssh.shells.last.hangUp();

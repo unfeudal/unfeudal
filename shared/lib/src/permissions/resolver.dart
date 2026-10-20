@@ -7,6 +7,24 @@ enum MemberStatus { accepted, confirmed }
 
 enum PrincipalType { user, team }
 
+/// The folder keys a member's effective permissions entitle them to hold:
+/// view grants the meta key, connect grants the secret key too.
+enum FolderKeyAccess {
+  none,
+  meta,
+  metaAndSecret;
+
+  factory FolderKeyAccess.of(Set<Permission> effective) =>
+      effective.contains(Permission.connect)
+      ? metaAndSecret
+      : effective.contains(Permission.view)
+      ? meta
+      : none;
+
+  bool get hasMeta => this != none;
+  bool get hasSecret => this == metaAndSecret;
+}
+
 class AclEntry {
   const AclEntry(
     this.folderId,
@@ -20,6 +38,21 @@ class AclEntry {
   final String principalId;
   final Set<Permission> allow;
   final Set<Permission> deny; // ignored for teams (refused at write time)
+}
+
+/// ACL entries keyed by principal and folder, built once for many [resolvePermissions] calls;
+/// a later entry for the same key replaces an earlier one.
+class AclIndex {
+  AclIndex(Iterable<AclEntry> entries)
+    : _byKey = {
+        for (final e in entries)
+          (e.principalType, e.principalId, e.folderId): e,
+      };
+
+  final Map<(PrincipalType, String, String), AclEntry> _byKey;
+
+  AclEntry? entryAt(PrincipalType type, String principalId, String folderId) =>
+      _byKey[(type, principalId, folderId)];
 }
 
 enum StepKind { notConfirmed, disabled, role, entry, denied }
@@ -37,8 +70,9 @@ class ExplanationStep {
   final PrincipalType? principalType;
   final String? principalId;
   final String? folderId; // folder where the applied entry sits
-  final Set<Permission>
-  permissions; // entry: its allow · role: all · denied: what the deny removed
+  /// For an entry step its allow set, for a role step all permissions, for a
+  /// denied step what the deny removed.
+  final Set<Permission> permissions;
 }
 
 class Explanation {
@@ -47,15 +81,15 @@ class Explanation {
   final List<ExplanationStep> steps;
 }
 
-/// reveal ⇒ connect ⇒ view; edit ⇒ view; manage ⇒ view.
-Set<Permission> expand(Set<Permission> p) => {
+// reveal implies connect, and any permission implies view.
+Set<Permission> _expand(Set<Permission> p) => {
   ...p,
   if (p.contains(Permission.reveal)) Permission.connect,
   if (p.isNotEmpty) Permission.view,
 };
 
-/// Denying view removes everything; denying connect removes reveal.
-Set<Permission> denyClosure(Set<Permission> deny) => {
+// Denying view removes everything; denying connect removes reveal.
+Set<Permission> _denyClosure(Set<Permission> deny) => {
   for (final d in deny)
     ...switch (d) {
       Permission.view => Permission.values,
@@ -72,7 +106,7 @@ Explanation resolvePermissions({
   required Set<String> teamIds,
   required String folderId,
   required String? Function(String id) parentOf,
-  required Iterable<AclEntry> entries,
+  required AclIndex acl,
 }) {
   if (role == null || status != MemberStatus.confirmed) {
     return const Explanation({}, [ExplanationStep(StepKind.notConfirmed)]);
@@ -96,12 +130,9 @@ Explanation resolvePermissions({
   for (String? at = folderId; at != null && seen.add(at); at = parentOf(at)) {
     chain.add(at); // nearest first; a stored cycle ends the walk
   }
-  final byKey = {
-    for (final e in entries) (e.principalType, e.principalId, e.folderId): e,
-  };
   AclEntry? nearest(PrincipalType type, String id) {
     for (final f in chain) {
-      final e = byKey[(type, id, f)];
+      final e = acl.entryAt(type, id, f);
       if (e != null) return e;
     }
     return null;
@@ -136,10 +167,10 @@ Explanation resolvePermissions({
       ),
     );
   }
-  final granted = expand(allow);
+  final granted = _expand(allow);
   final removed = mine == null
       ? <Permission>{}
-      : granted.intersection(denyClosure(mine.deny));
+      : granted.intersection(_denyClosure(mine.deny));
   if (removed.isNotEmpty) {
     steps.add(
       ExplanationStep(

@@ -88,7 +88,7 @@ class ActivityModel extends ChangeNotifier {
     );
   }
 
-  /// Errors land in [error], never thrown to the UI.
+  // Errors land in error, never thrown to the UI.
   Future<void> _guard(Future<void> Function() action) async {
     loading = true;
     error = null;

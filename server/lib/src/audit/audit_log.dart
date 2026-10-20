@@ -10,7 +10,6 @@ import '../api/app.dart';
 import '../api/middleware.dart';
 import '../config/features.dart';
 import '../db/db.dart';
-import '../net/client_ip.dart';
 import '../util/clock.dart';
 
 class AuditScope {
@@ -19,6 +18,9 @@ class AuditScope {
   static const instance = AuditScope('instance');
   factory AuditScope.user(String id) => AuditScope('user:$id');
   factory AuditScope.org(String id) => AuditScope('org:$id');
+
+  /// The org of an `org:<id>` chain, else null.
+  String? get orgId => wire.startsWith('org:') ? wire.substring(4) : null;
 }
 
 class AuditLog {
@@ -29,7 +31,7 @@ class AuditLog {
   final Future<Uint8List> _ipKey;
 
   Future<String> ipPseudonym(String ip) async =>
-      'ip:${Hmac(sha256, await _ipKey).convert(utf8.encode(ip)).bytes.sublist(0, 16).map((b) => b.toRadixString(16).padLeft(2, '0')).join()}';
+      'ip:${Hmac(sha256, await _ipKey).convert(utf8.encode(ip)).toString().substring(0, 32)}';
 
   /// Inside the caller's transaction. The head row is locked by the UPDATE until commit (both engines),
   /// so concurrent writers of one scope queue and the chain never forks.
@@ -127,7 +129,7 @@ AuditWrite auditWriter(
   final deps = depsOf(request);
   final who =
       actor ?? (user: authOf(request).userId, device: authOf(request).deviceId);
-  final ip = clientIp(request, deps.config.trustedProxies).address;
+  final ip = clientIpOf(request).address;
   return (scope, action, targetIds) => deps.audit.append(
     tx,
     scope: scope,

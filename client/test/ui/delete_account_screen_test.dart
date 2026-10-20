@@ -42,9 +42,8 @@ void main() {
   );
 
   testWidgets('the Instance Owner has no deletion entry', (t) async {
-    final s = await signedInState(
-      t,
-    ); // first account of the harness: Instance Owner
+    // The first account of the harness is the Instance Owner.
+    final s = await signedInState(t);
     await pumpApp(
       t,
       state: s,

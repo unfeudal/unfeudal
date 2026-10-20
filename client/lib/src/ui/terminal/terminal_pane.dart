@@ -23,7 +23,7 @@ import '../shell/shortcuts.dart';
 import 'multiline_dialog.dart';
 
 /// One tab's terminal: copy, paste, scrollback search, a context menu and reconnect after a hang-up.
-/// Plain Ctrl keys reach the shell; the terminal shortcuts need Ctrl+Shift (⌘ on macOS).
+/// Plain Ctrl keys reach the shell; the terminal shortcuts need Ctrl+Shift (Cmd on macOS).
 class TerminalPane extends StatefulWidget {
   const TerminalPane({super.key, required this.session, this.onEditHost});
 
@@ -246,7 +246,8 @@ class _TerminalPaneState extends State<TerminalPane> {
                       controller: _session.controller,
                       scrollController: _scroll,
                       autofocus: true,
-                      shortcuts: const {}, // drops xterm2's own Ctrl+C/V
+                      // Empty, to drop xterm2's own Ctrl+C/V.
+                      shortcuts: const {},
                       onKeyEvent: _onKey,
                       onSecondaryTapDown: _menu,
                       theme: terminalThemeFor(
@@ -334,7 +335,7 @@ class _TerminalPaneState extends State<TerminalPane> {
   }
 }
 
-/// A failed session stays in its tab: what happened, then retry or edit. Never the exception text.
+// A failed session stays in its tab: what happened, then retry or edit. Never the exception text.
 class _ErrorCard extends StatelessWidget {
   const _ErrorCard({
     required this.session,

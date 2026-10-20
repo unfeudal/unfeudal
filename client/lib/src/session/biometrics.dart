@@ -16,10 +16,8 @@ abstract interface class BiometricBackend {
 }
 
 class ChannelBiometricBackend implements BiometricBackend {
-  const ChannelBiometricBackend([
-    this._channel = const MethodChannel('fr.unfeudal/biometric'),
-  ]);
-  final MethodChannel _channel;
+  const ChannelBiometricBackend();
+  static const _channel = MethodChannel('fr.unfeudal/biometric');
   @override
   Future<bool> available() async {
     try {

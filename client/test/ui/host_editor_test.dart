@@ -121,11 +121,12 @@ void main() {
   });
 
   testWidgets('newer payload and trashed host are read-only', (t) async {
-    final s = await signedInState(t);
+    final h = SyncHarness();
+    final s = await signedInState(t, harness: h);
     late String newer, trashed;
     await t.runAsync(() async {
       final item = await sealItem(
-        s.vault!.debugKey,
+        h.accounts[testEmail]!.account!.unlocked.userKey,
         meta: {...hostJson('n'), 'schemaVersion': 2},
       );
       s.mirror!.upsertItems([item]);

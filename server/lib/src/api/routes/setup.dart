@@ -22,14 +22,13 @@ ApiError _setupDone() =>
 /// Creates the Instance Owner with the one-time setup token, and its first session.
 Future<Response> setup(Request request) async {
   final deps = depsOf(request);
-  final net = netOf(clientIp(request, deps.config.trustedProxies));
+  final net = netOf(clientIpOf(request));
   // Never refunded: setup happens once.
   await deps.limiter.hit([ipKey(net)]);
   final body = await readJson(request);
   final token = normalizeSetupToken(reqString(body, 'token', max: 200));
   final email = normalizeEmail(body['email']);
-  final bundle = body['bundle'];
-  parseBundle(bundle, allowTestingKdf: deps.allowTestingKdf);
+  final bundle = parseBundle(body['bundle'], kdfFloor: deps.kdfFloor);
   final authKey = reqKey32(body, 'authKey');
   final recoveryAuthKey = reqKey32(body, 'recoveryAuthKey');
   final device = parseDevice(body['device']);
@@ -63,38 +62,31 @@ Future<Response> setup(Request request) async {
       {'h': h},
     );
     if (claimed == 0) throw _setupDone();
-    final userId = newId();
-    await tx.execute(
-      'INSERT INTO users (id, email, is_instance_owner, bundle, bundle_version, auth_hash, '
-      'recovery_auth_hash, created_at, locale) '
-      'VALUES (@id, @email, 1, @bundle, 0, @auth, @recovery, @now, @locale)',
-      {
-        'id': userId,
-        'email': email,
-        'bundle': jsonEncode(bundle),
-        'auth': authHash,
-        'recovery': recoveryHash,
-        'now': iso(deps.clock.now()),
-        'locale': locale,
-      },
+    final userId = await insertUser(
+      tx,
+      deps,
+      email: email,
+      bundle: bundle,
+      authHash: authHash,
+      recoveryHash: recoveryHash,
+      locale: locale,
+      isInstanceOwner: true,
     );
     final session = await createSession(
-      deps,
+      request,
       tx,
       userId: userId,
       isInstanceOwner: true,
-      bundle: bundle! as Map<String, Object?>,
+      bundle: bundle,
       bundleVersion: 0,
       device: device,
     );
     // after the session exists: its device is the actor
-    final audit = auditWriter(
+    await auditWriter(
       request,
       tx,
       actor: (user: userId, device: session.deviceId),
-    );
-    await audit(AuditScope.instance, 'setup.completed', [userId]);
-    await audit(AuditScope.user(userId), 'device.added', [session.deviceId]);
+    )(AuditScope.instance, 'setup.completed', [userId]);
     return session;
   });
   return jsonResponse(session.toJson(), status: 201);

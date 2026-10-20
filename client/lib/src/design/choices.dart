@@ -5,20 +5,18 @@ import 'icons.dart';
 import 'motion.dart';
 import 'tokens.dart';
 
-/// An on/off switch: a 32 × 18 track whose 14 px thumb slides in [UfMotion.base]. Null [onChanged] disables
-/// it; [busy] puts a spinner on the thumb and ignores taps, while a system prompt answers.
+/// An on/off switch: a 32 by 18 track whose 14 px thumb slides in [UfMotion.base]. Null [onChanged] disables
+/// it.
 class UfSwitch extends StatelessWidget {
   const UfSwitch({
     super.key,
     required this.value,
     required this.onChanged,
-    this.busy = false,
     this.semanticLabel,
   });
 
   final bool value;
   final ValueChanged<bool>? onChanged;
-  final bool busy;
   final String? semanticLabel;
 
   @override
@@ -32,12 +30,7 @@ class UfSwitch extends StatelessWidget {
       enabled: !disabled,
       label: semanticLabel,
       child: _Pressable(
-        // a busy switch keeps its focus while the system prompt answers
-        onTap: disabled
-            ? null
-            : busy
-            ? () {}
-            : () => change(!value),
+        onTap: disabled ? null : () => change(!value),
         builder: (context, states) {
           final active =
               states.contains(WidgetState.hovered) ||
@@ -84,18 +77,7 @@ class UfSwitch extends StatelessWidget {
               child: Container(
                 width: 14,
                 height: 14,
-                alignment: Alignment.center,
                 decoration: BoxDecoration(color: thumb, shape: BoxShape.circle),
-                child: busy
-                    ? SizedBox.square(
-                        dimension: 8,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 1.5,
-                          color: colors.accent,
-                          backgroundColor: Colors.transparent,
-                        ),
-                      )
-                    : null,
               ),
             ),
           );
@@ -160,8 +142,8 @@ class UfRadio<T> extends StatelessWidget {
   }
 }
 
-/// A radio choice as a card, for a choice with consequences: the radio, then a 600 [title] over a `muted`
-/// [description]; the picked card takes `select` and an `accent` edge.
+/// A radio choice as a card, for a choice with consequences: the radio, then a 600 [title]; the picked card
+/// takes `select` and an `accent` edge.
 class UfChoiceCard<T> extends StatelessWidget {
   const UfChoiceCard({
     super.key,
@@ -169,14 +151,12 @@ class UfChoiceCard<T> extends StatelessWidget {
     required this.groupValue,
     required this.onChanged,
     required this.title,
-    this.description,
   });
 
   final T value;
   final T groupValue;
   final ValueChanged<T>? onChanged;
   final String title;
-  final String? description;
 
   @override
   Widget build(BuildContext context) {
@@ -227,23 +207,9 @@ class UfChoiceCard<T> extends StatelessWidget {
                     ),
                   ),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      spacing: 2,
-                      children: [
-                        Text(
-                          title,
-                          style: text.labelLarge!.copyWith(fontSize: 13.5),
-                        ),
-                        if (description case final description?)
-                          Text(
-                            description,
-                            style: text.bodyMedium!.copyWith(
-                              fontSize: 13,
-                              color: colors.muted,
-                            ),
-                          ),
-                      ],
+                    child: Text(
+                      title,
+                      style: text.labelLarge!.copyWith(fontSize: 13.5),
                     ),
                   ),
                 ],
@@ -350,22 +316,20 @@ class UfOption<T> {
 }
 
 /// A select: a 32 px field box showing the picked option, opening a menu as wide as itself. It fills a bounded
-/// width, else fits its widest label. Null [onChanged] disables it; with no matching option it shows
-/// [placeholder]; [selectedLabel] replaces the picked option's label in the box.
+/// width, else fits its widest label. Null [onChanged] disables it; with no matching option the box is empty;
+/// [selectedLabel] replaces the picked option's label in the box.
 class UfSelect<T> extends StatefulWidget {
   const UfSelect({
     super.key,
     required this.options,
     required this.value,
     required this.onChanged,
-    this.placeholder,
     this.selectedLabel,
   });
 
   final List<UfOption<T>> options;
   final T value;
   final ValueChanged<T>? onChanged;
-  final String? placeholder;
   final String? selectedLabel;
 
   @override
@@ -448,7 +412,7 @@ class _UfSelectState<T> extends State<UfSelect<T>> {
           final labels = [
             for (final o in widget.options) (o.label, o.style),
             (
-              shown ?? widget.placeholder ?? '',
+              shown ?? '',
               widget.selectedLabel == null && picked >= 0
                   ? widget.options[picked].style
                   : null,
@@ -523,7 +487,7 @@ class _UfSelectState<T> extends State<UfSelect<T>> {
   }
 }
 
-/// A 16 px radio: `field` with a 1 px `edge` ring at rest, `accent` with a 6 px `accentFg` dot when picked.
+// A 16 px radio: `field` with a 1 px `edge` ring at rest, `accent` with a 6 px `accentFg` dot when picked.
 class _RadioDot extends StatelessWidget {
   const _RadioDot({required this.selected, required this.states});
 
@@ -575,8 +539,8 @@ class _RadioDot extends StatelessWidget {
   }
 }
 
-/// Tracks hover, press and keyboard focus for the controls above; Enter and Space activate. Null [onTap]
-/// reports [WidgetState.disabled].
+// Tracks hover, press and keyboard focus for the controls above; Enter and Space activate. Null onTap
+// reports WidgetState.disabled.
 class _Pressable extends StatefulWidget {
   const _Pressable({
     required this.onTap,

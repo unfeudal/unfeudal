@@ -57,7 +57,8 @@ class SqliteDb implements Db {
       final result = await fn(_SqliteTx(this));
       _db.execute('COMMIT');
       return result;
-    } catch (_) {
+      // Any failure, whatever its type, rolls the transaction back before propagating.
+    } on Object catch (_) {
       _db.execute('ROLLBACK');
       rethrow;
     }
@@ -96,7 +97,7 @@ class SqliteDb implements Db {
   });
 }
 
-/// Runs inside the lock already held by the transaction.
+// Runs inside the lock already held by the transaction.
 class _SqliteTx implements Tx {
   _SqliteTx(this._db);
 

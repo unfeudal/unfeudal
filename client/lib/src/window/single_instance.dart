@@ -46,7 +46,7 @@ class SingleInstance {
     return SingleInstance._(server);
   }
 
-  /// True when a live instance answered; a stale port file or another program on that port is not one.
+  // True when a live instance answered; a stale port file or another program on that port is not one.
   static Future<bool> _knockAt(File portFile) async {
     final port = int.tryParse(
       await portFile.exists() ? (await portFile.readAsString()).trim() : '',

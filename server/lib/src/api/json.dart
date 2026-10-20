@@ -9,7 +9,8 @@ import 'errors.dart';
 
 const maxBody = 1 << 20;
 
-/// The body as a JSON object; over 1 MiB (declared or streamed) → 413, anything else malformed → 400.
+/// The body as a JSON object. Over 1 MiB (declared or streamed) gives a 413,
+/// anything else malformed gives a 400.
 Future<Map<String, Object?>> readJson(Request request) async {
   final declared = request.contentLength;
   if (declared != null && declared > maxBody) {
@@ -38,9 +39,16 @@ Response jsonResponse(
   Object? body, {
   int status = 200,
   Map<String, String> headers = const {},
+}) => jsonTextResponse(jsonEncode(body), status: status, headers: headers);
+
+/// [json] is already encoded.
+Response jsonTextResponse(
+  String json, {
+  int status = 200,
+  Map<String, String> headers = const {},
 }) => Response(
   status,
-  body: jsonEncode(body),
+  body: json,
   headers: {'content-type': 'application/json; charset=utf-8', ...headers},
 );
 

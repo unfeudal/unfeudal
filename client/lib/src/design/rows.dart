@@ -245,9 +245,9 @@ class ItemRow extends StatelessWidget {
   }
 }
 
-enum UfBadgeTone { accent, danger, neutral }
+enum UfBadgeTone { accent, neutral }
 
-/// A count or a short state on a filled 18 px badge: `accent`, `danger` or `neutral`.
+/// A count or a short state on a filled 18 px badge: `accent` or `neutral`.
 class UfBadge extends StatelessWidget {
   const UfBadge(this.label, {super.key, this.tone = UfBadgeTone.neutral});
 
@@ -259,7 +259,6 @@ class UfBadge extends StatelessWidget {
     final colors = UfColors.of(context);
     final (fill, ink) = switch (tone) {
       UfBadgeTone.accent => (colors.accent, colors.accentFg),
-      UfBadgeTone.danger => (colors.danger, colors.onDanger),
       UfBadgeTone.neutral => (colors.neutral, colors.text),
     };
     return Container(

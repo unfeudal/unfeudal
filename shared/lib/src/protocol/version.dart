@@ -2,7 +2,7 @@
 
 final _pattern = RegExp(r'^(\d+)\.(\d+)\.(\d+)$');
 
-/// Plain `X.Y.Z`: no prefix, pre-release or build suffix.
+// Plain `X.Y.Z`: no prefix, pre-release or build suffix.
 List<int> _parse(String s) {
   final match = s.length <= 32 ? _pattern.firstMatch(s) : null;
   if (match == null) throw FormatException('invalid version', s);
@@ -19,5 +19,5 @@ int compareVersions(String a, String b) {
   return 0;
 }
 
-/// [s] with leading zeros dropped (`01.2.3` → `1.2.3`); throws [FormatException] unless `X.Y.Z`.
+/// [s] with leading zeros dropped (`01.2.3` becomes `1.2.3`); throws [FormatException] unless `X.Y.Z`.
 String canonicalVersion(String s) => _parse(s).join('.');

@@ -15,7 +15,7 @@ import '../json.dart';
 import '../middleware.dart';
 import '../validate.dart';
 
-/// First line of every admin handler: the Instance Owner only, before the body is read.
+// Must be the first line of every admin handler, before the body is read.
 void _requireIo(Request request) {
   if (!authOf(request).isInstanceOwner) {
     throw ApiError(ApiErrorCode.forbidden, 'Instance Owner only.');
@@ -42,16 +42,12 @@ Future<Response> listUsers(Request request) async {
 }
 
 Future<Response> setDisabled(Request request) async {
-  final id = request.params['id']!;
   _requireIo(request);
   final deps = depsOf(request);
-  parseUuid(id);
+  final id = parseUuid(request.params['id']!);
   final disabled = (await readJson(request))['disabled'];
   if (disabled is! bool) {
-    throw ApiError(
-      ApiErrorCode.invalidRequest,
-      'disabled must be a boolean.',
-    ); // 1.
+    throw ApiError(ApiErrorCode.invalidRequest, 'disabled must be a boolean.');
   }
   await deps.db.transaction((tx) async {
     final user = (await tx.query(
@@ -62,12 +58,13 @@ Future<Response> setDisabled(Request request) async {
       throw ApiError(
         ApiErrorCode.forbidden,
         'The Instance Owner cannot be disabled.',
-      ); // 2.
+      );
     }
-    if (user == null) throw ApiError.notFound(); // 3.
+    if (user == null) throw ApiError.notFound();
+    // A disabled last owner would leave an organization nobody can manage.
     if (disabled) {
       final last = await lastOwnerOrgs(tx, id);
-      if (last.isNotEmpty) throw lastOwnerError(last); // 4.
+      if (last.isNotEmpty) throw lastOwnerError(last);
     }
     final orgIds = [
       for (final r in await tx.query(
@@ -102,11 +99,10 @@ Future<Response> setDisabled(Request request) async {
 }
 
 Future<Response> deleteUserRoute(Request request) async {
-  final id = request.params['id']!;
   _requireIo(request);
   final deps = depsOf(request);
-  parseUuid(id);
-  // deleteUser refuses the Instance Owner (1.), an unknown id (2.) and a last owner (409)
+  final id = parseUuid(request.params['id']!);
+  // deleteUser refuses the Instance Owner, an unknown id and a last owner.
   await deps.db.transaction(
     (tx) => deleteUser(tx, id, audit: auditWriter(request, tx)),
   );
@@ -164,27 +160,26 @@ Future<Response> listOrgs(Request request) async {
 
 /// The exact name confirms a deletion the Instance Owner cannot see inside.
 Future<Response> adminDeleteOrg(Request request) async {
-  final id = request.params['id']!;
   _requireIo(request);
   final deps = depsOf(request);
-  parseUuid(id);
+  final id = parseUuid(request.params['id']!);
   final confirmName = (await readJson(request))['confirmName'];
   if (confirmName is! String) {
     throw ApiError(
       ApiErrorCode.invalidRequest,
       'confirmName must be a string.',
-    ); // 1.
+    );
   }
   await deps.db.transaction((tx) async {
     final org = (await tx.query('SELECT name FROM orgs WHERE id = @o', {
       'o': id,
     })).firstOrNull;
-    if (org == null) throw ApiError.notFound(); // 2.
+    if (org == null) throw ApiError.notFound();
     if (org['name'] != confirmName) {
       throw ApiError(
         ApiErrorCode.invalidRequest,
         'confirmName must be the exact organization name.',
-      ); // 3.
+      );
     }
     await deleteOrg(tx, id);
     await auditWriter(request, tx)(AuditScope.instance, 'org.deleted', [id]);
@@ -195,8 +190,8 @@ Future<Response> adminDeleteOrg(Request request) async {
 Future<Response> createInstanceInvite(Request request) async {
   _requireIo(request);
   final deps = depsOf(request), auth = authOf(request);
-  final email = normalizeEmail((await readJson(request))['email']); // 1.
-  await deps.limiter.hit([inviteCreateKey(auth.userId)]); // 2.
+  final email = normalizeEmail((await readJson(request))['email']);
+  await deps.limiter.hit([inviteCreateKey(auth.userId)]);
   final (row, locale) = await deps.db.transaction((tx) async {
     final row = await createInviteRow(
       tx,

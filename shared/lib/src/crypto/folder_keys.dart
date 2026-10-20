@@ -86,7 +86,7 @@ class WrappedFolderKeys {
     );
   }
 
-  /// Labels must be `folder:<folderId>:v<version>:meta|secret` (SealedBox.open → KeyLabelMismatch).
+  /// Labels must be `folder:<folderId>:v<version>:meta|secret`, else SealedBox.open throws KeyLabelMismatch.
   Future<FolderKeys> unwrap(String folderId, SimpleKeyPair keyPair) async {
     String label(PayloadPart p) => KeyIds.folder(folderId, version, p);
     final metaKey = await SealedBox.open(
@@ -210,7 +210,7 @@ class FolderKeyHistory {
     ]..sort((a, b) => a.version.compareTo(b.version));
   }
 
-  /// JSON list of `{version (1..current-1, unique), <field>: b64(32 bytes)}` → FormatException otherwise.
+  // A JSON list of `{version (1..current-1, unique), <field>: b64(32 bytes)}`, else FormatException.
   static Map<int, Uint8List> _entries(
     List<int> plain,
     String field,

@@ -11,7 +11,7 @@ import '../support/test_server.dart';
 void main() {
   late TestServer s;
   late OrgWorld w;
-  late Map<String, String> items; // name → id
+  late Map<String, String> items; // name to id
   setUp(() async {
     s = await TestServer.start();
     w = await OrgWorld.build(
@@ -120,34 +120,46 @@ void main() {
     expect(page.org!.orgs, isEmpty);
   });
 
-  test('a member sees their teams, the ACLs of their tree, no status, no public key, only their own wraps', () async {
-    await w.keys('db', 1, ['mia', 'olivia']);
-    await w.keys('hr', 1, ['vic']);
-    final b = await w.block(w['mia']);
-    expect(b.teams.map((t) => t.name), ['Ops']);
-    expect(b.acl.map((a) => a.folderId).toSet(), {w.folder('db')});
-    expect(
-      b.members.every(
-        (m) => m.status == null && m.publicKey == null && m.disabled == null,
-      ),
-      isTrue,
-    );
-    expect(
-      b.members.map((m) => m.email).toSet(),
-      containsAll(['dis@example.org', 'ana@example.org']),
-    );
-    expect(b.wrappedKeys.map((k) => k.folderId), [w.folder('db')]);
-    expect(b.keyRequests, isEmpty);
-    expect(b.pendingRotations, isEmpty);
-    expect(b.folderTree.map((n) => (n.folderId, n.parentId)).toSet(), {
-      (w.folder('db'), w.folder('prod')),
-      (w.folder('prod'), null),
+  group('a member', () {
+    late OrgBlock b;
+    setUp(() async {
+      await w.keys('db', 1, ['mia', 'olivia']);
+      await w.keys('hr', 1, ['vic']);
+      b = await w.block(w['mia']);
     });
-    expect(
-      (await w.block(w['vic'])).wrappedKeys,
-      isEmpty,
-      reason: 'hr is denied now',
-    );
+
+    test('sees their teams, the ACLs and the folder tree of their tree', () {
+      expect(b.teams.map((t) => t.name), ['Ops']);
+      expect(b.acl.map((a) => a.folderId).toSet(), {w.folder('db')});
+      expect(b.folderTree.map((n) => (n.folderId, n.parentId)).toSet(), {
+        (w.folder('db'), w.folder('prod')),
+        (w.folder('prod'), null),
+      });
+    });
+
+    test('sees every member without status, public key or disabled', () {
+      expect(
+        b.members.every(
+          (m) => m.status == null && m.publicKey == null && m.disabled == null,
+        ),
+        isTrue,
+      );
+      expect(
+        b.members.map((m) => m.email).toSet(),
+        containsAll(['dis@example.org', 'ana@example.org']),
+      );
+    });
+
+    test('gets only their own wraps, no key requests or rotations', () async {
+      expect(b.wrappedKeys.map((k) => k.folderId), [w.folder('db')]);
+      expect(b.keyRequests, isEmpty);
+      expect(b.pendingRotations, isEmpty);
+      expect(
+        (await w.block(w['vic'])).wrappedKeys,
+        isEmpty,
+        reason: 'hr is denied now',
+      );
+    });
   });
 
   test('admins see statuses, public keys, every team and ACL, key requests and pending rotations', () async {
@@ -209,9 +221,139 @@ void main() {
     );
     final vic = await w.block(w['vic']);
     expect(vic.keyHistory.single.folderId, w.folder('web'));
-    expect(vic.keyHistory.single.secret, isNull);
-    expect((await w.block(w['adam'])).keyHistory.single.secret, isNotNull);
+    expect(vic.keyHistory.single.keys.secret, isNull);
+    expect((await w.block(w['adam'])).keyHistory.single.keys.secret, isNotNull);
     expect((await w.block(w['mia'])).keyHistory, isEmpty);
+  });
+
+  group('block rows keep their wire keys in order', () {
+    setUp(() async {
+      await w.keys('db', 1, ['olivia', 'adam']);
+      await w.keys('prod', 1, ['olivia']);
+      await s.db.execute(
+        "INSERT INTO pending_rotations (org_id, folder_id, reason, removed_user_ids) VALUES (@o, @f, 'acl_change', @r)",
+        {
+          'o': w.orgId,
+          'f': w.folder('db'),
+          'r': jsonEncode([w.id('vic')]),
+        },
+      );
+      await s.db.execute(
+        'INSERT INTO folder_key_history (org_id, folder_id, version, body) VALUES (@o, @f, 2, @b)',
+        {
+          'o': w.orgId,
+          'f': w.folder('web'),
+          'b': jsonEncode({
+            'version': 2,
+            'meta': OrgWorld.sealed(w.folder('web'), 2, 'meta'),
+            'secret': OrgWorld.sealed(w.folder('web'), 2, 'secret'),
+          }),
+        },
+      );
+    });
+    Future<Map<String, Object?>> raw(String name) async =>
+        (await s.get(
+              '/api/v1/sync?cursor=0&orgCursor=0',
+              token: w[name].accessToken,
+            )).body['org']!
+            as Map<String, Object?>;
+    List<Map<String, Object?>> rows(Map<String, Object?> block, String key) =>
+        (block[key]! as List).cast<Map<String, Object?>>();
+
+    test('top level, orgs and members, for an admin', () async {
+      final admin = await raw('adam');
+      expect(admin.keys, [
+        'orgCursor',
+        'orgs',
+        'members',
+        'teams',
+        'acl',
+        'folderTree',
+        'wrappedKeys',
+        'keyHistory',
+        'keyRequests',
+        'pendingRotations',
+        'itemIds',
+      ]);
+      expect(rows(admin, 'orgs').single.keys, [
+        'id',
+        'name',
+        'role',
+        'status',
+        'settings',
+      ]);
+      expect(
+        rows(
+          admin,
+          'members',
+        ).firstWhere((m) => m['userId'] == w.id('mia')).keys,
+        ['orgId', 'userId', 'email', 'role', 'status', 'publicKey', 'disabled'],
+      );
+    });
+
+    test('teams, ACL entries and folder tree, nulls included', () async {
+      final admin = await raw('adam');
+      expect(rows(admin, 'teams').first.keys, [
+        'orgId',
+        'id',
+        'name',
+        'memberIds',
+      ]);
+      expect(rows(admin, 'acl').first.keys, [
+        'orgId',
+        'folderId',
+        'principalType',
+        'principalId',
+        'allow',
+        'deny',
+      ]);
+      expect(
+        rows(
+          admin,
+          'folderTree',
+        ).firstWhere((n) => n['folderId'] == w.folder('prod')),
+        {'orgId': w.orgId, 'folderId': w.folder('prod'), 'parentId': null},
+      );
+    });
+
+    test('wraps, key requests and pending rotations, nulls included', () async {
+      final admin = await raw('adam');
+      expect(rows(admin, 'wrappedKeys').single.keys, [
+        'folderId',
+        'version',
+        'meta',
+        'secret',
+      ]);
+      expect(rows(admin, 'keyRequests').first.keys, [
+        'orgId',
+        'folderId',
+        'userId',
+        'version',
+        'secret',
+      ]);
+      final rotation = rows(admin, 'pendingRotations').single;
+      expect(rotation.keys, [
+        'orgId',
+        'folderId',
+        'reason',
+        'removedUserIds',
+        'rotatedVersion',
+      ]);
+      expect(rotation['rotatedVersion'], isNull);
+    });
+
+    test(
+      'a member gets no admin fields; key history keeps its null secret',
+      () async {
+        expect(
+          rows(await raw('mia'), 'members').map((m) => m.keys),
+          everyElement(['orgId', 'userId', 'email', 'role']),
+        );
+        final history = rows(await raw('vic'), 'keyHistory').single;
+        expect(history.keys, ['folderId', 'version', 'meta', 'secret']);
+        expect(history['secret'], isNull);
+      },
+    );
   });
 
   test('the block comes only when org_seq passed orgCursor; settings carry mascot only', () async {

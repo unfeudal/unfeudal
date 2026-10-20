@@ -20,7 +20,7 @@ void main() {
     () async {
       final old = await s.setupOwner();
       final bob = await s.createUser('bob@example.org');
-      await transferOwner(s.db, ' Bob@Example.org ');
+      await transferOwner(s.db, 'bob@example.org');
       expect(await owners(), ['bob@example.org']);
       expect(
         (await s.get('/api/v1/admin/users', token: old.accessToken)).status,

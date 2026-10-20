@@ -163,7 +163,7 @@ class SshConfigImporter {
     }
   }
 
-  /// The identity's id; null when the key does not open with [passphrase].
+  // The identity's id; null when the key does not open with passphrase.
   Future<String?> _writeIdentity(PlannedKey key, String? passphrase) async {
     final String publicKey;
     try {

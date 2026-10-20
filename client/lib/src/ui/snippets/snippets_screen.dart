@@ -7,7 +7,6 @@ import '../../app_scope.dart';
 import '../../design/buttons.dart';
 import '../../design/dialog.dart';
 import '../../design/empty_state.dart';
-import '../../design/field.dart';
 import '../../design/icons.dart';
 import '../../design/motion.dart';
 import '../../design/rows.dart';
@@ -18,7 +17,7 @@ import '../../vault/org_writer.dart';
 import '../../vault/snippet_store.dart';
 import '../../vault/vault.dart';
 import '../describe_error.dart';
-import '../history/item_history_panel.dart';
+import '../fields.dart';
 import '../hosts/editor_frame.dart';
 import '../manage_frame.dart';
 import '../terminal/multiline_dialog.dart';
@@ -129,7 +128,8 @@ class _SnippetsScreenState extends State<SnippetsScreen> {
                     padding: const EdgeInsets.only(bottom: 40),
                     children: [
                       for (final (:id, :meta) in snippets)
-                        if (!readOnly && canEditEntry(state, vault.entry(id)!)
+                        if (!readOnly &&
+                                state.orgs!.canEditEntry(vault.entry(id)!)
                             case final editable)
                           ItemRow(
                             key: Key('snippet-$id'),
@@ -222,7 +222,7 @@ class _SnippetEditorState extends State<_SnippetEditor> {
   );
   final _problems = <String, String>{};
 
-  /// Where a new snippet goes: an org folder of the shown vault, or the personal vault (null).
+  // Where a new snippet goes: an org folder of the shown vault, or the personal vault (null).
   late String? _folderId = _folders.firstOrNull?.id;
 
   List<VaultEntry> get _folders {
@@ -254,7 +254,8 @@ class _SnippetEditorState extends State<_SnippetEditor> {
       await widget.store.save(
         SnippetMeta(
           name: _name.text.trim(),
-          command: _command.text, // stored as typed
+          // Unlike the name, the command is stored as typed, untrimmed.
+          command: _command.text,
           tags: [
             for (final t in _tags.text.split(','))
               if (t.trim().isNotEmpty) t.trim(),
@@ -294,26 +295,22 @@ class _SnippetEditorState extends State<_SnippetEditor> {
         ),
       ],
       children: [
-        UfField(
-          label: l.snippetName,
+        keyedField(
+          'snippet-name',
+          _name,
+          l.snippetName,
           error: _problems['name'],
-          child: TextField(key: const Key('snippet-name'), controller: _name),
         ),
-        UfField(
-          label: l.snippetCommand,
+        keyedField(
+          'snippet-command',
+          _command,
+          l.snippetCommand,
+          minLines: 3,
+          maxLines: 8,
+          mono: true,
           error: _problems['command'],
-          child: TextField(
-            key: const Key('snippet-command'),
-            controller: _command,
-            minLines: 3,
-            maxLines: 8,
-            style: monoField,
-          ),
         ),
-        UfField(
-          label: l.snippetTags,
-          child: TextField(key: const Key('snippet-tags'), controller: _tags),
-        ),
+        keyedField('snippet-tags', _tags, l.snippetTags),
         if (folders.isNotEmpty)
           entryPicker(
             key: 'snippet-location',

@@ -181,7 +181,6 @@ void main() {
                 UfOption('c', 'Charlie', key: Key('opt-c'), enabled: false),
               ],
               value: picked,
-              placeholder: 'Choose',
               onChanged: (v) => picked = v,
             ),
           ),
@@ -240,7 +239,6 @@ void main() {
                 value: 2,
                 groupValue: group,
                 title: 'Two',
-                description: 'The second',
                 onChanged: (v) => setState(() => group = v),
               ),
             ],
@@ -250,13 +248,13 @@ void main() {
     );
     await t.tap(find.text('One'));
     expect(group, 1);
-    await t.tap(find.text('The second'));
+    await t.tap(find.text('Two'));
     await t.pump();
     expect(group, 2);
     expect(
       t.getSemantics(find.byType(UfChoiceCard<int>)),
       isSemantics(
-        label: 'Two\nThe second',
+        label: 'Two',
         isChecked: true,
         isInMutuallyExclusiveGroup: true,
       ),
@@ -346,7 +344,6 @@ void main() {
                   UfOption(2, 'Two', key: Key('opt-2')),
                 ],
                 value: null,
-                placeholder: 'Choose',
                 onChanged: (v) => picked = v,
               ),
             ),

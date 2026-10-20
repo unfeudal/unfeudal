@@ -187,18 +187,14 @@ class _ImportPreviewScreenState extends State<ImportPreviewScreen>
                   if (problem case final problem?) UfErrorLine(problem),
                   Align(
                     alignment: Alignment.centerRight,
-                    child: FilledButton(
+                    child: BusyButton(
                       key: const Key('import-submit'),
+                      busy: busy,
                       onPressed:
-                          busy ||
-                              _selected.isEmpty ||
-                              (state.sync?.readOnly ?? false)
+                          _selected.isEmpty || (state.sync?.readOnly ?? false)
                           ? null
                           : _submit,
-                      child: BusyLabel(
-                        busy: busy,
-                        label: l.importCount(_selected.length),
-                      ),
+                      label: l.importCount(_selected.length),
                     ),
                   ),
                 ],

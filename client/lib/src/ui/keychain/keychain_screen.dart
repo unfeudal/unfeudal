@@ -27,7 +27,7 @@ import '../history/item_history_panel.dart';
 import '../hosts/editor_frame.dart';
 import '../manage_frame.dart';
 
-/// Where the keychain reads and writes: the personal vault, or one org folder (shared identities).
+// Where the keychain reads and writes: the personal vault, or one org folder (shared identities).
 class _Place {
   _Place(this.state, this.folderId);
 
@@ -59,9 +59,7 @@ class _Place {
     secret: secret,
   );
 
-  Future<void> trash(String id) => folderId == null
-      ? state.vault!.trashItem(id)
-      : state.orgs!.writer.trash(id);
+  Future<void> trash(String id) => state.trashItem(id);
 }
 
 /// The selected vault's SSH keys and passwords: generate, import, add a password, copy a public key, rename,
@@ -76,7 +74,7 @@ class KeychainScreen extends StatefulWidget {
 }
 
 class _KeychainScreenState extends State<KeychainScreen> {
-  /// Where new keys of an org vault go; the personal vault has a single place.
+  // Where new keys of an org vault go; the personal vault has a single place.
   String? _folderId;
 
   @override
@@ -91,7 +89,7 @@ class _KeychainScreenState extends State<KeychainScreen> {
       if (orgId != null)
         for (final e in vault.ofKind(ItemKind.folder))
           if (e.orgId == orgId && e.state == EntryState.ok) e,
-    ]..sort((a, b) => (a.name ?? '').compareTo(b.name ?? ''));
+    ]..sort(byName);
     if (!orgFolders.any((e) => e.id == _folderId)) {
       _folderId = orgFolders.firstOrNull?.id; // the vault or the folder changed
     }
@@ -112,15 +110,14 @@ class _KeychainScreenState extends State<KeychainScreen> {
                   place.holds(e),
             )
             .toList()
-          ..sort((a, b) => (a.name ?? '').compareTo(b.name ?? ''));
+          ..sort(byName);
     // personal keys bound to this org's hosts: shown here, edited in the personal vault
     final linked = orgId == null
         ? const <VaultEntry>[]
         : ({
-              for (final h in vault.ofKind(ItemKind.host))
-                if (h.orgId == orgId) ?bindingFor(vault, h.id),
-            }.map(vault.entry).nonNulls.toList()
-            ..sort((a, b) => (a.name ?? '').compareTo(b.name ?? '')));
+            for (final h in vault.ofKind(ItemKind.host))
+              if (h.orgId == orgId) ?bindingFor(vault, h.id),
+          }.map(vault.entry).nonNulls.toList()..sort(byName));
     Future<void> form(
       String title,
       List<FormDialogField> fields,
@@ -138,9 +135,9 @@ class _KeychainScreenState extends State<KeychainScreen> {
         initial: initial,
       ),
     );
-    Widget row(VaultEntry e, {required bool editable}) => _IdentityRow(
+    Widget row(VaultEntry e) => _IdentityRow(
       entry: e,
-      readOnly: !editable,
+      readOnly: readOnly,
       onRename: () => form(
         l.keyRename,
         [FormDialogField('identity-name', l.keyName)],
@@ -155,14 +152,17 @@ class _KeychainScreenState extends State<KeychainScreen> {
         initial: {'identity-name': e.name ?? ''},
       ),
       onDelete: () => _confirmTrash(context, place, e),
-      onReveal: canReveal(state, e) ? () => _reveal(context, e) : null,
-      onHistory: state.serverHas('item_history')
+      onReveal: state.serverHas(Flag.reveal) && state.orgs!.canReveal(e)
+          ? () => _reveal(context, e)
+          : null,
+      onHistory: state.serverHas(Flag.itemHistory)
           ? () => showUfDialog<void>(
               context,
               (_) => ItemHistoryPanel(itemId: e.id),
             )
           : null,
     );
+    final empty = identities.isEmpty && linked.isEmpty && orgFolders.isEmpty;
     final caption = Theme.of(context).textTheme.labelSmall!
         .copyWith(color: colors.muted);
     return ManageFrame(
@@ -241,10 +241,8 @@ class _KeychainScreenState extends State<KeychainScreen> {
           child: Text(l.keyPassword),
         ),
       ],
-      maxWidth: identities.isEmpty && linked.isEmpty && orgFolders.isEmpty
-          ? null
-          : 980,
-      child: identities.isEmpty && linked.isEmpty && orgFolders.isEmpty
+      maxWidth: empty ? null : 980,
+      child: empty
           ? EmptyState(title: l.keychainTitle, body: l.keychainEmpty)
           : ListView(
               padding: const EdgeInsets.only(bottom: 40),
@@ -291,8 +289,7 @@ class _KeychainScreenState extends State<KeychainScreen> {
                     style: Theme.of(context).textTheme.bodySmall!
                         .copyWith(color: colors.muted),
                   ),
-                for (final e in identities)
-                  row(e, editable: !serverReadOnly && place.editable),
+                for (final e in identities) row(e),
                 if (linked.isNotEmpty) ...[
                   Padding(
                     padding: const EdgeInsets.only(top: 18, bottom: 4),
@@ -317,7 +314,7 @@ class _KeychainScreenState extends State<KeychainScreen> {
     );
   }
 
-  /// Shows the secret once per opening and reports that it was shown.
+  // Shows the secret once per opening and reports that it was shown.
   static Future<void> _reveal(BuildContext context, VaultEntry e) async {
     final state = AppScope.read(context);
     final secret = await state.vault!.identitySecret(e.id);
@@ -346,7 +343,7 @@ class _KeychainScreenState extends State<KeychainScreen> {
     );
   }
 
-  /// The key is read (and its passphrase checked) before anything is stored; the original text is kept.
+  // The key is read (and its passphrase checked) before anything is stored; the original text is kept.
   static Future<void> _import(_Place place, Map<String, String> v) async {
     final passphrase = v['import-passphrase']!.isEmpty
         ? null
@@ -487,7 +484,7 @@ class _IdentityRow extends StatelessWidget {
   }
 }
 
-/// The password, or the private key and its passphrase; a copy is wiped from the clipboard after a minute.
+// The password, or the private key and its passphrase; a copy is wiped from the clipboard after a minute.
 class _RevealDialog extends StatefulWidget {
   const _RevealDialog({required this.name, required this.secret});
 
@@ -509,7 +506,7 @@ class _RevealDialogState extends State<_RevealDialog> {
     _clear = Timer(const Duration(seconds: 60), _wipe);
   }
 
-  /// Clears the clipboard only if it still holds the copied secret.
+  // Clears the clipboard only if it still holds the copied secret.
   Future<void> _wipe() async {
     _clear?.cancel();
     _clear = null;
@@ -530,12 +527,8 @@ class _RevealDialogState extends State<_RevealDialog> {
     final l = AppLocalizations.of(context);
     final material = MaterialLocalizations.of(context);
     final s = widget.secret;
-    Widget field(String value) => UfReadOnlyField(
-      value: value,
-      mono: true,
-      onCopy: () => _copy(value),
-      copyTooltip: material.copyButtonLabel,
-    );
+    Widget field(String value) =>
+        UfReadOnlyField(value: value, onCopy: () => _copy(value));
     return UfDialog(
       title: l.identityRevealTitle(widget.name),
       actions: [

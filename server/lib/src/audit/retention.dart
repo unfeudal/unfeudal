@@ -14,6 +14,13 @@ import 'audit_log.dart';
 
 typedef Retention = ({int auditDays, int maxVersions, int trashDays});
 
+/// The server values, keyed as in org settings.
+Map<String, int> serverRetention(Config config) => {
+  'auditDays': config.auditRetentionDays,
+  'maxVersions': config.itemHistoryMaxVersions,
+  'trashDays': config.trashRetentionDays,
+};
+
 /// The server values, each made stricter by the org's settings when [orgId] names an existing org.
 Future<Retention> retentionFor(Tx tx, Config config, String? orgId) async {
   final rows = orgId == null
@@ -22,12 +29,13 @@ Future<Retention> retentionFor(Tx tx, Config config, String? orgId) async {
   final settings = rows.isEmpty
       ? const <String, Object?>{}
       : jsonDecode(rows.single['settings']! as String) as Map<String, Object?>;
-  int value(int server, String key) =>
-      effectiveRetention(server, settings[key] as int?);
+  final server = serverRetention(config);
+  int value(String key) =>
+      effectiveRetention(server[key]!, settings[key] as int?);
   return (
-    auditDays: value(config.auditRetentionDays, 'auditDays'),
-    maxVersions: value(config.itemHistoryMaxVersions, 'maxVersions'),
-    trashDays: value(config.trashRetentionDays, 'trashDays'),
+    auditDays: value('auditDays'),
+    maxVersions: value('maxVersions'),
+    trashDays: value('trashDays'),
   );
 }
 
@@ -52,7 +60,8 @@ Future<void> runRetention(AppDeps deps) async {
   ]) {
     try {
       await step(deps);
-    } catch (e) {
+    } on Object catch (e) {
+      // Any failure is caught so one broken step never stops the others.
       deps.log.error('retention step failed', {
         'step': name,
         'type': '${e.runtimeType}',
@@ -75,7 +84,7 @@ Future<void> _audit(AppDeps deps) async {
       final days = (await retentionFor(
         tx,
         deps.config,
-        scope.startsWith('org:') ? scope.substring(4) : null,
+        AuditScope(scope).orgId,
       )).auditDays;
       if (days == 0) return; // forever
       final newest = (await tx.query(
@@ -92,17 +101,18 @@ Future<void> _audit(AppDeps deps) async {
         'DELETE FROM audit_events WHERE scope = @s AND seq <= @n',
         p,
       );
+      // The head row stays, so the chain continues from this checkpoint.
       await deps.audit.append(
         tx,
         scope: AuditScope(scope),
         action: 'audit.checkpoint',
         targetIds: ['seq:${newest['seq']}', 'hash:${newest['hash']}'],
-      ); // the head row stays: the chain continues
+      );
     });
   }
 }
 
-/// Raw addresses older than audit_ip_retention_days; the events and their pseudonyms stay.
+// Deletes raw addresses older than audit_ip_retention_days; the events and their pseudonyms stay.
 Future<void> _ips(AppDeps deps) async {
   final cutoff = deps.clock.now().subtract(
     Duration(days: deps.config.auditIpRetentionDays),
@@ -114,7 +124,7 @@ Future<void> _ips(AppDeps deps) async {
   );
 }
 
-/// Revisions beyond each item's effective maxVersions.
+// Prunes revisions beyond each item's effective maxVersions.
 Future<void> _revisions(AppDeps deps) async {
   for (final r in await deps.db.query(
     'SELECT DISTINCT r.item_id, i.org_id FROM item_revisions r JOIN items i ON i.id = r.item_id',
@@ -130,7 +140,7 @@ Future<void> _revisions(AppDeps deps) async {
   }
 }
 
-/// Trashed items past their scope's effective trashDays (0: never), one transaction each.
+// Purges trashed items past their scope's effective trashDays (0: never), one transaction each.
 Future<void> _trash(AppDeps deps) async {
   final now = deps.clock.now();
   final groups = <(String, int, Map<String, Object?>)>[
@@ -150,15 +160,16 @@ Future<void> _trash(AppDeps deps) async {
       'SELECT id FROM items WHERE deleted = 1 AND purged = 0 AND updated_at < @cutoff AND $where ORDER BY updated_at',
       {...params, 'cutoff': iso(now.subtract(Duration(days: days)))},
     );
+    // purgeItem re-checks purged, since the subtrees of due items overlap.
     for (final r in due) {
       await deps.db.transaction(
         (tx) => purgeItem(tx, r['id']! as String, deps.audit),
-      ); // re-checks purged: subtrees overlap
+      );
     }
   }
 }
 
-/// Expired limiter windows, dead refresh tokens and stale invites; then SQLite hands freed pages back.
+// Deletes expired limiter windows, dead refresh tokens and stale invites; then SQLite hands freed pages back.
 Future<void> _cleanup(AppDeps deps) async {
   await deps.db.transaction(
     (tx) => runCleanup(tx, deps.clock.now(), deps.config),

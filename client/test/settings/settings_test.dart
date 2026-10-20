@@ -45,10 +45,8 @@ void main() {
       'terminalFont': 'JetBrainsMono',
       'terminalFontSize': 13,
     });
-    expect(
-      const Settings().toPrefs().containsKey('locale'),
-      isFalse,
-    ); // system locale
+    // The default locale follows the system and is not written.
+    expect(const Settings().toPrefs().containsKey('locale'), isFalse);
   });
 
   test('withPrefs applies valid synced values, ignores the rest, never touches device fields', () {

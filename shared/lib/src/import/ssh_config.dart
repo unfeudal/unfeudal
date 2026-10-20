@@ -178,7 +178,7 @@ int? _port(String text) {
   return port != null && port >= 1 && port <= 65535 ? port : null;
 }
 
-/// `[bind:]port host:port`; the bind address is dropped.
+// `[bind:]port host:port`; the bind address is dropped.
 PortForward? _forward(String text) {
   final parts = text.split(RegExp(r'\s+'));
   if (parts.length != 2) return null;

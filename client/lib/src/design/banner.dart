@@ -8,14 +8,12 @@ import 'tokens.dart';
 
 enum BannerTone {
   info,
-  success,
   warn,
   danger;
 
   /// Ink, fill and icon. Status never by colour alone: each tone has its own icon shape.
   (Color, Color, IconData) style(UfColors colors) => switch (this) {
     info => (colors.accentText, colors.select, UfIcons.info),
-    success => (colors.ok, colors.okSoft, UfIcons.checkCircle),
     warn => (colors.warn, colors.warnSoft, UfIcons.warning),
     danger => (colors.danger, colors.dangerSoft, UfIcons.warningOctagon),
   };

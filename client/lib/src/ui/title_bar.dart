@@ -193,7 +193,6 @@ class UfTitleBar extends StatelessWidget {
   }
 }
 
-/// [rest] until hovered, then [hover].
 WidgetStateProperty<Color> _glyph(Color rest, Color hover) =>
     WidgetStateProperty<Color>.fromMap({
       WidgetState.hovered: hover,

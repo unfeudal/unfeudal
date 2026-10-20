@@ -39,7 +39,6 @@ class OrgController extends ChangeNotifier {
       block: () => block,
       userId: userId,
       publicKey: publicKey,
-      write: sync.write,
       online: online,
       emit: emit,
     );
@@ -82,7 +81,8 @@ class OrgController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// The cached block serves offline orgs until the next one arrives.
+  /// The cached block serves offline orgs until the next one arrives. Runs before the vault unlocks, so its
+  /// one reload already shows the org items; [MemberPins.seed] follows that reload.
   Future<void> unlock(UnlockedAccount account) async {
     _keyPair = account.keyPair;
     await keyring.load(account.userKey);
@@ -90,8 +90,6 @@ class OrgController extends ChangeNotifier {
     if (mirror.getKv(KvKey.orgBlock) case final raw?) {
       block = OrgBlock.fromJson(jsonDecode(raw));
     }
-    await vault.reload();
-    pins.seed();
     notifyListeners();
   }
 
@@ -128,9 +126,8 @@ class OrgController extends ChangeNotifier {
   Future<void> rotateNow() async {
     final b = block;
     if (b == null) return;
-    lastRotation = await rotation.run(
-      b,
-    ); // each folder's failure stays pending inside
+    // Each folder's failure stays pending inside the result.
+    lastRotation = await rotation.run(b);
     notifyListeners();
   }
 
@@ -147,6 +144,17 @@ class OrgController extends ChangeNotifier {
         : explainFromBlock(b, orgId, userId, folderId);
   }
 
+  /// Whether [e] may be rewritten (restored): always for a personal item, `edit` on its parent folder for an org one.
+  bool canEditEntry(VaultEntry e) =>
+      e.orgId == null || writer.canEdit(e.orgId!, e.folderId);
+
+  /// Whether [e]'s secrets may be shown: always for a personal item, `reveal` on its key folder for an org one.
+  bool canReveal(VaultEntry e) {
+    final item = e.item;
+    return item.scope == ItemScope.personal ||
+        permissions(item.orgId!, item.keyFolderId!).contains(Permission.reveal);
+  }
+
   OrgSummary? byId(String? orgId) =>
       orgs.where((o) => o.id == orgId).firstOrNull;
 
@@ -156,7 +164,7 @@ class OrgController extends ChangeNotifier {
       if (m.orgId == orgId) m,
   ]..sort((a, b) => a.email.compareTo(b.email));
 
-  bool isAdmin(String orgId) => byId(orgId)?.isAdmin ?? false;
+  bool isAdmin(String orgId) => block?.isAdminOf(orgId) ?? false;
 
   /// The role alone, confirmed or not.
   bool isOwner(String orgId) => byId(orgId)?.role == OrgRole.owner.name;

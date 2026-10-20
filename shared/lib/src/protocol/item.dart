@@ -14,12 +14,18 @@ enum ItemKind {
   profile,
   hostBinding,
   memberPin,
-  unknown;
-
-  static ItemKind fromType(String type) => values.asNameMap()[type] ?? unknown;
+  unknown,
 }
 
 const personalOnlyTypes = {'knownHost', 'profile', 'hostBinding', 'memberPin'};
+
+/// The folder whose keys seal an org item's payloads and whose permissions
+/// govern it: a folder governs itself, any other item its [folderId].
+String? keyFolderIdOf({
+  required String type,
+  required String id,
+  required String? folderId,
+}) => type == 'folder' ? id : folderId;
 
 /// One synced record: ids and placement in clear, content in [meta] and
 /// [secret]. Server-set fields are null in a client request body.
@@ -27,7 +33,6 @@ class Item {
   Item({
     required this.id,
     required this.type,
-    required this.scope,
     required this.orgId,
     required this.folderId,
     this.schemaVersion = 1,
@@ -70,7 +75,6 @@ class Item {
     return Item(
       id: r.uuid('id'),
       type: type,
-      scope: scope,
       orgId: orgId,
       folderId: r.optUuid('folderId'),
       schemaVersion: r.integer('schemaVersion', min: 1),
@@ -107,7 +111,6 @@ class Item {
 
   final String id;
   final String type;
-  final ItemScope scope;
   final String? orgId;
   final String? folderId;
   final int schemaVersion;
@@ -122,7 +125,12 @@ class Item {
   final String? updatedDevice;
   final Map<String, Object?> extra;
 
-  ItemKind get kind => ItemKind.fromType(type);
+  ItemScope get scope => orgId == null ? ItemScope.personal : ItemScope.org;
+
+  String? get keyFolderId =>
+      keyFolderIdOf(type: type, id: id, folderId: folderId);
+
+  ItemKind get kind => ItemKind.values.asNameMap()[type] ?? ItemKind.unknown;
 
   Map<String, Object?> toJson() => {
     ...extra,

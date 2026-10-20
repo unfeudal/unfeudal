@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// latest_all keeps the link names (UTC, US/Eastern…) that latest drops.
+// latest_all keeps the link names (UTC, US/Eastern and others) that latest drops.
 import 'package:timezone/data/latest_all.dart';
 import 'package:timezone/timezone.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
@@ -26,23 +26,14 @@ enum OrgCreation { all, instanceOwner }
 
 enum SmtpTls { starttls, implicit, none }
 
-class SmtpConfig {
-  SmtpConfig({
-    required this.host,
-    required this.port,
-    required this.tls,
-    this.user,
-    this.password,
-    required this.from,
-  });
-
-  final String host;
-  final int port;
-  final SmtpTls tls;
-  final String? user;
-  final String? password;
-  final String from;
-}
+typedef SmtpConfig = ({
+  String host,
+  int port,
+  SmtpTls tls,
+  String? user,
+  String? password,
+  String from,
+});
 
 /// Instance settings, read once at start from `UNFEUDAL_*` and the YAML file; env wins.
 class Config {
@@ -237,7 +228,7 @@ class Config {
   }
 }
 
-/// One parser per value kind; every failure names the key, never the value.
+// One parser per value kind; every failure names the key, never the value.
 class _Reader {
   _Reader(this._values);
 
@@ -466,7 +457,7 @@ class _Reader {
     if (from == null) {
       throw ConfigError('smtp_from', 'required with smtp_host');
     }
-    return SmtpConfig(
+    return (
       host: host,
       port: port,
       tls: tls,

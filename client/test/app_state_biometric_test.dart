@@ -59,12 +59,18 @@ void main() {
     await s.enableBiometrics();
     h.expireSessions();
     await s.sync!.syncNow();
-    expect((s.sessionExpired, await s.biometric!.isEnabled()), (true, true));
+    expect(
+      (s.signedOutBecause, await s.biometric!.isEnabled()),
+      (SignOutReason.sessionExpired, true),
+    );
     final (h2, s2, _) = await home();
     await s2.enableBiometrics();
     h2.devices[s2.stored!.deviceId]!.revokedAt = h2.now;
     await s2.sync!.syncNow();
-    expect((s2.deviceRevoked, await s2.biometric!.isEnabled()), (true, false));
+    expect(
+      (s2.signedOutBecause, await s2.biometric!.isEnabled()),
+      (SignOutReason.deviceRevoked, false),
+    );
   });
 
   test(

@@ -83,7 +83,7 @@ class Enrollment {
   static Future<Enrollment> parseFile(
     String text, {
     String? passphrase,
-    bool allowTestingKdf = false,
+    KdfParams kdfFloor = KdfParams.defaults,
   }) async {
     // Bad JSON throws FormatException.
     final r = JsonReader(jsonDecode(text), 'enroll');
@@ -97,7 +97,7 @@ class Enrollment {
     final kdf = KdfParams.fromJson(e.object('kdf'));
     final envelope = Envelope.fromJson(e.object('envelope'));
     // Before any derivation: the file may come from anyone.
-    kdf.ensureAcceptable(allowTesting: allowTestingKdf);
+    kdf.ensureAcceptable(floor: kdfFloor);
     if (passphrase == null) throw const WrongPassword();
     final key = await hkdf32(await argon2id(passphrase, salt, kdf), _info);
     final Uint8List plain;
@@ -124,7 +124,7 @@ class Enrollment {
     _kind(r.opt<String>('kind')),
   );
 
-  /// Absent means setup.
+  // Absent means setup.
   static EnrollKind _kind(String? name) => name == null
       ? EnrollKind.setup
       : EnrollKind.values.asNameMap()[name] ??

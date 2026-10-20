@@ -173,40 +173,36 @@ void main() {
     },
   );
 
-  testWidgets(
-    'canReveal: the reveal flag, and reveal on the folder for org items',
-    (t) async {
-      final h = SyncHarness(capabilities: ['orgs', 'reveal', 'sync']);
-      final s = await signedInState(t, harness: h);
-      final me = s.stored!.userId;
-      final f = newId();
-      late Item orgItem;
-      Future<void> block(int cursor, List<String> allow) =>
-          t.runAsync(() async {
-            h.orgBlock = orgBlock(
-              cursor: cursor,
-              members: [memberRow(me, status: 'confirmed')],
-              folderTree: [node(f)],
-              acl: [aclRow(f, me, allow: allow)],
-            );
-            await s.sync!.syncNow();
-          });
-      await t.runAsync(
-        () async => orgItem = await sealOrgItem(
-          FolderKeys.generate(1),
-          folderId: f,
-          meta: hostJson('db'),
-        ),
+  testWidgets('canReveal: reveal on the folder for org items', (t) async {
+    final h = SyncHarness(capabilities: ['orgs', 'reveal', 'sync']);
+    final s = await signedInState(t, harness: h);
+    final me = s.stored!.userId;
+    final f = newId();
+    late Item orgItem;
+    Future<void> block(int cursor, List<String> allow) => t.runAsync(() async {
+      h.orgBlock = orgBlock(
+        cursor: cursor,
+        members: [memberRow(me, status: 'confirmed')],
+        folderTree: [node(f)],
+        acl: [aclRow(f, me, allow: allow)],
       );
-      await block(1, ['connect']);
-      expect(canReveal(s, VaultEntry(orgItem, EntryState.ok)), isFalse);
-      await block(2, ['reveal']);
-      expect(canReveal(s, VaultEntry(orgItem, EntryState.ok)), isTrue);
-      expect(
-        canReveal(s, VaultEntry(wireItem(newId()), EntryState.ok)),
-        isTrue,
-        reason: 'personal items',
-      );
-    },
-  );
+      await s.sync!.syncNow();
+    });
+    await t.runAsync(
+      () async => orgItem = await sealOrgItem(
+        FolderKeys.generate(1),
+        folderId: f,
+        meta: hostJson('db'),
+      ),
+    );
+    await block(1, ['connect']);
+    expect(s.orgs!.canReveal(VaultEntry(orgItem, EntryState.ok)), isFalse);
+    await block(2, ['reveal']);
+    expect(s.orgs!.canReveal(VaultEntry(orgItem, EntryState.ok)), isTrue);
+    expect(
+      s.orgs!.canReveal(VaultEntry(wireItem(newId()), EntryState.ok)),
+      isTrue,
+      reason: 'personal items',
+    );
+  });
 }

@@ -39,6 +39,9 @@ import 'vault/vault.dart';
 
 enum AppStage { booting, login, setup, join, unlock, home, mirrorTooNew }
 
+/// Why the login screen shows after a session ended without the user signing out.
+enum SignOutReason { deviceRevoked, sessionExpired }
+
 /// A server reached over anything but https, or plain http outside the LAN or without `plain_http_lan`.
 class InsecureServer implements Exception {
   const InsecureServer();
@@ -97,8 +100,8 @@ class AppState extends ChangeNotifier implements SshCallbacks {
     required this._openMirror,
     http.Client? httpClient,
     SshConnector? ssh,
-    this.allowTestingKdf = false,
     KdfParams kdf = KdfParams.defaults,
+    KdfParams kdfFloor = KdfParams.defaults,
     LoquetMemory? loquetMemory,
     DateTime Function() loquetClock = DateTime.now,
     BiometricBackend? biometrics,
@@ -107,7 +110,7 @@ class AppState extends ChangeNotifier implements SshCallbacks {
            ? null
            : BiometricUnlock(sessions.kv, biometrics),
        _ssh = ssh ?? SshConnector(),
-       _crypto = AccountCrypto(kdf: kdf, allowTestingKdf: allowTestingKdf),
+       _crypto = AccountCrypto(kdf: kdf, kdfFloor: kdfFloor),
        _loquetClock = loquetClock,
        loquet = LoquetController(
          ReactionEngine(
@@ -120,7 +123,6 @@ class AppState extends ChangeNotifier implements SshCallbacks {
 
   final SessionStore sessions;
   final SettingsStore settingsStore;
-  final bool allowTestingKdf;
   final Future<LocalMirror> Function(String userId) _openMirror;
   final http.Client _http;
   final SshConnector _ssh;
@@ -130,7 +132,7 @@ class AppState extends ChangeNotifier implements SshCallbacks {
   /// The vault key sealed by the device's secure hardware; null on a platform without it.
   final BiometricUnlock? biometric;
 
-  /// The unlocked account while the vault is open (its userKey seals the biometric wrap).
+  // Held while the vault is open: its userKey seals the biometric wrap.
   UnlockedAccount? _account;
   final DateTime Function() _loquetClock;
 
@@ -138,10 +140,10 @@ class AppState extends ChangeNotifier implements SshCallbacks {
   late final reporter = EventReporter(
     events: events,
     api: () => api,
-    enabled: () => serverHas('client_events'),
+    enabled: () => serverHas(Flag.clientEvents),
   );
 
-  /// Tabs whose shell opened: each leaves once, with a [SessionClosed].
+  // Tabs whose shell opened: each leaves once, with a SessionClosed.
   final _live = <TerminalSession>{};
 
   /// The mascot: local only, nothing about it is synced or logged.
@@ -163,8 +165,7 @@ class AppState extends ChangeNotifier implements SshCallbacks {
   TerminalSession? get activeSession =>
       tabs.isEmpty ? null : tabs[activeTab.clamp(0, tabs.length - 1)];
   SshDialogs? dialogs;
-  bool deviceRevoked = false;
-  bool sessionExpired = false;
+  SignOutReason? signedOutBecause;
 
   /// The sealed ledger could not be opened and restarted empty: shown once in a banner.
   bool ledgerReported = false;
@@ -182,6 +183,11 @@ class AppState extends ChangeNotifier implements SshCallbacks {
   int _unlockFailures = 0;
   AutoLock? _autoLock;
   bool _wasOnline = true;
+
+  // What the screens show of the sync engine at the last notification; a round that changes none of it, and
+  // leaves the vault as it was, notifies nobody.
+  Object? _shownSync;
+  bool _entriesChanged = false;
   Future<void> _prefsWrite = Future.value();
 
   Stream<AppEvent> get events => _events.stream;
@@ -192,12 +198,11 @@ class AppState extends ChangeNotifier implements SshCallbacks {
   /// The server version of the last ApiInfo seen with a token, if any.
   String? get serverVersion => _lastInfo?.server ?? _storedInfo?.server;
 
-  /// The last ApiInfo seen (a sync round or [checkServer]), else the stored one.
+  // The last ApiInfo seen (a sync round or checkServer), else the stored one.
   ApiInfo? get _info => _lastInfo ?? _storedInfo;
 
-  /// The ApiInfo the last sync round stored in the mirror.
-  ApiInfo? get _storedInfo => switch (mirror?.getKv(KvKey.apiInfo)) {
-    final raw? => ApiInfo.fromJson(jsonDecode(raw)),
+  ApiInfo? get _storedInfo => switch (mirror) {
+    final mirror? => storedApiInfo(mirror),
     null => null,
   };
 
@@ -213,10 +218,10 @@ class AppState extends ChangeNotifier implements SshCallbacks {
     loquet.show(loquet.engine.handle(event));
   }
 
-  /// The three levels: server flag, then the orgs, then the user's pref. A server never seen yet shows the logo.
+  // The three levels: server flag, then the orgs, then the user's pref. A server never seen yet shows the logo.
   void _refreshLoquet() {
     final mode = effectiveLoquetMode(
-      serverHas('mascot'),
+      serverHas(Flag.mascot),
       orgs?.orgs ?? const [],
       settings.loquetMode,
     );
@@ -228,7 +233,7 @@ class AppState extends ChangeNotifier implements SshCallbacks {
       ' ${lookupAppLocalizations(l).conflictSuffix}',
   };
 
-  /// Loquet's resting mood, from the vault and the last sync round.
+  // Loquet's resting mood comes from the vault and the last sync round.
   void _refreshHealth() {
     final v = vault;
     if (v == null || !v.isUnlocked) return;
@@ -237,13 +242,13 @@ class AppState extends ChangeNotifier implements SshCallbacks {
         v,
         now: _loquetClock(),
         lastSyncAt: sync?.lastSyncAt,
-        rejected: sync?.rejected.length ?? 0,
+        rejected: sync?.rejectedIds.length ?? 0,
         conflictSuffixes: _conflictSuffixes,
       ),
     );
   }
 
-  /// The event's type, plus the host id and error type for connections; nothing from the vault.
+  // The event's type, plus the host id and error type for connections; nothing from the vault.
   static String _describe(AppEvent event) => switch (event) {
     ConnectStarted(:final hostId) => 'ConnectStarted ${shortId(hostId)}',
     ConnectSucceeded(:final hostId) => 'ConnectSucceeded ${shortId(hostId)}',
@@ -261,8 +266,16 @@ class AppState extends ChangeNotifier implements SshCallbacks {
   /// The KDF this client uses for new wraps (and vault exports).
   KdfParams get kdf => _crypto.kdf;
 
+  /// [Enrollment.parseFile] under this client's KDF floor.
+  Future<Enrollment> parseEnrollmentFile(String text, {String? passphrase}) =>
+      Enrollment.parseFile(
+        text,
+        passphrase: passphrase,
+        kdfFloor: _crypto.kdfFloor,
+      );
+
   /// False when no ApiInfo was ever seen.
-  bool serverHas(String capability) => _info?.has(capability) ?? false;
+  bool serverHas(Flag flag) => _info?.has(flag) ?? false;
 
   Future<void> boot() async {
     settings = await settingsStore.load();
@@ -290,7 +303,7 @@ class AppState extends ChangeNotifier implements SshCallbacks {
     if (http && !isLanHost(server)) throw const InsecureServer();
     final info = await _newApi(server).info();
     if (http) {
-      if (!info.has('plain_http_lan')) throw const InsecureServer();
+      if (!info.has(Flag.plainHttpLan)) throw const InsecureServer();
       if (await confirmPlainHttp?.call(server) != true) {
         throw const PlainHttpRefused();
       }
@@ -376,19 +389,22 @@ class AppState extends ChangeNotifier implements SshCallbacks {
     await checkServer(server);
     final api = _newApi(server);
     final pre = await api.prelogin(email);
-    pre.kdf.ensureAcceptable(allowTesting: allowTestingKdf); // WeakKdf / UnsupportedKdf / FormatException: nothing derived, nothing sent
+    pre.kdf.ensureAcceptable(floor: _crypto.kdfFloor); // WeakKdf / UnsupportedKdf / FormatException: nothing derived, nothing sent
     final keys = await deriveMasterKeys(password, pre.salt, pre.kdf);
     final session = await api.login(
       email: email,
       authKey: keys.authKey,
       device: deviceInput(),
     );
-    final unlocked = await _crypto.unlock(
-      session.bundle,
-      password,
-    ); // checks the bundle KDF too
+    // the prelogin derivation opens a bundle of the same salt and KDF; any other is checked and derived again
+    final sameKdf =
+        listEquals(session.bundle.salt, pre.salt) &&
+        jsonEncode(session.bundle.kdf.toJson()) == jsonEncode(pre.kdf.toJson());
+    final unlocked = sameKdf
+        ? await _crypto.unlockWithEncKey(session.bundle, keys.encKey)
+        : await _crypto.unlock(session.bundle, password);
     await _open(api, session, server, email, unlocked);
-    deviceRevoked = sessionExpired = false;
+    signedOutBecause = null;
     stage = AppStage.home;
     notifyListeners();
     emit(
@@ -416,7 +432,7 @@ class AppState extends ChangeNotifier implements SshCallbacks {
     await _resume(unlocked);
   }
 
-  /// After the key is checked: the API resumes with the stored refresh token, the vault opens, home.
+  // After the key is checked: the API resumes with the stored refresh token, the vault opens, home.
   Future<void> _resume(UnlockedAccount unlocked) async {
     // the keystore holds the latest refresh token (rotations since sign-in); a stale one is a replay
     final loaded = await sessions.load();
@@ -444,7 +460,7 @@ class AppState extends ChangeNotifier implements SshCallbacks {
   /// Hardware present, the server allows it, and the OS offers it.
   Future<bool> biometricAvailable() async =>
       biometric != null &&
-      serverHas('biometric_unlock') &&
+      serverHas(Flag.biometricUnlock) &&
       await biometric!.backend.available();
 
   Future<bool> enableBiometrics() async {
@@ -459,7 +475,7 @@ class AppState extends ChangeNotifier implements SshCallbacks {
   Future<bool> unlockWithBiometrics() async {
     final bio = biometric;
     if (bio == null || !await bio.isEnabled()) return false;
-    if (!serverHas('biometric_unlock')) {
+    if (!serverHas(Flag.biometricUnlock)) {
       await bio.disable(); // flag off on the server: a stored wrap is wiped
       return false;
     }
@@ -488,9 +504,9 @@ class AppState extends ChangeNotifier implements SshCallbacks {
   String get _biometricReason =>
       lookupAppLocalizations(Locale(_uiLocale ?? 'en')).biometricReason;
 
-  /// The server turning biometric_unlock off wipes a stored wrap, once per change of the flag.
+  // The server turning biometric_unlock off wipes a stored wrap, once per change of the flag.
   void _checkBiometricFlag() {
-    final allowed = serverHas('biometric_unlock');
+    final allowed = serverHas(Flag.biometricUnlock);
     if (_biometricAllowed && !allowed) unawaited(biometric?.disable());
     _biometricAllowed = allowed;
   }
@@ -528,50 +544,46 @@ class AppState extends ChangeNotifier implements SshCallbacks {
 
   /// The current password is proved locally before anything is sent; the userKey stays the same.
   Future<void> changeMasterPassword(String current, String next) async {
+    await _changeMasterPassword(current, next);
+  }
+
+  /// Returns the unlocked account and the new password's authKey, for a recovery kit right after.
+  Future<({UnlockedAccount unlocked, Uint8List authKey})> _changeMasterPassword(
+    String current,
+    String next,
+  ) async {
     final (:bundle, :bundleVersion) = _cachedBundle();
-    final unlocked = await _crypto.unlock(
-      bundle,
-      current,
-    ); // WrongPassword: nothing sent
-    final changed = await _crypto.changePassword(
-      unlocked,
-      bundle,
-      next,
-    ); // WeakPassword: nothing sent
-    final currentAuthKey = (await deriveMasterKeys(
-      current,
-      bundle.salt,
-      bundle.kdf,
-    )).authKey;
+    // WrongPassword and WeakPassword throw here, before anything is sent.
+    final proved = await _crypto.unlockWithAuthKey(bundle, current);
+    final changed = await _crypto.changePassword(proved.unlocked, bundle, next);
     await api!.changePassword(
-      currentAuthKey: currentAuthKey,
+      currentAuthKey: proved.authKey,
       bundle: changed.bundle,
       bundleVersion: bundleVersion,
       authKey: changed.authKey,
     );
-    _saveBundle(
-      changed.bundle,
-      bundleVersion + 1,
-    ); // userKey unchanged: a biometric wrap stays valid
+    // The userKey is unchanged, so a biometric wrap stays valid.
+    _saveBundle(changed.bundle, bundleVersion + 1);
+    return (unlocked: proved.unlocked, authKey: changed.authKey);
   }
 
   /// Password change, then a new recovery kit when the server allows it (null otherwise).
   Future<String?> securityReset(String current, String next) async {
-    await changeMasterPassword(current, next);
-    return serverHas('recovery_kit') ? regenerateRecoveryKit(next) : null;
+    final changed = await _changeMasterPassword(current, next);
+    return serverHas(Flag.recoveryKit)
+        ? _rotateRecoveryKit(changed.unlocked, changed.authKey)
+        : null;
   }
 
   /// The password is proved here first; this device forgets the account only after the server deleted it.
   Future<void> deleteAccount(String password) async {
-    final bundle = _cachedBundle().bundle;
-    await _crypto.unlock(bundle, password); // WrongPassword: nothing sent
-    final currentAuthKey = (await deriveMasterKeys(
+    // WrongPassword throws here, before anything is sent.
+    final proved = await _crypto.unlockWithAuthKey(
+      _cachedBundle().bundle,
       password,
-      bundle.salt,
-      bundle.kdf,
-    )).authKey;
+    );
     // 409 last_owner: ApiException.orgs, nothing wiped
-    await api!.deleteAccount(currentAuthKey: currentAuthKey);
+    await api!.deleteAccount(currentAuthKey: proved.authKey);
     await biometric?.disable();
     await lock();
     await sessions.clear();
@@ -585,12 +597,22 @@ class AppState extends ChangeNotifier implements SshCallbacks {
 
   /// New recovery key text; the server stores the new wrap (compare-and-swap on the bundle version).
   Future<String> regenerateRecoveryKit(String password) async {
+    final proved = await _crypto.unlockWithAuthKey(
+      _cachedBundle().bundle,
+      password,
+    );
+    return _rotateRecoveryKit(proved.unlocked, proved.authKey);
+  }
+
+  // authKey proves the password of the cached bundle.
+  Future<String> _rotateRecoveryKit(
+    UnlockedAccount unlocked,
+    Uint8List authKey,
+  ) async {
     final (:bundle, :bundleVersion) = _cachedBundle();
-    final unlocked = await _crypto.unlock(bundle, password);
     final rotated = await _crypto.rotateRecoveryKey(unlocked, bundle);
-    final keys = await deriveMasterKeys(password, bundle.salt, bundle.kdf);
     await api!.changeRecoveryKit(
-      currentAuthKey: keys.authKey,
+      currentAuthKey: authKey,
       bundle: rotated.bundle,
       bundleVersion: bundleVersion,
       recoveryAuthKey: rotated.recoveryAuthKey,
@@ -633,7 +655,7 @@ class AppState extends ChangeNotifier implements SshCallbacks {
       newRecoveryAuthKey: rotated.recoveryAuthKey,
     );
     if (stored case final s? when s.email == email && s.serverUrl == server) {
-      sessionExpired = true;
+      signedOutBecause = SignOutReason.sessionExpired;
       await lock();
     }
     stage = AppStage.login;
@@ -641,7 +663,7 @@ class AppState extends ChangeNotifier implements SshCallbacks {
     return rotated.recoveryKey;
   }
 
-  /// Null for a missing, trashed or unreadable host: the chain reports JumpHostMissing.
+  // Null for a missing, trashed or unreadable host: the chain reports JumpHostMissing.
   ResolvedHost? _jumpLookup(String id) =>
       vault!.isTrashed(id) ? null : vault!.hostLookup(id)?.resolved;
 
@@ -649,10 +671,10 @@ class AppState extends ChangeNotifier implements SshCallbacks {
     final found = vault!.hostLookup(id)!;
     final user = found.resolved.user ?? (throw const MissingUser());
     final entry = vault!.entry(id)!;
+    // A per-member org host uses the member's own binding: never inherited, never the org's.
     final identityId =
         found.meta.identityMode == IdentityMode.perMember && entry.orgId != null
-        ? bindingFor(vault!, id) ??
-              (throw MissingBinding(id)) // never inherited, never the org's
+        ? bindingFor(vault!, id) ?? (throw MissingBinding(id))
         : found.resolved.identityId;
     return ConnectTarget(
       hostId: id,
@@ -695,7 +717,11 @@ class AppState extends ChangeNotifier implements SshCallbacks {
       final target = await _targetFor(hostId);
       final JumpConnection conn;
       try {
-        conn = await connectChain(sshHopOpener(_ssh, this), hops, target);
+        conn = await connectChain(
+          (hop, {over}) => _ssh.connectHop(hop, this, over: over),
+          hops,
+          target,
+        );
       } on JumpChainFailed catch (e) {
         if (e.hopIndex == hops.length && e.cause is Exception) {
           throw e.cause; // the target's own error keeps its handling
@@ -781,14 +807,13 @@ class AppState extends ChangeNotifier implements SshCallbacks {
     return tab;
   }
 
-  /// Reports every running forward as stopped, then closes the shell, forwards and hops.
+  // Reports every running forward as stopped, then closes the shell, forwards and hops.
   Future<void> _closeSession(TerminalSession tab) async {
     for (final port in tab.forwarder?.active.keys ?? const <int>[]) {
       emit(ForwardStopped(hostId: tab.hostId, localPort: port));
     }
-    _sessionClosed(
-      tab,
-    ); // before the first await: lock clears the tabs right after
+    // Runs before the first await: lock clears the tabs right after.
+    _sessionClosed(tab);
     await tab.close();
   }
 
@@ -865,9 +890,15 @@ class AppState extends ChangeNotifier implements SshCallbacks {
           secret: secret,
         );
 
-  /// Moves an item of the personal vault, or of [orgId], to the trash.
-  Future<void> trashItem(String id, {String? orgId}) =>
-      orgId == null ? vault!.trashItem(id) : orgs!.writer.trash(id);
+  /// Moves an item to the trash, through the org writer for an org item.
+  Future<void> trashItem(String id) =>
+      _isOrgItem(id) ? orgs!.writer.trash(id) : vault!.trashItem(id);
+
+  /// Takes an item out of the trash, through the org writer for an org item.
+  Future<void> restoreItem(String id) =>
+      _isOrgItem(id) ? orgs!.writer.restore(id) : vault!.restoreItem(id);
+
+  bool _isOrgItem(String id) => vault!.entry(id)?.orgId != null;
 
   /// Saved on this machine; synced prefs also go to the profile item (removed keys as null), one write at a time.
   Future<void> updateSettings(Settings next) async {
@@ -902,7 +933,7 @@ class AppState extends ChangeNotifier implements SshCallbacks {
   Future<void> revokeDevice(String id) async {
     await api!.revokeDevice(id);
     if (id == stored?.deviceId) {
-      deviceRevoked = true;
+      signedOutBecause = SignOutReason.deviceRevoked;
       await signOut();
     }
   }
@@ -932,7 +963,7 @@ class AppState extends ChangeNotifier implements SshCallbacks {
     loquet.show(loquet.engine.wake());
   }
 
-  /// Synced prefs from the profile item apply here and are cached in settings.json; never written back.
+  // Synced prefs from the profile item apply here and are cached in settings.json; never written back.
   void _applySyncedPrefs() {
     final prefs = vault?.profile.prefs ?? const {};
     if (prefs.isEmpty) return;
@@ -950,17 +981,38 @@ class AppState extends ChangeNotifier implements SshCallbacks {
       _wasOnline = engine.online;
       emit(engine.online ? const CameOnline() : const WentOffline());
     }
-    _lastInfo = _storedInfo ?? _lastInfo;
+    _lastInfo = engine.storedInfo ?? _lastInfo;
     _checkBiometricFlag();
     _refreshLoquet();
     _refreshHealth();
+    final shown = (
+      engine.online,
+      engine.lastSyncAt == null,
+      '${engine.lastError}',
+      engine.compat?.mode,
+      engine.compat?.api,
+      engine.compat?.reason,
+      engine.readOnly,
+      engine.restorePending,
+      engine.updateVersion,
+      mirror?.getKv(KvKey.apiInfo),
+      engine.rejectedIds.join(' '),
+    );
+    if (!_entriesChanged && shown == _shownSync) return;
+    _entriesChanged = false;
+    _shownSync = shown;
     notifyListeners();
+  }
+
+  void _onVaultChanged() {
+    _entriesChanged = true;
+    _refreshHealth();
   }
 
   /// The name shown beside Loquet in the sidebar.
   String? get displayName => vault?.profile.displayName ?? stored?.displayName;
 
-  /// The language of the security mails; best effort, retried at the next sign-in or change.
+  // The language of the security mails; best effort, retried at the next sign-in or change.
   Future<void> _sendLocale() async {
     try {
       await api?.setLocale(_uiLocale ?? 'en');
@@ -1028,10 +1080,11 @@ class AppState extends ChangeNotifier implements SshCallbacks {
 
   Future<void> _startVault(ApiClient api, UnlockedAccount unlocked) async {
     _account = unlocked;
+    _shownSync = null;
     final m = mirror!;
     sync?.dispose();
     vault?.removeListener(_applySyncedPrefs);
-    vault?.removeListener(_refreshHealth);
+    vault?.removeListener(_onVaultChanged);
     orgs?.removeListener(_onOrgsChanged);
     api.onTokens = (t) => sessions.saveRefreshToken(t.refreshToken);
     final engine = SyncEngine(api: api, mirror: m, deviceId: stored!.deviceId);
@@ -1062,11 +1115,12 @@ class AppState extends ChangeNotifier implements SshCallbacks {
     vault = v;
     orgs = o;
 
-    ledgerReported = !await v.unlock(unlocked.userKey);
     await o.unlock(unlocked);
+    ledgerReported = !await v.unlock(unlocked.userKey);
+    o.pins.seed();
     o.addListener(_onOrgsChanged);
     v.addListener(_applySyncedPrefs);
-    v.addListener(_refreshHealth);
+    v.addListener(_onVaultChanged);
     engine.addListener(_onSyncChanged);
     _applySyncedPrefs();
     _refreshHealth();
@@ -1077,15 +1131,17 @@ class AppState extends ChangeNotifier implements SshCallbacks {
     notifyListeners();
   }
 
-  /// The server ended the session: back to login, mirror, outbox and stored session kept.
-  Future<void> _sessionEnded(String? reason) async {
+  // The server ended the session: back to login, mirror, outbox and stored session kept.
+  Future<void> _sessionEnded(UnauthorizedReason? reason) async {
     trace(
       TraceArea.session,
-      'session ended by the server: ${reason ?? 'no reason'}',
+      'session ended by the server: ${reason?.wire ?? 'no reason'}',
     );
-    deviceRevoked = reason == UnauthorizedReason.deviceRevoked.wire;
-    sessionExpired = !deviceRevoked;
-    if (deviceRevoked) unawaited(biometric?.disable()); // other endings keep it
+    final revoked = reason == UnauthorizedReason.deviceRevoked;
+    signedOutBecause = revoked
+        ? SignOutReason.deviceRevoked
+        : SignOutReason.sessionExpired;
+    if (revoked) unawaited(biometric?.disable()); // other endings keep it
     await lock(); // first: stops sync and the vault before any await below
     stage = AppStage.login;
     notifyListeners();
@@ -1093,7 +1149,7 @@ class AppState extends ChangeNotifier implements SshCallbacks {
     stored = await sessions.load() ?? stored;
   }
 
-  /// The mirror of [userId]: kept open across locks, replaced for another account.
+  // The mirror of userId: kept open across locks, replaced for another account.
   Future<void> _mirrorFor(String userId) async {
     if (mirror != null && _mirrorUser == userId) return;
     mirror?.close();

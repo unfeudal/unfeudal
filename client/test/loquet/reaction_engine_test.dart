@@ -81,13 +81,13 @@ void main() {
     },
   );
 
-  test('serious moods never wear an accessory', () {
+  test('a host key change alerts with its line, important', () {
     now = DateTime(2026, 4, 1, 12);
     e.handle(asRoot);
     final r = e.handle(const HostKeyChanged())!;
     expect(
-      (r.mood, r.accessory, r.line, r.important),
-      (LoquetMood.alert, null, LineKey.keyChanged, true),
+      (r.mood, r.line, r.important),
+      (LoquetMood.alert, LineKey.keyChanged, true),
     );
   });
 

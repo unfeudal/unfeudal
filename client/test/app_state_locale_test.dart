@@ -24,10 +24,14 @@ void main() {
         password: testPassword,
       );
       expect(h.accounts[testEmail]!.locale, 'fr');
-      await s.updateSettings(s.settings.copyWith(locale: 'en'));
+      await s.updateSettings(
+        Settings.fromJson({...s.settings.toJson(), 'locale': 'en'}),
+      );
       expect(h.accounts[testEmail]!.locale, 'en');
       h.offline = true;
-      await s.updateSettings(s.settings.copyWith(locale: 'fr'));
+      await s.updateSettings(
+        Settings.fromJson({...s.settings.toJson(), 'locale': 'fr'}),
+      );
       expect(h.accounts[testEmail]!.locale, 'en');
     },
   );

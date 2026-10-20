@@ -8,7 +8,7 @@ class ShellChrome extends ChangeNotifier {
   String? _title;
   VoidCallback? _toggleSidebar;
 
-  /// The home shell that last wrote it.
+  // The home shell that last wrote it.
   Object? _owner;
   bool _disposed = false;
 

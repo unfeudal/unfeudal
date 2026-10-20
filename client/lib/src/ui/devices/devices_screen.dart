@@ -11,9 +11,10 @@ import '../../design/icons.dart';
 import '../../design/rows.dart';
 import '../../design/tokens.dart';
 import '../../design/dialog.dart';
+import '../busy_action.dart';
 import '../describe_error.dart';
 
-/// This account's devices, the current one marked, each other one revocable; Réglages › Appareils.
+/// This account's devices, the current one marked, each other one revocable; the Devices group of Settings.
 class DeviceList extends StatefulWidget {
   const DeviceList({super.key});
 
@@ -21,9 +22,8 @@ class DeviceList extends StatefulWidget {
   State<DeviceList> createState() => _DeviceListState();
 }
 
-class _DeviceListState extends State<DeviceList> {
+class _DeviceListState extends State<DeviceList> with BusyAction {
   late Future<List<Device>> _devices = AppScope.read(context).loadDevices();
-  String? _error;
 
   Future<void> _revoke(Device device) async {
     final l = AppLocalizations.of(context);
@@ -36,7 +36,7 @@ class _DeviceListState extends State<DeviceList> {
       );
       if (!yes) return;
     }
-    try {
+    await run(() async {
       await state.revokeDevice(device.id);
       if (!mounted || state.stored == null) {
         return; // revoking this device signed out
@@ -45,9 +45,7 @@ class _DeviceListState extends State<DeviceList> {
       setState(() {
         _devices = reloaded;
       });
-    } on Exception catch (e) {
-      if (mounted) setState(() => _error = describeError(l, e));
-    }
+    });
   }
 
   @override
@@ -67,7 +65,7 @@ class _DeviceListState extends State<DeviceList> {
         return ListView(
           padding: const EdgeInsets.only(bottom: 40),
           children: [
-            if (_error case final error?) UfErrorLine(error),
+            if (problem case final error?) UfErrorLine(error),
             for (final d in devices)
               _DeviceRow(
                 key: ValueKey(d.id),

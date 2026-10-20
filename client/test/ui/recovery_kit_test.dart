@@ -38,10 +38,9 @@ void main() {
       instructions: 'Keep it offline.',
     ));
     expect(String.fromCharCodes(pdf.take(5)), '%PDF-');
+    // The pdf package writes `/Type/Page`.
     expect(
-      RegExp(r'/Type\s*/Page[^s]').allMatches(
-        String.fromCharCodes(pdf),
-      ), // the pdf package writes `/Type/Page`
+      RegExp(r'/Type\s*/Page[^s]').allMatches(String.fromCharCodes(pdf)),
       hasLength(1),
     );
   });

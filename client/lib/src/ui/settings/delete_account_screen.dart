@@ -49,7 +49,7 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen>
       } on WrongPassword {
         if (mounted) setState(() => problem = l.passwordCurrentWrong);
       } on ApiException catch (e) {
-        if (e.reason != ConflictReason.lastOwner.wire) rethrow;
+        if (e.conflictReason != ConflictReason.lastOwner) rethrow;
         if (mounted) {
           setState(
             () => problem = l.deleteLastOwner((e.orgs ?? const []).join(', ')),
@@ -85,11 +85,12 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen>
           if (problem case final problem?) UfErrorLine(problem),
           Align(
             alignment: Alignment.centerRight,
-            child: FilledButton(
+            child: BusyButton(
               key: const Key('delete-submit'),
               style: dangerButtonStyle(colors),
-              onPressed: busy ? null : _submit,
-              child: BusyLabel(busy: busy, label: l.deleteSubmit),
+              busy: busy,
+              onPressed: _submit,
+              label: l.deleteSubmit,
             ),
           ),
         ],

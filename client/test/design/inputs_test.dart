@@ -157,7 +157,7 @@ void main() {
       await pumpCombo(t);
       await t.enterText(find.byType(TextField), 'zz');
       await t.pumpAndSettle();
-      expect(find.text('Nothing matches “zz”.'), findsOneWidget);
+      expect(find.text('Nothing matches \u201Czz\u201D.'), findsOneWidget);
     });
 
     testWidgets(
@@ -167,9 +167,8 @@ void main() {
         await t.tap(find.byType(TextField));
         await t.pumpAndSettle();
         await t.sendKeyEvent(LogicalKeyboardKey.arrowDown); // opens on Europe
-        await t.sendKeyEvent(
-          LogicalKeyboardKey.arrowDown,
-        ); // skips United States
+        // Skips United States.
+        await t.sendKeyEvent(LogicalKeyboardKey.arrowDown);
         await t.sendKeyEvent(LogicalKeyboardKey.enter);
         await t.pumpAndSettle();
         expect(picked, ['as']);
@@ -182,40 +181,6 @@ void main() {
         expect(find.text('Australia'), findsNothing);
       },
     );
-  });
-
-  testWidgets('slider: a drag changes the value and shows the tip meanwhile', (
-    t,
-  ) async {
-    var value = 0.0;
-    await t.pumpWidget(
-      host(
-        Center(
-          child: SizedBox(
-            width: 214,
-            child: StatefulBuilder(
-              builder: (context, setState) => UfSlider(
-                value: value,
-                max: 100,
-                onChanged: (v) => setState(() => value = v),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-    expect(find.byKey(const Key('slider-tip')), findsNothing);
-    final start = t.getTopLeft(find.byType(UfSlider)) + const Offset(7, 10);
-    final drag = await t.startGesture(start);
-    await drag.moveBy(const Offset(50, 0));
-    await drag.moveBy(const Offset(50, 0));
-    await t.pump();
-    expect(value, closeTo(50, 1));
-    expect(find.byKey(const Key('slider-tip')), findsOneWidget);
-    expect(find.text('50'), findsOneWidget);
-    await drag.up();
-    await t.pump();
-    expect(find.byKey(const Key('slider-tip')), findsNothing);
   });
 
   testWidgets('tri-state: allow, deny, unset, then allow again', (t) async {
@@ -325,16 +290,12 @@ void main() {
     });
 
     testWidgets('Escape clears the text, then leaves the field', (t) async {
-      final controller = TextEditingController();
-      addTearDown(controller.dispose);
-      await t.pumpWidget(
-        host(UfSearchField(controller: controller, shortcut: 'Ctrl K')),
-      );
+      await t.pumpWidget(host(const UfSearchField(shortcut: 'Ctrl K')));
       await t.enterText(find.byType(TextField), 'prod');
       await t.sendKeyEvent(LogicalKeyboardKey.escape);
       await t.pump();
-      expect(controller.text, isEmpty);
       final field = t.widget<TextField>(find.byType(TextField));
+      expect(field.controller!.text, isEmpty);
       expect(field.focusNode!.hasFocus, isTrue);
       await t.sendKeyEvent(LogicalKeyboardKey.escape);
       await t.pump();

@@ -82,3 +82,17 @@ class BusyLabel extends StatelessWidget {
     );
   }
 }
+
+/// A [FilledButton] with a [BusyLabel], disabled while [busy].
+class BusyButton extends FilledButton {
+  BusyButton({
+    super.key,
+    required bool busy,
+    required VoidCallback? onPressed,
+    required String label,
+    super.style,
+  }) : super(
+         onPressed: busy ? null : onPressed,
+         child: BusyLabel(busy: busy, label: label),
+       );
+}

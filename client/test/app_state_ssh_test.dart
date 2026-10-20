@@ -93,10 +93,8 @@ void main() {
         tab.error,
         isA<JumpChainFailed>().having((e) => e.hostName, 'hostName', 'bastion'),
       );
-      expect(
-        tab.state,
-        SealState.offline,
-      ); // the target's own key is not in question
+      // The target's own key is not in question.
+      expect(tab.state, SealState.offline);
     });
 
     test(

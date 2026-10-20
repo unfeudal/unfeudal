@@ -2,7 +2,6 @@
 import 'package:shelf/shelf.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
-import '../net/client_ip.dart';
 import 'app.dart';
 import 'errors.dart';
 
@@ -24,7 +23,7 @@ Middleware requestLog() =>
       final sw = Stopwatch()..start();
       final response = await inner(request);
       final deps = depsOf(request);
-      final ip = clientIp(request, deps.config.trustedProxies);
+      final ip = clientIpOf(request);
       if (deps.config.trustedProxies.isEmpty &&
           !deps.proxyWarned &&
           isLanHost(Uri(host: ip.address))) {
@@ -45,7 +44,7 @@ Middleware requestLog() =>
       return response;
     };
 
-/// Routes an old client may still write to, so it can sign in and protect the account.
+// Routes an old client may still write to, so it can sign in and protect the account.
 final _neverTooOld = [
   (
     'POST',
@@ -86,11 +85,19 @@ Middleware clientVersionGate() =>
     };
 
 class AuthContext {
-  const AuthContext(this.userId, this.deviceId, this.isInstanceOwner);
+  const AuthContext(
+    this.userId,
+    this.deviceId,
+    this.isInstanceOwner,
+    this.lastSeenAt,
+  );
 
   final String userId;
   final String deviceId;
   final bool isInstanceOwner;
+
+  /// The device's `last_seen_at` as read at authentication.
+  final String lastSeenAt;
 }
 
 const _authKey = 'unfeudal.auth';
@@ -104,16 +111,14 @@ ApiError _unauthorized(UnauthorizedReason r) => ApiError(
   extra: {'reason': r.wire},
 );
 
-/// Token (prefix, one dot, MAC, JSON, exp), then users ⋈ devices. Writes nothing.
+/// Checks the token (prefix, one dot, MAC, JSON, exp), then the user joined
+/// with the device. Writes nothing.
 Handler requireAuth(Handler inner) => (request) async {
   final deps = depsOf(request);
-  final header = request.headers['authorization'] ?? '';
-  final claims = header.startsWith('Bearer ')
-      ? deps.access.verify(header.substring(7))
-      : null;
+  final claims = deps.access.verifyHeader(request.headers['authorization']);
   if (claims == null) throw _unauthorized(UnauthorizedReason.invalidToken);
   final rows = await deps.db.query(
-    'SELECT u.is_instance_owner, u.disabled, d.revoked_at FROM users u '
+    'SELECT u.is_instance_owner, u.disabled, d.revoked_at, d.last_seen_at FROM users u '
     'JOIN devices d ON d.user_id = u.id WHERE u.id = @u AND d.id = @d',
     {'u': claims.userId, 'd': claims.deviceId},
   );
@@ -129,6 +134,7 @@ Handler requireAuth(Handler inner) => (request) async {
           claims.userId,
           claims.deviceId,
           rows.single['is_instance_owner'] == 1,
+          rows.single['last_seen_at']! as String,
         ),
       },
     ),

@@ -12,7 +12,7 @@ import 'jump_connector.dart';
 
 enum HostKeyDecision { trusted, unknown, changed }
 
-/// No pin → unknown; same type and fingerprint → trusted; anything else → changed.
+/// No pin is unknown; the same type and fingerprint is trusted; anything else is changed.
 HostKeyDecision decideHostKey(
   KnownHostMeta? pinned,
   String keyType,
@@ -145,12 +145,8 @@ class SshConnector {
         pinned: pinned,
       ),
     );
-    if (!ok) {
-      return (
-        accepted: false,
-        decision: decision,
-      ); // no UI, a closed dialog or "no": refused
-    }
+    // No UI, a closed dialog or "no" all refuse the key.
+    if (!ok) return (accepted: false, decision: decision);
     await callbacks.pinHostKey(hostId, keyType, fingerprint);
     return (accepted: true, decision: decision);
   }
@@ -191,9 +187,8 @@ class SshConnector {
         ]);
       },
       onVerifyHostKey: (type, fingerprintBytes) async {
-        final fingerprint = utf8.decode(
-          fingerprintBytes,
-        ); // dartssh2 passes `SHA256:<base64>` as UTF-8
+        // dartssh2 passes `SHA256:<base64>` as UTF-8 bytes.
+        final fingerprint = utf8.decode(fingerprintBytes);
         final (:accepted, :decision) = await verifyHostKey(
           hostId: target.hostId,
           hostName: target.hostName,
@@ -213,6 +208,7 @@ class SshConnector {
       await client.authenticated;
       return _DartSshHop(target.hostId, client);
     } catch (e) {
+      // Any failure closes the client; known dartssh2 errors are translated, the rest rethrown.
       trace(
         TraceArea.ssh,
         'connect ${shortId(target.hostId)} failed: ${e.runtimeType}',

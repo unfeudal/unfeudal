@@ -55,17 +55,17 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
   late double _treeWidth = _state.settings.treeWidth;
   bool _treeVisible = true;
 
-  /// The sidebar only: the terminal's keys never reach Loquet.
+  // The sidebar only: the terminal's keys never reach Loquet.
   final _loquetKeys = FocusNode(debugLabel: 'loquet-keys');
   bool _ledgerDismissed = false;
 
-  /// The host or folder inspector docked right of the sessions, if open.
+  // The host or folder inspector docked right of the sessions, if open.
   Widget? _editor;
 
-  /// The section in place of the sessions, if open.
+  // The section in place of the sessions, if open.
   ShellPage? _page;
 
-  /// Kept to clear the title bar on dispose, when the context can no longer look it up.
+  // Kept to clear the title bar on dispose, when the context can no longer look it up.
   ShellChrome? _chrome;
 
   static const _minTree = 220.0, _maxTree = 400.0, _resizeStep = 16.0;
@@ -128,7 +128,7 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
     return true;
   }
 
-  /// Ctrl+1…9 (⌘ on macOS) picks the personal vault, then each org in order; the terminal keeps its keys.
+  // Ctrl+1 to Ctrl+9 (Cmd on macOS) picks the personal vault, then each org in order; the terminal keeps its keys.
   bool _vaultShortcut(KeyEvent event, HardwareKeyboard keyboard) {
     final mac = defaultTargetPlatform == TargetPlatform.macOS;
     final modifier = mac ? keyboard.isMetaPressed : keyboard.isControlPressed;
@@ -138,7 +138,7 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
     if (_terminalFocus.hasFocus) return false;
     final digit = _digits.indexOf(event.logicalKey);
     if (digit < 0) return false;
-    final orgs = _state.serverHas('orgs') ? _state.orgs : null;
+    final orgs = _state.serverHas(Flag.orgs) ? _state.orgs : null;
     final vaults = [null, ...?orgs?.orgs.map((o) => o.id)];
     if (digit >= vaults.length) return false;
     orgs?.select(vaults[digit]);
@@ -332,7 +332,7 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
     );
   }
 
-  /// The title bar reads the sidebar width and the window title: « [vault] — [section or session] ».
+  // The title bar reads the sidebar width and the window title: the vault, then the section or session.
   void _publishChrome(BuildContext context, AppState state, ShellPage? page) {
     final chrome = ShellChromeScope.maybeOf(context);
     if (chrome == null) return;
@@ -341,8 +341,8 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
     final tab = state.activeSession?.title ?? l.statusNoSession;
     final title = switch (page) {
       ShellPage.settings => l.railSettings,
-      final page? => '$vault — ${pageTitle(l, page)}',
-      null => '$vault — $tab',
+      final page? => '$vault \u2014 ${pageTitle(l, page)}',
+      null => '$vault \u2014 $tab',
     };
     final width = _treeVisible ? _treeWidth : null;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -404,8 +404,8 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
     ),
   );
 
-  /// Top to bottom: plain http, restore, read-only, update, rejected writes, offline, protocol, key rotations,
-  /// ledger reset.
+  // Top to bottom: plain http, restore, read-only, update, rejected writes, offline, protocol, key rotations,
+  // ledger reset.
   List<Widget> _banners(BuildContext context, AppState state) {
     final l = AppLocalizations.of(context);
     final sync = state.sync;

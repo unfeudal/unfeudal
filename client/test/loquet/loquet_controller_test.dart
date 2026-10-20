@@ -79,10 +79,8 @@ void main() {
           spontaneous: true,
         ),
       );
-      expect(
-        c.mood,
-        LoquetMood.offline,
-      ); // a grave one replaces a lesser one at once
+      // A grave mood replaces a lesser one at once.
+      expect(c.mood, LoquetMood.offline);
       c.detach();
     });
   });

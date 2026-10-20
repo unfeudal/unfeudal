@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -115,6 +116,23 @@ void main() {
       ),
       (newEpoch, null, false, false),
     );
+  });
+
+  test('accept: the API keeps refusing writes until the accepted round has negotiated', () async {
+    final h = SyncHarness();
+    final (e, m, _) = await h.engine();
+    await e.syncNow();
+    h.restore(h.snapshot(), epoch: newEpoch);
+    await e.syncNow();
+    await e.refuseRestore();
+    final info = Completer<void>();
+    h.holdInfo = info.future;
+    final accepted = e.acceptRestore();
+    await pumpEventQueue();
+    expect((e.readOnly, e.api.isReadOnly()), (false, true));
+    info.complete();
+    await accepted;
+    expect((e.readOnly, e.api.isReadOnly()), (false, false));
   });
 
   test('outside an accepted restore an older revision is ignored', () async {

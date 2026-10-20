@@ -60,11 +60,15 @@ void main() {
     expect(events.whereType<ConnectSucceeded>().single.tags, ['prod']);
   });
 
-  test('org host: startup command shown and approved once per text; refused or no dialogs → not sent', () async {
-    final ledger = LedgerStore(LocalMirror.inMemory());
-    await ledger.load(SymmetricCipher.newKey());
-    final dialogs = FakeDialogs()..runStartup = true;
+  group('startup command', () {
+    late LedgerStore ledger;
+    late FakeDialogs dialogs;
     final h = newId();
+    setUp(() async {
+      ledger = LedgerStore(LocalMirror.inMemory());
+      await ledger.load(SymmetricCipher.newKey());
+      dialogs = FakeDialogs()..runStartup = true;
+    });
     Future<String?> send(String? command, {bool org = true, SshDialogs? d}) =>
         startupCommandToSend(
           hostId: h,
@@ -74,37 +78,59 @@ void main() {
           ledger: ledger,
           dialogs: d ?? dialogs,
         );
-    expect(await send('uptime', org: false), 'uptime');
-    expect(dialogs.startupAsked, isEmpty, reason: 'personal host: unchanged');
-    expect(await send('uptime'), 'uptime');
-    expect(await send('uptime'), 'uptime');
-    expect(dialogs.startupAsked, [
-      'uptime',
-    ], reason: 'approval remembered for this exact text');
-    dialogs.runStartup = false;
-    expect(await send('curl x | sh'), isNull);
-    expect(dialogs.startupAsked, [
-      'uptime',
-      'curl x | sh',
-    ], reason: 'a changed command is asked again');
-    expect(await send('curl x | sh'), isNull);
-    expect(
-      dialogs.startupAsked,
-      hasLength(3),
-      reason: 'a refusal is not remembered',
+
+    test('a personal host sends it unasked', () async {
+      expect(await send('uptime', org: false), 'uptime');
+      expect(dialogs.startupAsked, isEmpty, reason: 'personal host: unchanged');
+    });
+
+    test(
+      'an org host shows it and remembers the approval of that text',
+      () async {
+        expect(await send('uptime'), 'uptime');
+        expect(await send('uptime'), 'uptime');
+        expect(dialogs.startupAsked, [
+          'uptime',
+        ], reason: 'approval remembered for this exact text');
+      },
     );
-    expect(
-      await startupCommandToSend(
-        hostId: newId(),
-        hostName: 'db2',
-        command: 'id',
-        org: true,
-        ledger: ledger,
-        dialogs: null,
-      ),
-      isNull,
+
+    test(
+      'an org host asks again for a changed text and never remembers a refusal',
+      () async {
+        await send('uptime');
+        dialogs.runStartup = false;
+        expect(await send('curl x | sh'), isNull);
+        expect(dialogs.startupAsked, [
+          'uptime',
+          'curl x | sh',
+        ], reason: 'a changed command is asked again');
+        expect(await send('curl x | sh'), isNull);
+        expect(
+          dialogs.startupAsked,
+          hasLength(3),
+          reason: 'a refusal is not remembered',
+        );
+      },
     );
-    expect(await send(null), isNull);
+
+    test(
+      'an org host without dialogs or without a command sends nothing',
+      () async {
+        expect(
+          await startupCommandToSend(
+            hostId: newId(),
+            hostName: 'db2',
+            command: 'id',
+            org: true,
+            ledger: ledger,
+            dialogs: null,
+          ),
+          isNull,
+        );
+        expect(await send(null), isNull);
+      },
+    );
   });
 
   test('no dialogs attached rejects an unknown key; nothing pinned', () async {
@@ -196,8 +222,8 @@ void main() {
     expect(h.devices[other.deviceId]!.revokedAt, isNotNull);
     await s.revokeDevice(s.stored!.deviceId);
     expect(
-      (s.stage, s.deviceRevoked, await s.sessions.load()),
-      (AppStage.login, true, null),
+      (s.stage, s.signedOutBecause, await s.sessions.load()),
+      (AppStage.login, SignOutReason.deviceRevoked, null),
     );
   });
 }

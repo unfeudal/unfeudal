@@ -23,6 +23,10 @@ Widget keyedField(
   bool autofocus = false,
   TextInputType? keyboard,
   String? hint,
+  int? minLines,
+  int maxLines = 1,
+  int? maxLength,
+  ValueChanged<String>? onChanged,
   ValueChanged<String>? onSubmitted,
   String? error,
 }) {
@@ -35,6 +39,10 @@ Widget keyedField(
     autofocus: autofocus,
     keyboard: keyboard,
     hint: hint,
+    minLines: minLines,
+    maxLines: maxLines,
+    maxLength: maxLength,
+    onChanged: onChanged,
     onSubmitted: onSubmitted,
   );
   final field = strength
@@ -64,7 +72,7 @@ int passwordScore(String password) {
   return 2 + (length >= 12 ? 1 : 0) + (length >= 16 || classes >= 3 ? 1 : 0);
 }
 
-/// The strength meter of [controller]'s password and the Caps Lock state, kept current as keys go down.
+// The strength meter of the controller's password and the Caps Lock state, kept current as keys go down.
 class _PasswordStrength extends StatefulWidget {
   const _PasswordStrength(this.controller);
 
@@ -96,7 +104,7 @@ class _PasswordStrengthState extends State<_PasswordStrength> {
 
   void _refresh() => setState(() {});
 
-  /// Reads the lock state only; the key goes on to the focused field.
+  // Reads the lock state only; the key goes on to the focused field.
   bool _onKey(KeyEvent _) {
     if (_capsLockOn != _capsLock) setState(() => _capsLock = _capsLockOn);
     return false;
@@ -119,6 +127,10 @@ class _KeyedInput extends StatefulWidget {
     required this.autofocus,
     this.keyboard,
     this.hint,
+    this.minLines,
+    required this.maxLines,
+    this.maxLength,
+    this.onChanged,
     this.onSubmitted,
   });
 
@@ -127,6 +139,10 @@ class _KeyedInput extends StatefulWidget {
   final bool secret, mono, enabled, autofocus;
   final TextInputType? keyboard;
   final String? hint;
+  final int? minLines;
+  final int maxLines;
+  final int? maxLength;
+  final ValueChanged<String>? onChanged;
   final ValueChanged<String>? onSubmitted;
 
   @override
@@ -144,10 +160,15 @@ class _KeyedInputState extends State<_KeyedInput> {
     enabled: widget.enabled,
     autofocus: widget.autofocus,
     keyboardType: widget.keyboard,
+    minLines: widget.minLines,
+    maxLines: widget.maxLines,
+    maxLength: widget.maxLength,
+    onChanged: widget.onChanged,
     onSubmitted: widget.onSubmitted,
     style: widget.mono ? monoField : null,
     decoration: InputDecoration(
       hintText: widget.hint,
+      counterText: widget.maxLength == null ? null : '',
       suffixIcon: widget.secret
           ? IconButton(
               key: Key('${widget.fieldKey}-peek'),

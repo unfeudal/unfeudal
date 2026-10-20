@@ -80,7 +80,7 @@ void main() {
 
   test('French copy uses neutral forms', () {
     final personal = RegExp(
-      r"(^|[\s'’(])(tu|vous|votre|vos|ton|ta|tes|toi)(?=[\s.,;:!?)]|$)",
+      r"(^|[\s'\u2019(])(tu|vous|votre|vos|ton|ta|tes|toi)(?=[\s.,;:!?)]|$)",
       caseSensitive: false,
     );
     for (final kind in MailKind.values) {

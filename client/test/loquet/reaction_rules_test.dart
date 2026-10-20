@@ -56,10 +56,8 @@ void main() {
     final r = e.handle(connect(user: 'root'))!;
     expect((r.accessory, r.line), (LoquetAccessory.hardHat, LineKey.root));
     expect(e.sessionAccessory, LoquetAccessory.hardHat);
-    expect(
-      e.handle(connect(user: 'root'))!.line,
-      LineKey.connected,
-    ); // same session
+    // Same session.
+    expect(e.handle(connect(user: 'root'))!.line, LineKey.connected);
     e.tabsChanged({});
     expect(e.sessionAccessory, isNull);
     e.handle(connect(user: 'root'));

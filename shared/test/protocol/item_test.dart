@@ -78,10 +78,8 @@ void main() {
       (t.purged, t.meta, t.createdAt),
       (true, null, DateTime.utc(2026, 10, 1, 9)),
     );
-    expect(
-      jsonEncode(t.toJson()),
-      jsonEncode(tomb),
-    ); // `purged` right after `deleted`
+    // `purged` comes right after `deleted`.
+    expect(jsonEncode(t.toJson()), jsonEncode(tomb));
     expect(Item.fromJson(item()).toJson().containsKey('purged'), isFalse);
   });
 

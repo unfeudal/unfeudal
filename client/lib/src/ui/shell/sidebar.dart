@@ -20,8 +20,8 @@ import 'tree_panel.dart';
 /// A section screen that replaces the sessions while the sidebar stays; all but settings follow the vault.
 enum ShellPage { snippets, keychain, members, activity, trash, settings }
 
-/// The single sidebar: vault selector, search and host tree of that vault, the « Dans [vault] » entries, then
-/// Loquet with the account, Réglages and Verrouiller.
+/// The single sidebar: vault selector, search and host tree of that vault, the entries of that vault's
+/// sections, then Loquet with the account, Settings and Lock.
 class Sidebar extends StatelessWidget {
   const Sidebar({
     super.key,
@@ -45,7 +45,7 @@ class Sidebar extends StatelessWidget {
     final state = AppScope.of(context);
     final colors = UfColors.of(context);
     final org = selectedOrg(state);
-    final confirmed = org != null && org.status == 'confirmed';
+    final confirmed = org != null && org.isConfirmed;
     final vault = state.vault;
     final empty = !(vault?.entries ?? const []).any(
       (e) =>
@@ -57,7 +57,7 @@ class Sidebar extends StatelessWidget {
       ShellPage.snippets,
       ShellPage.keychain,
       if (confirmed) ShellPage.members,
-      if (state.serverHas('audit')) ShellPage.activity,
+      if (state.serverHas(Flag.audit)) ShellPage.activity,
       ShellPage.trash,
     ];
     return Container(
@@ -149,7 +149,7 @@ class Sidebar extends StatelessWidget {
 
 /// The org the sidebar shows, or null for the personal vault.
 OrgSummary? selectedOrg(AppState state) {
-  final orgs = state.serverHas('orgs') ? state.orgs : null;
+  final orgs = state.serverHas(Flag.orgs) ? state.orgs : null;
   return orgs?.byId(orgs.selected);
 }
 
@@ -171,7 +171,7 @@ IconData pageIcon(ShellPage page) => switch (page) {
   ShellPage.settings => UfIcons.gear,
 };
 
-/// A « Dans [vault] » entry: icon and label, the current one on `panelHover` in 600.
+/// An entry of the vault's own sections: icon and label, the current one on `panelHover` in 600.
 class SidebarEntry extends StatelessWidget {
   const SidebarEntry({
     super.key,
@@ -241,7 +241,7 @@ class VaultSelector extends StatelessWidget {
     final l = AppLocalizations.of(context);
     final state = AppScope.of(context);
     final colors = UfColors.of(context);
-    final orgs = state.serverHas('orgs') ? state.orgs : null;
+    final orgs = state.serverHas(Flag.orgs) ? state.orgs : null;
     final current = selectedOrg(state);
     final text = Theme.of(context).textTheme;
     int hostsIn(String? orgId) => (state.vault?.entries ?? const [])
@@ -342,7 +342,7 @@ class VaultSelector extends StatelessWidget {
     final name = current?.name ?? l.vaultPersonal;
     final subtitle = current == null
         ? l.vaultPersonalSubtitle(hosts)
-        : current.status == 'confirmed'
+        : current.isConfirmed
         ? l.vaultOrgSubtitle(role(current))
         : l.orgAwaiting;
     final vaults = orgs?.orgs ?? const <OrgSummary>[];
@@ -371,16 +371,13 @@ class VaultSelector extends StatelessWidget {
               index: i + 1,
               key: Key('vault-org-${org.id}'),
               name: org.name,
-              subtitle: org.status == 'confirmed'
+              subtitle: org.isConfirmed
                   ? l.vaultMenuOrgHosts(role(org), hostsIn(org.id))
                   : l.orgAwaiting,
               selected: current?.id == org.id,
-              dim: org.status != 'confirmed',
+              dim: !org.isConfirmed,
               onPressed: () => pick(org.id),
-              tile: VaultTile(
-                letter: org.name,
-                awaiting: org.status != 'confirmed',
-              ),
+              tile: VaultTile(letter: org.name, awaiting: !org.isConfirmed),
             ),
           if (orgs != null) ...[
             Container(
@@ -414,8 +411,8 @@ class VaultSelector extends StatelessWidget {
   }
 }
 
-/// The selector itself: an `edge` border on hover, the outer focus ring while its menu is open or it holds
-/// keyboard focus.
+// The selector itself: an `edge` border on hover, the outer focus ring while its menu is open or it holds
+// keyboard focus.
 class _VaultTrigger extends StatefulWidget {
   const _VaultTrigger({
     required this.menu,
@@ -483,8 +480,7 @@ class _VaultTriggerState extends State<_VaultTrigger> {
                     VaultTile(
                       letter: name,
                       personal: current == null,
-                      awaiting:
-                          current != null && current.status != 'confirmed',
+                      awaiting: current != null && !current.isConfirmed,
                     ),
                     Expanded(
                       child: Column(

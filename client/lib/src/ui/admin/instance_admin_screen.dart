@@ -11,18 +11,19 @@ import '../../design/icons.dart';
 import '../../design/motion.dart';
 import '../../design/rows.dart';
 import '../../design/tokens.dart';
-import '../describe_error.dart';
+import '../busy_action.dart';
+import '../fields.dart';
 import '../orgs/invite_dialog.dart';
 import '../orgs/org_settings_screen.dart';
 
-/// Binary units, rounded down: 2097152 → "2 MB".
+/// Binary units, rounded down: 2097152 is "2 MB".
 String sizeLabel(AppLocalizations l, int bytes) => switch (bytes) {
   >= 1 << 30 => l.sizeGb(bytes >> 30),
   >= 1 << 20 => l.sizeMb(bytes >> 20),
   _ => l.sizeKb(bytes >> 10),
 };
 
-/// Accounts, invitations and organisations of the instance, for its owner; Réglages › Serveur.
+/// Accounts, invitations and organisations of the instance, for its owner; the Server group of Settings.
 class InstanceAdminPanel extends StatefulWidget {
   const InstanceAdminPanel({super.key});
 
@@ -30,13 +31,13 @@ class InstanceAdminPanel extends StatefulWidget {
   State<InstanceAdminPanel> createState() => _InstanceAdminPanelState();
 }
 
-class _InstanceAdminPanelState extends State<InstanceAdminPanel> {
+class _InstanceAdminPanelState extends State<InstanceAdminPanel>
+    with BusyAction {
   List<AdminUser> _users = const [];
   List<AdminOrg> _orgs = const [];
   List<PendingInvite> _invites = const [];
   InviteCreated? _created;
   final _email = TextEditingController();
-  String? _error;
 
   @override
   void initState() {
@@ -50,7 +51,7 @@ class _InstanceAdminPanelState extends State<InstanceAdminPanel> {
     super.dispose();
   }
 
-  Future<void> _load() => _run(() async {
+  Future<void> _load() => run(() async {
     final api = AppScope.read(context).api!;
     final (users, orgs, invites) = await (
       api.adminUsers(),
@@ -66,19 +67,7 @@ class _InstanceAdminPanelState extends State<InstanceAdminPanel> {
     }
   });
 
-  /// Errors land in the screen; lists are updated in place, never fetched again.
-  Future<void> _run(Future<void> Function() action) async {
-    try {
-      await action();
-      if (mounted) setState(() => _error = null);
-    } on Exception catch (e) {
-      if (mounted) {
-        setState(() => _error = describeError(AppLocalizations.of(context), e));
-      }
-    }
-  }
-
-  Future<void> _toggle(AdminUser u) => _run(() async {
+  Future<void> _toggle(AdminUser u) => run(() async {
     await AppScope.read(context).api!.adminSetDisabled(u.id, !u.disabled);
     setState(() {
       _users = [
@@ -106,7 +95,7 @@ class _InstanceAdminPanelState extends State<InstanceAdminPanel> {
     )) {
       return;
     }
-    await _run(() async {
+    await run(() async {
       await api.adminDeleteUser(u.id);
       setState(
         () => _users = [
@@ -131,7 +120,7 @@ class _InstanceAdminPanelState extends State<InstanceAdminPanel> {
       ),
     );
     if (yes != true) return;
-    await _run(() async {
+    await run(() async {
       await api.adminDeleteOrg(o.id, o.name);
       setState(
         () => _orgs = [
@@ -146,8 +135,8 @@ class _InstanceAdminPanelState extends State<InstanceAdminPanel> {
     final l = AppLocalizations.of(context);
     final api = AppScope.read(context).api!;
     final email = _email.text.trim();
-    if (email.isEmpty) return setState(() => _error = l.fieldRequired);
-    await _run(() async {
+    if (email.isEmpty) return setState(() => problem = l.fieldRequired);
+    await run(() async {
       final created = await api.adminInvite(email);
       final invites = await api.adminInvites();
       setState(() {
@@ -157,7 +146,7 @@ class _InstanceAdminPanelState extends State<InstanceAdminPanel> {
     });
   }
 
-  Future<void> _revoke(PendingInvite p) => _run(() async {
+  Future<void> _revoke(PendingInvite p) => run(() async {
     await AppScope.read(context).api!.revokeInvite(p.id);
     setState(
       () => _invites = [
@@ -187,7 +176,7 @@ class _InstanceAdminPanelState extends State<InstanceAdminPanel> {
               Tab(key: const Key('admin-tab-orgs'), text: l.adminOrgs),
             ],
           ),
-          if (_error case final error?) UfErrorLine(error),
+          if (problem case final error?) UfErrorLine(error),
           Expanded(
             child: TabBarView(
               children: [
@@ -226,13 +215,11 @@ class _InstanceAdminPanelState extends State<InstanceAdminPanel> {
                       spacing: 8,
                       children: [
                         Expanded(
-                          child: UfField(
-                            label: l.inviteEmail,
-                            child: TextField(
-                              key: const Key('admin-invite-email'),
-                              controller: _email,
-                              keyboardType: TextInputType.emailAddress,
-                            ),
+                          child: keyedField(
+                            'admin-invite-email',
+                            _email,
+                            l.inviteEmail,
+                            keyboard: TextInputType.emailAddress,
                           ),
                         ),
                         FilledButton(
@@ -257,7 +244,7 @@ class _InstanceAdminPanelState extends State<InstanceAdminPanel> {
                           o.owners.join(', '),
                           l.adminOrgMembers(o.memberCount),
                           o.lastActivityAt == null
-                              ? '—'
+                              ? noValue
                               : dates.formatMediumDate(
                                   o.lastActivityAt!.toLocal(),
                                 ),

@@ -9,6 +9,7 @@ import '../../app_scope.dart';
 import '../../app_state.dart';
 import '../../audit/activity_model.dart';
 import '../../audit/audit_anchors.dart';
+import '../../debug_trace.dart';
 import '../../design/banner.dart';
 import '../../design/buttons.dart';
 import '../../design/choices.dart';
@@ -21,7 +22,7 @@ import '../manage_frame.dart';
 import '../save_file.dart';
 
 /// The audit views this account may read: in a vault, its actions and the org chain it administers or the
-/// folders it manages; from Réglages, its account chain or the instance. Verify and export read the whole chain.
+/// folders it manages; from Settings, its account chain or the instance. Verify and export read the whole chain.
 class ActivityScreen extends StatefulWidget {
   const ActivityScreen({
     super.key,
@@ -72,11 +73,10 @@ class _ActivityScreenState extends State<ActivityScreen> {
     });
   }
 
-  /// Opened from Réglages on the account or server chain; otherwise the section of the selected vault.
   bool get _fromSettings =>
       widget.scope == 'user' || widget.scope == 'instance';
 
-  /// The selected org's chain for its admins, else « Mes actions ».
+  // The selected org's chain for its admins, else the account's own actions.
   String _initialScope() {
     if (widget.scope != 'me') return widget.scope;
     final orgs = AppScope.read(context).orgs;
@@ -84,8 +84,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
     return orgId != null && orgs!.isAdmin(orgId) ? 'org:$orgId' : 'me';
   }
 
-  /// (scope, label) pairs offered here: the account and server chains in Réglages; « Mes actions » and the
-  /// selected org's chain or the folders this account manages in a vault.
+  // The account and server chains in Settings; in a vault, the account's own actions and the selected
+  // org's chain or the folders this account manages.
   List<(String, String)> _scopes(AppLocalizations l, AppState state) {
     final block = state.orgs?.block;
     final orgId = state.orgs?.selected;
@@ -112,14 +112,14 @@ class _ActivityScreenState extends State<ActivityScreen> {
                     'folder:${n.folderId}',
                     l.activityScopeFolder(
                       state.vault?.entry(n.folderId)?.name ??
-                          n.folderId.substring(0, 8),
+                          shortId(n.folderId),
                     ),
                   ),
       ],
       // a deleted org's chain, opened from its org.deleted event: the Instance Owner only
       if (_scope.startsWith('org:') &&
           !(block?.orgs.any((o) => 'org:${o.id}' == _scope) ?? false))
-        (_scope, l.activityScopeDeletedOrg(_scope.substring(4, 12))),
+        (_scope, l.activityScopeDeletedOrg(shortId(_scope.substring(4)))),
     ];
   }
 
@@ -132,8 +132,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
       if (id == state.stored!.userId) return l.activityYou;
       return state.vault?.entry(id)?.name ??
           block?.members.where((m) => m.userId == id).firstOrNull?.email ??
-          block?.orgs.where((o) => o.id == id).firstOrNull?.name ??
-          (id.length > 8 ? id.substring(0, 8) : id);
+          state.orgs?.byId(id)?.name ??
+          shortId(id);
     };
   }
 

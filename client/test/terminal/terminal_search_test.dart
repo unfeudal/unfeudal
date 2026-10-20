@@ -13,10 +13,8 @@ void main() {
     final hits = findInTerminal(t, 'alpha');
     expect(hits.map((m) => (m.x, m.length)), [(0, 5), (11, 5)]);
     expect(hits.first.y, hits.last.y);
-    expect(
-      findInTerminal(t, 'line 0').single.y,
-      0,
-    ); // long scrolled out of the 24-row viewport
+    // Long scrolled out of the 24-row viewport.
+    expect(findInTerminal(t, 'line 0').single.y, 0);
     expect(findInTerminal(t, ''), isEmpty);
     expect(findInTerminal(t, 'zzz'), isEmpty);
   });

@@ -9,6 +9,7 @@ import '../../design/buttons.dart';
 import '../../design/dialog.dart';
 import '../../design/field.dart';
 import '../busy_action.dart';
+import '../fields.dart';
 
 /// An existing account joins an org from an invitation link or file of its own server.
 class JoinOrgDialog extends StatefulWidget {
@@ -39,7 +40,7 @@ class _JoinOrgDialogState extends State<JoinOrgDialog> with BusyAction {
   static Future<String?> _openFileDialog() async =>
       (await openFile())?.readAsString();
 
-  Future<void> _join() async {
+  Future<void> _join() => run(() async {
     final l = AppLocalizations.of(context);
     final state = AppScope.read(context);
     final Enrollment invite;
@@ -47,10 +48,7 @@ class _JoinOrgDialogState extends State<JoinOrgDialog> with BusyAction {
       final file = _file;
       invite = file == null
           ? Enrollment.parseLink(_link.text.trim())
-          : await Enrollment.parseFile(
-              file,
-              allowTestingKdf: state.allowTestingKdf,
-            );
+          : await state.parseEnrollmentFile(file);
     } on Exception {
       return setState(() => problem = l.joinInvalid);
     }
@@ -58,13 +56,11 @@ class _JoinOrgDialogState extends State<JoinOrgDialog> with BusyAction {
         invite.server != state.stored?.serverUrl) {
       return setState(() => problem = l.joinInvalid);
     }
-    await run(() async {
-      final orgId = await state.api!.joinInvite(invite.token);
-      await state.sync!.syncNow();
-      state.orgs!.select(orgId);
-      if (mounted) Navigator.of(context).pop();
-    });
-  }
+    final orgId = await state.api!.joinInvite(invite.token);
+    await state.sync!.syncNow();
+    state.orgs!.select(orgId);
+    if (mounted) Navigator.of(context).pop();
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -73,21 +69,20 @@ class _JoinOrgDialogState extends State<JoinOrgDialog> with BusyAction {
       title: l.railJoinOrg,
       actions: [
         CancelButton(onPressed: () => Navigator.of(context).pop()),
-        FilledButton(
+        BusyButton(
           key: const Key('join-submit'),
-          onPressed: busy ? null : _join,
-          child: BusyLabel(busy: busy, label: l.orgJoinSubmit),
+          busy: busy,
+          onPressed: _join,
+          label: l.orgJoinSubmit,
         ),
       ],
       children: [
-        UfField(
-          label: l.joinPaste,
-          child: TextField(
-            key: const Key('join-link'),
-            controller: _link,
-            autofocus: true,
-            onSubmitted: (_) => _join(),
-          ),
+        keyedField(
+          'join-link',
+          _link,
+          l.joinPaste,
+          autofocus: true,
+          onSubmitted: (_) => _join(),
         ),
         Align(
           alignment: Alignment.centerLeft,

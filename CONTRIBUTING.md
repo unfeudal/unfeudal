@@ -26,7 +26,7 @@ Every change to logic comes with a test. Run the test suite of the package you t
 ## Code rules
 
 - `dart format` and `dart analyze --fatal-infos` (`flutter analyze` in `client/`) pass with no change and no issue.
-- Every source file starts with its SPDX header: `// SPDX-License-Identifier: AGPL-3.0-or-later` under `server/`, `// SPDX-License-Identifier: Apache-2.0` elsewhere. `cd tool && dart run bin/spdx.dart` checks it.
+- Every source file starts with its SPDX header: `// SPDX-License-Identifier: AGPL-3.0-or-later` under `server/`, `// SPDX-License-Identifier: Apache-2.0` elsewhere. The `checks` workflow checks it.
 - No user-facing text in client code: each string goes in `client/lib/l10n/app_en.arb` and `app_fr.arb`, in English and French.
 
 ## Licence of contributions

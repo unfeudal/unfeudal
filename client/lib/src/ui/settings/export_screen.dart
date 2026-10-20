@@ -134,10 +134,11 @@ class _ExportScreenState extends State<ExportScreen> with BusyAction {
           if (_done case final done?) Text(done),
           Align(
             alignment: Alignment.centerRight,
-            child: FilledButton(
+            child: BusyButton(
               key: const Key('export-submit'),
-              onPressed: busy ? null : _submit,
-              child: BusyLabel(busy: busy, label: l.exportSubmit),
+              busy: busy,
+              onPressed: _submit,
+              label: l.exportSubmit,
             ),
           ),
         ],

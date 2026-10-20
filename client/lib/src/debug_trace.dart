@@ -8,7 +8,7 @@ import 'package:flutter/foundation.dart';
 /// What a trace line is about; `--dart-define=UNFEUDAL_TRACE=http,sync` keeps only those.
 enum TraceArea { http, session, sync, ssh, vault, ui }
 
-/// `--dart-define=UNFEUDAL_TRACE=all` (or `true`, or a comma list of [TraceArea] names); off when unset.
+// `--dart-define=UNFEUDAL_TRACE=all` (or `true`, or a comma list of TraceArea names); off when unset.
 const _flag = String.fromEnvironment('UNFEUDAL_TRACE');
 
 final _areas = switch (_flag) {

@@ -81,7 +81,8 @@ class _LoquetState extends State<Loquet> with TickerProviderStateMixin {
         LoquetMood.happy => LoquetFx.hop,
         LoquetMood.sad || LoquetMood.alert => LoquetFx.shake,
         LoquetMood.dizzy => LoquetFx.wobble,
-        LoquetMood.connecting => null, // bob, below
+        // Connecting bobs instead, in the offset below.
+        LoquetMood.connecting => null,
         _ => old.mood == LoquetMood.sleep ? LoquetFx.stretch : null,
       };
       _fade.forward(from: 0).whenComplete(() {
@@ -112,7 +113,7 @@ class _LoquetState extends State<Loquet> with TickerProviderStateMixin {
       ..forward(from: 0);
   }
 
-  /// Widget-owned timers, only with [Loquet.life] and never when still.
+  // Widget-owned timers, only with Loquet.life and never when still.
   void _syncLife() {
     for (final t in _timers) {
       t.cancel();
@@ -155,7 +156,7 @@ class _LoquetState extends State<Loquet> with TickerProviderStateMixin {
     final wave = sin(pi * p);
     var pose = LoquetPose.of(mood, eyeX: widget.eyeX);
     if (_look.isAnimating) {
-      // −4 → 4 → 0
+      // Glances from -4 to 4, then back to 0.
       final t = _look.value;
       pose = pose.lookingAt(t < 0.5 ? -4 + 16 * t : 4 - 8 * (t - 0.5));
     }
@@ -196,10 +197,8 @@ class _LoquetState extends State<Loquet> with TickerProviderStateMixin {
                 0.04 * size * sin(4 * pi * p) * (1 - p),
                 0,
               ),
-              null => Offset(
-                0,
-                -0.03 * size * sin(4 * pi * p),
-              ), // connecting bob, twice
+              // Connecting bobs twice per cycle.
+              null => Offset(0, -0.03 * size * sin(4 * pi * p)),
               _ => Offset.zero,
             };
             final angle = switch (_playing) {

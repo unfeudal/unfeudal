@@ -15,10 +15,8 @@ void main() {
     'rows, load more, verify, export, raw IPs for the Instance Owner, the SSH note',
     (t) async {
       final h = SyncHarness(capabilities: ['audit', 'mascot', 'sync']);
-      final s = await signedInState(
-        t,
-        harness: h,
-      ); // the first account is the Instance Owner
+      // The first account is the Instance Owner.
+      final s = await signedInState(t, harness: h);
       final me = s.stored!.userId;
       for (var i = 0; i < 101; i++) {
         h.appendAudit(
@@ -137,10 +135,11 @@ void main() {
       final i = h.auditLog.indexWhere(
         (e) => e.scope == 'user:$me' && e.seq == 2,
       );
+      // The hash is left as it was.
       h.auditLog[i] = AuditEvent.fromJson({
         ...h.auditLog[i].toJson(),
         'action': 'item.created',
-      }); // hash left as it was
+      });
       final saved = <String>[];
       await pumpApp(
         t,
@@ -163,10 +162,8 @@ void main() {
     'the Instance Owner opens a deleted org\'s chain from its deletion event',
     (t) async {
       final h = SyncHarness(capabilities: ['audit', 'sync']);
-      final s = await signedInState(
-        t,
-        harness: h,
-      ); // the first account is the Instance Owner
+      // The first account is the Instance Owner.
+      final s = await signedInState(t, harness: h);
       final gone = newId();
       h.appendAudit('org:$gone', 'org.created', actorUser: s.stored!.userId);
       h.appendAudit(

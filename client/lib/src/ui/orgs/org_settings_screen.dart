@@ -11,7 +11,7 @@ import '../../design/inputs.dart';
 import '../../design/motion.dart';
 import '../../design/rows.dart';
 import '../../design/tokens.dart';
-import '../describe_error.dart';
+import '../busy_action.dart';
 import 'members_screen.dart';
 
 /// Name, Loquet and retention of an org (admins), then leaving it (anyone) or deleting it (owners). Only changed
@@ -25,18 +25,17 @@ class OrgSettingsScreen extends StatefulWidget {
   State<OrgSettingsScreen> createState() => _OrgSettingsScreenState();
 }
 
-class _OrgSettingsScreenState extends State<OrgSettingsScreen> {
+class _OrgSettingsScreenState extends State<OrgSettingsScreen> with BusyAction {
   static const _retention = ['auditDays', 'maxVersions', 'trashDays'];
   final _name = TextEditingController();
   final _values = <String, int?>{};
   bool _mascot = true;
 
-  /// What the server holds, as last read or saved.
+  // What the server holds, as last read or saved.
   late Map<String, Object?> _saved;
 
-  /// The server's retention values, shown next to each field; null until read.
+  // The server's retention values, shown next to each field; null until read.
   Map<String, int>? _server;
-  String? _error;
 
   OrgSummary? get _org => AppScope.read(context).orgs?.byId(widget.orgId);
 
@@ -57,25 +56,16 @@ class _OrgSettingsScreenState extends State<OrgSettingsScreen> {
     _loadRetention();
   }
 
-  /// The org's values start the fields; a failed read leaves them as they are, without the server's values.
+  // The org's values start the fields; a failed read leaves them as they are, without the server's values.
   Future<void> _loadRetention() async {
     try {
       final r = await AppScope.read(context).api!.orgRetention(widget.orgId);
       if (!mounted) return;
-      final org = {
-        'auditDays': r.org.auditDays,
-        'maxVersions': r.org.maxVersions,
-        'trashDays': r.org.trashDays,
-      };
       setState(() {
-        _server = {
-          'auditDays': r.server.auditDays,
-          'maxVersions': r.server.maxVersions,
-          'trashDays': r.server.trashDays,
-        };
+        _server = r.server;
         for (final k in _retention) {
-          _saved[k] = org[k];
-          _values[k] = org[k];
+          _saved[k] = r.org[k];
+          _values[k] = r.org[k];
         }
       });
     } on Exception {
@@ -90,7 +80,6 @@ class _OrgSettingsScreenState extends State<OrgSettingsScreen> {
   }
 
   Future<void> _save() async {
-    final l = AppLocalizations.of(context);
     final state = AppScope.read(context);
     final current = <String, Object?>{
       'mascot': _mascot,
@@ -103,7 +92,7 @@ class _OrgSettingsScreenState extends State<OrgSettingsScreen> {
     final name = _name.text.trim();
     final rename = name.isNotEmpty && name != _saved['name'];
     if (settings.isEmpty && !rename) return;
-    try {
+    await run(() async {
       await state.api!.updateOrg(
         widget.orgId,
         name: rename ? name : null,
@@ -111,10 +100,7 @@ class _OrgSettingsScreenState extends State<OrgSettingsScreen> {
       );
       _saved = {..._saved, ...current, 'name': rename ? name : _saved['name']};
       await state.sync!.syncNow();
-      if (mounted) setState(() => _error = null);
-    } on Exception catch (e) {
-      if (mounted) setState(() => _error = describeError(l, e));
-    }
+    });
   }
 
   Future<void> _delete(String name) async {
@@ -130,15 +116,12 @@ class _OrgSettingsScreenState extends State<OrgSettingsScreen> {
       ),
     );
     if (yes != true || !mounted) return;
-    final l = AppLocalizations.of(context);
-    try {
+    await run(() async {
       await state.api!.deleteOrg(widget.orgId);
       // the section closes once the org leaves the selection
       state.orgs!.select(null);
       await state.sync!.syncNow();
-    } on Exception catch (e) {
-      if (mounted) setState(() => _error = describeError(l, e));
-    }
+    });
   }
 
   @override
@@ -195,7 +178,7 @@ class _OrgSettingsScreenState extends State<OrgSettingsScreen> {
             number('org-audit-days', 'auditDays', l.orgAuditDays),
             number('org-max-versions', 'maxVersions', l.orgMaxVersions),
             number('org-trash-days', 'trashDays', l.orgTrashDays),
-            if (_error case final error?)
+            if (problem case final error?)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
                 child: UfErrorLine(error),

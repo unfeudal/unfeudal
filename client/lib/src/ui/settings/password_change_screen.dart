@@ -29,7 +29,7 @@ class _PasswordChangeScreenState extends State<PasswordChangeScreen>
   final _next = TextEditingController();
   final _confirm = TextEditingController();
 
-  /// Reset mode, after the change: the new kit, or null when the server allows none.
+  // Reset mode, after the change: the new kit, or null when the server allows none.
   String? _kit;
   bool _done = false;
 
@@ -115,10 +115,11 @@ class _PasswordChangeScreenState extends State<PasswordChangeScreen>
             else
               Align(
                 alignment: Alignment.centerRight,
-                child: FilledButton(
+                child: BusyButton(
                   key: const Key('pw-submit'),
-                  onPressed: busy ? null : _submit,
-                  child: BusyLabel(busy: busy, label: l.pwSubmit),
+                  busy: busy,
+                  onPressed: _submit,
+                  label: l.pwSubmit,
                 ),
               ),
           ],

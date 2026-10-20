@@ -4,7 +4,6 @@ import 'sqlite_db.dart';
 
 enum DbEngine { sqlite, postgres }
 
-/// Statements with `@name` parameters; booleans are bound as 1/0.
 /// Booleans as 1/0, every other value as is.
 Object? dbValue(Object? value) => switch (value) {
   true => 1,
@@ -34,7 +33,7 @@ abstract class Db implements Tx {
   Future<void> close();
 }
 
-/// `sqlite::memory:` (tests only), `sqlite:///<path>` or `postgres://…`.
+/// `sqlite::memory:` (tests only), `sqlite:///<path>` or `postgres://...`.
 Future<Db> openDb(String url) async {
   if (url == 'sqlite::memory:') return SqliteDb.open(':memory:');
   final uri = Uri.parse(url);

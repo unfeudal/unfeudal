@@ -8,17 +8,20 @@ class Compat {
   const Compat(this.mode, this.api, this.reason);
 
   final CompatMode mode;
-  final int? api; // highest common API, null when none
-  final String? reason; // 'no-common-api' | 'client-too-old'
+
+  /// The highest common API, null when none.
+  final int? api;
+
+  /// 'no-common-api' or 'client-too-old' when [mode] is read-only.
+  final String? reason;
 }
 
 Compat negotiate(String clientVersion, List<int> clientApis, ApiInfo info) {
   final common = clientApis.where(info.api.contains).toList()..sort();
-  // No common API: no push, no pull.
+  // Without a common API the client can neither push nor pull.
   if (common.isEmpty) {
     return const Compat(CompatMode.readOnly, null, 'no-common-api');
   }
-  // Below minClient: pull only.
   if (compareVersions(clientVersion, info.minClient) < 0) {
     return Compat(CompatMode.readOnly, common.last, 'client-too-old');
   }

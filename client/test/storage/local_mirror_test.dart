@@ -96,10 +96,8 @@ void main() {
     m.enqueue(wireItem(b, revision: 0), baseRevision: 0);
     m.rejectOutbox(b);
     m.enqueue(wireItem(b, revision: 0, deleted: true), baseRevision: 0);
-    expect(
-      m.outbox().last.state,
-      OutboxState.pending,
-    ); // a new edit makes a rejected entry pending again
+    // A new edit makes a rejected entry pending again.
+    expect(m.outbox().last.state, OutboxState.pending);
     m.rebaseOutbox(a, 5);
     expect(m.outbox().first.baseRevision, 5);
     m.removeOutbox(a);
@@ -127,10 +125,8 @@ void main() {
       restore.setKv(k, 'x');
     }
     restore.resetForRestore();
-    expect(
-      restore.items(),
-      hasLength(1),
-    ); // replaced by the full pull, not wiped up front
+    // Items are replaced by the full pull, not wiped up front.
+    expect(restore.items(), hasLength(1));
     expect(restore.outbox(), hasLength(1));
     expect(
       {for (final k in KvKey.values) k: restore.getKv(k)},

@@ -16,10 +16,14 @@ class LedgerStore {
   Ledger _ledger = Ledger.empty();
   final _handedOut = <String, int>{};
 
+  // Set by a load and a rising mark, cleared by a save.
+  bool _unsaved = false;
+
   /// False when a stored ledger could not be opened: it restarts empty and the caller reports it.
   Future<bool> load(Uint8List userKey) {
     _handedOut.clear();
     _ledger = Ledger.empty();
+    _unsaved = true;
     return _store.load(userKey, (json) => _ledger = Ledger.fromJson(json));
   }
 
@@ -27,7 +31,9 @@ class LedgerStore {
 
   /// Marks rise only, from confirmed payloads.
   void confirm(String id, PayloadPart part, int seq) {
-    if (seq > mark(id, part)) _ledger.seq[_seqKey(id, part)] = seq;
+    if (seq <= mark(id, part)) return;
+    _ledger.seq[_seqKey(id, part)] = seq;
+    _unsaved = true;
   }
 
   /// A missing `_seq` counts as 0: once a mark exists, it is a replay.
@@ -73,7 +79,15 @@ class LedgerStore {
     return save();
   }
 
-  Future<void> save() => _store.save(_ledger.toJson());
+  Future<void> save() {
+    _unsaved = false;
+    return _store.save(_ledger.toJson());
+  }
+
+  /// Saves only when a mark rose or the ledger was loaded since the last save.
+  Future<void> saveIfChanged() async {
+    if (_unsaved) await save();
+  }
 
   /// Accepted server restore: replay marks go, pins and approvals stay.
   Future<void> reset() {

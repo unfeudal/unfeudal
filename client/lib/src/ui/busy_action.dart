@@ -10,8 +10,9 @@ mixin BusyAction<T extends StatefulWidget> on State<T> {
   String? problem;
 
   /// Clears [problem], then sets it to the failure's sentence if [action] throws.
+  /// Does nothing while an action already runs.
   Future<void> run(Future<void> Function() action) async {
-    final l = AppLocalizations.of(context);
+    if (busy) return;
     setState(() {
       busy = true;
       problem = null;
@@ -19,9 +20,17 @@ mixin BusyAction<T extends StatefulWidget> on State<T> {
     try {
       await action();
     } on Exception catch (e) {
-      if (mounted) setState(() => problem = describeError(l, e));
+      if (mounted) {
+        setState(
+          () => problem = describeError(AppLocalizations.of(context), e),
+        );
+        failed(e);
+      }
     } finally {
       if (mounted) setState(() => busy = false);
     }
   }
+
+  /// Called after [problem] is set by a failed action, while still mounted.
+  void failed(Object error) {}
 }

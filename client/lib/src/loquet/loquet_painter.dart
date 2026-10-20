@@ -9,33 +9,12 @@ import 'loquet_pose.dart';
 const _bodyData =
     'M20 8 H80 A4 4 0 0 1 84 12 V58 A34 34 0 0 1 16 58 V12 A4 4 0 0 1 20 8 Z M45 8 H55 V20 A5 5 0 0 1 45 20 Z';
 
-/// The logo silhouette with its short top notch left open; viewBox 100 × 100.
+/// The logo silhouette with its short top notch left open; viewBox 100 by 100.
 @visibleForTesting
 Path loquetBodyPath() => _path(_bodyData)..fillType = PathFillType.evenOdd;
 
-// colours are irrelevant when only the outlines are read
-const _none = Color(0x00000000);
-const _shapesOnly = LoquetPalette(
-  body: _none,
-  face: _none,
-  feet: _none,
-  zzz: _none,
-  accent: _none,
-  drop: _none,
-);
-
-/// Every shape of [accessory], for its bounds.
-@visibleForTesting
-Path loquetAccessoryPath(LoquetAccessory accessory) {
-  final out = Path();
-  for (final s in _accessory(accessory, _shapesOnly)) {
-    out.addPath(s.path, Offset.zero);
-  }
-  return out;
-}
-
 /// The only code that draws Loquet: feet, body, face, extras, accessory, then hands over the accessory.
-/// Shapes follow the mockup; viewBox 100 × 100 scaled to the size, hats may reach y = −50.
+/// The viewBox is 100 by 100, scaled to the size; hats may reach y = -50.
 class LoquetPainter extends CustomPainter {
   const LoquetPainter({
     required this.pose,
@@ -49,10 +28,10 @@ class LoquetPainter extends CustomPainter {
   final LoquetPalette palette;
   final LoquetAccessory? accessory;
 
-  /// 0 open … 1 closed, for open eyes.
+  /// From 0 (open) to 1 (closed), for open eyes.
   final double blink;
 
-  /// 0 … 1, squashes towards the feet.
+  /// From 0 to 1, squashes towards the feet.
   final double squash;
 
   @override
@@ -183,7 +162,8 @@ class LoquetPainter extends CustomPainter {
             _line('M84 7 H92 L84 16 H92', palette.zzz, 2.4),
             _line('M92 -1 H97.5 L92 6 H97.5', palette.zzz, 1.8),
           ],
-          LoquetExtra.tear => const <_Shape>[], // part of the yawn
+          // The tear is drawn as part of the yawn.
+          LoquetExtra.tear => const <_Shape>[],
         },
     ];
     return shapes;
@@ -324,7 +304,7 @@ List<_Shape> _accessory(LoquetAccessory a, LoquetPalette palette) {
         ),
       ];
     case LoquetAccessory.partyHat:
-      // tilted −12° around (50, 10)
+      // Tilted -12 degrees around (50, 10).
       final tilt = Matrix4.identity()
         ..translateByDouble(50, 10, 0, 1)
         ..rotateZ(-12 * pi / 180)
@@ -372,7 +352,7 @@ List<_Shape> _accessory(LoquetAccessory a, LoquetPalette palette) {
 
 final _token = RegExp(r'[MmLlHhVvQqAaZz]|-?(?:\d+\.?\d*|\.\d+)');
 
-/// SVG path data (M L H V Q A Z, absolute and relative) as a [Path], so the mockup's shapes are used as written.
+// SVG path data (M L H V Q A Z, absolute and relative) as a Path, so the shapes are kept as SVG strings.
 Path _path(String d) {
   final tokens = [for (final m in _token.allMatches(d)) m[0]!];
   final path = Path();

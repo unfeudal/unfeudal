@@ -1402,7 +1402,6 @@
     }
   },
   "keyEscape": "Esc",
-  "fieldCopy": "Copy",
   "fieldIncrease": "Increase",
   "fieldDecrease": "Decrease",
   "strengthWeak": "Weak.",

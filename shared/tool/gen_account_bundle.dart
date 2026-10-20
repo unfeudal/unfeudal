@@ -8,7 +8,7 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 Future<void> main() async {
   final acc = await AccountCrypto(
     kdf: KdfParams.testing,
-    allowTestingKdf: true,
+    kdfFloor: KdfParams.testing,
   ).create('fixture-password');
   File('test/fixtures/v0/account_bundle.json')
       .writeAsStringSync('${jsonEncode(acc.bundle.toJson())}\n');

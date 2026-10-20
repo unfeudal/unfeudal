@@ -61,7 +61,7 @@ class ReactionEngine {
   final LoquetMemory memory;
   final DateTime Function() _now;
 
-  /// `yyyy-mm-dd` of the first public release: a party hat on its anniversaries.
+  // `yyyy-mm-dd` of the first public release: a party hat on its anniversaries.
   final String? _projectRelease;
   LoquetMode mode = LoquetMode.on;
   VaultHealth health = VaultHealth.none;
@@ -86,16 +86,14 @@ class ReactionEngine {
     LogicalKeyboardKey.keyA,
   ];
 
-  DateTime now() => _now();
-
-  String get _day => LoquetMemory.day(now());
+  String get _day => LoquetMemory.day(_now());
 
   /// Terminal input less than 3 s ago.
   bool get typing =>
       _lastInput != null &&
-      now().difference(_lastInput!) < const Duration(seconds: 3);
+      _now().difference(_lastInput!) < const Duration(seconds: 3);
 
-  void terminalInput() => _lastInput = now();
+  void terminalInput() => _lastInput = _now();
 
   /// The resting mood: offline, then dozing, then concerned, then night, then the vault's mood.
   LoquetMood get baseline {
@@ -103,14 +101,14 @@ class ReactionEngine {
     if (_offline) return LoquetMood.offline;
     if (_dozing) return LoquetMood.sleep;
     if (mood == LoquetMood.concerned) return mood;
-    if (now().hour < 5) return LoquetMood.sleepy;
+    if (_now().hour < 5) return LoquetMood.sleepy;
     return mood;
   }
 
   LoquetAccessory? get sessionAccessory {
     if (mode != LoquetMode.on) return null;
     if (_rootHosts.isNotEmpty) return LoquetAccessory.hardHat;
-    final t = now();
+    final t = _now();
     if (t.month == 12 && t.day >= 24 && t.day <= 26) {
       return LoquetAccessory.woollyHat;
     }
@@ -139,11 +137,11 @@ class ReactionEngine {
       case Unlocked(:final displayName):
         final first = memory.firstUnlock;
         if (first == null) {
-          memory.firstUnlock = now();
+          memory.firstUnlock = _now();
           unawaited(memory.save());
         }
         if (first != null &&
-            now().difference(first) >= const Duration(days: 365)) {
+            _now().difference(first) >= const Duration(days: 365)) {
           final r = _out(
             const Reaction(
               LoquetMood.happy,
@@ -154,7 +152,7 @@ class ReactionEngine {
           );
           if (r != null) return r;
         }
-        if (now().hour >= 5 && now().hour < 8) {
+        if (_now().hour >= 5 && _now().hour < 8) {
           final r = _out(
             const Reaction(LoquetMood.yawn, line: LineKey.earlyYawn),
             once: 'yawn:$_day',
@@ -210,7 +208,7 @@ class ReactionEngine {
             return r;
           }
         }
-        final t = now();
+        final t = _now();
         if (t.weekday == DateTime.friday &&
             t.hour >= 17 &&
             event.tags.contains('prod')) {
@@ -305,7 +303,7 @@ class ReactionEngine {
           once: 'secondDevice',
         );
       case LoquetClicked():
-        final t = now();
+        final t = _now();
         _clicks
           ..add(t)
           ..removeWhere((c) => t.difference(c) > const Duration(seconds: 4));
@@ -339,7 +337,7 @@ class ReactionEngine {
 
   /// Each minute.
   Reaction? tick() {
-    if (now().hour < 5) {
+    if (_now().hour < 5) {
       return _out(
         const Reaction(
           LoquetMood.sleepy,
@@ -353,7 +351,7 @@ class ReactionEngine {
     return null;
   }
 
-  /// Konami (↑↑↓↓←→←→BA) completed: a backflip, once a day; a wrong key restarts the sequence.
+  /// Konami (up up down down left right left right B A) completed: a backflip, once a day; a wrong key restarts the sequence.
   Reaction? key(LogicalKeyboardKey key) {
     if (key == _konamiCode[_konami]) {
       _konami++;
@@ -382,8 +380,8 @@ class ReactionEngine {
     return _out(Reaction(baseline));
   }
 
-  /// [once]: memory key consumed when the reaction is shown. [egg]: easter egg (mode `on` only).
-  /// [clock]: a clock rule; when its bubble is gated it returns null and is retried at the next tick.
+  // once: memory key consumed when the reaction is shown. egg: easter egg (mode `on` only).
+  // clock: a clock rule; when its bubble is gated it returns null and is retried at the next tick.
   Reaction? _out(
     Reaction r, {
     String? once,
@@ -399,13 +397,13 @@ class ReactionEngine {
       final cooling =
           r.spontaneous &&
           last != null &&
-          now().difference(last) < const Duration(minutes: 10);
+          _now().difference(last) < const Duration(minutes: 10);
       if (typing || cooling) {
         // Never a bubble while the terminal is typed in; cooldown only for spontaneous ones.
         if (clock) return null; // nothing consumed, retried later
         line = null; // the mood still shows
       } else if (r.spontaneous) {
-        _lastSpontaneous = now();
+        _lastSpontaneous = _now();
       }
     }
     if (once != null) {
@@ -414,9 +412,7 @@ class ReactionEngine {
     }
     return Reaction(
       r.mood,
-      accessory: r.mood.serious
-          ? null
-          : r.accessory, // no accessory on a serious face
+      accessory: r.accessory,
       line: line,
       params: r.params,
       important: r.important,

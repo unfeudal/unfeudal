@@ -45,11 +45,12 @@ void main() {
     final key = SymmetricCipher.newKey();
     final mirror = LocalMirror.inMemory()
       ..upsertItems([
+        // Updated 2026-10-14, no pin.
         await sealItem(
           key,
           meta: hostJson('web'),
           createdAt: DateTime.utc(2026, 10, 1),
-        ), // updated 2026-10-14, no pin
+        ),
         await sealItem(key, meta: hostJson('db (conflict copy)')),
         await sealItem(
           key,

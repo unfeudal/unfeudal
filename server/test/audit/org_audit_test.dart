@@ -24,34 +24,69 @@ void main() {
   Future<List<List<String>>> since(String scope, int n) async =>
       (await actions(s, scope)).skip(n).toList();
 
-  test('org management: one event each in org:<id>, actor = caller; org.deleted in the instance chain', () async {
-    final (o, a) = (w['olivia'].accessToken, w['adam'].accessToken);
-    final (prod, mia, max) = (w.folder('prod'), w.id('mia'), w.id('max'));
+  test(
+    'org management: one member event each in org:<id>, actor = caller',
+    () async {
+      final (o, a) = (w['olivia'].accessToken, w['adam'].accessToken);
+      final (mia, max) = (w.id('mia'), w.id('max'));
+      final n = (await actions(s, org())).length;
+      expect(
+        (await s.put(
+          '/api/v1/orgs/${w.orgId}',
+          token: o,
+          body: {'name': 'Acme 2'},
+        )).status,
+        204,
+      );
+      expect(
+        (await s.put(
+          '/api/v1/orgs/${w.orgId}/members/$mia',
+          token: o,
+          body: {'role': 'admin'},
+        )).status,
+        204,
+      );
+      expect(
+        (await s.post(
+          '/api/v1/orgs/${w.orgId}/members/$max/confirm',
+          token: a,
+        )).status,
+        204,
+      );
+      expect(
+        (await s.delete(
+          '/api/v1/orgs/${w.orgId}/members/$mia',
+          token: o,
+        )).status,
+        204,
+      );
+      expect(
+        (await s.delete(
+          '/api/v1/orgs/${w.orgId}/members/$max',
+          token: w['max'].accessToken,
+        )).status,
+        204,
+      );
+      final events = await auditEvents(s, org());
+      expect(await since(org(), n), [
+        ['org.updated', w.orgId],
+        ['member.role_changed', mia],
+        ['member.confirmed', max],
+        ['member.removed', mia],
+        ['member.removed', max],
+      ]);
+      expect(
+        [events[n].actorUser, events.last.actorUser],
+        [w.id('olivia'), max],
+      );
+    },
+  );
+
+  test('org management: one team and ACL event each in org:<id>', () async {
+    final a = w['adam'].accessToken;
+    final (prod, max) = (w.folder('prod'), w.id('max'));
+    await s.post('/api/v1/orgs/${w.orgId}/members/$max/confirm', token: a);
     final n = (await actions(s, org())).length;
-    final m = (await actions(s, 'instance')).length;
-    expect(
-      (await s.put(
-        '/api/v1/orgs/${w.orgId}',
-        token: o,
-        body: {'name': 'Acme 2'},
-      )).status,
-      204,
-    );
-    expect(
-      (await s.put(
-        '/api/v1/orgs/${w.orgId}/members/$mia',
-        token: o,
-        body: {'role': 'admin'},
-      )).status,
-      204,
-    );
-    expect(
-      (await s.post(
-        '/api/v1/orgs/${w.orgId}/members/$max/confirm',
-        token: a,
-      )).status,
-      204,
-    );
     final team = await s.post(
       '/api/v1/orgs/${w.orgId}/teams',
       token: a,
@@ -90,6 +125,23 @@ void main() {
       (await s.delete('/api/v1/orgs/${w.orgId}/teams/$t', token: a)).status,
       204,
     );
+    expect(await since(org(), n), [
+      ['team.created', t],
+      ['team.updated', t],
+      ['acl.changed', prod],
+      ['team.deleted', t],
+    ]);
+  });
+
+  test('org management: one key and rotation event each in org:<id>', () async {
+    final (o, a) = (w['olivia'].accessToken, w['adam'].accessToken);
+    final (prod, mia) = (w.folder('prod'), w.id('mia'));
+    await s.put(
+      '/api/v1/orgs/${w.orgId}/members/$mia',
+      token: o,
+      body: {'role': 'admin'},
+    );
+    final n = (await actions(s, org())).length;
     expect(
       (await s.put(
         '/api/v1/folders/$prod/keys',
@@ -116,11 +168,12 @@ void main() {
       )).status,
       204,
     );
+    // A pending rotation at version 2 is what rotation/done clears.
     await s.db.execute(
       "INSERT INTO pending_rotations (org_id, folder_id, reason, removed_user_ids, rotated_version) "
       "VALUES (@o, @f, 'member_removed', '[]', 2) ON CONFLICT (folder_id) DO NOTHING",
       {'o': w.orgId, 'f': prod},
-    ); // the team deletion may have queued it
+    );
     expect(
       (await w.put(
         w['olivia'],
@@ -138,44 +191,36 @@ void main() {
       204,
       reason: 'nothing to clear: no event',
     );
-    expect(
-      (await s.delete('/api/v1/orgs/${w.orgId}/members/$mia', token: o)).status,
-      204,
-    );
-    expect(
-      (await s.delete(
-        '/api/v1/orgs/${w.orgId}/members/$max',
-        token: w['max'].accessToken,
-      )).status,
-      204,
-    );
-    final events = await auditEvents(s, org());
     expect(await since(org(), n), [
-      ['org.updated', w.orgId],
-      ['member.role_changed', mia],
-      ['member.confirmed', max],
-      ['team.created', t],
-      ['team.updated', t],
-      ['acl.changed', prod],
-      ['team.deleted', t],
       ['folder.keys_shared', prod],
       ['folder.keys_rotated', prod],
       ['item.updated', prod],
       ['folder.rotation_done', prod],
-      ['member.removed', mia],
-      ['member.removed', max],
     ]);
-    expect([events[n].actorUser, events.last.actorUser], [w.id('olivia'), max]);
-    expect((await s.delete('/api/v1/orgs/${w.orgId}', token: o)).status, 204);
-    expect(await since('instance', m), [
-      ['org.deleted', w.orgId],
-    ]);
-    expect(
-      await actions(s, org()),
-      hasLength(events.length),
-      reason: 'the org chain stays',
-    );
   });
+
+  test(
+    'org deletion: org.deleted in the instance chain; the org chain stays',
+    () async {
+      final events = await auditEvents(s, org());
+      final m = (await actions(s, 'instance')).length;
+      expect(
+        (await s.delete(
+          '/api/v1/orgs/${w.orgId}',
+          token: w['olivia'].accessToken,
+        )).status,
+        204,
+      );
+      expect(await since('instance', m), [
+        ['org.deleted', w.orgId],
+      ]);
+      expect(
+        await actions(s, org()),
+        hasLength(events.length),
+        reason: 'the org chain stays',
+      );
+    },
+  );
 
   test(
     'invites: created, revoked once, accepted by join and by a new account',
@@ -253,7 +298,7 @@ void main() {
     },
   );
 
-  test('admin: disable and enable (instance, then each org), delete user, delete org', () async {
+  test('admin: disable and enable (instance, then each org)', () async {
     final (io, mia) = (w.io.accessToken, w.id('mia'));
     final n = (await actions(s, org())).length;
     final m = (await actions(s, 'instance')).length;
@@ -273,6 +318,20 @@ void main() {
       )).status,
       204,
     );
+    expect(await since(org(), n), [
+      ['admin.user_disabled', mia],
+      ['admin.user_enabled', mia],
+    ]);
+    expect(await since('instance', m), [
+      ['admin.user_disabled', mia],
+      ['admin.user_enabled', mia],
+    ]);
+  });
+
+  test('admin: delete user, then delete org', () async {
+    final (io, mia) = (w.io.accessToken, w.id('mia'));
+    final n = (await actions(s, org())).length;
+    final m = (await actions(s, 'instance')).length;
     expect((await s.delete('/api/v1/admin/users/$mia', token: io)).status, 204);
     expect(
       (await s.delete(
@@ -283,13 +342,9 @@ void main() {
       204,
     );
     expect(await since(org(), n), [
-      ['admin.user_disabled', mia],
-      ['admin.user_enabled', mia],
       ['member.removed', mia],
     ]);
     expect(await since('instance', m), [
-      ['admin.user_disabled', mia],
-      ['admin.user_enabled', mia],
       ['account.deleted', mia],
       ['org.deleted', w.orgId],
     ]);

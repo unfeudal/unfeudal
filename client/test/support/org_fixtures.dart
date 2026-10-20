@@ -197,9 +197,6 @@ class ClientOrg {
     this.publicKey,
   );
 
-  /// Writes only queue (tests push with `sync.syncNow()`), as `testVault`.
-  Future<void> write(Item item) async =>
-      mirror.enqueue(item, baseRevision: item.revision ?? 0);
   final SyncHarness h;
   final ApiClient api;
   final LocalMirror mirror;

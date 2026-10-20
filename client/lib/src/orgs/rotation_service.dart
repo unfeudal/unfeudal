@@ -10,11 +10,8 @@ import 'block_permissions.dart';
 import 'folder_keyring.dart';
 import 'member_pins.dart';
 
-class RotationReport {
-  RotationReport(this.done, this.blocked);
-  final Set<String> done; // folders whose rotation finished this run
-  final Set<String> blocked; // readers to confirm before the rotation can go on
-}
+/// [done]: folders whose rotation finished this run. [blocked]: readers to confirm before the rotation can go on.
+typedef RotationReport = ({Set<String> done, Set<String> blocked});
 
 /// Admin clients rotate a folder's keys when a reader lost access, then re-seal its items.
 class RotationService {
@@ -43,7 +40,7 @@ class RotationService {
     final done = <String>{};
     final blocked = _blocked = {};
     for (final p in block.pendingRotations) {
-      if (!block.orgs.any((o) => o.id == p.orgId && o.isAdmin)) continue;
+      if (!block.isAdminOf(p.orgId)) continue;
       try {
         if (await rotate(block, p.orgId, p.folderId)) done.add(p.folderId);
       } on ApiException {
@@ -52,7 +49,7 @@ class RotationService {
         // stays pending: retried on the next block
       }
     }
-    return RotationReport(done, blocked);
+    return (done: done, blocked: blocked);
   }
 
   // ponytail: re-seals one folder at a time; batch when a folder holds thousands of items.
@@ -74,13 +71,10 @@ class RotationService {
             !removed.contains(m.userId) &&
             m.disabled != true,
       )) {
-        final perms = explainFromBlock(
-          block,
-          orgId,
-          m.userId,
-          folderId,
-        ).effective;
-        if (!perms.contains(Permission.view) || m.publicKey == null) continue;
+        final access = FolderKeyAccess.of(
+          explainFromBlock(block, orgId, m.userId, folderId).effective,
+        );
+        if (!access.hasMeta || m.publicKey == null) continue;
         if (m.userId != userId &&
             pins.check(m.userId, m.publicKey!) != PinCheck.matches) {
           _blocked.add(m.userId); // unpinned: the admin confirms them first; changed: alert. Never pinned here.
@@ -92,7 +86,7 @@ class RotationService {
             folderId: folderId,
             recipientPublicKey: m.publicKey!,
             userId: m.userId,
-            withSecret: perms.contains(Permission.connect),
+            withSecret: access.hasSecret,
           ),
         );
       }
@@ -115,15 +109,16 @@ class RotationService {
       await keyring.put(folderId, next);
       keys = next;
     }
-    for (final item in mirror.items().where(
-      (i) =>
-          !i.purged &&
-          (i.id == folderId || (i.folderId == folderId && i.type != 'folder')),
-    )) {
-      if (KeyIds.parseFolder(item.meta!.keyId)?.version != keys.version) {
-        await writer.reseal(item, keys);
-      }
-    }
+    await writer.resealAll(
+      mirror.items().where(
+        (i) =>
+            !i.purged &&
+            (i.id == folderId ||
+                (i.folderId == folderId && i.type != 'folder')) &&
+            KeyIds.parseFolder(i.meta!.keyId)?.version != keys.version,
+      ),
+      keys,
+    );
     await sync.syncNow();
     if (mirror.outbox().any(
       (e) => e.item.id == folderId || e.item.folderId == folderId,

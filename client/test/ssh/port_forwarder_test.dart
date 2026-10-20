@@ -10,7 +10,6 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../support/fakes.dart';
 
-/// Whatever the local client writes comes back.
 class _Echo implements SSHSocket {
   final _back = StreamController<Uint8List>();
   late final _in = StreamController<List<int>>()

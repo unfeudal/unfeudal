@@ -14,19 +14,19 @@ class MemberRow {
       status = MemberStatus.values.byName(row['status']! as String),
       disabled = row['disabled'] == 1,
       email = row['email'] as String? ?? '',
-      publicKey = switch (row['bundle']) {
-        final String bundle =>
-          (jsonDecode(bundle) as Map)['publicKey'] as String?,
-        _ => null,
-      };
+      _bundle = row['bundle'] as String?;
 
   final OrgRole role;
   final MemberStatus status;
   final bool disabled;
   final String email;
+  final String? _bundle;
 
-  /// b64 of `bundle.publicKey`, null when the bundle has none.
-  final String? publicKey;
+  /// b64 of `bundle.publicKey`, null when the bundle has none; decoded on first read.
+  late final String? publicKey = switch (_bundle) {
+    final String bundle => (jsonDecode(bundle) as Map)['publicKey'] as String?,
+    _ => null,
+  };
 
   bool get isAdmin =>
       status == MemberStatus.confirmed && !disabled && role != OrgRole.member;
@@ -36,7 +36,7 @@ typedef OrgTeam = ({String name, Set<String> memberIds});
 
 /// One org as the permission rules see it, read in one transaction.
 class OrgSnapshot {
-  const OrgSnapshot({
+  OrgSnapshot({
     required this.orgId,
     required this.name,
     required this.members,
@@ -54,12 +54,28 @@ class OrgSnapshot {
   /// Live folders to their parent: trashed ones included, purged ones out.
   final Map<String, String?> folders;
 
+  // Built on first use: a snapshot is never mutated after loadOrg, without and withParent copy.
+  late final _aclIndex = AclIndex(acl);
+  late final Map<String, Set<String>> _teamIdsByUser = () {
+    final out = <String, Set<String>>{};
+    for (final MapEntry(:key, :value) in teams.entries) {
+      for (final userId in value.memberIds) {
+        out.putIfAbsent(userId, () => {}).add(key);
+      }
+    }
+    return out;
+  }();
+  late final Map<String?, List<String>> _childrenOf = () {
+    final out = <String?, List<String>>{};
+    for (final MapEntry(:key, :value) in folders.entries) {
+      out.putIfAbsent(value, () => []).add(key);
+    }
+    return out;
+  }();
+
   String? parentOf(String id) => folders[id];
 
-  Set<String> teamIdsOf(String userId) => {
-    for (final MapEntry(:key, :value) in teams.entries)
-      if (value.memberIds.contains(userId)) key,
-  };
+  Set<String> teamIdsOf(String userId) => _teamIdsByUser[userId] ?? const {};
 
   /// [folderId] then its descendants.
   List<String> subtree(String folderId) {
@@ -68,8 +84,8 @@ class OrgSnapshot {
     void walk(String id) {
       if (!seen.add(id)) return;
       out.add(id);
-      for (final MapEntry(:key, :value) in folders.entries) {
-        if (value == id) walk(key);
+      for (final child in _childrenOf[id] ?? const <String>[]) {
+        walk(child);
       }
     }
 
@@ -83,10 +99,10 @@ class OrgSnapshot {
       if (permissionsOf(this, userId, f).contains(Permission.view)) f,
   };
 
-  /// Viewable folders and their ancestors.
-  Set<String> tree(String userId) {
+  /// Viewable folders and their ancestors; [viewable] skips recomputing them.
+  Set<String> tree(String userId, {Set<String>? viewable}) {
     final out = <String>{};
-    for (final f in viewable(userId)) {
+    for (final f in viewable ?? this.viewable(userId)) {
       for (String? at = f; at != null && out.add(at); at = parentOf(at)) {}
     }
     return out;
@@ -195,9 +211,48 @@ Set<Permission> permissionsOf(OrgSnapshot org, String userId, String folderId) {
     teamIds: org.teamIdsOf(userId),
     folderId: folderId,
     parentOf: org.parentOf,
-    entries: org.acl,
+    acl: org._aclIndex,
   ).effective;
 }
+
+/// [item] (owner_user_id, org_id, folder_id, type) is [userId]'s personal item, or an org item where they hold
+/// [need] on its key folder; else 404, never 403. [orgs] memoizes snapshots across calls in one request.
+Future<void> requireItemAccess(
+  Tx tx,
+  Map<String, Object?> item, {
+  required String itemId,
+  required String userId,
+  required Permission need,
+  Map<String, OrgSnapshot?>? orgs,
+}) async {
+  final orgId = item['org_id'] as String?;
+  if (orgId == null) {
+    if (item['owner_user_id'] != userId) throw ApiError.notFound();
+    return;
+  }
+  final snapshots = orgs ?? {};
+  final org = snapshots[orgId] ??=
+      await loadOrg(tx, orgId) ?? (throw ApiError.notFound());
+  final folder = keyFolderIdOf(
+    type: item['type']! as String,
+    id: itemId,
+    folderId: item['folder_id'] as String?,
+  )!;
+  if (!permissionsOf(org, userId, folder).contains(need)) {
+    throw ApiError.notFound();
+  }
+}
+
+/// The meta, and the secret when there is one, sealed with [folderId]'s keys at [version].
+bool sealedWithFolderKeys(
+  Object? metaKeyId,
+  Object? secretKeyId,
+  String folderId,
+  int version,
+) =>
+    metaKeyId == KeyIds.folder(folderId, version, PayloadPart.meta) &&
+    (secretKeyId == null ||
+        secretKeyId == KeyIds.folder(folderId, version, PayloadPart.secret));
 
 /// No row, or an unconfirmed one when [confirmed]: 404; a missing role: 403.
 Future<MemberRow> requireMember(
@@ -225,6 +280,17 @@ Future<MemberRow> requireMember(
     throw ApiError(ApiErrorCode.forbidden, 'Your role does not allow this.');
   }
   return row;
+}
+
+/// Admin and owner roles are an owner's to grant, change or revoke: else 403 [message].
+void requireRoleManager(
+  MemberRow caller,
+  Iterable<OrgRole> touched,
+  String message,
+) {
+  if (caller.role != OrgRole.owner && touched.any((r) => r != OrgRole.member)) {
+    throw ApiError(ApiErrorCode.forbidden, message);
+  }
 }
 
 bool _liveOwner(MemberRow m) =>

@@ -28,7 +28,7 @@ ConnectTarget target({IdentitySecret? identity}) => ConnectTarget(
   identity: identity,
 );
 
-/// A shell with an 80×24 PTY over a direct connection.
+/// A shell with an 80x24 PTY over a direct connection.
 Future<SshShell> connect(ConnectTarget target, SshCallbacks callbacks) async =>
     (await SshConnector().connectHop(target, callbacks)).shell();
 

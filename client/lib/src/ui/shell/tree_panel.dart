@@ -62,7 +62,7 @@ class _TreePanelState extends State<TreePanel> {
   final _collapsed = <String>{};
   ({String id, DateTime at})? _lastTap;
 
-  /// The row the last click selected: highlighted, with its address and pencil.
+  // The row the last click selected: highlighted, with its address and pencil.
   String? _selected;
 
   @override
@@ -96,7 +96,7 @@ class _TreePanelState extends State<TreePanel> {
     _palette.hide();
   }
 
-  /// Closes the palette, then runs [action].
+  // Closes the palette first, then runs the action.
   VoidCallback _thenClose(VoidCallback? action) => () {
     _closePalette();
     action?.call();
@@ -112,7 +112,7 @@ class _TreePanelState extends State<TreePanel> {
     final orgs = state.orgs;
     final orgId = orgs?.selected;
     final org = orgs?.byId(orgId);
-    final awaiting = org != null && org.status != 'confirmed';
+    final awaiting = org != null && !org.isConfirmed;
     final online = state.sync?.online ?? false;
     // an org vault: folders need the server, and both buttons need edit somewhere in the cached block
     final orgEdit =
@@ -251,11 +251,10 @@ class _TreePanelState extends State<TreePanel> {
                   ),
                 )
               : UfStagger(
-                  child: ListView(
-                    children: [
-                      for (final (i, row) in rows.indexed)
-                        UfStaggerItem(index: i, child: row),
-                    ],
+                  child: ListView.builder(
+                    itemCount: rows.length,
+                    itemBuilder: (context, i) =>
+                        UfStaggerItem(index: i, child: rows[i]),
                   ),
                 ),
         ),
@@ -263,8 +262,8 @@ class _TreePanelState extends State<TreePanel> {
     );
   }
 
-  /// Hosts of this vault matching the query, then snippets of this vault and the personal one (inserted into
-  /// the active session), then the actions the panel allows.
+  // Hosts of this vault matching the query, then snippets of this vault and the personal one (inserted into
+  // the active session), then the actions the panel allows.
   List<UfPaletteGroup> _paletteGroups(
     BuildContext context,
     AppState state, {
@@ -286,7 +285,7 @@ class _TreePanelState extends State<TreePanel> {
             e.state != EntryState.unsupported &&
             _matches(e, query))
           e,
-    ]..sort((a, b) => (a.name ?? '').compareTo(b.name ?? ''));
+    ]..sort(byName);
     final tab = state.activeSession;
     final canInsert = tab?.state == SealState.connected;
     final snippets = [
@@ -349,7 +348,7 @@ class _TreePanelState extends State<TreePanel> {
     ];
   }
 
-  /// `user@address:port` of a host, from its resolved values.
+  // `user@address:port` of a host, from its resolved values.
   static String? _target(AppState state, String hostId) =>
       switch (state.vault?.hostLookup(hostId)) {
         (:final meta, :final resolved, org: _) => [
@@ -360,7 +359,7 @@ class _TreePanelState extends State<TreePanel> {
         null => null,
       };
 
-  /// Hosts, folders, and the entries the tree must label (unreadable, newer type).
+  // Hosts, folders, and the entries the tree must label (unreadable, newer type).
   static bool _shown(VaultEntry e) =>
       e.kind == ItemKind.host ||
       e.kind == ItemKind.folder ||
@@ -381,7 +380,7 @@ class _TreePanelState extends State<TreePanel> {
     );
   }
 
-  /// Folders nested under their parent (a stored loop is cut by the seen-set); orphans at the root.
+  // Folders nested under their parent (a stored loop is cut by the seen-set); orphans at the root.
   List<Widget> _tree(
     BuildContext context,
     AppState state,
@@ -399,8 +398,7 @@ class _TreePanelState extends State<TreePanel> {
     final out = <Widget>[];
     final seen = <String>{};
     void walk(String? parent, int depth) {
-      final items = [...?children[parent]]
-        ..sort((a, b) => (a.name ?? '').compareTo(b.name ?? ''));
+      final items = [...?children[parent]]..sort(byName);
       for (final e in items.where(
         (e) => e.kind == ItemKind.folder && folders.containsKey(e.id),
       )) {
@@ -430,7 +428,7 @@ class _TreePanelState extends State<TreePanel> {
     icon: const Icon(UfIcons.pencil),
   );
 
-  /// Access (with manage) and why, for an org folder.
+  // Access (with manage) and why, for an org folder.
   List<Widget> _orgFolderButtons(BuildContext context, VaultEntry e) {
     final l = AppLocalizations.of(context);
     final (:access, :why) = orgFolderAccessActions(context, e.orgId!, e.id);
@@ -513,7 +511,6 @@ class _TreePanelState extends State<TreePanel> {
     );
   }
 
-  /// 13.5 px; a selected row is `accentText` in 600.
   static TextStyle _rowStyle(BuildContext context, bool selected) {
     final colors = UfColors.of(context);
     return Theme.of(context).textTheme.bodyMedium!.copyWith(

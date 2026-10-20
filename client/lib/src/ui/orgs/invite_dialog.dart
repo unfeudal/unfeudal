@@ -17,6 +17,7 @@ import '../../design/inputs.dart';
 import '../../design/rows.dart';
 import '../../design/tokens.dart';
 import '../busy_action.dart';
+import '../fields.dart';
 import '../save_file.dart';
 import 'members_screen.dart';
 
@@ -70,21 +71,20 @@ class _InviteDialogState extends State<InviteDialog> with BusyAction {
       width: 480,
       actions: [
         CancelButton(onPressed: () => Navigator.of(context).maybePop()),
-        FilledButton(
+        BusyButton(
           key: const Key('invite-create'),
-          onPressed: busy ? null : _create,
-          child: BusyLabel(busy: busy, label: l.inviteCreate),
+          busy: busy,
+          onPressed: _create,
+          label: l.inviteCreate,
         ),
       ],
       children: [
-        UfField(
-          label: l.inviteEmail,
-          child: TextField(
-            key: const Key('invite-email'),
-            controller: _email,
-            autofocus: true,
-            keyboardType: TextInputType.emailAddress,
-          ),
+        keyedField(
+          'invite-email',
+          _email,
+          l.inviteEmail,
+          autofocus: true,
+          keyboard: TextInputType.emailAddress,
         ),
         UfField(
           label: l.inviteRole,
@@ -133,7 +133,7 @@ class InviteResult extends StatelessWidget {
       spacing: 8,
       children: [
         Text(created.mailSent ? l.inviteMailSent : l.inviteShare),
-        UfReadOnlyField(value: created.link, mono: true),
+        UfReadOnlyField(value: created.link),
         Row(
           spacing: 8,
           children: [

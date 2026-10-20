@@ -33,6 +33,17 @@ void main() {
     expect(h.requests.where((r) => r == 'GET /api/v1/sync'), hasLength(3));
   });
 
+  test('the vault reloads after a round that changed the mirror, not after an idle one', () async {
+    final h = SyncHarness();
+    final (e, _, _) = await h.engine();
+    var reloads = 0;
+    e.onChanged = () async => reloads++;
+    h.serverPut(wireItem(newId(), revision: 0));
+    await e.syncNow();
+    await e.syncNow();
+    expect(reloads, 1);
+  });
+
   test('an edit made during the push is rebased and pushed next, without a conflict', () async {
     final h = SyncHarness();
     final copies = <Item>[];
@@ -40,10 +51,8 @@ void main() {
     final id = newId();
     h.onPut = (_) {
       h.onPut = null;
-      m.enqueue(
-        wireItem(id, revision: 0, deleted: true),
-        baseRevision: 0,
-      ); // user edits while the PUT flies
+      // The user edits while the PUT is in flight.
+      m.enqueue(wireItem(id, revision: 0, deleted: true), baseRevision: 0);
     };
     await e.write(wireItem(id, revision: 0));
     await e.syncNow();
@@ -62,10 +71,8 @@ void main() {
     await e.syncNow();
     expect(m.item(id)!.updatedDevice, isNot(e.deviceId));
     expect(copies, hasLength(1));
-    expect(
-      h.serverItem(copies.single.id),
-      isNotNull,
-    ); // pushed by the follow-up round of this syncNow
+    // Pushed by the follow-up round of this syncNow.
+    expect(h.serverItem(copies.single.id), isNotNull);
     expect(m.outbox(), isEmpty);
   });
 
@@ -79,12 +86,10 @@ void main() {
       final mine = wireItem(id, revision: 0);
       h.offline = true;
       await e.write(mine);
+      // Stored as this device; the answer never arrived.
       h
         ..offline = false
-        ..serverPut(
-          mine,
-          deviceId: login.deviceId,
-        ); // stored as this device; the answer never arrived
+        ..serverPut(mine, deviceId: login.deviceId);
       await e.syncNow();
       expect(copies, isEmpty);
       expect(m.outbox(), isEmpty);

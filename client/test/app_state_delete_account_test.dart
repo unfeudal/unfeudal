@@ -26,7 +26,7 @@ Future<(SyncHarness, AppState, FakeSecureKv, Directory)> signedIn() async {
     openMirror: (id) async => LocalMirror.open('${dir.path}/mirror-$id.sqlite'),
     httpClient: h.client,
     biometrics: FakeBiometricBackend(),
-    allowTestingKdf: true,
+    kdfFloor: KdfParams.testing,
     kdf: KdfParams.testing,
   );
   await s.boot();

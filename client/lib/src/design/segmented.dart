@@ -89,7 +89,7 @@ class _UfSegmentedState<T> extends State<UfSegmented<T>>
   }
 }
 
-/// 28 px, 12 px sides, 12/600: `muted` at rest, `text` when picked or hovered, a 2 px ring on keyboard focus.
+// 28 px, 12 px sides, 12/600: `muted` at rest, `text` when picked or hovered, a 2 px ring on keyboard focus.
 class _Segment extends StatefulWidget {
   const _Segment({required this.selected, this.onTap, required this.child});
 
@@ -152,7 +152,7 @@ class _SegmentState extends State<_Segment> {
   }
 }
 
-/// Lays the segments in a row 2 px apart, then the pill (first child) between the rects of [from] and [to].
+// Lays the segments in a row 2 px apart, then the pill (first child) between the rects of from and to.
 class _Track extends MultiChildRenderObjectWidget {
   const _Track({
     required this.slide,

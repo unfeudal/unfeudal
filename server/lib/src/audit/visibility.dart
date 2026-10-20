@@ -5,6 +5,7 @@ import '../api/errors.dart';
 import '../api/middleware.dart';
 import '../db/db.dart';
 import '../orgs/org_access.dart';
+import 'audit_log.dart';
 
 class AuditQuery {
   const AuditQuery({
@@ -28,7 +29,7 @@ Future<AuditQuery> resolveAuditQuery(
   final io = auth.isInstanceOwner;
   if (scope == 'me') return AuditQuery(actor: auth.userId, rawIps: io);
   if (scope == 'user') {
-    return AuditQuery(scope: 'user:${auth.userId}', rawIps: io);
+    return AuditQuery(scope: AuditScope.user(auth.userId).wire, rawIps: io);
   }
   if (scope == 'instance') {
     if (!io) throw ApiError(ApiErrorCode.forbidden, 'Instance Owner only.');
@@ -45,15 +46,11 @@ Future<AuditQuery> resolveAuditQuery(
     })).isEmpty) {
       // a deleted org's chain: Instance Owner only
       if (!io) throw ApiError.notFound();
-      return AuditQuery(scope: 'org:$id', rawIps: true);
+      return AuditQuery(scope: AuditScope.org(id).wire, rawIps: true);
     }
-    await requireMember(
-      tx,
-      id,
-      auth.userId,
-      admin: true,
-    ); // not a confirmed member → 404, not admin → 403
-    return AuditQuery(scope: 'org:$id', rawIps: io);
+    // A caller who is not a confirmed member gets 404; a member who is not admin gets 403.
+    await requireMember(tx, id, auth.userId, admin: true);
+    return AuditQuery(scope: AuditScope.org(id).wire, rawIps: io);
   }
   final orgId = await liveOrgFolder(tx, id);
   await requireMember(tx, orgId, auth.userId); // 404
@@ -67,7 +64,7 @@ Future<AuditQuery> resolveAuditQuery(
     {'o': orgId},
   );
   return AuditQuery(
-    scope: 'org:$orgId',
+    scope: AuditScope.org(orgId).wire,
     rawIps: io,
     targets: {
       ...folders,

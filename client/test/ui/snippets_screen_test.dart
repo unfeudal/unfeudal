@@ -172,23 +172,19 @@ void main() {
     await t.pumpAndSettle();
     await t.tap(find.byKey(const Key('multiline-send')));
     await pumpReal(t, rounds: 3);
-    expect(
-      utf8.decode(shell.written.last),
-      'cd /srv\rmake',
-    ); // paste sends a line break as \r
+    // Paste sends a line break as \r.
+    expect(utf8.decode(shell.written.last), 'cd /srv\rmake');
   });
 
   testWidgets(
     'no connected tab: insert disabled; read-only: new, edit and delete disabled',
     (t) async {
-      final s = await signedInState(
-        t,
-        harness: SyncHarness(minClient: '9.0.0'),
-      );
+      final h = SyncHarness(minClient: '9.0.0');
+      final s = await signedInState(t, harness: h);
       late String id;
       await t.runAsync(() async {
         final item = await sealItem(
-          s.vault!.debugKey,
+          h.accounts[testEmail]!.account!.unlocked.userKey,
           type: 'snippet',
           meta: {
             'schemaVersion': 1,

@@ -32,6 +32,10 @@ enum UnauthorizedReason {
   const UnauthorizedReason(this.wire);
 
   final String wire;
+
+  /// Null for no reason or one this version does not know.
+  static UnauthorizedReason? fromWire(String? wire) =>
+      values.where((r) => r.wire == wire).firstOrNull;
 }
 
 enum ConflictReason {

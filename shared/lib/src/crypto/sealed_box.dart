@@ -73,7 +73,7 @@ abstract final class SealedBox {
     );
   }
 
-  /// key = hkdf32(X25519, `unfeudal/sealed/v1|<purpose>|<b64 ephPub>|<b64 recipientPub>`); all-zero X25519 refused.
+  // key = hkdf32(X25519, `unfeudal/sealed/v1|<purpose>|<b64 ephPub>|<b64 recipientPub>`); all-zero X25519 refused.
   static Future<Uint8List> _key(
     SimpleKeyPair mine,
     List<int> theirs,

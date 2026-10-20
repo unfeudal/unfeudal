@@ -2,6 +2,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
@@ -11,7 +12,7 @@ import '../../design/field.dart';
 import '../../design/icons.dart';
 import '../../design/tokens.dart';
 import '../../session/lock_machine.dart';
-import '../describe_error.dart';
+import '../busy_action.dart';
 import '../onboarding/recovery_screen.dart';
 import 'lock_frame.dart';
 
@@ -23,24 +24,20 @@ class UnlockScreen extends StatefulWidget {
   State<UnlockScreen> createState() => _UnlockScreenState();
 }
 
-class _UnlockScreenState extends State<UnlockScreen> {
+class _UnlockScreenState extends State<UnlockScreen> with BusyAction {
   late final AppState _state = AppScope.read(context);
   late final LockMachine _machine = _state.lockMachine;
   final _password = TextEditingController();
   final _focus = FocusNode();
-  Object? _error;
 
-  /// Bumped by a refused password, to shake the field.
+  // Bumped by a refused password, to shake the field.
   int _shakes = 0;
 
-  /// The key derivation takes seconds: one at a time, the button waits for it.
-  bool _busy = false;
-
-  /// A stored biometric wrap the server still allows.
+  // A stored biometric wrap the server still allows.
   late final Future<bool> _biometric = _biometricEnabled();
 
   Future<bool> _biometricEnabled() async =>
-      _state.serverHas('biometric_unlock') &&
+      _state.serverHas(Flag.biometricUnlock) &&
       (await _state.biometric?.isEnabled() ?? false);
 
   @override
@@ -66,24 +63,17 @@ class _UnlockScreenState extends State<UnlockScreen> {
 
   void _onMachine() => setState(() {});
 
-  Future<void> _submit() async {
-    if (_busy) return;
-    setState(() => _busy = true);
+  // The key derivation takes seconds: one at a time, the button waits for it.
+  Future<void> _submit() => run(() async {
     _machine.submit();
-    try {
-      await _state.unlock(_password.text);
-      _machine.succeed();
-    } on Exception catch (e) {
-      _machine.fail(); // AppState already failed the machine on a wrong password; this covers the rest
-      if (mounted) {
-        setState(() {
-          _error = e;
-          _shakes++;
-        });
-      }
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
+    await _state.unlock(_password.text);
+    _machine.succeed();
+  });
+
+  @override
+  void failed(Object error) {
+    _machine.fail(); // AppState already failed the machine on a wrong password; this covers the rest
+    setState(() => _shakes++);
   }
 
   @override
@@ -113,7 +103,7 @@ class _UnlockScreenState extends State<UnlockScreen> {
                 controller: _password,
                 focusNode: _focus,
                 obscureText: !peeking,
-                readOnly: _busy,
+                readOnly: busy,
                 onChanged: (_) {
                   _machine.input();
                   setState(() {});
@@ -131,12 +121,13 @@ class _UnlockScreenState extends State<UnlockScreen> {
               ),
             ),
           ),
-          if (_error case final error?) UfErrorLine(describeError(l, error)),
+          if (problem case final problem?) UfErrorLine(problem),
           LockActions(
-            primary: FilledButton(
+            primary: BusyButton(
               key: const Key('unlock-submit'),
-              onPressed: _busy ? null : _submit,
-              child: BusyLabel(busy: _busy, label: l.unlockSubmit),
+              busy: busy,
+              onPressed: _submit,
+              label: l.unlockSubmit,
             ),
             links: [
               FutureBuilder(
@@ -144,7 +135,7 @@ class _UnlockScreenState extends State<UnlockScreen> {
                 builder: (context, enabled) => enabled.data ?? false
                     ? TextButton(
                         key: const Key('unlock-biometric'),
-                        onPressed: _busy ? null : _state.unlockWithBiometrics,
+                        onPressed: busy ? null : _state.unlockWithBiometrics,
                         child: Text(
                           Platform.isMacOS
                               ? l.unlockBiometricMac
@@ -157,7 +148,7 @@ class _UnlockScreenState extends State<UnlockScreen> {
                 onPressed: _state.signOut,
                 child: Text(l.unlockRelogin),
               ),
-              if (state.serverHas('recovery_kit'))
+              if (state.serverHas(Flag.recoveryKit))
                 TextButton(
                   onPressed: () => Navigator.of(context).push(
                     MaterialPageRoute<void>(
@@ -174,7 +165,7 @@ class _UnlockScreenState extends State<UnlockScreen> {
   }
 }
 
-/// The known account on this device, in place of an e-mail field: its initial, name and address.
+// The known account on this device, in place of an e-mail field: its initial, name and address.
 class _AccountChip extends StatelessWidget {
   const _AccountChip({super.key, required this.email, this.name});
 

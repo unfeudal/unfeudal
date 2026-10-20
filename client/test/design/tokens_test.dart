@@ -107,21 +107,33 @@ void main() {
     }
   });
 
-  test('theme uses the bundled fonts, 6 px controls and flat surfaces', () {
+  test('theme rebuilds compare equal and carry their palette', () {
     for (final b in Brightness.values) {
       final t = ufTheme(b);
-      // state maps compare by value: an unequal rebuild would animate every theme change
+      // State maps compare by value: an unequal rebuild would animate every theme change.
       expect(ufTheme(b), t);
       expect(
         t.extension<UfColors>(),
         b == Brightness.light ? UfColors.light : UfColors.dark,
       );
+    }
+  });
+
+  test('theme uses the bundled fonts with tabular figures', () {
+    for (final b in Brightness.values) {
+      final t = ufTheme(b);
       expect(t.textTheme.bodyMedium!.fontFamily, 'HankenGrotesk');
       expect(t.textTheme.headlineMedium!.fontFamily, 'Alegreya');
       expect(
         t.textTheme.bodyMedium!.fontFeatures,
         contains(const FontFeature.tabularFigures()),
       );
+    }
+  });
+
+  test('theme uses 6 px controls and flat surfaces', () {
+    for (final b in Brightness.values) {
+      final t = ufTheme(b);
       final shape =
           t.filledButtonTheme.style!.shape!.resolve({})!
               as RoundedRectangleBorder;

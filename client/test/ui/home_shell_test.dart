@@ -68,7 +68,7 @@ void main() {
   );
 
   testWidgets(
-    'layout: sidebar 272 resizable within 220–400, saved per device',
+    'layout: sidebar 272 resizable within 220-400, saved per device',
     (t) async {
       final s = await shell(t);
       expect(t.getSize(find.byKey(const Key('tree-panel'))).width, 272);
@@ -121,6 +121,7 @@ void main() {
           meta: hostJson('retired-box'),
         );
         await v.trashItem(gone);
+        await s.sync!.syncNow();
         s.mirror!.upsertItems([
           await sealItem(SymmetricCipher.newKey(), meta: hostJson('x')),
         ]);

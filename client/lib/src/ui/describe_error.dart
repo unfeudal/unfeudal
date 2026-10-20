@@ -47,23 +47,27 @@ String describeError(AppLocalizations l, Object e) => switch (e) {
   _ => l.errorUnexpected('${e.runtimeType}'),
 };
 
-/// Exhaustive over [ApiErrorCode], no wildcard: a new code fails to compile until it has a sentence.
+// Exhaustive over ApiErrorCode and its reasons, no wildcard: a new code fails to compile until it has a sentence.
 String _api(AppLocalizations l, ApiException e) => switch (e.known) {
   null => l.errorUnexpected(e.code),
   ApiErrorCode.invalidRequest => l.errorInvalidRequest,
-  ApiErrorCode.unauthorized => switch (e.reason) {
-    null => l.errorUnauthorized,
-    'device_revoked' => l.errorDeviceRevoked,
-    _ => l.errorSessionExpired,
+  ApiErrorCode.unauthorized => switch (e.unauthorizedReason) {
+    null when e.reason == null => l.errorUnauthorized,
+    UnauthorizedReason.deviceRevoked => l.errorDeviceRevoked,
+    UnauthorizedReason.invalidToken ||
+    UnauthorizedReason.sessionExpired ||
+    null => l.errorSessionExpired,
   },
   ApiErrorCode.forbidden => l.errorForbidden,
   ApiErrorCode.notFound => l.errorNotFound,
-  ApiErrorCode.conflict => switch (e.reason) {
-    'cursor_ahead' => l.errorCursorAhead,
-    'client_too_old' => l.errorClientTooOld,
-    'last_owner' => l.errorLastOwner((e.orgs ?? const []).join(', ')),
-    'account_exists' => l.errorAccountExists,
-    _ => l.errorConflict,
+  ApiErrorCode.conflict => switch (e.conflictReason) {
+    ConflictReason.cursorAhead => l.errorCursorAhead,
+    ConflictReason.clientTooOld => l.errorClientTooOld,
+    ConflictReason.lastOwner => l.errorLastOwner(
+      (e.orgs ?? const []).join(', '),
+    ),
+    ConflictReason.accountExists => l.errorAccountExists,
+    null => l.errorConflict,
   },
   ApiErrorCode.payloadTooLarge => l.errorPayloadTooLarge,
   ApiErrorCode.rateLimited => l.errorRateLimited(e.retryAfter?.inSeconds ?? 1),

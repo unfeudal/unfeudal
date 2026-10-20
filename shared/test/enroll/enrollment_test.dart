@@ -91,7 +91,7 @@ void main() {
     final back = await Enrollment.parseFile(
       sealed,
       passphrase: 'file pass',
-      allowTestingKdf: true,
+      kdfFloor: KdfParams.testing,
     );
     expect(
       (back.server, back.token, back.kind),
@@ -101,11 +101,15 @@ void main() {
 
   test('wrong or missing passphrase throws WrongPassword', () async {
     await expectLater(
-      Enrollment.parseFile(sealed, passphrase: 'nope', allowTestingKdf: true),
+      Enrollment.parseFile(
+        sealed,
+        passphrase: 'nope',
+        kdfFloor: KdfParams.testing,
+      ),
       throwsA(isA<WrongPassword>()),
     );
     await expectLater(
-      Enrollment.parseFile(sealed, allowTestingKdf: true),
+      Enrollment.parseFile(sealed, kdfFloor: KdfParams.testing),
       throwsA(isA<WrongPassword>()),
     );
   });

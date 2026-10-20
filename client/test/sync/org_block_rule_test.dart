@@ -50,10 +50,8 @@ void main() {
     await e.syncNow();
     m.enqueue(queued, baseRevision: 1);
     h.failPuts[queued.id] = 403; // stays queued through the round
-    h.orgBlock = orgBlock(
-      cursor: 2,
-      itemIds: [a.id],
-    ); // the server stopped showing b and queued
+    // The server stopped showing b and queued.
+    h.orgBlock = orgBlock(cursor: 2, itemIds: [a.id]);
     await e.syncNow();
     expect(m.item(b.id), isNull);
     expect((m.item(a.id)?.id, m.item(queued.id)?.id), (a.id, queued.id));

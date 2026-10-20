@@ -9,8 +9,8 @@ import 'items.dart';
 import 'test_server.dart';
 
 /// One org "Acme". `olivia` is its confirmed owner; every name in [roles] is an account `<name>@example.org`
-/// with that role (confirmed unless in [accepted]). [folders]: name → parent name (null = root), created in map
-/// order by olivia through `PUT /items`. [teams]: name → member names. `io` is the Instance Owner, not a member.
+/// with that role (confirmed unless in [accepted]). [folders]: name to parent name (null = root), created in map
+/// order by olivia through `PUT /items`. [teams]: name to member names. `io` is the Instance Owner, not a member.
 class OrgWorld {
   OrgWorld._(this.s, this.io, this.orgId, this.users, this.teams, this.folders);
   final TestServer s;

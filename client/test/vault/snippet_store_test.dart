@@ -105,7 +105,6 @@ void main() {
       block: () => block,
       userId: c.userId,
       publicKey: c.publicKey,
-      write: c.write,
       online: () => true,
       emit: c.events.add,
     );

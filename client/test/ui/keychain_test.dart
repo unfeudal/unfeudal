@@ -165,10 +165,8 @@ void main() {
     late IdentitySecret secret;
     await t.runAsync(() async => secret = (await s.vault!.identitySecret(id))!);
     expect(secret.password, 's3cret');
-    expect(
-      find.byKey(Key('identity-copy-$id')),
-      findsNothing,
-    ); // passwords have no public key
+    // Passwords have no public key.
+    expect(find.byKey(Key('identity-copy-$id')), findsNothing);
     expect(clip, isEmpty);
   });
 

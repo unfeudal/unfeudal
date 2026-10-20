@@ -83,7 +83,7 @@ class ApiInfo {
   final int? trashDays;
   final Map<String, Object?> extra;
 
-  bool has(String capability) => capabilities.contains(capability);
+  bool has(Flag flag) => capabilities.contains(flag.wire);
 
   Map<String, Object?> toJson() => {
     ...extra,
@@ -97,7 +97,6 @@ class ApiInfo {
     if (trashDays != null) 'trashDays': trashDays,
   };
 
-  /// Validated, kept as text.
   static String _version(String text) {
     canonicalVersion(text);
     return text;

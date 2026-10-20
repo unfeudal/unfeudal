@@ -91,12 +91,16 @@ abstract final class PayloadCrypto {
     return OpenedPayload(json, seq);
   }
 
-  /// Personal payloads use `user`; org payloads use a folder key of the folder itself (folder items)
-  /// or of the item's folderId, for the same part.
+  // Personal payloads use `user`; org payloads use a folder key of the folder itself (folder items)
+  // or of the item's folderId, for the same part.
   static bool _keyIdFits(PayloadAad aad, String keyId) {
     if (aad.scope == ItemScope.personal) return keyId == KeyIds.user;
     final f = KeyIds.parseFolder(keyId);
-    final expected = aad.type == 'folder' ? aad.itemId : aad.folderId;
+    final expected = keyFolderIdOf(
+      type: aad.type,
+      id: aad.itemId,
+      folderId: aad.folderId,
+    );
     return f != null && f.part == aad.part && f.folderId == expected;
   }
 }

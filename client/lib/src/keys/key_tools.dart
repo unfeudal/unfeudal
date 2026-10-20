@@ -16,15 +16,9 @@ class InvalidKey implements Exception {
   String toString() => 'InvalidKey';
 }
 
-class GeneratedKey {
-  const GeneratedKey(this.privateKeyPem, this.publicKey);
-
-  /// OpenSSH private key, encrypted when a passphrase was given.
-  final String privateKeyPem;
-
-  /// One OpenSSH line: `type base64 comment`.
-  final String publicKey;
-}
+/// [privateKeyPem]: OpenSSH private key, encrypted when a passphrase was given.
+/// [publicKey]: one OpenSSH line, `type base64 comment`.
+typedef GeneratedKey = ({String privateKeyPem, String publicKey});
 
 const rsaBits = 4096;
 
@@ -70,7 +64,8 @@ String publicKeyOf(String pem, {String? passphrase}) {
       ).first,
     );
   } catch (_) {
-    throw const InvalidKey(); // the parser throws assorted errors; all mean the same thing to the user
+    // The parser throws assorted errors; all mean the same thing to the user.
+    throw const InvalidKey();
   }
 }
 
@@ -80,9 +75,9 @@ GeneratedKey _generated(
   String? passphrase,
 ) {
   final line = _publicLine(pair);
-  return GeneratedKey(
-    pair.toPem(passphrase: passphrase),
-    comment.isEmpty ? line : '$line $comment',
+  return (
+    privateKeyPem: pair.toPem(passphrase: passphrase),
+    publicKey: comment.isEmpty ? line : '$line $comment',
   );
 }
 

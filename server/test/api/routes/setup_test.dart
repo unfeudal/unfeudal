@@ -26,15 +26,23 @@ void main() {
     ...over,
   };
 
-  test('creates the Instance Owner and its first session', () async {
+  Future<Session> createOwner() async {
     final r = await s.post(
       '/api/v1/setup',
       body: body({'token': 'abcd efgh-ijkl mnop-qrst uvwx-yz'}),
     );
     expect(r.status, 201);
-    final session = Session.fromJson(r.json);
+    return Session.fromJson(r.json);
+  }
+
+  test('creates the Instance Owner session with its bundle', () async {
+    final session = await createOwner();
     expect((session.isInstanceOwner, session.bundleVersion), (true, 0));
     expect(session.bundle.toJson(), acc.bundle.toJson());
+  });
+
+  test('stores the Instance Owner with hashed auth keys', () async {
+    final session = await createOwner();
     final user = (await s.db.query('SELECT * FROM users')).single;
     expect(
       (user['id'], user['email'], user['is_instance_owner'], user['locale']),
@@ -51,6 +59,10 @@ void main() {
       ),
       isTrue,
     );
+  });
+
+  test('registers the first device and consumes the setup token', () async {
+    final session = await createOwner();
     final device = (await s.db.query('SELECT id, name, platform FROM devices'))
         .single;
     expect(device, {
@@ -62,6 +74,10 @@ void main() {
       await s.db.query("SELECT key FROM meta WHERE key = 'setup_token_hash'"),
       isEmpty,
     );
+  });
+
+  test('issues the first session tokens for the first device', () async {
+    final session = await createOwner();
     expect(
       s.deps.access.verify(session.accessToken)!.deviceId,
       session.deviceId,

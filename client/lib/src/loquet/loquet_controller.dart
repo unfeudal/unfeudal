@@ -104,7 +104,7 @@ class LoquetController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// The current reaction's bubble and hold, in full.
+  // The current reaction's bubble and hold, in full.
   void _armReaction() {
     final r = _current;
     if (r == null) return;

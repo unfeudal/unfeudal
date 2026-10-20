@@ -32,6 +32,7 @@ void main() {
     );
     m.upsertItems([kh]);
     final v = await testVault(key, m);
+    // The server swaps the key.
     m.upsertItems([
       await sealItem(
         key,
@@ -41,7 +42,7 @@ void main() {
         seq: 2,
         revision: 2,
       ),
-    ]); // server swaps the key
+    ]);
     await v.reload();
     expect(v.trustedPin(host)!.sha256Fingerprint, 'SHA256:${'A' * 43}');
     m.upsertItems([

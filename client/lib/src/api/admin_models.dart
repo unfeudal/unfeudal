@@ -1,17 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
-String _uuid(Object? value) => value is String && isUuid(value)
-    ? value
-    : throw const FormatException('not a UUID');
-
-OrgRole? _role(Object? value) => switch (value) {
+OrgRole? _role(JsonReader r) => switch (r.opt<String>('role')) {
   null => null,
-  final String wire => OrgRole.values.firstWhere(
-    (r) => r.name == wire,
-    orElse: () => throw const FormatException('unknown role'),
-  ),
-  _ => throw const FormatException('role: not a string'),
+  final wire =>
+    OrgRole.values.asNameMap()[wire] ??
+        (throw FormatException('${r.what}.role: unknown role')),
 };
 
 /// A new invite (org or instance): the link and file are shown once.
@@ -26,29 +20,19 @@ class InviteCreated {
     this.mailSent,
   );
 
-  factory InviteCreated.fromJson(Object? json) => switch (json) {
-    {
-      'invite': {
-        'id': final Object? id,
-        'email': final String email,
-        'role': final Object? role,
-        'expiresAt': final String expiresAt,
-        'link': final String link,
-        'file': final String file,
-      },
-      'mailSent': final bool mailSent,
-    } =>
-      InviteCreated(
-        _uuid(id),
-        email,
-        _role(role),
-        parseIso(expiresAt),
-        link,
-        file,
-        mailSent,
-      ),
-    _ => throw const FormatException('invite: unexpected body'),
-  };
+  factory InviteCreated.fromJson(Object? json) {
+    final body = JsonReader(json, 'invite created');
+    final r = JsonReader(body.object('invite'), 'invite');
+    return InviteCreated(
+      r.uuid('id'),
+      r.req<String>('email'),
+      _role(r),
+      r.time('expiresAt'),
+      r.req<String>('link'),
+      r.req<String>('file'),
+      body.req<bool>('mailSent'),
+    );
+  }
 
   final String id;
   final String email;
@@ -69,24 +53,17 @@ class PendingInvite {
     this.expiresAt,
   );
 
-  factory PendingInvite.fromJson(Object? json) => switch (json) {
-    {
-      'id': final Object? id,
-      'email': final String email,
-      'createdBy': final Object? createdBy,
-      'createdAt': final String createdAt,
-      'expiresAt': final String expiresAt,
-    } =>
-      PendingInvite(
-        _uuid(id),
-        email,
-        _role((json as Map)['role']),
-        _uuid(createdBy),
-        parseIso(createdAt),
-        parseIso(expiresAt),
-      ),
-    _ => throw const FormatException('pending invite: unexpected body'),
-  };
+  factory PendingInvite.fromJson(Object? json) {
+    final r = JsonReader(json, 'pending invite');
+    return PendingInvite(
+      r.uuid('id'),
+      r.req<String>('email'),
+      _role(r),
+      r.uuid('createdBy'),
+      r.time('createdAt'),
+      r.time('expiresAt'),
+    );
+  }
 
   final String id;
   final String email;
@@ -105,23 +82,16 @@ class AdminUser {
     this.createdAt,
   );
 
-  factory AdminUser.fromJson(Object? json) => switch (json) {
-    {
-      'id': final Object? id,
-      'email': final String email,
-      'disabled': final bool disabled,
-      'isInstanceOwner': final bool isInstanceOwner,
-      'createdAt': final String createdAt,
-    } =>
-      AdminUser(
-        _uuid(id),
-        email,
-        disabled,
-        isInstanceOwner,
-        parseIso(createdAt),
-      ),
-    _ => throw const FormatException('admin user: unexpected body'),
-  };
+  factory AdminUser.fromJson(Object? json) {
+    final r = JsonReader(json, 'admin user');
+    return AdminUser(
+      r.uuid('id'),
+      r.req<String>('email'),
+      r.req<bool>('disabled'),
+      r.req<bool>('isInstanceOwner'),
+      r.time('createdAt'),
+    );
+  }
 
   final String id;
   final String email;
@@ -140,26 +110,21 @@ class AdminOrg {
     this.lastActivityAt,
   );
 
-  factory AdminOrg.fromJson(Object? json) => switch (json) {
-    {
-      'id': final Object? id,
-      'name': final String name,
-      'owners': final List<Object?> owners,
-      'memberCount': final int memberCount,
-      'storageBytes': final int storageBytes,
-      'lastActivityAt': final String? lastActivityAt,
+  factory AdminOrg.fromJson(Object? json) {
+    final r = JsonReader(json, 'admin org');
+    final owners = r.req<List<Object?>>('owners');
+    if (!owners.every((o) => o is String)) {
+      throw const FormatException('admin org.owners: not strings');
     }
-        when owners.every((o) => o is String) =>
-      AdminOrg(
-        _uuid(id),
-        name,
-        owners.cast<String>(),
-        memberCount,
-        storageBytes,
-        lastActivityAt == null ? null : parseIso(lastActivityAt),
-      ),
-    _ => throw const FormatException('admin org: unexpected body'),
-  };
+    return AdminOrg(
+      r.uuid('id'),
+      r.req<String>('name'),
+      owners.cast<String>(),
+      r.req<int>('memberCount'),
+      r.req<int>('storageBytes'),
+      r.optTime('lastActivityAt'),
+    );
+  }
 
   final String id;
   final String name;

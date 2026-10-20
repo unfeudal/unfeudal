@@ -11,7 +11,8 @@ Future<Response> healthz(Request request) async {
         .query('SELECT 1 AS one')
         .timeout(const Duration(seconds: 2));
     return jsonResponse({'status': 'ok'});
-  } catch (_) {
+  } on Object {
+    // Any failure, timeout or driver error alike, means the database is down.
     return jsonResponse({'status': 'unavailable'}, status: 503);
   }
 }

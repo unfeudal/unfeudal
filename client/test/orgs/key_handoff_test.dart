@@ -62,11 +62,8 @@ void main() {
     expect(first.unconfirmed, {miaId});
     expect(uploads(), isEmpty);
     expect(c.pins.pinOf(miaId), isNull);
-    await c.pins.pin(
-      miaId,
-      mia.publicKey,
-      verified: false,
-    ); // confirmed without comparing codes
+    // Confirmed without comparing codes.
+    await c.pins.pin(miaId, mia.publicKey, verified: false);
     await handoff.run(block());
     final body = uploads().single;
     expect((body['version'], body['history']), (1, null));

@@ -7,12 +7,7 @@ import '../storage/local_mirror.dart';
 
 enum AnchorAlertKind { rewritten, vanished }
 
-class AnchorAlert {
-  const AnchorAlert(this.scope, this.seq, this.kind);
-  final String scope;
-  final int seq;
-  final AnchorAlertKind kind;
-}
+typedef AnchorAlert = ({String scope, int seq, AnchorAlertKind kind});
 
 /// kv.anchors: {scope: {"seq", "hash"}}, the newest event this device saw per chain. Read on every call (no cache),
 /// so an accepted restore that empties kv.anchors needs no hook.
@@ -64,12 +59,20 @@ class AuditAnchors {
         ];
         if ((same != null && same.hash != a.hash) ||
             checkpoints.any((c) => c.seq == a.seq && c.hash != a.hash)) {
-          alerts.add(AnchorAlert(scope, a.seq, AnchorAlertKind.rewritten));
+          alerts.add((
+            scope: scope,
+            seq: a.seq,
+            kind: AnchorAlertKind.rewritten,
+          ));
           alert = true;
         } else if (same == null &&
             scope == completeScope &&
             !checkpoints.any((c) => c.seq >= a.seq)) {
-          alerts.add(AnchorAlert(scope, a.seq, AnchorAlertKind.vanished));
+          alerts.add((
+            scope: scope,
+            seq: a.seq,
+            kind: AnchorAlertKind.vanished,
+          ));
           alert = true;
         }
       }

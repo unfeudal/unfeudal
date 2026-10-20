@@ -38,23 +38,16 @@ class AclEditor extends StatefulWidget {
 }
 
 class _AclEditorState extends State<AclEditor> with BusyAction {
-  /// principal id → (type, allow, deny), from the block's entries on this folder.
+  // (type, allow, deny) by principal id, from the block's entries on this folder.
   late final Map<String, (PrincipalType, Set<Permission>, Set<Permission>)>
   _entries = _load();
 
   Map<String, (PrincipalType, Set<Permission>, Set<Permission>)> _load() {
     final block = AppScope.read(context).orgs!.block;
-    Set<Permission> perms(List<String> names) => {
-      for (final n in names) ...Permission.values.where((p) => p.name == n),
-    };
     return {
       for (final a in block?.acl ?? const <AclRow>[])
         if (a.orgId == widget.orgId && a.folderId == widget.folderId)
-          a.principalId: (
-            a.principalType == 'team' ? PrincipalType.team : PrincipalType.user,
-            perms(a.allow),
-            perms(a.deny),
-          ),
+          a.principalId: (a.entry.principalType, a.entry.allow, a.entry.deny),
     };
   }
 
@@ -82,11 +75,11 @@ class _AclEditorState extends State<AclEditor> with BusyAction {
     final isAdmin = orgs.isAdmin(widget.orgId);
     final held = orgs.permissions(widget.orgId, widget.folderId);
     final teams = [
-      if (state.serverHas('teams'))
+      if (state.serverHas(Flag.teams))
         for (final t in block?.teams ?? const <OrgTeam>[])
           if (t.orgId == widget.orgId) t,
     ]..sort((a, b) => a.name.compareTo(b.name));
-    final members = state.serverHas('user_overrides')
+    final members = state.serverHas(Flag.userOverrides)
         ? orgs.membersOf(widget.orgId)
         : const <OrgMember>[];
     final folderName = state.vault?.entry(widget.folderId)?.name ?? '';
@@ -156,10 +149,11 @@ class _AclEditorState extends State<AclEditor> with BusyAction {
           if (problem case final error?) UfErrorLine(error),
           Align(
             alignment: Alignment.centerRight,
-            child: FilledButton(
+            child: BusyButton(
               key: const Key('acl-save'),
-              onPressed: busy ? null : _save,
-              child: BusyLabel(busy: busy, label: l.aclSave),
+              busy: busy,
+              onPressed: _save,
+              label: l.aclSave,
             ),
           ),
         ],

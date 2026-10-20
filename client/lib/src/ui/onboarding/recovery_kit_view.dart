@@ -185,7 +185,7 @@ class _RecoveryKitViewState extends State<RecoveryKitView> {
     _clear = Timer(const Duration(seconds: 60), _wipe);
   }
 
-  /// Clears the clipboard only if it still holds the key.
+  // Clears the clipboard only if it still holds the key.
   Future<void> _wipe() async {
     _clear?.cancel();
     _clear = null;

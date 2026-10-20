@@ -72,7 +72,7 @@ class LockMachine extends ChangeNotifier {
     _idle = null;
   }
 
-  /// Every call restarts a running idle watch, legal or not: it is user activity.
+  // Every call restarts a running idle watch, legal or not: it is user activity.
   bool _move(Set<LockScreenState> from, LockScreenState to) {
     if (_idle != null) startIdleWatch();
     if (!from.contains(_state)) return false;

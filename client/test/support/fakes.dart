@@ -404,7 +404,7 @@ AppState testAppState({
     httpClient: h.client,
     ssh: ssh ?? FakeSshConnector(),
 
-    allowTestingKdf: true,
+    kdfFloor: KdfParams.testing,
     kdf: KdfParams.testing,
     loquetMemory: loquetMemory,
     // a Thursday noon: no suite depends on the machine's hour, weekday or calendar

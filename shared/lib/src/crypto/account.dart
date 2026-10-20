@@ -116,13 +116,18 @@ class UnlockedAccount {
 }
 
 class AccountCrypto {
-  AccountCrypto({this.kdf = KdfParams.defaults, this.allowTestingKdf = false}) {
-    kdf.ensureAcceptable(allowTesting: allowTestingKdf);
+  AccountCrypto({
+    this.kdf = KdfParams.defaults,
+    this.kdfFloor = KdfParams.defaults,
+  }) {
+    kdf.ensureAcceptable(floor: kdfFloor);
   }
 
   static const minPasswordLength = 8;
   final KdfParams kdf; // the instance KDF used for new wraps
-  final bool allowTestingKdf; // tests only
+
+  /// The weakest KDF accepted from outside; only tests lower it.
+  final KdfParams kdfFloor;
   static final _x25519 = X25519();
 
   Future<NewAccount> create(String password) async {
@@ -166,14 +171,34 @@ class AccountCrypto {
     );
   }
 
-  Future<UnlockedAccount> unlock(AccountBundle bundle, String password) async {
+  Future<UnlockedAccount> unlock(AccountBundle bundle, String password) async =>
+      (await unlockWithAuthKey(bundle, password)).unlocked;
+
+  /// [unlock], also returning the authKey derived on the way, so the password can be proved to the server
+  /// without a second Argon2 run.
+  Future<({UnlockedAccount unlocked, Uint8List authKey})> unlockWithAuthKey(
+    AccountBundle bundle,
+    String password,
+  ) async {
     // Before any derivation: a hostile server may serve a weak or huge KDF.
-    bundle.kdf.ensureAcceptable(allowTesting: allowTestingKdf);
+    bundle.kdf.ensureAcceptable(floor: kdfFloor);
     final keys = await deriveMasterKeys(password, bundle.salt, bundle.kdf);
+    return (
+      unlocked: await unlockWithEncKey(bundle, keys.encKey),
+      authKey: keys.authKey,
+    );
+  }
+
+  /// [encKey] already derived from the bundle's salt and an accepted KDF (a login reuses its prelogin
+  /// derivation). WrongPassword when it does not open the bundle.
+  Future<UnlockedAccount> unlockWithEncKey(
+    AccountBundle bundle,
+    Uint8List encKey,
+  ) async {
     try {
       return await _finish(
         bundle,
-        await SymmetricCipher.decrypt(keys.encKey, bundle.wrappedUserKey),
+        await SymmetricCipher.decrypt(encKey, bundle.wrappedUserKey),
       );
     } on DecryptionFailed {
       throw const WrongPassword();
@@ -208,7 +233,7 @@ class AccountCrypto {
     }
   }
 
-  /// The rebuilt public key must equal bundle.publicKey: a server cannot pair our private key with its own public key.
+  // The rebuilt public key must equal bundle.publicKey: a server cannot pair our private key with its own public key.
   Future<UnlockedAccount> _finish(
     AccountBundle bundle,
     Uint8List userKey,

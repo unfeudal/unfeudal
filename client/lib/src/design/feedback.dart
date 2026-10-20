@@ -5,10 +5,9 @@ import 'package:flutter/material.dart';
 
 import 'banner.dart';
 import 'motion.dart';
-import 'rows.dart';
 import 'tokens.dart';
 
-/// Pulses its subtree's opacity 1 → .5 → 1 every 1.6 s while content loads; static when motion is still.
+/// Pulses its subtree's opacity from 1 to .5 and back every 1.6 s while content loads; static when motion is still.
 class UfSkeleton extends StatefulWidget {
   const UfSkeleton({super.key, required this.child});
 
@@ -118,16 +117,12 @@ class UfTreeSkeleton extends StatelessWidget {
   );
 }
 
-/// A notice inside a dialog or a panel: a `warnSoft` or `dangerSoft` box, the tone's icon, the 13.5 message
-/// and a row of small [actions] under it. [UfNotice.row] lays it on one line with the actions on the right,
-/// at the top of a section.
+/// A notice inside a dialog or a panel: a `warnSoft` or `dangerSoft` box, the tone's icon and the 13.5 message.
+/// [UfNotice.row] lays it on one line with small [actions] on the right, at the top of a section.
 class UfNotice extends StatelessWidget {
-  const UfNotice({
-    super.key,
-    required this.tone,
-    required this.message,
-    this.actions = const [],
-  }) : _row = false;
+  const UfNotice({super.key, required this.tone, required this.message})
+    : _row = false,
+      actions = const [];
 
   const UfNotice.row({
     super.key,
@@ -175,17 +170,7 @@ class UfNotice extends StatelessWidget {
                   padding: const EdgeInsets.only(top: 2),
                   child: Icon(icon, size: 16, color: color),
                 ),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    spacing: 8,
-                    children: [
-                      text,
-                      if (actions.isNotEmpty)
-                        Wrap(spacing: 8, runSpacing: 8, children: actions),
-                    ],
-                  ),
-                ),
+                Expanded(child: text),
               ],
             ),
     );
@@ -367,139 +352,6 @@ class UfStaggerItem extends StatelessWidget {
         );
       },
       child: child,
-    );
-  }
-}
-
-/// A 32 px [row] that grows in place to 140 px to preview [details] in three 13 muted columns: its fill goes
-/// `panelHover` → `panel` with a `line` edge, and the details fade in once it has grown. [onToggle] flips
-/// [expanded] on a click, Enter or Space.
-class UfExpandingRow extends StatefulWidget {
-  const UfExpandingRow({
-    super.key,
-    required this.expanded,
-    required this.onToggle,
-    required this.row,
-    required this.details,
-  });
-
-  final bool expanded;
-  final VoidCallback onToggle;
-  final Widget row;
-  final List<Widget> details;
-
-  @override
-  State<UfExpandingRow> createState() => _UfExpandingRowState();
-}
-
-class _UfExpandingRowState extends State<UfExpandingRow>
-    with SingleTickerProviderStateMixin {
-  late final _grow = AnimationController(
-    vsync: this,
-    value: widget.expanded ? 1 : 0,
-  );
-  late final _height = CurvedAnimation(parent: _grow, curve: UfMotion.enter);
-  // 160 ms after a 120 ms wait, within the 280 ms growth
-  late final _reveal = CurvedAnimation(
-    parent: _grow,
-    curve: const Interval(120 / 280, 1, curve: UfMotion.enter),
-  );
-  bool _hover = false;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _grow.duration = UfMotion.of(context).slow;
-  }
-
-  @override
-  void didUpdateWidget(UfExpandingRow old) {
-    super.didUpdateWidget(old);
-    if (widget.expanded != old.expanded) {
-      widget.expanded ? _grow.forward() : _grow.reverse();
-    }
-  }
-
-  @override
-  void dispose() {
-    _height.dispose();
-    _reveal.dispose();
-    _grow.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = UfColors.of(context);
-    return Semantics(
-      button: true,
-      expanded: widget.expanded,
-      child: UfFocusRing(
-        borderRadius: widget.expanded ? UfRadius.card : UfRadius.control,
-        child: FocusableActionDetector(
-          mouseCursor: SystemMouseCursors.click,
-          onShowHoverHighlight: (v) => setState(() => _hover = v),
-          actions: {
-            ActivateIntent: CallbackAction<ActivateIntent>(
-              onInvoke: (_) => widget.onToggle(),
-            ),
-          },
-          child: GestureDetector(
-            onTap: widget.onToggle,
-            child: AnimatedBuilder(
-              animation: _grow,
-              builder: (context, _) {
-                final t = _height.value;
-                final rest = _hover ? colors.panelHover : Colors.transparent;
-                return Container(
-                  height: 32 + (140 - 32) * t,
-                  clipBehavior: Clip.antiAlias,
-                  decoration: BoxDecoration(
-                    color: _grow.value == 0
-                        ? rest
-                        : Color.lerp(colors.panelHover, colors.panel, t),
-                    borderRadius: BorderRadius.lerp(
-                      UfRadius.control,
-                      UfRadius.card,
-                      t,
-                    ),
-                    border: Border.all(color: colors.line.withValues(alpha: t)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      SizedBox(height: 30, child: widget.row),
-                      if (_grow.value > 0)
-                        Expanded(
-                          child: FadeTransition(
-                            opacity: _reveal,
-                            child: Padding(
-                              padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
-                              child: DefaultTextStyle.merge(
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: colors.muted,
-                                ),
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  spacing: 16,
-                                  children: [
-                                    for (final detail in widget.details)
-                                      Expanded(child: detail),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

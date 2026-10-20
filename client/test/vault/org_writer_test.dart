@@ -34,7 +34,6 @@ void main() {
       block: () => block,
       userId: c.userId,
       publicKey: c.publicKey,
-      write: c.write,
       online: () => !c.h.offline,
       emit: c.events.add,
     );

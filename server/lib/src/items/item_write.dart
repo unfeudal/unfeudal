@@ -13,10 +13,10 @@ import '../db/db.dart';
 import '../orgs/org_access.dart';
 import '../orgs/rotations.dart';
 
-/// Checks 2–3 (before the transaction): the client body as an Item, server-set fields dropped.
+/// Parses the client body as an Item before the transaction, dropping server-set fields.
 Item parseItemInput(String pathId, Map<String, Object?> body) {
   if (body.containsKey('id') && body['id'] != pathId) {
-    throw _bad('id must equal the path');
+    throw ApiError.invalid('id must equal the path');
   }
   final json = {...body, 'id': pathId, 'secret': body['secret']}
     ..remove('purged')
@@ -27,20 +27,22 @@ Item parseItemInput(String pathId, Map<String, Object?> body) {
     ..remove('updatedDevice');
   final Item item;
   try {
-    item = Item.fromJson(json); // type 1–64, schemaVersion ≥ 1, deleted, meta/secret envelopes, folderId, scope, orgId iff org
+    // Checks type (1 to 64), schemaVersion (at least 1), deleted, the envelopes, folderId,
+    // scope, and an orgId present exactly for org items.
+    item = Item.fromJson(json);
   } on FormatException catch (e) {
-    throw _bad('invalid item: ${e.message}');
+    throw ApiError.invalid('invalid item: ${e.message}');
   }
   if (personalOnlyTypes.contains(item.type) &&
       (item.scope != ItemScope.personal || item.folderId != null)) {
-    throw _bad('${item.type} items are personal and have no folder');
+    throw ApiError.invalid(
+      '${item.type} items are personal and have no folder',
+    );
   }
   return item;
 }
 
-ApiError _bad(String m) => ApiError(ApiErrorCode.invalidRequest, m);
-
-/// Checks 4–12 and writes, inside the caller's transaction.
+/// Checks access, revision and quota, then writes, inside the caller's transaction.
 Future<Item> writeItem(
   AppDeps deps,
   Tx tx,
@@ -64,13 +66,11 @@ Future<Item> writeItem(
     'The item changed on another device.',
     extra: {'item': curBody},
   );
-  // Ownership first (8. and 9., first rules): a tombstone or a type of another account or org never shows.
+  // Ownership comes first so a tombstone or a type of another account or org never shows.
   if (input.scope == ItemScope.personal) {
+    // Another account's item, or an org item.
     if (cur != null && cur['owner_user_id'] != auth.userId) {
-      throw ApiError(
-        ApiErrorCode.forbidden,
-        'Not your item.',
-      ); // another account's, or an org item
+      throw ApiError(ApiErrorCode.forbidden, 'Not your item.');
     }
   } else {
     if (!deps.features.enabled(Flag.orgs)) {
@@ -85,55 +85,57 @@ Future<Item> writeItem(
     );
     if (member.isEmpty) throw ApiError.notFound();
   }
+  // A purged item is a tombstone: no write revives it, whatever If-Match says.
   if (cur != null && cur['purged'] == 1) {
-    throw conflict(); // 5. tombstone, whatever If-Match
+    throw conflict();
   }
   if (cur != null && cur['type'] != input.type) {
-    throw _bad('type is fixed at creation'); // 6.
+    throw ApiError.invalid('type is fixed at creation');
   }
+  final wasDeleted = cur?['deleted'] == 1;
   final storedSecret = curBody?['secret'];
   final folderChanged = cur != null && cur['folder_id'] != input.folderId;
+  // Personal items always use the `user` keyId, so only org items change key.
   final keyChanged =
-      cur != null &&
-      (curBody?['meta'] as Map?)?['keyId'] !=
-          input.meta?.keyId; // personal: always `user`
+      cur != null && (curBody?['meta'] as Map?)?['keyId'] != input.meta?.keyId;
+  // The kept secret is sealed with the old key, so it cannot follow a move or re-seal.
   if (storedSecret != null &&
       input.secret == null &&
       (folderChanged || keyChanged)) {
-    throw _bad('a move or a re-seal re-seals the secret'); // 7.
+    throw ApiError.invalid('a move or a re-seal re-seals the secret');
   }
   if (input.scope == ItemScope.personal) {
-    await _checkPersonalFolder(tx, auth, input); // 8.
+    await _checkPersonalFolder(tx, auth, input);
   } else {
-    await checkOrgWrite(tx, auth, input, cur); // 9.
+    await checkOrgWrite(tx, auth, input, cur);
   }
   if (cur != null &&
       await isTrashed(
         tx,
-        deleted: cur['deleted'] == 1,
+        deleted: wasDeleted,
         folderId: cur['folder_id'] as String?,
       )) {
-    // 10.
     final restore =
-        (cur['deleted'] == 1 && !input.deleted) ||
+        (wasDeleted && !input.deleted) ||
         (folderChanged &&
             !await isTrashed(
               tx,
               deleted: input.deleted,
               folderId: input.folderId,
             ));
-    final reseal = !folderChanged && input.deleted == (cur['deleted'] == 1);
+    final reseal = !folderChanged && input.deleted == wasDeleted;
     if (!restore && !reseal) {
-      throw _bad('a trashed item can only be restored or re-sealed');
+      throw ApiError.invalid(
+        'a trashed item can only be restored or re-sealed',
+      );
     }
   }
   final revision = cur?['revision'] as int? ?? 0;
-  if (ifMatch != revision) throw conflict(); // 11.
+  if (ifMatch != revision) throw conflict();
   final now = deps.clock.now();
   final stored = Item(
     id: input.id,
     type: input.type,
-    scope: input.scope,
     orgId: input.orgId,
     folderId: input.folderId,
     schemaVersion: input.schemaVersion,
@@ -143,11 +145,7 @@ Future<Item> writeItem(
     secret:
         input.secret ??
         (storedSecret == null ? null : Envelope.fromJson(storedSecret)),
-    createdAt: cur == null
-        ? now
-        : parseIso(
-            cur['created_at'] as String,
-          ), // set on insert, kept on update
+    createdAt: cur == null ? now : parseIso(cur['created_at'] as String),
     updatedAt: now,
     updatedBy: auth.userId,
     updatedDevice: auth.deviceId,
@@ -156,13 +154,10 @@ Future<Item> writeItem(
   final text = jsonEncode(stored.toJson());
   final size = utf8.encode(text).length;
   final curSize = cur?['size'] as int? ?? 0;
-  final addsRevision =
-      cur != null &&
-      deps.features.enabled(
-        Flag.itemHistory,
-      ); // the replaced version is kept as a revision
+  // With item history on, an update keeps the replaced version as a revision.
+  final addsRevision = cur != null && deps.features.enabled(Flag.itemHistory);
+  // Only a growing write, or an update that adds a revision, can exceed the quota.
   if (addsRevision || size > curSize) {
-    // 12. a growing write, or any update that adds a revision
     final personal = input.scope == ItemScope.personal;
     await checkQuota(
       tx,
@@ -175,9 +170,7 @@ Future<Item> writeItem(
   }
   if (input.scope == ItemScope.org &&
       (input.type == 'folder'
-          ? cur == null ||
-                folderChanged ||
-                (cur['deleted'] == 1) != input.deleted
+          ? cur == null || folderChanged || wasDeleted != input.deleted
           : folderChanged)) {
     await bumpOrgSeq(tx); // the org block lists folders and where items live
   }
@@ -228,7 +221,6 @@ Future<Item> writeItem(
     );
   }
   final at = [input.id, ?input.folderId]; // one audit event per write
-  final wasDeleted = cur?['deleted'] == 1;
   final (action, targets) = cur == null
       ? ('item.created', at)
       : !wasDeleted && input.deleted
@@ -273,16 +265,20 @@ Future<void> checkOrgWrite(
   final isFolder = input.type == 'folder';
   final parent = input.folderId;
   if (parent != null && !org.folders.containsKey(parent)) {
-    throw _bad('folderId must be a folder of this organization');
+    throw ApiError.invalid('folderId must be a folder of this organization');
   }
-  if (!isFolder && parent == null) throw _bad('org items live in a folder');
+  if (!isFolder && parent == null) {
+    throw ApiError.invalid('org items live in a folder');
+  }
   final seen = <String>{};
   for (
     String? at = parent;
     isFolder && at != null && seen.add(at);
     at = org.parentOf(at)
   ) {
-    if (at == input.id) throw _bad('a folder cannot move under itself');
+    if (at == input.id) {
+      throw ApiError.invalid('a folder cannot move under itself');
+    }
   }
   bool canEdit(String? folderId) => folderId == null
       ? org.members[auth.userId]!.isAdmin
@@ -300,14 +296,17 @@ Future<void> checkOrgWrite(
     }
     await recordRotations(tx, input.orgId!, org, after, 'folder_moved');
   }
-  final keyFolder = isFolder ? input.id : parent!;
+  final keyFolder = input.keyFolderId!;
   final version = max(await currentKeyVersion(tx, keyFolder), 1);
-  if (input.meta?.keyId !=
-          KeyIds.folder(keyFolder, version, PayloadPart.meta) ||
-      (input.secret != null &&
-          input.secret!.keyId !=
-              KeyIds.folder(keyFolder, version, PayloadPart.secret))) {
-    throw _bad('payloads must use the folder keys at version $version');
+  if (!sealedWithFolderKeys(
+    input.meta?.keyId,
+    input.secret?.keyId,
+    keyFolder,
+    version,
+  )) {
+    throw ApiError.invalid(
+      'payloads must use the folder keys at version $version',
+    );
   }
 }
 
@@ -325,13 +324,15 @@ Future<void> pruneRevisions(Tx tx, String itemId, int max) async {
   );
 }
 
-/// Check 8, folder rule: folderId a live personal folder of the caller, not the item or below it.
+// The folderId must be a live personal folder of the caller, neither the item nor below it.
 Future<void> _checkPersonalFolder(Tx tx, AuthContext auth, Item input) async {
   final parent = input.folderId;
   if (parent == null) return;
   final seen = <String>{};
   for (String? at = parent; at != null && seen.add(at);) {
-    if (at == input.id) throw _bad('a folder cannot move under itself');
+    if (at == input.id) {
+      throw ApiError.invalid('a folder cannot move under itself');
+    }
     final r = (await tx.query(
       'SELECT owner_user_id, type, purged, folder_id FROM items WHERE id = @id',
       {'id': at},
@@ -341,7 +342,7 @@ Future<void> _checkPersonalFolder(Tx tx, AuthContext auth, Item input) async {
             r['owner_user_id'] != auth.userId ||
             r['type'] != 'folder' ||
             r['purged'] == 1)) {
-      throw _bad('folderId must be one of your folders');
+      throw ApiError.invalid('folderId must be one of your folders');
     }
     at = r?['folder_id'] as String?;
   }
@@ -367,8 +368,8 @@ Future<bool> isTrashed(
   return false;
 }
 
-/// Check 12: S_items (scope, without this item) + S_revisions (every item of the scope) + newSize > max → 413.
-/// newSize counts the current size too when the update adds a revision.
+/// Throws payloadTooLarge when the scope's other items, its revisions and [newSize] exceed [max].
+/// [newSize] counts the current size too when the update adds a revision.
 Future<void> checkQuota(
   Tx tx, {
   String? ownerUserId,

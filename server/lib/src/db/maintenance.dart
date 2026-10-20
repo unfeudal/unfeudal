@@ -8,7 +8,7 @@ import '../auth/tokens.dart';
 import '../config/config.dart';
 import 'db.dart';
 
-/// Creates [path] empty and owner-only before anything secret is written to it.
+// Creates the file empty and owner-only before anything secret is written to it.
 Future<void> _createPrivate(String path) async {
   await File(path).create(exclusive: true);
   if (Platform.isWindows) return;
@@ -76,10 +76,7 @@ Future<String?> ensureSetupToken(Db db, String? configured) =>
       );
       if (pending.isNotEmpty) return null;
       final token = newSetupToken();
-      await tx.execute(
-        "INSERT INTO meta (key, value) VALUES ('setup_token_hash', @v)",
-        {'v': hashToken(token)},
-      );
+      await setMeta(tx, 'setup_token_hash', hashToken(token));
       return token;
     });
 
@@ -94,7 +91,7 @@ Future<void> backupDatabase(Db db, String path) async {
   await db.execute('VACUUM INTO @p', {'p': path});
 }
 
-/// Daily cleanup. One cutoff for login_attempts: 24 h is the longest window of any key (login_lockout ≤ 24 h).
+/// Daily cleanup. One cutoff for login_attempts: 24 h is the longest window of any key (login_lockout is at most 24 h).
 Future<void> runCleanup(Tx tx, DateTime now, Config config) async {
   final t = iso(now);
   await tx.execute(
@@ -117,7 +114,7 @@ Future<void> runCleanup(Tx tx, DateTime now, Config config) async {
 Future<void> transferOwner(Db db, String email) => db.transaction((tx) async {
   final target = (await tx.query(
     'SELECT id, is_instance_owner, disabled FROM users WHERE email = @e',
-    {'e': email.trim().toLowerCase()},
+    {'e': email},
   )).firstOrNull;
   if (target == null) throw StateError('No account with this email.');
   if (target['is_instance_owner'] == 1) return;

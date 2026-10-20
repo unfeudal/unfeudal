@@ -6,38 +6,16 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
-import '../../app_state.dart';
 import '../../audit/payload_diff.dart';
 import '../../design/dialog.dart';
 import '../../design/field.dart';
 import '../../design/rows.dart';
 import '../../design/tokens.dart';
 import '../../events/app_events.dart';
-import '../../orgs/block_permissions.dart';
 import '../../vault/vault.dart';
-import '../describe_error.dart';
+import '../busy_action.dart';
 
-/// Whether [e] may be rewritten (restored): always for personal items, `edit` on its parent folder for org items.
-bool canEditEntry(AppState s, VaultEntry e) =>
-    e.orgId == null || (s.orgs?.writer.canEdit(e.orgId!, e.folderId) ?? false);
-
-/// Whether [e]'s secrets may be shown here: the server's reveal flag, and `reveal` on the folder for org items.
-bool canReveal(AppState s, VaultEntry e) {
-  if (!s.serverHas('reveal')) return false; // client-only flag
-  final item = e.item;
-  if (item.scope == ItemScope.personal) return true;
-  final block = s.orgs?.block;
-  if (block == null) return false;
-  final folder = item.kind == ItemKind.folder ? item.id : item.folderId!;
-  return explainFromBlock(
-    block,
-    item.orgId!,
-    s.stored!.userId,
-    folder,
-  ).effective.contains(Permission.reveal);
-}
-
-/// One stored version, opened on this device; [meta] null = unreadable here.
+// One stored version, opened on this device; a null meta means unreadable here.
 typedef _Version = ({Item item, Map<String, Object?>? meta});
 
 /// The stored versions of an item, newest first, each with its field changes; old secrets need `reveal`.
@@ -57,13 +35,12 @@ class ItemHistoryPanel extends StatefulWidget {
   State<ItemHistoryPanel> createState() => _ItemHistoryPanelState();
 }
 
-class _ItemHistoryPanelState extends State<ItemHistoryPanel> {
+class _ItemHistoryPanelState extends State<ItemHistoryPanel> with BusyAction {
   List<_Version>? _versions;
 
-  /// revision → opened secret, once revealed.
+  // Opened secret by revision, once revealed.
   final _secrets = <int, Map<String, Object?>?>{};
   bool _reported = false;
-  String? _error;
 
   @override
   void initState() {
@@ -81,23 +58,17 @@ class _ItemHistoryPanelState extends State<ItemHistoryPanel> {
     _load();
   }
 
-  Future<void> _load() async {
+  Future<void> _load() => run(() async {
     final state = AppScope.read(context);
-    try {
-      final items = await state.api!.revisions(widget.itemId);
-      final versions = [
-        for (final item in items)
-          (item: item, meta: await _open(state.vault!, item, PayloadPart.meta)),
-      ];
-      if (mounted) setState(() => _versions = versions);
-    } on Exception catch (e) {
-      if (mounted) {
-        setState(() => _error = describeError(AppLocalizations.of(context), e));
-      }
-    }
-  }
+    final items = await state.api!.revisions(widget.itemId);
+    final versions = [
+      for (final item in items)
+        (item: item, meta: await _open(state.vault!, item, PayloadPart.meta)),
+    ];
+    if (mounted) setState(() => _versions = versions);
+  });
 
-  /// Old `_seq` values are older on purpose: opened without the replay check, no mark moves.
+  // Old `_seq` values are older on purpose: opened without the replay check, no mark moves.
   static Future<Map<String, Object?>?> _open(
     Vault vault,
     Item item,
@@ -142,11 +113,11 @@ class _ItemHistoryPanelState extends State<ItemHistoryPanel> {
     );
     if (!yes) return;
     final entry = state.vault!.entry(widget.itemId)!;
-    try {
+    await run(() async {
       final secret = await _open(state.vault!, v.item, PayloadPart.secret);
       if (v.item.secret != null && secret == null) {
         // writing null would drop the secret: refuse instead
-        return setState(() => _error = l.historySecretUnreadable);
+        return setState(() => problem = l.historySecretUnreadable);
       }
       await state.saveItem(
         type: entry.item.type,
@@ -163,13 +134,11 @@ class _ItemHistoryPanelState extends State<ItemHistoryPanel> {
       } else {
         await Navigator.of(context).maybePop();
       }
-    } on Exception catch (e) {
-      if (mounted) setState(() => _error = describeError(l, e));
-    }
+    });
   }
 
   static String _show(Object? value) => switch (value) {
-    null => '—',
+    null => noValue,
     final List<Object?> list => list.join(', '),
     final Map<Object?, Object?> map => jsonEncode(map),
     _ => '$value',
@@ -185,10 +154,13 @@ class _ItemHistoryPanelState extends State<ItemHistoryPanel> {
     final restorable =
         entry != null &&
         entry.state == EntryState.ok &&
-        canEditEntry(state, entry) &&
+        state.orgs!.canEditEntry(entry) &&
         !state.vault!.isTrashed(entry.id) &&
         !(state.sync?.readOnly ?? true);
-    final reveal = entry != null && canReveal(state, entry);
+    final reveal =
+        entry != null &&
+        state.serverHas(Flag.reveal) && // client-only flag
+        state.orgs!.canReveal(entry);
     final dates = MaterialLocalizations.of(context);
     final muted = TextStyle(color: colors.muted, fontSize: 12);
 
@@ -210,9 +182,9 @@ class _ItemHistoryPanelState extends State<ItemHistoryPanel> {
         );
 
     final children = [
-      if (_error case final error?)
+      if (problem case final error?)
         UfErrorLine(error, key: const Key('history-error')),
-      if (versions == null && _error == null)
+      if (versions == null && problem == null)
         Center(child: UfLoading(l.loading)),
       for (final (i, v) in (versions ?? const <_Version>[]).indexed)
         Container(

@@ -81,6 +81,12 @@ void main() {
       'device_revoked',
       'session_expired',
     ]);
+    expect(
+      UnauthorizedReason.fromWire('device_revoked'),
+      UnauthorizedReason.deviceRevoked,
+    );
+    expect(UnauthorizedReason.fromWire('later'), isNull);
+    expect(UnauthorizedReason.fromWire(null), isNull);
   });
 
   test('malformed error bodies throw FormatException', () {

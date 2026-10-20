@@ -40,10 +40,9 @@ Future<Response> listDevices(Request request) async {
 
 /// Own devices only (another account's is 404); idempotent; its tokens stop working at once.
 Future<Response> deleteDevice(Request request) async {
-  final id = request.params['id']!;
   final deps = depsOf(request);
   final auth = authOf(request);
-  parseUuid(id);
+  final id = parseUuid(request.params['id']!);
   await deps.db.transaction((tx) async {
     final rows = await tx.query(
       'SELECT id FROM devices WHERE id = @d AND user_id = @u',

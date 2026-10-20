@@ -41,27 +41,19 @@ Future<void> removeMember(
   await bumpOrgSeq(tx);
 }
 
-Future<void> deleteTeam(Tx tx, String orgId, String teamId) async {
-  final before = (await loadOrg(tx, orgId))!;
-  final p = {'o': orgId, 't': teamId};
-  await tx.execute(
-    "DELETE FROM acl_entries WHERE org_id = @o AND principal_type = 'team' AND principal_id = @t",
-    p,
-  );
-  await tx.execute(
-    'DELETE FROM team_members WHERE org_id = @o AND team_id = @t',
-    p,
-  );
-  await tx.execute('DELETE FROM teams WHERE org_id = @o AND id = @t', p);
-  await recordRotations(
-    tx,
-    orgId,
-    before,
-    (await loadOrg(tx, orgId))!,
-    'team_deleted',
-  );
-  await bumpOrgSeq(tx);
-}
+Future<void> deleteTeam(Tx tx, String orgId, String teamId) =>
+    changeOrg(tx, orgId, 'team_deleted', (_) async {
+      final p = {'o': orgId, 't': teamId};
+      await tx.execute(
+        "DELETE FROM acl_entries WHERE org_id = @o AND principal_type = 'team' AND principal_id = @t",
+        p,
+      );
+      await tx.execute(
+        'DELETE FROM team_members WHERE org_id = @o AND team_id = @t',
+        p,
+      );
+      await tx.execute('DELETE FROM teams WHERE org_id = @o AND id = @t', p);
+    });
 
 Future<void> deleteOrg(Tx tx, String orgId) async {
   final p = {'o': orgId};
@@ -108,9 +100,8 @@ Future<void> deleteUser(Tx tx, String userId, {AuditWrite? audit}) async {
     ))
       r['org_id']! as String,
   ];
-  final snapshots = {
-    for (final o in orgIds) o: (await loadOrg(tx, o))!,
-  }; // all loaded before any delete
+  // Every org is loaded before any delete, so each removal sees the org as it was.
+  final snapshots = {for (final o in orgIds) o: (await loadOrg(tx, o))!};
   for (final MapEntry(key: orgId, value: org) in snapshots.entries) {
     await audit?.call(AuditScope.org(orgId), 'member.removed', [userId]);
     await removeMember(tx, orgId, userId, 'user_deleted', before: org);
@@ -130,7 +121,7 @@ Future<void> deleteUser(Tx tx, String userId, {AuditWrite? audit}) async {
   await tx.execute(
     'DELETE FROM audit_ips WHERE scope = @s OR EXISTS (SELECT 1 FROM audit_events e '
     'WHERE e.scope = audit_ips.scope AND e.seq = audit_ips.seq AND e.actor_user = @u)',
-    {'s': 'user:$userId', 'u': userId},
+    {'s': AuditScope.user(userId).wire, 'u': userId},
   );
   final email = user['email']! as String;
   await tx.execute(

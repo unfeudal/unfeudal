@@ -53,10 +53,9 @@ class _JoinScreenState extends State<JoinScreen> with BusyAction {
     final file = _file;
     final enrollment = file == null
         ? Enrollment.parseLink(_link.text.trim())
-        : await Enrollment.parseFile(
+        : await state.parseEnrollmentFile(
             file,
             passphrase: _passphrase.text.isEmpty ? null : _passphrase.text,
-            allowTestingKdf: state.allowTestingKdf,
           );
     await state.checkServer(enrollment.server);
     if (enrollment.kind == EnrollKind.setup) {
@@ -79,7 +78,7 @@ class _JoinScreenState extends State<JoinScreen> with BusyAction {
         email: _email.text.trim(),
         password: _password.text,
       );
-      if (!state.serverHas('recovery_kit')) state.finishOnboarding();
+      if (!state.serverHas(Flag.recoveryKit)) state.finishOnboarding();
     });
   }
 
@@ -101,7 +100,7 @@ class _JoinScreenState extends State<JoinScreen> with BusyAction {
               _link,
               l.joinLink,
               mono: true,
-              hint: 'unfeudal://enroll?…',
+              hint: 'unfeudal://enroll?\u2026',
             ),
             Align(
               alignment: Alignment.centerLeft,
@@ -137,13 +136,11 @@ class _JoinScreenState extends State<JoinScreen> with BusyAction {
           ],
           if (problem case final problem?) UfErrorLine(problem),
           LockActions(
-            primary: FilledButton(
+            primary: BusyButton(
               key: Key(invite == null ? 'join-submit' : 'join-accept'),
-              onPressed: busy ? null : (invite == null ? _submit : _accept),
-              child: BusyLabel(
-                busy: busy,
-                label: invite == null ? l.joinSubmit : l.setupSubmit,
-              ),
+              busy: busy,
+              onPressed: invite == null ? _submit : _accept,
+              label: invite == null ? l.joinSubmit : l.setupSubmit,
             ),
           ),
         ],

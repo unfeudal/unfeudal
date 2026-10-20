@@ -123,6 +123,7 @@ Future<bool> confirmDanger(
   BuildContext context, {
   required String question,
   required String action,
+  String? message,
 }) async =>
     await showUfDialog<bool>(context, (dialog) {
       final colors = UfColors.of(dialog);
@@ -132,6 +133,7 @@ Future<bool> confirmDanger(
           mood: LoquetMood.concerned,
         ),
         title: question,
+        message: message,
         actions: [
           CancelButton(
             autofocus: true,

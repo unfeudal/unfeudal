@@ -7,9 +7,10 @@ import '../../app_scope.dart';
 import '../../design/dialog.dart';
 import '../../design/feedback.dart';
 import '../../design/field.dart';
+import '../../design/inputs.dart';
 import '../../vault/org_writer.dart';
 import '../../vault/vault.dart';
-import '../describe_error.dart';
+import '../busy_action.dart';
 import '../history/item_history_panel.dart';
 import '../fields.dart';
 import 'access_tab.dart';
@@ -31,17 +32,16 @@ class FolderEditorPanel extends StatefulWidget {
   State<FolderEditorPanel> createState() => _FolderEditorPanelState();
 }
 
-class _FolderEditorPanelState extends State<FolderEditorPanel> {
+class _FolderEditorPanelState extends State<FolderEditorPanel> with BusyAction {
   final _name = TextEditingController();
-  final _port = TextEditingController();
+  int? _port;
   final _user = TextEditingController();
   String? _parentId;
   String? _identityId;
   String? _jumpHostId;
   final _problems = <String, String>{};
-  String? _error;
 
-  /// Bumped by a refused save, to shake the panel.
+  // Bumped by a refused save, to shake the panel.
   int _shakes = 0;
 
   @override
@@ -49,12 +49,12 @@ class _FolderEditorPanelState extends State<FolderEditorPanel> {
     super.initState();
     final entry = _entry;
     final meta = entry?.meta ?? const {};
-    final defaults = switch (meta['defaults']) {
-      final Map<String, Object?> d => d,
-      _ => const <String, Object?>{},
-    };
+    final defaults = _defaultsOf(meta);
     _name.text = (meta['name'] as String?) ?? '';
-    _port.text = defaults['port'] == null ? '' : '${defaults['port']}';
+    _port = switch (defaults['port']) {
+      final int port => port,
+      _ => null,
+    };
     _user.text = (defaults['user'] as String?) ?? '';
     _identityId = defaults['identityId'] as String?;
     _jumpHostId = defaults['jumpHostId'] as String?;
@@ -63,7 +63,7 @@ class _FolderEditorPanelState extends State<FolderEditorPanel> {
 
   @override
   void dispose() {
-    for (final c in [_name, _port, _user]) {
+    for (final c in [_name, _user]) {
       c.dispose();
     }
     super.dispose();
@@ -75,7 +75,13 @@ class _FolderEditorPanelState extends State<FolderEditorPanel> {
 
   String? get _orgId => _entry?.orgId ?? widget.orgId;
 
-  /// The folder itself and every folder below it: never a valid parent.
+  static Map<String, Object?> _defaultsOf(Map<String, Object?> meta) =>
+      switch (meta['defaults']) {
+        final Map<String, Object?> d => d,
+        _ => const <String, Object?>{},
+      };
+
+  // The folder itself and every folder below it: never a valid parent.
   Set<String> _subtree(Vault vault) {
     final id = widget.folderId;
     if (id == null) return const {};
@@ -95,25 +101,15 @@ class _FolderEditorPanelState extends State<FolderEditorPanel> {
     final vault = state.vault!;
     _problems.clear();
     if (_name.text.trim().isEmpty) _problems['name'] = l.fieldRequired;
-    final port = _port.text.trim().isEmpty
-        ? null
-        : int.tryParse(_port.text.trim());
-    if (_port.text.trim().isNotEmpty &&
-        (port == null || port < 1 || port > 65535)) {
-      _problems['port'] = l.fieldInvalid;
-    }
     final previous = _entry?.meta ?? const {};
-    final previousDefaults = switch (previous['defaults']) {
-      final Map<String, Object?> d => d,
-      _ => const <String, Object?>{},
-    };
+    // Spreading the previous meta keeps the keys this editor does not know.
     final json = {
       'schemaVersion': 1,
-      ...previous, // unknown keys kept
+      ...previous,
       'name': _name.text.trim(),
       'defaults': {
-        ...previousDefaults,
-        'port': port,
+        ..._defaultsOf(previous),
+        'port': _port,
         'user': _user.text.trim().isEmpty ? null : _user.text.trim(),
         'identityId': _identityId,
         'jumpHostId': _jumpHostId,
@@ -128,28 +124,31 @@ class _FolderEditorPanelState extends State<FolderEditorPanel> {
       }
     }
     if (meta == null) return setState(() => _shakes++);
-    try {
+    final folder = meta;
+    await run(() async {
       final orgId = _orgId;
       if (orgId == null) {
-        await vault.saveFolder(meta, id: widget.folderId, parentId: _parentId);
+        await vault.saveFolder(
+          folder,
+          id: widget.folderId,
+          parentId: _parentId,
+        );
       } else if (widget.folderId == null) {
         await state.orgs!.writer.createFolder(
           orgId: orgId,
           parentId: _parentId,
-          meta: meta,
+          meta: folder,
         );
       } else {
         await state.orgs!.writer.upsert(
           type: 'folder',
           id: widget.folderId,
           target: OrgTarget(orgId, _parentId),
-          meta: meta.toJson(),
+          meta: folder.toJson(),
         );
       }
       widget.onClose?.call();
-    } on Exception catch (e) {
-      if (mounted) setState(() => _error = describeError(l, e));
-    }
+    });
   }
 
   Future<void> _delete() async {
@@ -161,7 +160,7 @@ class _FolderEditorPanelState extends State<FolderEditorPanel> {
       action: l.folderDelete,
     );
     if (!yes) return;
-    await state.trashItem(widget.folderId!, orgId: _orgId);
+    await state.trashItem(widget.folderId!);
     widget.onClose?.call();
   }
 
@@ -189,12 +188,12 @@ class _FolderEditorPanelState extends State<FolderEditorPanel> {
       child: EditorFrame(
         title: widget.folderId == null
             ? l.treeNewFolder
-            : vault.entry(widget.folderId!)?.name ?? l.treeNewFolder,
+            : _entry?.name ?? l.treeNewFolder,
         crumb: [vaultNameOf(l, state, _orgId), ?parentName].join(' / '),
         tabs: [
           if ((_orgId, widget.folderId) case (final org?, final folder?))
             (l.inspectorTabAccess, [AccessTab(orgId: org, folderId: folder)]),
-          if (state.serverHas('item_history') && widget.folderId != null)
+          if (state.serverHas(Flag.itemHistory) && widget.folderId != null)
             (
               l.itemHistory,
               [ItemHistoryPanel.embedded(itemId: widget.folderId!)],
@@ -236,11 +235,15 @@ class _FolderEditorPanelState extends State<FolderEditorPanel> {
                   .copyWith(fontSize: 14),
             ),
           ),
-          keyedField(
-            'folder-port',
-            _port,
-            l.hostPort,
-            error: _problems['port'],
+          UfField(
+            label: l.hostPort,
+            child: UfNumberField(
+              key: const Key('folder-port'),
+              value: _port,
+              min: 1,
+              width: double.infinity,
+              onChanged: (port) => setState(() => _port = port),
+            ),
           ),
           keyedField(
             'folder-user',
@@ -263,7 +266,7 @@ class _FolderEditorPanelState extends State<FolderEditorPanel> {
             value: _jumpHostId,
             onChanged: (v) => setState(() => _jumpHostId = v),
           ),
-          if (_error case final error?) UfErrorLine(error),
+          if (problem case final error?) UfErrorLine(error),
         ],
       ),
     );

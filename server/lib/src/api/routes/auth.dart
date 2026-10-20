@@ -8,7 +8,6 @@ import '../../auth/secret_hash.dart';
 import '../../audit/audit_log.dart';
 import '../../auth/tokens.dart';
 import '../../mail/mailer.dart';
-import '../../net/client_ip.dart';
 import '../app.dart';
 import '../credentials.dart';
 import '../errors.dart';
@@ -91,8 +90,8 @@ Future<Response> login(Request request) async {
         );
       }
     }
-    final session = await createSession(
-      deps,
+    return createSession(
+      request,
       tx,
       userId: userId,
       isInstanceOwner: user['is_instance_owner'] == 1,
@@ -100,12 +99,6 @@ Future<Response> login(Request request) async {
       bundleVersion: user['bundle_version']! as int,
       device: device,
     );
-    await auditWriter(
-      request,
-      tx,
-      actor: (user: userId, device: session.deviceId),
-    )(AuditScope.user(userId), 'device.added', [session.deviceId]);
-    return session;
   });
   deps.notifier.notify(userId, MailKind.newDevice, {
     'device': device.name,
@@ -120,7 +113,7 @@ Future<Response> refreshToken(Request request) async {
   final body = await readJson(request);
   final rotated = await deps.refresh.rotate(
     reqString(body, 'refreshToken', max: 200),
-    ip: clientIp(request, deps.config.trustedProxies).address,
+    ip: clientIpOf(request).address,
   );
   return jsonResponse(
     TokenPair(

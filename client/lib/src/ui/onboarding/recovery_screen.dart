@@ -33,7 +33,7 @@ class _RecoveryScreenState extends State<RecoveryScreen> with BusyAction {
   final _confirm = TextEditingController();
   ({String key, Uri server, String email})? _done;
 
-  /// 1: server, e-mail and key; 2: the new password.
+  // 1: server, e-mail and key; 2: the new password.
   int _step = 1;
 
   @override
@@ -69,7 +69,7 @@ class _RecoveryScreenState extends State<RecoveryScreen> with BusyAction {
     ],
   ))?.readAsString();
 
-  /// A mistyped key is refused here, before any request.
+  // A mistyped key is refused here, before any request.
   void _next() {
     final l = AppLocalizations.of(context);
     try {
@@ -102,7 +102,7 @@ class _RecoveryScreenState extends State<RecoveryScreen> with BusyAction {
     });
   }
 
-  /// Signs in on this device with the new password; a failure leaves the login screen to do it.
+  // Signs in on this device with the new password; a failure leaves the login screen to do it.
   Future<void> _finish(({String key, Uri server, String email}) done) async {
     final l = AppLocalizations.of(context);
     final state = AppScope.read(context);
@@ -168,7 +168,7 @@ class _RecoveryScreenState extends State<RecoveryScreen> with BusyAction {
               _key,
               l.recoverKey,
               mono: true,
-              hint: 'XXXX-XXXX-XXXX-XXXX-…',
+              hint: 'XXXX-XXXX-XXXX-XXXX-\u2026',
               onSubmitted: (_) => _next(),
             ),
           ] else ...[
@@ -201,10 +201,11 @@ class _RecoveryScreenState extends State<RecoveryScreen> with BusyAction {
             )
           else
             LockActions(
-              primary: FilledButton(
+              primary: BusyButton(
                 key: const Key('recover-submit'),
-                onPressed: busy ? null : _submit,
-                child: BusyLabel(busy: busy, label: l.recoverSubmit),
+                busy: busy,
+                onPressed: _submit,
+                label: l.recoverSubmit,
               ),
               links: [
                 TextButton(

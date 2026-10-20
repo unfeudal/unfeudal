@@ -23,7 +23,7 @@ class UfPaletteRow {
   final Widget? icon;
 }
 
-/// A titled group of [UfPaletteRow]s ("Hosts · Acme Ops", "Snippets", "Actions").
+/// A titled group of [UfPaletteRow]s (the hosts of a vault, "Snippets", "Actions").
 class UfPaletteGroup {
   const UfPaletteGroup(this.title, this.rows);
 

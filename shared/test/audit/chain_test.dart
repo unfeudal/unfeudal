@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
+import 'dart:convert';
+
+import 'package:crypto/crypto.dart';
 import 'package:test/test.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
@@ -35,10 +38,9 @@ List<AuditEvent> chain(int n) {
   return out;
 }
 
-AuditEvent tampered(AuditEvent e, String action) => AuditEvent.fromJson({
-  ...e.toJson(),
-  'action': action,
-}); // same hash, other content
+// Keeps the hash and changes the content.
+AuditEvent tampered(AuditEvent e, String action) =>
+    AuditEvent.fromJson({...e.toJson(), 'action': action});
 
 void main() {
   test('genesis and the reference vector', () {
@@ -49,9 +51,9 @@ void main() {
     );
   });
 
-  test('canonicalJson sorts keys at every level, no spaces, nulls kept', () {
+  test('the hashed JSON sorts keys at every level, no spaces, nulls kept', () {
     expect(
-      canonicalJson({
+      auditHash(genesisHash, {
         'b': 1,
         'a': {
           'd': null,
@@ -62,7 +64,13 @@ void main() {
           ],
         },
       }),
-      '{"a":{"c":[1,"x",{"y":false,"z":true}],"d":null},"b":1}',
+      sha256
+          .convert(
+            utf8.encode(
+              '$genesisHash{"a":{"c":[1,"x",{"y":false,"z":true}],"d":null},"b":1}',
+            ),
+          )
+          .toString(),
     );
   });
 

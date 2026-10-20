@@ -11,7 +11,7 @@ import '../../design/inputs.dart';
 import '../../design/tokens.dart';
 import '../../events/app_events.dart';
 import '../../vault/vault.dart';
-import '../describe_error.dart';
+import '../busy_action.dart';
 import '../history/item_history_panel.dart';
 import 'access_tab.dart';
 import 'editor_frame.dart';
@@ -34,7 +34,7 @@ class HostEditorPanel extends StatefulWidget {
   State<HostEditorPanel> createState() => _HostEditorPanelState();
 }
 
-class _HostEditorPanelState extends State<HostEditorPanel> {
+class _HostEditorPanelState extends State<HostEditorPanel> with BusyAction {
   final _name = TextEditingController();
   final _address = TextEditingController();
   final _user = TextEditingController();
@@ -47,12 +47,11 @@ class _HostEditorPanelState extends State<HostEditorPanel> {
   String? _jumpHostId;
   IdentityMode _identityMode = IdentityMode.shared;
 
-  /// Null while a forward row has a problem.
+  // Null while a forward row has a problem.
   List<PortForward>? _forwards = const [];
   final _problems = <String, String>{};
-  String? _error;
 
-  /// Bumped by a refused save, to shake the panel.
+  // Bumped by a refused save, to shake the panel.
   int _shakes = 0;
 
   @override
@@ -112,9 +111,10 @@ class _HostEditorPanelState extends State<HostEditorPanel> {
     final port = _port;
     String? optional(TextEditingController c) =>
         c.text.trim().isEmpty ? null : c.text.trim();
+    // Spreading the stored meta keeps the fields this editor does not show (forwards, jump host, unknown keys).
     final meta = {
       'schemaVersion': 1,
-      ...?_entry?.meta, // fields this editor does not show (forwards, jump host, unknown keys) are kept
+      ...?_entry?.meta,
       'name': _name.text.trim(),
       'address': _address.text.trim(),
       'port': port,
@@ -147,7 +147,7 @@ class _HostEditorPanelState extends State<HostEditorPanel> {
       }
     }
     if (_problems.isNotEmpty) return setState(() => _shakes++);
-    try {
+    await run(() async {
       final isNew = widget.hostId == null;
       await state.saveItem(
         type: 'host',
@@ -158,18 +158,16 @@ class _HostEditorPanelState extends State<HostEditorPanel> {
       );
       if (isNew) state.emit(HostCreated(name: _name.text.trim()));
       widget.onClose?.call();
-    } on Exception catch (e) {
-      if (mounted) setState(() => _error = describeError(l, e));
-    }
+    });
   }
 
-  /// `host.<field>: …` → the field to mark; anything else marks the name.
+  // A `host.<field>: ...` message marks that field; anything else marks the name.
   static String _fieldOf(FormatException e) =>
       RegExp(r'^host\.(\w+)').firstMatch(e.message)?.group(1) ?? 'name';
 
   Future<void> _trash() async {
     final state = AppScope.read(context);
-    await state.trashItem(widget.hostId!, orgId: _orgId);
+    await state.trashItem(widget.hostId!);
     widget.onClose?.call();
   }
 
@@ -265,7 +263,7 @@ class _HostEditorPanelState extends State<HostEditorPanel> {
           if ((orgId, _folderId) case (final org?, final folder?)
               when widget.hostId != null)
             (l.inspectorTabAccess, [AccessTab(orgId: org, folderId: folder)]),
-          if (state.serverHas('item_history') && widget.hostId != null)
+          if (state.serverHas(Flag.itemHistory) && widget.hostId != null)
             (
               l.itemHistory,
               [ItemHistoryPanel.embedded(itemId: widget.hostId!)],
@@ -313,7 +311,6 @@ class _HostEditorPanelState extends State<HostEditorPanel> {
                         key: const Key('host-port'),
                         value: _port,
                         min: 1,
-                        max: 65535,
                         width: double.infinity,
                         placeholder: resolved?.port,
                         onChanged: editable
@@ -397,7 +394,7 @@ class _HostEditorPanelState extends State<HostEditorPanel> {
             'startupCommand',
             mono: true,
           ),
-          if (_error case final error?) UfErrorLine(error),
+          if (problem case final error?) UfErrorLine(error),
         ],
       ),
     );

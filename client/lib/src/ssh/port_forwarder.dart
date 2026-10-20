@@ -8,8 +8,8 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 const _addressInUse = {48, 98, 10048}; // EADDRINUSE: macOS, Linux, Windows
 
-/// The OS says the port is taken, or the Dart VM does: it refuses a second bind of a port this process
-/// already holds (another tab's forward) before asking the OS.
+// The OS says the port is taken, or the Dart VM does: it refuses a second bind of a port this process
+// already holds (another tab's forward) before asking the OS.
 bool _isInUse(SocketException e) =>
     _addressInUse.contains(e.osError?.errorCode) ||
     (e.osError?.message.contains('shared flag') ?? false);
@@ -77,10 +77,11 @@ class PortForwarder extends ChangeNotifier {
     }
     final ServerSocket server;
     try {
+      // Loopback only, never 0.0.0.0 or ::, so the forward is not exposed to the network.
       server = await ServerSocket.bind(
         InternetAddress.loopbackIPv4,
         f.localPort,
-      ); // never 0.0.0.0 or ::
+      );
     } on SocketException catch (e) {
       final Exception error = _isInUse(e)
           ? PortInUse(f.localPort)
@@ -101,7 +102,8 @@ class PortForwarder extends ChangeNotifier {
           local.cast<List<int>>().pipe(remote.sink).catchError((Object _) {}),
         );
       } catch (_) {
-        local.destroy(); // channel refused: only this connection ends
+        // Any failure to open the channel ends only this connection, never the forward.
+        local.destroy();
       }
     });
     _active[f.localPort] = handle;

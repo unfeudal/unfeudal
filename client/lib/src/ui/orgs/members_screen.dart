@@ -4,7 +4,6 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
-import '../../app_state.dart';
 import '../../design/banner.dart';
 import '../../design/buttons.dart';
 import '../../design/choices.dart';
@@ -14,7 +13,7 @@ import '../../design/icons.dart';
 import '../../design/rows.dart';
 import '../../design/tokens.dart';
 import '../../orgs/member_pins.dart';
-import '../describe_error.dart';
+import '../busy_action.dart';
 import 'safety_code_dialog.dart';
 
 String roleLabel(AppLocalizations l, OrgRole role) => switch (role) {
@@ -56,21 +55,8 @@ class MembersScreen extends StatefulWidget {
   State<MembersScreen> createState() => _MembersScreenState();
 }
 
-class _MembersScreenState extends State<MembersScreen> {
-  String? _error;
-
-  Future<void> _run(Future<void> Function(AppState state) action) async {
-    final l = AppLocalizations.of(context);
-    final state = AppScope.read(context);
-    try {
-      await action(state);
-      if (mounted) setState(() => _error = null);
-    } on Exception catch (e) {
-      if (mounted) setState(() => _error = describeError(l, e));
-    }
-  }
-
-  /// Confirms an accepted member: pinned first, then confirmed on the server.
+class _MembersScreenState extends State<MembersScreen> with BusyAction {
+  // Pinned first, then confirmed on the server.
   Future<void> _confirm(OrgMember m) async {
     final verified = await showSafetyCode(
       context,
@@ -78,14 +64,15 @@ class _MembersScreenState extends State<MembersScreen> {
       publicKey: m.publicKey!,
     );
     if (verified == null) return;
-    await _run((state) async {
+    await run(() async {
+      final state = AppScope.read(context);
       await state.orgs!.pins.pin(m.userId, m.publicKey!, verified: verified);
       await state.api!.confirmMember(widget.orgId, m.userId);
       await state.sync!.syncNow();
     });
   }
 
-  /// Pins a confirmed member on this device; a changed key rotates every folder they can view.
+  // Pins a confirmed member on this device; a changed key rotates every folder they can view.
   Future<void> _verify(OrgMember m) async {
     final orgs = AppScope.read(context).orgs!;
     final changed = orgs.pins.check(m.userId, m.publicKey!) == PinCheck.changed;
@@ -95,7 +82,8 @@ class _MembersScreenState extends State<MembersScreen> {
       publicKey: m.publicKey!,
     );
     if (verified == null) return;
-    await _run((state) async {
+    await run(() async {
+      final state = AppScope.read(context);
       await orgs.pins.pin(m.userId, m.publicKey!, verified: verified);
       orgs.alerts.remove(m.userId);
       await state.sync!.syncNow();
@@ -122,7 +110,8 @@ class _MembersScreenState extends State<MembersScreen> {
       action: l.memberRemove,
     );
     if (!yes) return;
-    await _run((state) async {
+    await run(() async {
+      final state = AppScope.read(context);
       await state.api!.removeMember(widget.orgId, m.userId);
       await state.sync!.syncNow();
     });
@@ -157,7 +146,7 @@ class _MembersScreenState extends State<MembersScreen> {
       child: ListView(
         padding: const EdgeInsets.only(bottom: 40),
         children: [
-          if (_error case final error?)
+          if (problem case final error?)
             StatusBanner(tone: BannerTone.danger, message: error),
           for (final m in members)
             _row(
@@ -228,7 +217,8 @@ class _MembersScreenState extends State<MembersScreen> {
             onChanged: touchable && (!self || (isOwner && anotherOwner))
                 ? (r) {
                     if (r == role) return;
-                    _run((state) async {
+                    run(() async {
+                      final state = AppScope.read(context);
                       await state.api!.setMemberRole(widget.orgId, m.userId, r);
                       await state.sync!.syncNow();
                     });

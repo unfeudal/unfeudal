@@ -105,7 +105,7 @@ TerminalTheme _charte(UfColors c, {required Color background}) {
   );
 }
 
-/// Moves [color] away from [background] in lightness until the pair reaches 4.5:1.
+// Moves color away from background in lightness until the pair reaches 4.5:1.
 Color _readable(Color color, Color background) {
   final darker = background.computeLuminance() > 0.5;
   var hsl = HSLColor.fromColor(color);

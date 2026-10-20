@@ -233,7 +233,7 @@ class _TabChipState extends State<_TabChip> {
   }
 }
 
-/// 28 px under the terminal: the active target (and its jump host), its running forwards, then the sync state.
+// Under the terminal: the active target (and its jump host), its running forwards, then the sync state.
 class _StatusBar extends StatelessWidget {
   const _StatusBar();
 
@@ -284,7 +284,7 @@ class _StatusBar extends StatelessWidget {
     );
   }
 
-  /// user@address[:port], with « via » the jump host's name when there is one.
+  // user@address[:port], followed by "via" and the jump host's name when there is one.
   static String _target(AppLocalizations l, AppState state, String hostId) {
     final lookup = state.vault?.hostLookup(hostId);
     if (lookup == null) return '';

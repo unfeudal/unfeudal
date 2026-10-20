@@ -12,7 +12,8 @@ import '../../design/icons.dart';
 import '../../design/motion.dart';
 import '../../design/rows.dart';
 import '../../design/tokens.dart';
-import '../describe_error.dart';
+import '../busy_action.dart';
+import '../fields.dart';
 
 /// The org's teams (with the `teams` capability): create, rename, change members, delete.
 class TeamsScreen extends StatefulWidget {
@@ -24,10 +25,9 @@ class TeamsScreen extends StatefulWidget {
   State<TeamsScreen> createState() => _TeamsScreenState();
 }
 
-class _TeamsScreenState extends State<TeamsScreen> {
+class _TeamsScreenState extends State<TeamsScreen> with BusyAction {
   /// The team being edited: null id for a new one; null while none is open.
   ({String? id, TextEditingController name, Set<String> memberIds})? _editing;
-  String? _error;
 
   @override
   void dispose() {
@@ -49,8 +49,8 @@ class _TeamsScreenState extends State<TeamsScreen> {
     final state = AppScope.read(context);
     final editing = _editing!;
     final name = editing.name.text.trim();
-    if (name.isEmpty) return setState(() => _error = l.fieldRequired);
-    try {
+    if (name.isEmpty) return setState(() => problem = l.fieldRequired);
+    await run(() async {
       final memberIds = editing.memberIds.toList()..sort();
       editing.id == null
           ? await state.api!.createTeam(
@@ -69,12 +69,9 @@ class _TeamsScreenState extends State<TeamsScreen> {
         setState(() {
           _editing?.name.dispose();
           _editing = null;
-          _error = null;
         });
       }
-    } on Exception catch (e) {
-      if (mounted) setState(() => _error = describeError(l, e));
-    }
+    });
   }
 
   Future<void> _delete(OrgTeam team) async {
@@ -86,12 +83,10 @@ class _TeamsScreenState extends State<TeamsScreen> {
       action: l.teamDelete,
     );
     if (!yes) return;
-    try {
+    await run(() async {
       await state.api!.deleteTeam(widget.orgId, team.id);
       await state.sync!.syncNow();
-    } on Exception catch (e) {
-      if (mounted) setState(() => _error = describeError(l, e));
-    }
+    });
   }
 
   @override
@@ -100,7 +95,7 @@ class _TeamsScreenState extends State<TeamsScreen> {
     final colors = UfColors.of(context);
     final state = AppScope.of(context);
     final block = state.orgs!.block;
-    final enabled = state.serverHas('teams');
+    final enabled = state.serverHas(Flag.teams);
     final teams = [
       for (final t in block?.teams ?? const <OrgTeam>[])
         if (t.orgId == widget.orgId) t,
@@ -134,14 +129,11 @@ class _TeamsScreenState extends State<TeamsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   spacing: 8,
                   children: [
-                    UfField(
-                      label: l.teamName,
-                      child: TextField(
-                        key: const Key('team-name'),
-                        controller: editing.name,
-                        maxLength: 100,
-                        decoration: const InputDecoration(counterText: ''),
-                      ),
+                    keyedField(
+                      'team-name',
+                      editing.name,
+                      l.teamName,
+                      maxLength: 100,
                     ),
                     for (final m in members)
                       UfCheckboxRow(
@@ -166,7 +158,7 @@ class _TeamsScreenState extends State<TeamsScreen> {
                 ),
               ),
             ),
-          if (_error case final error?) UfErrorLine(error),
+          if (problem case final error?) UfErrorLine(error),
           const SizedBox(height: 8),
           if (teams.isEmpty && editing == null)
             Text(l.teamsEmpty, style: muted),

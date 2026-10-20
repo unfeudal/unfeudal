@@ -2,9 +2,9 @@
 import 'dart:typed_data';
 
 import '../bytes.dart';
-import '../crypto/envelope.dart';
 import '../crypto/folder_keys.dart';
 import '../ids.dart';
+import '../permissions/resolver.dart';
 import '../util/json_reader.dart';
 
 const _maxRows = 100000;
@@ -141,6 +141,8 @@ class OrgSummary {
   final Map<String, Object?> extra;
 
   bool get mascot => settings['mascot'] != false;
+
+  bool get isConfirmed => status == MemberStatus.confirmed.name;
 
   Map<String, Object?> toJson() => {
     ...extra,
@@ -284,6 +286,22 @@ class AclRow {
   final List<String> deny;
   final Map<String, Object?> extra;
 
+  bool get isTeam => principalType == PrincipalType.team.name;
+
+  /// Typed for the resolver; unknown permission names are skipped and any
+  /// principal type other than team reads as user.
+  AclEntry get entry => AclEntry(
+    folderId,
+    isTeam ? PrincipalType.team : PrincipalType.user,
+    principalId,
+    _permissions(allow),
+    _permissions(deny),
+  );
+
+  static Set<Permission> _permissions(List<String> names) => {
+    for (final name in names) ?Permission.values.asNameMap()[name],
+  };
+
   Map<String, Object?> toJson() => {
     ...extra,
     'orgId': orgId,
@@ -329,45 +347,23 @@ class FolderNode {
 /// One folder key version: a `wrappedKeys` row (the caller's own keys) or a
 /// `keyHistory` row; both share one shape.
 class WrappedKeyRow {
-  WrappedKeyRow({
-    required this.folderId,
-    required this.version,
-    required this.meta,
-    this.secret,
-    this.extra = const {},
-  });
+  WrappedKeyRow({required this.folderId, required this.keys});
 
-  factory WrappedKeyRow.fromJson(Object? json, String what) {
-    final r = JsonReader(json, what);
-    final secret = r.opt<Map<String, Object?>>('secret');
-    return WrappedKeyRow(
-      folderId: r.uuid('folderId'),
-      version: r.integer('version', min: 1),
-      meta: Envelope.fromJson(r.object('meta')),
-      secret: secret == null ? null : Envelope.fromJson(secret),
-      extra: r.extra(const {'folderId', 'version', 'meta', 'secret'}),
-    );
-  }
+  factory WrappedKeyRow.fromJson(Object? json, String what) => WrappedKeyRow(
+    folderId: JsonReader(json, what).uuid('folderId'),
+    keys: WrappedFolderKeys.fromJson(json),
+  );
 
   final String folderId;
-  final int version;
-  final Envelope meta;
-  final Envelope? secret;
-  final Map<String, Object?> extra;
+  final WrappedFolderKeys keys; // its extra keeps folderId and unknown fields
 
-  WrappedFolderKeys get keys =>
-      WrappedFolderKeys(version: version, meta: meta, secret: secret);
+  FolderKeyHistory get history => FolderKeyHistory(
+    version: keys.version,
+    meta: keys.meta,
+    secret: keys.secret,
+  );
 
-  FolderKeyHistory get history =>
-      FolderKeyHistory(version: version, meta: meta, secret: secret);
-
-  Map<String, Object?> toJson() => {
-    ...extra,
-    'folderId': folderId,
-    'version': version,
-    'meta': meta.toJson(),
-    'secret': secret?.toJson(),
-  };
+  Map<String, Object?> toJson() => {'folderId': folderId, ...keys.toJson()};
 }
 
 /// A member waiting for folder keys; [secret] means they need the secret key.

@@ -87,7 +87,6 @@ class _PasswordPromptDialogState extends State<PasswordPromptDialog> {
     final l = AppLocalizations.of(context);
     void submit() => Navigator.pop(context, _password.text);
     return UfDialog(
-      width: 440,
       title: l.sshPasswordTitle(widget.target),
       actions: [
         CancelButton(onPressed: () => Navigator.pop(context)),
@@ -145,7 +144,6 @@ class _KeyboardInteractiveDialogState extends State<KeyboardInteractiveDialog> {
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
     return UfDialog(
-      width: 440,
       title: widget.name.isEmpty ? l.sshPromptsTitle : widget.name,
       message: widget.instruction.isEmpty ? null : widget.instruction,
       actions: [

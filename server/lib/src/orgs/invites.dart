@@ -72,7 +72,8 @@ Future<bool> inviteMailSent(
   }
   try {
     return await deps.mailer.send(Mail(MailKind.invite, to, locale, vars));
-  } catch (e) {
+  } on Object catch (e) {
+    // Any mail failure is caught: the invite is already committed and stays.
     deps.log.warn('invite mail failed', {'type': '${e.runtimeType}'});
     return false;
   }

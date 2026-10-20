@@ -15,7 +15,9 @@ class ResolvedHost {
   final String? user;
   final String? identityId;
   final String? jumpHostId;
-  final Map<String, String> sources; // field → 'host' | folder id | 'default'
+
+  /// Field name to where its value comes from: 'host', a folder id or 'default'.
+  final Map<String, String> sources;
 }
 
 /// The host's own value, else the nearest folder default along the parent

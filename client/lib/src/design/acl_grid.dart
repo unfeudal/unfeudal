@@ -6,8 +6,8 @@ import 'tokens.dart';
 
 enum UfTriState { allow, deny, unset }
 
-/// One right for one principal, 28 px: "Allow" on `okSoft`, "Deny" on `dangerSoft`, or a muted "—" in a `line`
-/// edge when unset. A click cycles allow → deny → unset; without [canDeny] it cycles allow → unset. Null
+/// One right for one principal, 28 px: "Allow" on `okSoft`, "Deny" on `dangerSoft`, or a muted dash in a `line`
+/// edge when unset. A click cycles allow, deny, unset; without [canDeny] it cycles allow, unset. Null
 /// [onChanged] disables it. [semanticLabel] (the right's name) is read before the state.
 class UfTriToggle extends StatelessWidget {
   const UfTriToggle({
@@ -71,7 +71,7 @@ class UfTriToggle extends StatelessWidget {
         }),
       ),
       child: Text(
-        state == UfTriState.unset ? '—' : word,
+        state == UfTriState.unset ? noValue : word,
         semanticsLabel: [?semanticLabel, word].join(', '),
       ),
     );

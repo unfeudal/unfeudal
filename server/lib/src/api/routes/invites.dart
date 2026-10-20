@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import 'dart:convert';
-
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
@@ -21,20 +19,15 @@ import '../session.dart';
 import '../validate.dart';
 
 Future<Response> createOrgInvite(Request request) async {
-  final org = request.params['org']!;
   final deps = depsOf(request), auth = authOf(request);
-  parseUuid(org);
+  final org = parseUuid(request.params['org']!);
   final body = await readJson(request);
-  final email = normalizeEmail(body['email']); // 1.
+  final email = normalizeEmail(body['email']);
   final role = body.containsKey('role')
-      ? OrgRole.values.asNameMap()[body['role']] ??
-            (throw ApiError(
-              ApiErrorCode.invalidRequest,
-              'role must be owner, admin or member.',
-            ))
+      ? parseRole(body['role'])
       : OrgRole.member;
   final (caller, orgName, locale) = await deps.db.transaction((tx) async {
-    final caller = await requireMember(tx, org, auth.userId, admin: true); // 2.
+    final caller = await requireMember(tx, org, auth.userId, admin: true);
     final name =
         (await tx.query('SELECT name FROM orgs WHERE id = @o', {
               'o': org,
@@ -43,13 +36,10 @@ Future<Response> createOrgInvite(Request request) async {
     final locale = await localeOf(tx, auth.userId);
     return (caller, name, locale);
   });
-  if (role != OrgRole.member && caller.role != OrgRole.owner) {
-    throw ApiError(
-      ApiErrorCode.forbidden,
-      'Only an owner invites admins and owners.',
-    ); // 3.
-  }
-  await deps.limiter.hit([inviteCreateKey(auth.userId)]); // 4.
+  requireRoleManager(caller, [
+    role,
+  ], 'Only an owner invites admins and owners.');
+  await deps.limiter.hit([inviteCreateKey(auth.userId)]);
   final row = await deps.db.transaction((tx) async {
     final row = await createInviteRow(
       tx,
@@ -76,9 +66,8 @@ Future<Response> createOrgInvite(Request request) async {
 
 /// Pending invites only (not accepted, revoked or expired), by expiresAt.
 Future<Response> listOrgInvites(Request request) async {
-  final org = request.params['org']!;
   final deps = depsOf(request), auth = authOf(request);
-  parseUuid(org);
+  final org = parseUuid(request.params['org']!);
   final invites = await deps.db.transaction((tx) async {
     await requireMember(tx, org, auth.userId, admin: true);
     return pendingInvites(tx, deps, org);
@@ -87,9 +76,8 @@ Future<Response> listOrgInvites(Request request) async {
 }
 
 Future<Response> revokeInvite(Request request) async {
-  final id = request.params['id']!;
   final deps = depsOf(request), auth = authOf(request);
-  parseUuid(id);
+  final id = parseUuid(request.params['id']!);
   await deps.db.transaction((tx) async {
     final inv = (await tx.query(
       'SELECT org_id, role, accepted_at, revoked_at FROM invites WHERE id = @i',
@@ -107,20 +95,18 @@ Future<Response> revokeInvite(Request request) async {
     final mayManage =
         inv != null &&
         (orgId == null ? auth.isInstanceOwner : caller?.isAdmin == true);
-    if (!mayManage) throw ApiError.notFound(); // 1.
+    // An invite the caller may not manage looks the same as a missing one.
+    if (!mayManage) throw ApiError.notFound();
     if (orgId != null && !deps.features.enabled(Flag.orgs)) {
-      throw ApiError.orgsOff(); // 2.
+      throw ApiError.orgsOff();
     }
-    if (orgId != null &&
-        inv['role'] != 'member' &&
-        caller!.role != OrgRole.owner) {
-      throw ApiError(
-        ApiErrorCode.forbidden,
-        'Only an owner revokes admin and owner invites.',
-      ); // 3.
+    if (orgId != null) {
+      requireRoleManager(caller!, [
+        OrgRole.values.asNameMap()[inv['role']] ?? OrgRole.admin,
+      ], 'Only an owner revokes admin and owner invites.');
     }
     if (inv['accepted_at'] != null) {
-      throw ApiError(ApiErrorCode.conflict, 'Already accepted.'); // 4.
+      throw ApiError(ApiErrorCode.conflict, 'Already accepted.');
     }
     if (inv['revoked_at'] == null) {
       await tx.execute('UPDATE invites SET revoked_at = @t WHERE id = @i', {
@@ -139,8 +125,9 @@ Future<Response> revokeInvite(Request request) async {
 
 const _invalid = 'This invitation is not valid.';
 
-/// Row of a usable invite for [email], or null (unknown, used, revoked, expired, other email).
-Future<Map<String, Object?>?> _usable(
+// An unknown, used, revoked or expired invite, or one for another email, gives
+// the same 404.
+Future<Map<String, Object?>> _usable(
   Tx tx,
   String token,
   String email,
@@ -152,17 +139,18 @@ Future<Map<String, Object?>?> _usable(
     'WHERE i.token_hash = @h',
     {'h': hashToken(token)},
   )).firstOrNull;
-  if (r == null || r['accepted_at'] != null || r['revoked_at'] != null) {
-    return null;
-  }
-  if (!parseIso(r['expires_at']! as String).isAfter(now) ||
+  if (r == null ||
+      r['accepted_at'] != null ||
+      r['revoked_at'] != null ||
+      !parseIso(r['expires_at']! as String).isAfter(now) ||
       r['email'] != email) {
-    return null;
+    throw ApiError(ApiErrorCode.notFound, _invalid);
   }
   return r;
 }
 
-/// First write of accept and join: a concurrent accept that committed first leaves 0 rows → 404.
+// Runs as the first write of accept and join: when a concurrent accept
+// committed first, no row changes and the caller gets a 404.
 Future<void> _claim(Tx tx, Map<String, Object?> inv, DateTime now) async {
   final n = await tx.execute(
     'UPDATE invites SET accepted_at = @t WHERE id = @i AND accepted_at IS NULL',
@@ -183,19 +171,17 @@ void _orgGates(AppDeps deps, Map<String, Object?> inv) {
 
 Future<Response> acceptInvite(Request request) async {
   final deps = depsOf(request);
-  final net = netOf(clientIp(request, deps.config.trustedProxies));
-  await deps.limiter.hit([inviteIpKey(net)]); // 1.
-  final body = await readJson(request); // 2.
+  final net = netOf(clientIpOf(request));
+  await deps.limiter.hit([inviteIpKey(net)]);
+  final body = await readJson(request);
   final token = reqString(body, 'token', max: 200);
   final email = normalizeEmail(body['email']);
   final now = deps.clock.now();
-  final inv =
-      await deps.db.transaction(
-        readOnly: true,
-        (tx) => _usable(tx, token, email, now),
-      ) ??
-      (throw ApiError(ApiErrorCode.notFound, _invalid)); // 3.
-  _orgGates(deps, inv); // 4, 5.
+  final inv = await deps.db.transaction(
+    readOnly: true,
+    (tx) => _usable(tx, token, email, now),
+  );
+  _orgGates(deps, inv);
   Future<void> noAccount(Tx tx) async {
     if ((await tx.query('SELECT 1 AS x FROM users WHERE email = @e', {
       'e': email,
@@ -204,18 +190,15 @@ Future<Response> acceptInvite(Request request) async {
         ApiErrorCode.conflict,
         'An account already uses this email.',
         extra: {'reason': ConflictReason.accountExists.wire},
-      ); // 6.
+      );
     }
   }
 
   await deps.db.transaction(readOnly: true, noAccount);
-  final bundle = body['bundle']; // 7.
-  parseBundle(bundle, allowTestingKdf: deps.allowTestingKdf);
+  final bundle = parseBundle(body['bundle'], kdfFloor: deps.kdfFloor);
   final device = parseDevice(body['device']);
-  final authHash = await hashSecret(
-    reqKey32(body, 'authKey'),
-    deps.secretHash,
-  ); // Argon2 before the transaction
+  // Argon2 is slow, so both hashes run before the write transaction opens.
+  final authHash = await hashSecret(reqKey32(body, 'authKey'), deps.secretHash);
   final recoveryHash = await hashSecret(
     reqKey32(body, 'recoveryAuthKey'),
     deps.secretHash,
@@ -224,24 +207,20 @@ Future<Response> acceptInvite(Request request) async {
       ? parseLocale(body['locale'])
       : 'en';
   final session = await deps.db.transaction((tx) async {
-    final again =
-        await _usable(tx, token, email, deps.clock.now()) ??
-        (throw ApiError(ApiErrorCode.notFound, _invalid)); // 8.
+    // Checks again inside the write transaction: the invite may have changed
+    // since the read-only check.
+    final again = await _usable(tx, token, email, deps.clock.now());
     await _claim(tx, again, deps.clock.now());
     await noAccount(tx);
-    final userId = newId();
-    await tx.execute(
-      'INSERT INTO users (id, email, bundle, bundle_version, auth_hash, recovery_auth_hash, created_at, locale) '
-      'VALUES (@id, @e, @b, 0, @a, @r, @t, @l)',
-      {
-        'id': userId,
-        'e': email,
-        'b': jsonEncode(bundle),
-        'a': authHash,
-        'r': recoveryHash,
-        't': iso(deps.clock.now()),
-        'l': locale,
-      },
+    final userId = await insertUser(
+      tx,
+      deps,
+      email: email,
+      bundle: bundle,
+      authHash: authHash,
+      recoveryHash: recoveryHash,
+      locale: locale,
+      isInstanceOwner: false,
     );
     final orgId = again['org_id'] as String?;
     if (orgId != null) {
@@ -253,26 +232,24 @@ Future<Response> acceptInvite(Request request) async {
       await bumpOrgSeq(tx);
     }
     final session = await createSession(
-      deps,
+      request,
       tx,
       userId: userId,
       isInstanceOwner: false,
-      bundle: bundle as Map<String, Object?>,
+      bundle: bundle,
       bundleVersion: 0,
       device: device,
     );
     // after the session exists: the new user and device are the actors
-    final audit = auditWriter(
+    await auditWriter(
       request,
       tx,
       actor: (user: userId, device: session.deviceId),
-    );
-    await audit(
+    )(
       orgId == null ? AuditScope.instance : AuditScope.org(orgId),
       'invite.accepted',
       [again['id']! as String, userId],
     );
-    await audit(AuditScope.user(userId), 'device.added', [session.deviceId]);
     return session;
   });
   await deps.limiter.refund(inviteIpKey(net));
@@ -281,34 +258,32 @@ Future<Response> acceptInvite(Request request) async {
 
 Future<Response> joinInvite(Request request) async {
   final deps = depsOf(request), auth = authOf(request);
-  final net = netOf(clientIp(request, deps.config.trustedProxies));
-  await deps.limiter.hit([inviteIpKey(net)]); // 1.
-  final token = reqString(await readJson(request), 'token', max: 200); // 2.
+  final net = netOf(clientIpOf(request));
+  await deps.limiter.hit([inviteIpKey(net)]);
+  final token = reqString(await readJson(request), 'token', max: 200);
   final orgId = await deps.db.transaction((tx) async {
     final email =
         (await tx.query('SELECT email FROM users WHERE id = @u', {
               'u': auth.userId,
             })).single['email']!
             as String;
-    final inv =
-        await _usable(tx, token, email, deps.clock.now()) ??
-        (throw ApiError(ApiErrorCode.notFound, _invalid)); // 3.
+    final inv = await _usable(tx, token, email, deps.clock.now());
     final orgId = inv['org_id'] as String?;
     if (orgId == null) {
       throw ApiError(
         ApiErrorCode.conflict,
         'This invitation creates an account.',
         extra: {'reason': ConflictReason.accountExists.wire},
-      ); // 4.
+      );
     }
-    _orgGates(deps, inv); // 5, 6.
+    _orgGates(deps, inv);
     await _claim(tx, inv, deps.clock.now());
     final member = (await tx.query(
       'SELECT 1 AS x FROM org_members WHERE org_id = @o AND user_id = @u',
       {'o': orgId, 'u': auth.userId},
     )).isNotEmpty;
     if (!member) {
-      await checkMembershipCap(tx, deps.config, auth.userId); // 7.
+      await checkMembershipCap(tx, deps.config, auth.userId);
       await tx.execute(
         "INSERT INTO org_members (org_id, user_id, role, status) VALUES (@o, @u, @r, 'accepted')",
         {'o': orgId, 'u': auth.userId, 'r': inv['role']},

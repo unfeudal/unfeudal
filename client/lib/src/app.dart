@@ -8,8 +8,6 @@ import 'debug_trace.dart';
 import 'design/dialog.dart';
 import 'design/motion.dart';
 import 'design/tokens.dart';
-import 'loquet/loquet_pose.dart';
-import 'loquet/loquet_spot.dart';
 import 'settings/settings.dart';
 import 'ui/lock/lock_frame.dart';
 import 'ui/lock/login_screen.dart';
@@ -66,7 +64,7 @@ class _UnfeudalAppState extends State<UnfeudalApp> {
     super.dispose();
   }
 
-  /// Leaving home closes every dialog and pushed screen (lock, sign-out, revoked device).
+  // Leaving home closes every dialog and pushed screen (lock, sign-out, revoked device).
   void _onState() {
     final stage = widget.state.stage;
     if (stage != _stage) {
@@ -82,31 +80,15 @@ class _UnfeudalAppState extends State<UnfeudalApp> {
     final context = _navigator.currentContext;
     if (context == null) return false;
     final l = AppLocalizations.of(context);
-    return await showUfDialog<bool>(context, (dialog) {
-          void answer(bool value) => Navigator.pop(dialog, value);
-          final colors = UfColors.of(dialog);
-          return UfDialog(
-            leading: const LoquetSpot(
-              placement: LoquetPlacement.dialog,
-              mood: LoquetMood.concerned,
-            ),
-            title: l.plainHttpTitle,
-            message: l.plainHttpBody('$server'),
-            actions: [
-              CancelButton(autofocus: true, onPressed: () => answer(false)),
-              FilledButton(
-                key: const Key('plain-http-continue'),
-                style: dangerButtonStyle(colors),
-                onPressed: () => answer(true),
-                child: Text(l.plainHttpContinue),
-              ),
-            ],
-          );
-        }) ??
-        false;
+    return confirmDanger(
+      context,
+      question: l.plainHttpTitle,
+      message: l.plainHttpBody('$server'),
+      action: l.plainHttpContinue,
+    );
   }
 
-  /// Puts the custom title bar over the screens: it follows the home shell's sidebar, else the access screens.
+  // The custom title bar follows the home shell's sidebar, else the access screens.
   Widget _framed(BuildContext context, Widget screen) {
     final chrome = widget.chrome;
     final scoped = ShellChromeScope(chrome: _shellChrome, child: screen);
@@ -167,7 +149,7 @@ class _UnfeudalAppState extends State<UnfeudalApp> {
   );
 }
 
-/// Performance mode also drops Material's ink ripples.
+// Performance mode also drops Material's ink ripples.
 ThemeData _theme(Brightness brightness, Settings settings) {
   final theme = ufTheme(brightness);
   return settings.performanceMode

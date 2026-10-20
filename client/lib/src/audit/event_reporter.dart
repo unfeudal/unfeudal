@@ -16,7 +16,7 @@ class EventReporter {
   final ApiClient? Function() _api;
   final bool Function() _enabled;
 
-  /// hostId → jump hosts of the connection being opened.
+  // Maps a hostId to the jump hosts of the connection being opened.
   final _hops = <String, List<String>>{};
   Future<void> _tail = Future.value();
 

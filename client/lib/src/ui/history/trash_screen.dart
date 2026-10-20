@@ -13,10 +13,9 @@ import '../../design/motion.dart';
 import '../../design/rows.dart';
 import '../../vault/org_writer.dart';
 import '../../vault/vault.dart';
-import '../describe_error.dart';
+import '../busy_action.dart';
 import '../hosts/editor_frame.dart';
 import '../manage_frame.dart';
-import 'item_history_panel.dart';
 
 /// The selected vault's trash, with when the server deletes each item for good; restoring puts back what was
 /// inside a folder.
@@ -29,25 +28,14 @@ class TrashScreen extends StatefulWidget {
   State<TrashScreen> createState() => _TrashScreenState();
 }
 
-class _TrashScreenState extends State<TrashScreen> {
-  String? _error;
-
+class _TrashScreenState extends State<TrashScreen> with BusyAction {
   Future<void> _restore(VaultEntry e) async {
-    final l = AppLocalizations.of(context);
     final state = AppScope.read(context);
-    try {
-      e.orgId == null
-          ? await state.vault!.restoreItem(e.id)
-          : await state.orgs!.writer.restore(e.id);
-      if (mounted) setState(() => _error = null);
-    } on Exception catch (err) {
-      if (mounted) setState(() => _error = describeError(l, err));
-    }
+    await run(() => state.restoreItem(e.id));
   }
 
-  /// An item inside a trashed org folder moves to a live folder the user can edit (re-sealed with its keys).
+  // An item inside a trashed org folder moves to a live folder the user can edit (re-sealed with its keys).
   Future<void> _moveOut(VaultEntry e) async {
-    final l = AppLocalizations.of(context);
     final state = AppScope.read(context);
     final vault = state.vault!;
     final writer = state.orgs!.writer;
@@ -64,17 +52,14 @@ class _TrashScreenState extends State<TrashScreen> {
       (_) => _MoveOutDialog(name: e.name ?? '', targets: targets),
     );
     if (dest == null) return;
-    try {
-      await writer.upsert(
+    await run(
+      () => writer.upsert(
         type: e.item.type,
         id: e.id,
         target: OrgTarget(e.orgId!, dest),
         meta: e.meta!,
-      );
-      if (mounted) setState(() => _error = null);
-    } on Exception catch (err) {
-      if (mounted) setState(() => _error = describeError(l, err));
-    }
+      ),
+    );
   }
 
   /// Restores and syncs change the vault: the list follows it.
@@ -110,7 +95,7 @@ class _TrashScreenState extends State<TrashScreen> {
               ),
     ].join(' · ');
     bool blocked(VaultEntry e) =>
-        readOnly || e.state != EntryState.ok || !canEditEntry(state, e);
+        readOnly || e.state != EntryState.ok || !state.orgs!.canEditEntry(e);
     return ManageFrame(
       title: l.trashTitle,
       subtitle: vaultName,
@@ -121,7 +106,7 @@ class _TrashScreenState extends State<TrashScreen> {
           : ListView(
               padding: const EdgeInsets.only(bottom: 40),
               children: [
-                if (_error case final error?) UfErrorLine(error),
+                if (problem case final error?) UfErrorLine(error),
                 for (final e in trashed) ...[
                   ItemRow(
                     key: Key('trash-${e.id}'),

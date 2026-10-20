@@ -17,6 +17,7 @@ import '../db/maintenance.dart';
 import '../log/logger.dart';
 import '../mail/mailer.dart';
 import '../mail/notifier.dart';
+import '../net/client_ip.dart';
 import '../util/clock.dart';
 import 'errors.dart';
 import 'middleware.dart';
@@ -52,7 +53,7 @@ class AppDeps {
     required this.refresh,
     required this.limiter,
     required this.secretHash,
-    required this.allowTestingKdf,
+    required this.kdfFloor,
     required this.mailer,
   });
 
@@ -60,9 +61,9 @@ class AppDeps {
     Config config,
     Db db, {
     Clock clock = const SystemClock(),
-    Logger? log,
+    required Logger log,
     SecretHashParams secretHash = SecretHashParams.server,
-    bool allowTestingKdf = false,
+    KdfParams kdfFloor = KdfParams.defaults,
     Mailer mailer = const NoMailer(),
   }) async {
     final serverSecret = await loadServerSecret(config.secretFile);
@@ -71,7 +72,7 @@ class AppDeps {
       config: config,
       db: db,
       clock: clock,
-      log: log ?? Logger(config.logLevel, stdout.writeln),
+      log: log,
       serverSecret: serverSecret,
       instanceEpoch: await ensureInstanceEpoch(db),
       audit: audit,
@@ -85,7 +86,7 @@ class AppDeps {
       ),
       limiter: RateLimiter(db, clock, config),
       secretHash: secretHash,
-      allowTestingKdf: allowTestingKdf,
+      kdfFloor: kdfFloor,
       mailer: mailer,
     );
     deps.limiter.onLockout = deps.notifier.lockout;
@@ -108,8 +109,8 @@ class AppDeps {
   final Mailer mailer;
   late final SecurityNotifier notifier = SecurityNotifier(this);
 
-  /// Tests only.
-  final bool allowTestingKdf;
+  /// The weakest bundle KDF accepted; lowered by tests only.
+  final KdfParams kdfFloor;
 
   /// One trusted_proxies warning per process.
   bool proxyWarned = false;
@@ -125,15 +126,17 @@ Middleware withDeps(AppDeps deps) =>
 
 AppDeps depsOf(Request request) => request.context[_depsKey]! as AppDeps;
 
+InternetAddress clientIpOf(Request request) =>
+    clientIp(request, depsOf(request).config.trustedProxies);
+
 Never _notFound(Request _) => throw ApiError.notFound();
 
-/// An org route: signed in, then the `orgs` flag.
 Handler _org(Handler inner) => requireAuth(requireFeature(Flag.orgs)(inner));
 
-/// A team route: an org route, then the `teams` flag.
 Handler _team(Handler inner) => _org(requireFeature(Flag.teams)(inner));
 
-/// withDeps → requestLog → securityHeaders → errorMapper → routes.
+/// Middleware order, outermost first: withDeps, requestLog, securityHeaders,
+/// errorMapper, then the routes.
 Handler buildHandler(AppDeps deps) {
   final api = Router(notFoundHandler: _notFound)
     ..post('/setup', setup)

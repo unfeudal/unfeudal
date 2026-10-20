@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 import 'package:flutter/material.dart';
 
+import '../../l10n/app_localizations.dart';
 import '../design/buttons.dart';
 import '../design/segmented.dart';
 import '../design/dialog.dart';
 import '../design/field.dart';
-import '../design/tokens.dart';
 import 'busy_action.dart';
 import 'fields.dart';
 
@@ -20,6 +20,10 @@ class FormDialogField {
     this.lines = 1,
     this.mono = false,
     this.offLabel,
+    this.autofocus = false,
+    this.maxLength,
+    this.isRequired = false,
+    this.submitOnEnter = false,
   });
 
   final String key;
@@ -30,6 +34,13 @@ class FormDialogField {
 
   /// For a toggle: the label of its 'false' side, drawn as a two-choice switch (Ed25519 | RSA 4096).
   final String? offLabel;
+
+  final bool autofocus;
+  final int? maxLength;
+
+  /// A text left blank or only spaces stops the save with "required".
+  final bool isRequired;
+  final bool submitOnEnter;
 }
 
 /// A small form in a dialog. [onSave] gets the values by field key (a toggle is "true" or "false");
@@ -76,25 +87,34 @@ class _FormDialogState extends State<FormDialog> with BusyAction {
     super.dispose();
   }
 
-  Future<void> _save() => run(() async {
-    await widget.onSave({
-      for (final MapEntry(:key, :value) in _text.entries) key: value.text,
-      for (final MapEntry(:key, :value) in _toggles.entries) key: '$value',
+  Future<void> _save() async {
+    if (widget.fields.any(
+      (f) => f.isRequired && _text[f.key]!.text.trim().isEmpty,
+    )) {
+      return setState(
+        () => problem = AppLocalizations.of(context).fieldRequired,
+      );
+    }
+    await run(() async {
+      await widget.onSave({
+        for (final MapEntry(:key, :value) in _text.entries) key: value.text,
+        for (final MapEntry(:key, :value) in _toggles.entries) key: '$value',
+      });
+      if (mounted) Navigator.pop(context, true);
     });
-    if (mounted) Navigator.pop(context, true);
-  });
+  }
 
   @override
   Widget build(BuildContext context) {
     return UfDialog(
-      width: 440,
       title: widget.title,
       actions: [
         CancelButton(onPressed: () => Navigator.pop(context, false)),
-        FilledButton(
+        BusyButton(
           key: Key(widget.saveKey),
-          onPressed: busy ? null : _save,
-          child: BusyLabel(busy: busy, label: widget.saveLabel),
+          busy: busy,
+          onPressed: _save,
+          label: widget.saveLabel,
         ),
       ],
       children: [
@@ -110,23 +130,17 @@ class _FormDialogState extends State<FormDialog> with BusyAction {
               selected: _toggles[f.key]!,
               onChanged: (v) => setState(() => _toggles[f.key] = v),
             )
-          else if (f.kind == FormFieldKind.secret)
+          else
             keyedField(
               f.key,
               _text[f.key]!,
               f.label,
-              secret: true,
+              secret: f.kind == FormFieldKind.secret,
               mono: f.mono,
-            )
-          else
-            UfField(
-              label: f.label,
-              child: TextField(
-                key: Key(f.key),
-                controller: _text[f.key],
-                maxLines: f.lines,
-                style: f.mono ? monoField : null,
-              ),
+              maxLines: f.lines,
+              maxLength: f.maxLength,
+              autofocus: f.autofocus,
+              onSubmitted: f.submitOnEnter ? (_) => _save() : null,
             ),
         if (problem case final error?) UfErrorLine(error),
       ],

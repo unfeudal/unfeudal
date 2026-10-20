@@ -10,8 +10,8 @@ import '../../design/tokens.dart';
 import '../orgs/acl_editor.dart';
 import '../orgs/why_rights_view.dart';
 
-/// The inspector's Accès tab for an org item: who holds which rights on [folderId], then « Modifier les
-/// accès » (with manage) and « Pourquoi ces droits ? ».
+/// The inspector's Access tab for an org item: who holds which rights on [folderId], then the edit access
+/// action (with manage) and the why these rights action.
 class AccessTab extends StatelessWidget {
   const AccessTab({super.key, required this.orgId, required this.folderId});
 
@@ -25,10 +25,7 @@ class AccessTab extends StatelessWidget {
     final colors = UfColors.of(context);
     final orgs = state.orgs!;
     final block = orgs.block;
-    Set<Permission> perms(List<String> names) => {
-      for (final n in names) ...Permission.values.where((p) => p.name == n),
-    };
-    String who(AclRow a) => a.principalType == 'team'
+    String who(AclRow a) => a.isTeam
         ? block?.teams.where((t) => t.id == a.principalId).firstOrNull?.name ??
               ''
         : block?.members
@@ -56,9 +53,9 @@ class AccessTab extends StatelessWidget {
             key: Key('access-${a.principalId}'),
             title: who(a),
             subtitle: [
-              if (a.allow.isNotEmpty) permissionList(l, perms(a.allow)),
+              if (a.allow.isNotEmpty) permissionList(l, a.entry.allow),
               if (a.deny.isNotEmpty)
-                l.accessDenied(permissionList(l, perms(a.deny))),
+                l.accessDenied(permissionList(l, a.entry.deny)),
             ].join(' · '),
           ),
         Wrap(

@@ -225,6 +225,7 @@ void main() {
           folderId: prod,
           meta: hostJson('web'),
         );
+        await s.sync!.syncNow();
       });
       await pumpApp(
         t,

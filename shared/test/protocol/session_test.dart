@@ -12,7 +12,7 @@ void main() {
   setUpAll(() async {
     final acc = await AccountCrypto(
       kdf: KdfParams.testing,
-      allowTestingKdf: true,
+      kdfFloor: KdfParams.testing,
     ).create('correct horse');
     session = {
       'userId': u,

@@ -10,43 +10,65 @@ Matcher errorOn(String key) =>
 String env(String key) => 'UNFEUDAL_${key.toUpperCase()}';
 
 void main() {
-  test('documented defaults', () {
-    final c = load(const {});
-    expect(c.databaseUrl, 'sqlite:///data/unfeudal.db');
-    expect((c.listen.host, c.listen.port), ('0.0.0.0', 8080));
-    expect(
-      (c.publicUrl, c.secretFile),
-      (Uri.parse('https://vault.test'), '/data/secret.key'),
-    );
-    expect(c.sourceUrl, Uri.parse('https://github.com/unfeudal/unfeudal'));
-    expect(c.trustedProxies, isEmpty);
-    expect(
-      (c.logLevel, c.timezone, c.setupToken),
-      (LogLevel.info, 'UTC', null),
-    );
-    expect((c.minClientVersion, c.orgCreation), ('0.1.0', OrgCreation.all));
-    expect(
-      (c.accessTokenTtl, c.refreshTokenTtl),
-      (const Duration(minutes: 15), const Duration(days: 30)),
-    );
-    expect(
-      (c.loginMaxAttempts, c.loginLockout, c.inviteTtl),
-      (10, const Duration(minutes: 15), const Duration(days: 7)),
-    );
-    expect(
-      (c.maxVaultSize, c.maxOrgSize, c.maxOrgsPerUser, c.maxDevicesPerUser),
-      (50 << 20, 500 << 20, 0, 0),
-    );
-    expect(
-      (
-        c.auditRetentionDays,
-        c.auditIpRetentionDays,
-        c.itemHistoryMaxVersions,
-        c.trashRetentionDays,
-      ),
-      (365, 90, 50, 30),
-    );
-    expect(c.smtp, isNull);
+  group('documented defaults', () {
+    late Config c;
+    setUp(() => c = load(const {}));
+
+    test('database, listen address, public URL and secret file', () {
+      expect(c.databaseUrl, 'sqlite:///data/unfeudal.db');
+      expect((c.listen.host, c.listen.port), ('0.0.0.0', 8080));
+      expect(
+        (c.publicUrl, c.secretFile),
+        (Uri.parse('https://vault.test'), '/data/secret.key'),
+      );
+    });
+
+    test('source URL, proxies, log level, timezone and setup token', () {
+      expect(c.sourceUrl, Uri.parse('https://github.com/unfeudal/unfeudal'));
+      expect(c.trustedProxies, isEmpty);
+      expect(
+        (c.logLevel, c.timezone, c.setupToken),
+        (LogLevel.info, 'UTC', null),
+      );
+    });
+
+    test('client version and org creation', () {
+      expect((c.minClientVersion, c.orgCreation), ('0.1.0', OrgCreation.all));
+    });
+
+    test('token lifetimes, login lockout and invite lifetime', () {
+      expect(
+        (c.accessTokenTtl, c.refreshTokenTtl),
+        (const Duration(minutes: 15), const Duration(days: 30)),
+      );
+      expect(
+        (c.loginMaxAttempts, c.loginLockout, c.inviteTtl),
+        (10, const Duration(minutes: 15), const Duration(days: 7)),
+      );
+    });
+
+    test('storage and count limits', () {
+      expect(
+        (c.maxVaultSize, c.maxOrgSize, c.maxOrgsPerUser, c.maxDevicesPerUser),
+        (50 << 20, 500 << 20, 0, 0),
+      );
+    });
+
+    test('retention', () {
+      expect(
+        (
+          c.auditRetentionDays,
+          c.auditIpRetentionDays,
+          c.itemHistoryMaxVersions,
+          c.trashRetentionDays,
+        ),
+        (365, 90, 50, 30),
+      );
+    });
+
+    test('no SMTP', () {
+      expect(c.smtp, isNull);
+    });
   });
 
   test('accepted values', () {

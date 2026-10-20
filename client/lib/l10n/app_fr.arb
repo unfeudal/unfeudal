@@ -584,7 +584,6 @@
   "searchSnippets": "Snippets",
   "searchNoMatch": "Rien ne correspond à « {query} ».",
   "keyEscape": "Échap",
-  "fieldCopy": "Copier",
   "fieldIncrease": "Augmenter",
   "fieldDecrease": "Diminuer",
   "strengthWeak": "Faible.",

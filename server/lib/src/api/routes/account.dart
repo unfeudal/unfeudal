@@ -64,11 +64,8 @@ int _bundleVersion(Map<String, Object?> body) {
   return v;
 }
 
-/// The request's bundle as a map, after its model and KDF checks.
-Map<String, Object?> _bundle(AppDeps deps, Map<String, Object?> body) {
-  parseBundle(body['bundle'], allowTestingKdf: deps.allowTestingKdf);
-  return body['bundle']! as Map<String, Object?>;
-}
+Map<String, Object?> _bundle(AppDeps deps, Map<String, Object?> body) =>
+    parseBundle(body['bundle'], kdfFloor: deps.kdfFloor);
 
 void _requireVersion(_User user, int version) {
   if (user.bundleVersion != version) throw _stale();
@@ -79,8 +76,8 @@ ApiError _stale() => ApiError(
   'Your account changed on another device. Try again.',
 );
 
-/// Proof by the current master password. The acct keys reset as soon as it
-/// is right, as on login: the credential check succeeded, whatever follows.
+// The rate-limit keys reset as soon as the password is right, as on login:
+// the credential check succeeded, whatever follows.
 Future<void> _requireCurrentAuthKey(
   Request request,
   _User user,
@@ -93,7 +90,7 @@ Future<void> _requireCurrentAuthKey(
   await clearCredentials(request, user.email);
 }
 
-/// Compare-and-swap on bundle_version: a concurrent change → 409, never a silent overwrite.
+// A concurrent change gives a 409, never a silent overwrite.
 Future<void> _casBundle(
   Tx tx,
   String userId,
@@ -174,7 +171,8 @@ Future<Response> changePassword(Request request) async {
   return noContent();
 }
 
-/// Checks 1–4 of recover/start: one recovery proof, the same 401 for every failure.
+// The same 401 for every failure, and a hash is verified even for an unknown
+// email, so neither the response nor its timing tells which accounts exist.
 Future<_User> _proveRecovery(Request request, Map<String, Object?> body) async {
   final deps = depsOf(request);
   final email = normalizeEmail(body['email']);
@@ -281,20 +279,21 @@ Future<Response> setLocale(Request request) async {
 
 Future<Response> deleteAccount(Request request) async {
   final deps = depsOf(request);
-  final auth = authOf(request); // 1. requireAuth wraps this handler
+  final auth = authOf(request);
   if (auth.isInstanceOwner) {
     throw ApiError(
       ApiErrorCode.forbidden,
       'The Instance Owner cannot be deleted.',
-    ); // 2.
+    );
   }
-  final body = await readJson(request); // 3.
+  final body = await readJson(request);
   final user = await _userById(deps.db, auth.userId);
-  // 4. counted before the key is read
+  // Counted before the key is checked, so wrong guesses are rate limited.
   await limitCredentials(request, user.email);
   await _requireCurrentAuthKey(request, user, body);
+  // deleteUser refuses the last owner of an organization with a 409.
   await deps.db.transaction(
     (tx) => deleteUser(tx, auth.userId, audit: auditWriter(request, tx)),
-  ); // 5. last owner → 409 inside
+  );
   return noContent();
 }

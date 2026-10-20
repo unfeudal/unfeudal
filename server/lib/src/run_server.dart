@@ -65,9 +65,8 @@ Future<RunningServer> runServer(
     final retention = startRetentionTimer(deps);
     return RunningServer(server.port, (Duration drain) async {
       final deadline = DateTime.now().add(drain);
-      unawaited(
-        server.close(),
-      ); // stop accepting; open requests keep their connection
+      // Stops accepting; open requests keep their connection.
+      unawaited(server.close());
       if (inFlight > 0) {
         await (idle = Completer<void>()).future.timeout(
           drain,
@@ -80,7 +79,8 @@ Future<RunningServer> runServer(
       retention.cancel();
       await db.close();
     });
-  } catch (_) {
+    // Any startup failure closes the database before propagating.
+  } on Object catch (_) {
     await db.close();
     rethrow;
   }
@@ -101,7 +101,8 @@ Future<int> healthcheck(Config config) async {
     final response = await request.close().timeout(const Duration(seconds: 3));
     await response.drain<void>();
     return response.statusCode == 200 ? 0 : 1;
-  } catch (_) {
+    // Any failure to reach the server means unhealthy.
+  } on Object catch (_) {
     return 1;
   } finally {
     client.close(force: true);

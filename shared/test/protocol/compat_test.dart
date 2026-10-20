@@ -47,7 +47,13 @@ void main() {
     };
     final p = ApiInfo.fromJson(public);
     expect(
-      (p.server, p.instanceEpoch, p.trashDays, p.has('sync'), p.has('mascot')),
+      (
+        p.server,
+        p.instanceEpoch,
+        p.trashDays,
+        p.capabilities.contains('sync'),
+        p.has(Flag.mascot),
+      ),
       (null, null, null, true, false),
     );
     expect(jsonEncode(p.toJson()), jsonEncode(public));

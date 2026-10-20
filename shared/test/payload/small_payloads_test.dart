@@ -8,43 +8,48 @@ const h = '6f1c2b9a-3d4e-4f50-8a61-7b8c9d0e1f20';
 const i = '4a6c8e0a-2b4d-4f6a-8c0e-2a4c6e8a0c2e';
 final fp = 'SHA256:${'A' * 43}';
 
-void roundTrip(Object Function(Object?) parse, Map<String, Object?> json) =>
-    expect(
-      jsonEncode((parse(json) as Payload).toJson()),
-      jsonEncode(json),
-      reason: '$json',
-    );
+void expectRoundTrip(
+  Object Function(Object?) parse,
+  Map<String, Object?> json,
+) => expect(
+  jsonEncode((parse(json) as Payload).toJson()),
+  jsonEncode(json),
+  reason: '$json',
+);
 
 void main() {
   test('each payload round-trips with unknown fields', () {
-    roundTrip(KnownHostMeta.fromJson, {
+    expectRoundTrip(KnownHostMeta.fromJson, {
       'x': 1,
       'schemaVersion': 1,
       'hostItemId': h,
       'keyType': 'ssh-ed25519',
       'sha256Fingerprint': fp,
     });
-    roundTrip(ProfileMeta.fromJson, {
+    expectRoundTrip(ProfileMeta.fromJson, {
       'avatarSeed': 7,
       'schemaVersion': 1,
       'displayName': 'Alice',
       'prefs': {'themeMode': 'dark', 'futurePref': true},
     });
-    roundTrip(ProfileMeta.fromJson, {'schemaVersion': 1, 'displayName': null});
-    roundTrip(SnippetMeta.fromJson, {
+    expectRoundTrip(ProfileMeta.fromJson, {
+      'schemaVersion': 1,
+      'displayName': null,
+    });
+    expectRoundTrip(SnippetMeta.fromJson, {
       'color': 'blue',
       'schemaVersion': 1,
       'name': 'Disk',
       'command': ' df -h\n',
       'tags': ['ops'],
     });
-    roundTrip(HostBindingMeta.fromJson, {
+    expectRoundTrip(HostBindingMeta.fromJson, {
       'x': 1,
       'schemaVersion': 1,
       'hostItemId': h,
       'identityId': i,
     });
-    roundTrip(MemberPinMeta.fromJson, {
+    expectRoundTrip(MemberPinMeta.fromJson, {
       'x': 1,
       'schemaVersion': 1,
       'userId': i,

@@ -16,19 +16,15 @@ import '../json.dart';
 import '../middleware.dart';
 import '../validate.dart';
 
-Never _bad(String rule) =>
-    throw ApiError(ApiErrorCode.invalidRequest, 'entries: $rule');
-
 Set<Permission> _permissionList(Object? v) {
-  if (v is! List) _bad('allow and deny must be lists');
+  if (v is! List) badField('entries', 'allow and deny must be lists');
   return {
     for (final name in v)
-      Permission.values.asNameMap()[name] ?? _bad('unknown permission'),
+      Permission.values.asNameMap()[name] ??
+          badField('entries', 'unknown permission'),
   };
 }
 
-/// 4. shape, known permissions, teams never deny, one entry per principal · 5. users: user_overrides on,
-/// enabled members · 6. teams: teams on, teams of the org.
 List<AclEntry> _parseEntries(
   List<Map<String, Object?>> raw,
   String folder,
@@ -40,29 +36,34 @@ List<AclEntry> _parseEntries(
   for (final e in raw) {
     final type =
         PrincipalType.values.asNameMap()[e['principalType']] ??
-        _bad('principalType must be user or team');
+        badField('entries', 'principalType must be user or team');
     final id = e['principalId'];
-    if (id is! String || !isUuid(id)) _bad('principalId must be a UUID');
+    if (id is! String || !isUuid(id)) {
+      badField('entries', 'principalId must be a UUID');
+    }
     final allow = _permissionList(e['allow']);
     final deny = _permissionList(e['deny']);
     if (type == PrincipalType.team && deny.isNotEmpty) {
-      _bad('a team entry cannot deny');
+      badField('entries', 'a team entry cannot deny');
     }
-    if (!seen.add((type, id))) _bad('one entry per principal');
+    if (!seen.add((type, id))) badField('entries', 'one entry per principal');
     if (type == PrincipalType.user) {
       if (!features.enabled(Flag.userOverrides)) {
-        _bad('user entries are off on this server');
+        badField('entries', 'user entries are off on this server');
       }
       final member = org.members[id];
       if (member == null || member.disabled) {
-        _bad('a user entry must name an enabled member');
+        badField('entries', 'a user entry must name an enabled member');
       }
     } else {
       if (!features.enabled(Flag.teams)) {
-        _bad('team entries are off on this server');
+        badField('entries', 'team entries are off on this server');
       }
       if (!org.teams.containsKey(id)) {
-        _bad('a team entry must name a team of the organization');
+        badField(
+          'entries',
+          'a team entry must name a team of the organization',
+        );
       }
     }
     out.add(AclEntry(folder, type, id, allow, deny));
@@ -71,9 +72,8 @@ List<AclEntry> _parseEntries(
 }
 
 Future<Response> putAcl(Request request) async {
-  final folder = request.params['folder']!;
   final deps = depsOf(request), auth = authOf(request);
-  parseUuid(folder);
+  final folder = parseUuid(request.params['folder']!);
   final raw = (await readJson(request))['entries'];
   if (raw is! List ||
       raw.length > 200 ||
@@ -81,11 +81,11 @@ Future<Response> putAcl(Request request) async {
     throw ApiError(
       ApiErrorCode.invalidRequest,
       'entries must be a list of at most 200 objects.',
-    ); // 1.
+    );
   }
   await deps.db.transaction((tx) async {
-    final orgId = await liveOrgFolder(tx, folder); // 2. 404
-    await requireMember(tx, orgId, auth.userId); // 3. 404
+    final orgId = await liveOrgFolder(tx, folder);
+    await requireMember(tx, orgId, auth.userId);
     final before = (await loadOrg(tx, orgId))!;
     final admin = before.members[auth.userId]!.isAdmin;
     if (!admin &&
@@ -94,17 +94,14 @@ Future<Response> putAcl(Request request) async {
           auth.userId,
           folder,
         ).contains(Permission.manage)) {
-      throw ApiError(
-        ApiErrorCode.forbidden,
-        'You need manage on this folder.',
-      ); // 3.
+      throw ApiError(ApiErrorCode.forbidden, 'You need manage on this folder.');
     }
     final entries = _parseEntries(
       raw.cast<Map<String, Object?>>(),
       folder,
       before,
       deps.features,
-    ); // 4–6.
+    );
     await tx.execute('DELETE FROM acl_entries WHERE folder_id = @f', {
       'f': folder,
     });
@@ -123,8 +120,10 @@ Future<Response> putAcl(Request request) async {
       );
     }
     final after = (await loadOrg(tx, orgId))!;
+    // A non-admin manager cannot grant more than they hold, nor lock
+    // themselves out of the folder.
     if (!admin) {
-      checkNoEscalation(before, after, auth.userId); // 7. 403
+      checkNoEscalation(before, after, auth.userId);
       if (!permissionsOf(
         after,
         auth.userId,
@@ -133,7 +132,7 @@ Future<Response> putAcl(Request request) async {
         throw ApiError(
           ApiErrorCode.invalidRequest,
           'You cannot remove your own manage.',
-        ); // 7. 400
+        );
       }
     }
     await recordRotations(tx, orgId, before, after, 'acl_change');
@@ -146,9 +145,8 @@ Future<Response> putAcl(Request request) async {
 }
 
 Future<Response> putFolderKeys(Request request) async {
-  final folder = request.params['folder']!;
   final deps = depsOf(request), auth = authOf(request);
-  parseUuid(folder);
+  final folder = parseUuid(request.params['folder']!);
   final body = await readJson(request);
   final version = body['version'];
   final rawWraps = body['wrapped'];
@@ -156,7 +154,7 @@ Future<Response> putFolderKeys(Request request) async {
     throw ApiError(
       ApiErrorCode.invalidRequest,
       'version and wrapped are required.',
-    ); // 1.
+    );
   }
   final List<WrappedFolderKeys> wraps;
   final FolderKeyHistory? history;
@@ -176,7 +174,7 @@ Future<Response> putFolderKeys(Request request) async {
     );
   }
   await deps.db.transaction((tx) async {
-    final orgId = await liveOrgFolder(tx, folder); // 2.
+    final orgId = await liveOrgFolder(tx, folder);
     final caller = await requireMember(tx, orgId, auth.userId);
     final org = (await loadOrg(tx, orgId))!;
     final current = await currentKeyVersion(tx, folder);
@@ -198,16 +196,16 @@ Future<Response> putFolderKeys(Request request) async {
       throw ApiError(
         ApiErrorCode.invalidRequest,
         'version must be ${max(current, 1)} or ${current + 1}.',
-      ); // 3.
+      );
     }
     String label(PayloadPart p) =>
         KeyIds.sealed(KeyIds.folder(folder, version, p));
+    // Each user gets only the key parts their permissions on the folder allow.
     for (final w in wraps) {
-      // 4.
-      final perms = permissionsOf(org, w.userId!, folder);
+      final access = FolderKeyAccess.of(permissionsOf(org, w.userId!, folder));
       if (w.version != version ||
-          !perms.contains(Permission.view) ||
-          (w.secret != null && !perms.contains(Permission.connect)) ||
+          !access.hasMeta ||
+          (w.secret != null && !access.hasSecret) ||
           w.meta.keyId != label(PayloadPart.meta) ||
           (w.secret != null && w.secret!.keyId != label(PayloadPart.secret))) {
         throw ApiError(
@@ -216,8 +214,8 @@ Future<Response> putFolderKeys(Request request) async {
         );
       }
     }
+    // A rotation replaces every wrap, so no reader may be left without the new keys.
     if (rotation) {
-      // 5.
       final readers = org.members.keys.where(
         (u) => permissionsOf(org, u, folder).contains(Permission.view),
       );
@@ -235,15 +233,14 @@ Future<Response> putFolderKeys(Request request) async {
       await tx.execute('DELETE FROM folder_key_history WHERE folder_id = @f', {
         'f': folder,
       });
+      // history is checked non-null above; the awaits in between stop type promotion.
       await tx.execute(
         'INSERT INTO folder_key_history (org_id, folder_id, version, body) VALUES (@o, @f, @v, @b)',
         {
           'o': orgId,
           'f': folder,
           'v': version,
-          'b': jsonEncode(
-            history!.toJson(),
-          ), // checked above; the awaits stop promotion,
+          'b': jsonEncode(history!.toJson()),
         },
       );
       await tx.execute(
@@ -276,35 +273,36 @@ Future<Response> putFolderKeys(Request request) async {
 }
 
 Future<Response> rotationDone(Request request) async {
-  final folder = request.params['folder']!;
   final deps = depsOf(request), auth = authOf(request);
-  parseUuid(folder);
+  final folder = parseUuid(request.params['folder']!);
   await deps.db.transaction((tx) async {
-    final orgId = await liveOrgFolder(tx, folder); // 1.
-    await requireMember(tx, orgId, auth.userId, admin: true); // 2.
+    final orgId = await liveOrgFolder(tx, folder);
+    await requireMember(tx, orgId, auth.userId, admin: true);
     final pending = (await tx.query(
       'SELECT rotated_version FROM pending_rotations WHERE folder_id = @f',
       {'f': folder},
     )).firstOrNull;
-    if (pending == null) return; // 3. idempotent
+    // Idempotent: a repeated call after completion is a no-op.
+    if (pending == null) return;
     final current = await currentKeyVersion(tx, folder);
     final stale = ApiError(
       ApiErrorCode.conflict,
       'Some items still use the previous keys.',
     );
-    if (pending['rotated_version'] != current) throw stale; // 4.
-    // 5. the folder itself and its non-folder items (subfolders are sealed with their own keys), trash included
+    if (pending['rotated_version'] != current) throw stale;
+    // The folder and its non-folder items, trash included; subfolders are
+    // sealed with their own keys.
     for (final r in await tx.query(
       "SELECT body FROM items WHERE purged = 0 AND (id = @f OR (folder_id = @f AND type <> 'folder'))",
       {'f': folder},
     )) {
       final item = jsonDecode(r['body']! as String) as Map<String, Object?>;
-      final secret = item['secret'] as Map<String, Object?>?;
-      if ((item['meta'] as Map?)?['keyId'] !=
-              KeyIds.folder(folder, current, PayloadPart.meta) ||
-          (secret != null &&
-              secret['keyId'] !=
-                  KeyIds.folder(folder, current, PayloadPart.secret))) {
+      if (!sealedWithFolderKeys(
+        (item['meta'] as Map?)?['keyId'],
+        (item['secret'] as Map?)?['keyId'],
+        folder,
+        current,
+      )) {
         throw stale;
       }
     }

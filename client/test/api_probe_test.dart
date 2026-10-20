@@ -111,10 +111,8 @@ void main() {
     term.write('\x1b[?2004h');
     expect(term.bracketedPasteMode, isTrue);
     term.paste('c');
-    expect(out, [
-      'a\rb',
-      '\x1b[200~c\x1b[201~',
-    ]); // paste sends a line break as \r
+    // Paste sends a line break as \r.
+    expect(out, ['a\rb', '\x1b[200~c\x1b[201~']);
   });
 
   test('xterm2: selection, highlights and buffer text', () {

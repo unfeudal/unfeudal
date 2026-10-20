@@ -14,7 +14,7 @@ abstract final class SymmetricCipher {
 
   static Uint8List newKey() => secureBytes(32);
 
-  /// Effective AAD = utf8(keyId) ‖ 0x00 ‖ aad: an envelope cannot be relabelled to another key.
+  // Effective AAD is utf8(keyId), then a 0x00 byte, then aad: an envelope cannot be relabelled to another key.
   static List<int> _aad(String keyId, List<int> aad) => [
     ...utf8.encode(keyId),
     0,

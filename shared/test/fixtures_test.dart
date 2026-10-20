@@ -92,7 +92,7 @@ void main() {
     );
     final u = await AccountCrypto(
       kdf: KdfParams.testing,
-      allowTestingKdf: true,
+      kdfFloor: KdfParams.testing,
     ).unlock(bundle, 'fixture-password');
     expect(u.userKey.length, 32);
   });

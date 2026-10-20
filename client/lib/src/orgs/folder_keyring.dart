@@ -13,7 +13,8 @@ class FolderKeyring {
   FolderKeyring(LocalMirror mirror)
     : _store = SealedKv(mirror, KvKey.keyring, keyringAad);
   final SealedKv _store;
-  final _keys = <String, Map<int, FolderKeys>>{}; // folderId → version → keys
+  // Keyed by folderId, then by key version.
+  final _keys = <String, Map<int, FolderKeys>>{};
 
   /// false: kv.keyring did not open; the keyring restarts empty.
   Future<bool> load(Uint8List userKey) async {
@@ -69,12 +70,10 @@ class FolderKeyring {
     final histories = {for (final h in block.keyHistory) h.folderId: h};
     for (final row in block.wrappedKeys) {
       try {
-        final served = await row.keys.unwrap(
-          row.folderId,
-          keyPair,
-        ); // labels: KeyLabelMismatch
+        // Throws KeyLabelMismatch when the labels do not match.
+        final served = await row.keys.unwrap(row.folderId, keyPair);
         final h = histories[row.folderId];
-        final older = h != null && h.version == served.version
+        final older = h != null && h.keys.version == served.version
             ? await h.history.open(served, folderId: row.folderId)
             : const <FolderKeys>[];
         final held = current(row.folderId);

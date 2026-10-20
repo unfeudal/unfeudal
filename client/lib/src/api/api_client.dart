@@ -32,6 +32,9 @@ class ApiException implements Exception {
   final Duration? retryAfter;
 
   ApiErrorCode? get known => ApiErrorCode.fromWire(code);
+  ConflictReason? get conflictReason => ConflictReason.fromWire(reason);
+  UnauthorizedReason? get unauthorizedReason =>
+      UnauthorizedReason.fromWire(reason);
 
   @override
   String toString() =>
@@ -49,17 +52,10 @@ class NetworkException implements Exception {
 
 /// A write refused locally because the client is read-only toward this server.
 class ReadOnlyException implements Exception {
-  const ReadOnlyException([this.reason]);
-  final String? reason;
+  const ReadOnlyException();
 }
 
 typedef DeviceInput = ({String name, String platform});
-
-/// The server's retention values and the org's own (null = the server's applies).
-typedef OrgRetention = ({
-  ({int auditDays, int maxVersions, int trashDays}) server,
-  ({int? auditDays, int? maxVersions, int? trashDays}) org,
-});
 
 class ApiClient {
   ApiClient(this.baseUrl, this._http);
@@ -71,7 +67,7 @@ class ApiClient {
 
   /// Must persist the new pair before it resolves: a lost refresh token revokes the device on replay.
   Future<void> Function(TokenPair)? onTokens;
-  bool readOnly = false;
+  bool Function() isReadOnly = () => false;
   Future<void> Function(Duration) sleep = Future.delayed;
 
   static const _timeout = Duration(seconds: 30);
@@ -295,7 +291,10 @@ class ApiClient {
   Future<void> reportReveal(String itemId) =>
       _send('POST', '/events/reveal', body: {'itemId': itemId});
 
-  Future<OrgRetention> orgRetention(String orgId) async {
+  /// The server's retention values and the org's own (null = the server's applies), keyed by setting name.
+  Future<({Map<String, int> server, Map<String, int?> org})> orgRetention(
+    String orgId,
+  ) async {
     final json = await _send('GET', '/orgs/$orgId/settings/retention');
     if (json case {
       'server': {
@@ -310,16 +309,16 @@ class ApiClient {
       },
     }) {
       return (
-        server: (
-          auditDays: auditDays,
-          maxVersions: maxVersions,
-          trashDays: trashDays,
-        ),
-        org: (
-          auditDays: orgAuditDays,
-          maxVersions: orgMaxVersions,
-          trashDays: orgTrashDays,
-        ),
+        server: {
+          'auditDays': auditDays,
+          'maxVersions': maxVersions,
+          'trashDays': trashDays,
+        },
+        org: {
+          'auditDays': orgAuditDays,
+          'maxVersions': orgMaxVersions,
+          'trashDays': orgTrashDays,
+        },
       );
     }
     throw const FormatException('retention: unexpected body');
@@ -501,7 +500,7 @@ class ApiClient {
     return info;
   }
 
-  /// Writes an outdated or incompatible client may still make: reading, signing in, protecting the account.
+  // Writes an outdated or incompatible client may still make: reading, signing in, protecting the account.
   static bool _allowedReadOnly(String method, String path) =>
       method == 'GET' ||
       (method == 'DELETE' && path.startsWith('/devices/')) ||
@@ -523,7 +522,7 @@ class ApiClient {
     Map<String, String> headers = const {},
     bool auth = true,
   }) async {
-    if (readOnly && !_allowedReadOnly(method, path)) {
+    if (isReadOnly() && !_allowedReadOnly(method, path)) {
       throw const ReadOnlyException();
     }
     var busy = 0; // short 429s (server busy, e.g. the Argon2 queue full): retried silently
@@ -610,7 +609,7 @@ class ApiClient {
     }
   }
 
-  /// 2xx: the JSON body, null when empty. Else an [ApiException]; a body that is not JSON is a [FormatException].
+  // 2xx: the JSON body, null when empty. Else an ApiException; a body that is not JSON is a FormatException.
   static Object? _decode(http.Response res) {
     if (res.statusCode >= 200 && res.statusCode < 300) {
       return res.body.isEmpty ? null : jsonDecode(res.body);

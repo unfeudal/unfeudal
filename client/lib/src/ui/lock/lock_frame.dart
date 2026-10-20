@@ -10,7 +10,7 @@ import '../../loquet/lock_mapping.dart';
 import '../../loquet/loquet_pose.dart';
 import '../../loquet/loquet_spot.dart';
 
-export '../../design/buttons.dart' show BusyLabel;
+export '../../design/buttons.dart' show BusyButton;
 export '../../design/field.dart' show UfErrorLine;
 
 /// Every screen before the vault: the form on the left (mark, step, title, fields, actions), the side panel on
@@ -25,12 +25,12 @@ class LockFrame extends StatelessWidget {
     this.eyeX = 0.5,
   });
 
-  /// Where Loquet looks while an address is typed: 0 left … 1 right.
+  /// Where Loquet looks while an address is typed: from 0 (left) to 1 (right).
   final double eyeX;
 
   final String title;
 
-  /// "Étape 1 sur 2" on two-step screens.
+  /// The "Step 1 of 2" label on two-step screens.
   final String? step;
   final String? subtitle;
   final List<Widget> children;
@@ -38,7 +38,7 @@ class LockFrame extends StatelessWidget {
   /// The ground of the form, and of the title bar above it.
   static Color background(BuildContext context) => UfColors.of(context).bg;
 
-  /// Below this width the side panel is dropped and the form takes the window.
+  // Below this width the side panel is dropped and the form takes the window.
   static const _sideBreakpoint = 880.0;
 
   @override

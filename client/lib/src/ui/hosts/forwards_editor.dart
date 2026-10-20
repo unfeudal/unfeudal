@@ -79,7 +79,7 @@ class _ForwardsEditorState extends State<ForwardsEditor> {
     super.dispose();
   }
 
-  /// One problem per row, null when the row is fine.
+  // One problem per row, null when the row is fine.
   List<String?> _problems(AppLocalizations l) {
     final parsed = [for (final r in _rows) r.parse()];
     final problems = [

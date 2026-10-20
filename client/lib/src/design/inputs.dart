@@ -13,43 +13,7 @@ import 'icons.dart';
 import 'motion.dart';
 import 'tokens.dart';
 
-/// A 32 px icon-only quiet button; [tooltip] is also its accessible label. Null [onPressed] disables it.
-class UfIconButton extends StatelessWidget {
-  const UfIconButton({
-    super.key,
-    required this.icon,
-    required this.tooltip,
-    required this.onPressed,
-  });
-
-  final IconData icon;
-  final String tooltip;
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = UfColors.of(context);
-    final ink = WidgetStateProperty<Color>.fromMap({
-      WidgetState.disabled: colors.disabledFg,
-      WidgetState.any: colors.text,
-    });
-    const size = WidgetStatePropertyAll(Size.square(UfHeight.medium));
-    return IconButton(
-      tooltip: tooltip,
-      onPressed: onPressed,
-      style: ButtonStyle(
-        fixedSize: size,
-        minimumSize: size,
-        maximumSize: size,
-        foregroundColor: ink,
-        iconColor: ink,
-      ),
-      icon: Icon(icon),
-    );
-  }
-}
-
-/// A muted glyph button inside a field box: `neutral` on hover with a `text` glyph, radius 4.
+// A muted glyph button inside a field box: `neutral` on hover with a `text` glyph, radius 4.
 class _FieldIconButton extends StatelessWidget {
   const _FieldIconButton({
     required this.icon,
@@ -82,52 +46,37 @@ class _FieldIconButton extends StatelessWidget {
   );
 }
 
-/// A read-only value in a 1 px dashed `edge` box with no fill; the value is selectable. With [onCopy] it ends
-/// with a copy button, else with a muted lock. [mono] writes a key or fingerprint in mono 12 over several lines.
+/// A read-only key, fingerprint or link in mono 12 over several lines, in a 1 px dashed `edge` box with no
+/// fill; the value is selectable. With [onCopy] it ends with a copy button, else with a muted lock.
 class UfReadOnlyField extends StatelessWidget {
-  const UfReadOnlyField({
-    super.key,
-    required this.value,
-    this.mono = false,
-    this.onCopy,
-    this.copyTooltip,
-  });
+  const UfReadOnlyField({super.key, required this.value, this.onCopy});
 
   final String value;
-  final bool mono;
   final VoidCallback? onCopy;
-
-  /// Defaults to the generic "Copy".
-  final String? copyTooltip;
 
   @override
   Widget build(BuildContext context) {
     final colors = UfColors.of(context);
-    final style = mono
-        ? monoField.copyWith(color: colors.text)
-        : Theme.of(context).textTheme.bodyMedium!.copyWith(fontSize: 13.5);
     final copy = onCopy;
     return CustomPaint(
       painter: _DashedEdge(colors.edge),
       child: ConstrainedBox(
         constraints: const BoxConstraints(minHeight: UfHeight.medium),
         child: Padding(
-          padding: EdgeInsets.fromLTRB(10, mono ? 6 : 0, 6, mono ? 6 : 0),
+          padding: const EdgeInsets.fromLTRB(10, 6, 6, 6),
           child: Row(
             spacing: 8,
             children: [
               Expanded(
                 child: SelectableText(
                   value,
-                  style: style,
-                  maxLines: mono ? null : 1,
+                  style: monoField.copyWith(color: colors.text),
                 ),
               ),
               if (copy != null)
                 _FieldIconButton(
                   icon: const Icon(UfIcons.copy),
-                  tooltip:
-                      copyTooltip ?? AppLocalizations.of(context).fieldCopy,
+                  tooltip: MaterialLocalizations.of(context).copyButtonLabel,
                   onPressed: copy,
                   size: const Size.square(21),
                   iconSize: 15,
@@ -145,7 +94,7 @@ class UfReadOnlyField extends StatelessWidget {
   }
 }
 
-/// A 1 px dashed rounded edge, 4 on and 3 off.
+// A 1 px dashed rounded edge, 4 on and 3 off.
 class _DashedEdge extends CustomPainter {
   const _DashedEdge(this.color);
 
@@ -270,7 +219,7 @@ class UfMatchText extends StatelessWidget {
   }
 }
 
-/// No result for [query]: Loquet searching at 40 px over "Nothing matches « q »." in 13 muted, centred.
+/// No result for [query]: Loquet searching at 40 px over the localized "nothing matches" line, quoting the query, in 13 muted, centred.
 class UfNoMatch extends StatelessWidget {
   const UfNoMatch({super.key, required this.query});
 
@@ -304,7 +253,6 @@ class UfNoMatch extends StatelessWidget {
 class UfSearchField extends StatefulWidget {
   const UfSearchField({
     super.key,
-    this.controller,
     this.focusNode,
     this.hint,
     this.shortcut,
@@ -313,7 +261,6 @@ class UfSearchField extends StatefulWidget {
     this.autofocus = false,
   });
 
-  final TextEditingController? controller;
   final FocusNode? focusNode;
   final String? hint;
 
@@ -328,11 +275,9 @@ class UfSearchField extends StatefulWidget {
 }
 
 class _UfSearchFieldState extends State<UfSearchField> {
-  TextEditingController? _ownController;
+  final _controller = TextEditingController();
   FocusNode? _ownFocus;
 
-  TextEditingController get _controller =>
-      widget.controller ?? (_ownController ??= TextEditingController());
   FocusNode get _focus => widget.focusNode ?? (_ownFocus ??= FocusNode());
 
   @override
@@ -350,18 +295,12 @@ class _UfSearchFieldState extends State<UfSearchField> {
       oldFocus?.removeListener(_refresh);
       _focus.addListener(_refresh);
     }
-    final oldController = old.controller ?? _ownController;
-    if (oldController != _controller) {
-      oldController?.removeListener(_refresh);
-      _controller.addListener(_refresh);
-    }
   }
 
   @override
   void dispose() {
     _focus.removeListener(_refresh);
-    _controller.removeListener(_refresh);
-    _ownController?.dispose();
+    _controller.dispose();
     _ownFocus?.dispose();
     super.dispose();
   }
@@ -894,206 +833,4 @@ class _UfComboboxState<T> extends State<UfCombobox<T>>
       ),
     );
   }
-}
-
-/// A 20 px slider: a 4 px `line` track filled in `accent` up to a 14 px knob; while dragged the knob gets a
-/// `select` halo and a value tip 28 px above it. The arrow keys step it. Null [onChanged] disables it.
-class UfSlider extends StatefulWidget {
-  const UfSlider({
-    super.key,
-    required this.value,
-    required this.onChanged,
-    this.min = 0,
-    this.max = 1,
-    this.divisions,
-    this.label,
-    this.semanticLabel,
-  });
-
-  final double value;
-  final ValueChanged<double>? onChanged;
-  final double min, max;
-
-  /// Snaps the value to this many equal steps; the arrow keys move one step, or a twentieth without it.
-  final int? divisions;
-
-  /// Writes the value in the tip and for screen readers; defaults to the rounded value.
-  final String Function(double value)? label;
-  final String? semanticLabel;
-
-  @override
-  State<UfSlider> createState() => _UfSliderState();
-}
-
-class _UfSliderState extends State<UfSlider> {
-  static const _knob = 14.0;
-  bool _dragging = false, _focused = false;
-
-  double get _span => widget.max - widget.min;
-  double get _step => _span / (widget.divisions ?? 20);
-
-  String _label(double value) =>
-      widget.label?.call(value) ?? value.round().toString();
-
-  void _set(double value) {
-    var v = value.clamp(widget.min, widget.max).toDouble();
-    if (widget.divisions case final divisions?) {
-      v =
-          widget.min +
-          ((v - widget.min) / _span * divisions).round() * _span / divisions;
-    }
-    if (v != widget.value) widget.onChanged?.call(v);
-  }
-
-  void _setAt(double dx, double width) => _set(
-    widget.min + ((dx - _knob / 2) / (width - _knob)).clamp(0, 1) * _span,
-  );
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = UfColors.of(context);
-    final enabled = widget.onChanged != null;
-    final tip = Theme.of(context).tooltipTheme;
-    final t = _span == 0 ? 0.0 : (widget.value - widget.min) / _span;
-    void step(double by) => _set(widget.value + by);
-    return Semantics(
-      slider: true,
-      label: widget.semanticLabel,
-      value: _label(widget.value),
-      increasedValue: _label(
-        (widget.value + _step).clamp(widget.min, widget.max).toDouble(),
-      ),
-      decreasedValue: _label(
-        (widget.value - _step).clamp(widget.min, widget.max).toDouble(),
-      ),
-      onIncrease: enabled ? () => step(_step) : null,
-      onDecrease: enabled ? () => step(-_step) : null,
-      child: FocusableActionDetector(
-        enabled: enabled,
-        mouseCursor: enabled
-            ? SystemMouseCursors.click
-            : SystemMouseCursors.forbidden,
-        onShowFocusHighlight: (v) => setState(() => _focused = v),
-        shortcuts: const {
-          SingleActivator(LogicalKeyboardKey.arrowRight): _StepIntent(1),
-          SingleActivator(LogicalKeyboardKey.arrowUp): _StepIntent(1),
-          SingleActivator(LogicalKeyboardKey.arrowLeft): _StepIntent(-1),
-          SingleActivator(LogicalKeyboardKey.arrowDown): _StepIntent(-1),
-        },
-        actions: {
-          _StepIntent: CallbackAction<_StepIntent>(
-            onInvoke: (intent) => step(intent.direction * _step),
-          ),
-        },
-        child: LayoutBuilder(
-          builder: (context, box) {
-            final width = box.maxWidth;
-            final x = t * (width - _knob);
-            return GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTapDown: enabled
-                  ? (d) => _setAt(d.localPosition.dx, width)
-                  : null,
-              onHorizontalDragStart: enabled
-                  ? (d) {
-                      setState(() => _dragging = true);
-                      _setAt(d.localPosition.dx, width);
-                    }
-                  : null,
-              onHorizontalDragUpdate: enabled
-                  ? (d) => _setAt(d.localPosition.dx, width)
-                  : null,
-              onHorizontalDragEnd: enabled
-                  ? (_) => setState(() => _dragging = false)
-                  : null,
-              onHorizontalDragCancel: enabled
-                  ? () => setState(() => _dragging = false)
-                  : null,
-              child: SizedBox(
-                height: 20,
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  alignment: Alignment.centerLeft,
-                  children: [
-                    Container(
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: colors.line,
-                        borderRadius: const BorderRadius.all(
-                          Radius.circular(2),
-                        ),
-                      ),
-                    ),
-                    Container(
-                      width: x + _knob / 2,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: enabled ? colors.accent : colors.disabledFg,
-                        borderRadius: const BorderRadius.all(
-                          Radius.circular(2),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      left: x,
-                      child: Container(
-                        width: _knob,
-                        height: _knob,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: !enabled
-                              ? colors.disabledBg
-                              : colors.isDark
-                              ? colors.text
-                              : colors.panel,
-                          border: Border.all(
-                            color: enabled ? colors.accent : colors.disabledFg,
-                            width: 1.5,
-                          ),
-                          boxShadow: [
-                            if (_focused)
-                              BoxShadow(color: colors.focus, spreadRadius: 2)
-                            else if (_dragging)
-                              BoxShadow(color: colors.select, spreadRadius: 4),
-                          ],
-                        ),
-                      ),
-                    ),
-                    if (_dragging)
-                      Positioned(
-                        key: const Key('slider-tip'),
-                        left: x + _knob / 2 - 16,
-                        top: -28 + 3,
-                        child: Container(
-                          width: 32,
-                          height: 22,
-                          alignment: Alignment.center,
-                          decoration: (tip.decoration! as BoxDecoration)
-                              .copyWith(borderRadius: UfRadius.key),
-                          child: Text(
-                            _label(widget.value),
-                            maxLines: 1,
-                            style: tip.textStyle!.copyWith(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              height: 1,
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            );
-          },
-        ),
-      ),
-    );
-  }
-}
-
-class _StepIntent extends Intent {
-  const _StepIntent(this.direction);
-
-  final int direction;
 }

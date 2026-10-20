@@ -3,12 +3,12 @@ import 'package:flutter/material.dart';
 
 import '../../../l10n/app_localizations.dart';
 import '../../design/dialog.dart';
-import '../../design/field.dart';
 import '../../design/seal.dart';
 import '../../design/tokens.dart';
 import '../../loquet/loquet_pose.dart';
 import '../../loquet/loquet_spot.dart';
 import '../../ssh/ssh_connector.dart';
+import '../fields.dart';
 
 /// First sight of a host key: the fingerprint, trust or cancel.
 class HostKeyUnknownDialog extends StatelessWidget {
@@ -111,22 +111,20 @@ class _HostKeyChangedDialogState extends State<HostKeyChangedDialog> {
           labelColor: colors.danger,
           lines: [check.fingerprint],
         ),
-        UfField(
-          label: l.hostKeyTypeName(check.hostName),
-          child: TextField(
-            key: const Key('hostkey-confirm-input'),
-            controller: _typed,
-            onChanged: (_) => setState(() {}),
-            style: monoField,
-            decoration: InputDecoration(hintText: check.hostName),
-          ),
+        keyedField(
+          'hostkey-confirm-input',
+          _typed,
+          l.hostKeyTypeName(check.hostName),
+          mono: true,
+          hint: check.hostName,
+          onChanged: (_) => setState(() {}),
         ),
       ],
     );
   }
 }
 
-/// A filled box of selectable mono lines, with an optional label or seal.
+// A filled box of selectable mono lines, with an optional label or seal.
 class _FingerprintBox extends StatelessWidget {
   const _FingerprintBox({
     required this.fill,

@@ -62,10 +62,11 @@ class SecurityNotifier {
     late final Future<void> f;
     f = Future(job)
         .catchError((Object e) {
+          // The log never carries the address or the body.
           deps.log.warn('mail failed', {
             'kind': kind.name,
             'type': '${e.runtimeType}',
-          }); // never the address or the body
+          });
         })
         .whenComplete(() => _pending.remove(f));
     _pending.add(f);

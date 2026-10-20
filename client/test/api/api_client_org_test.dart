@@ -18,33 +18,34 @@ Future<(SyncHarness, ApiClient)> signedIn() async {
 }
 
 void main() {
-  test(
-    'org, member, team, ACL and key routes send the documented bodies',
-    () async {
-      final (h, api) = await signedIn();
-      final o = testOrgId, u = newId(), t = newId(), f = newId();
+  group('org, member, team, ACL and key routes', () {
+    final o = testOrgId, u = newId(), t = newId(), f = newId();
+    late SyncHarness h;
+    late String createdOrgId;
+    late OrgTeam team;
+    late WrappedFolderKeys wrap;
+    setUpAll(() async {
+      final (harness, api) = await signedIn();
+      h = harness;
       h.orgReplies['POST /orgs'] = (_) => SyncHarness.reply({
         'org': {'id': o, 'name': 'Acme', 'role': 'owner'},
       }, 201);
       h.orgReplies['POST /orgs/$o/teams'] = (b) => SyncHarness.reply({
         'team': {'id': t, 'name': b['name'], 'memberIds': b['memberIds']},
       }, 201);
-      expect((await api.createOrg('Acme')).id, o);
+      createdOrgId = (await api.createOrg('Acme')).id;
       await api.updateOrg(o, name: 'Acme 2', settings: {'mascot': false});
       await api.setMemberRole(o, u, OrgRole.admin);
       await api.confirmMember(o, u);
       await api.removeMember(o, u);
-      final team = await api.createTeam(o, name: 'Ops', memberIds: [u]);
-      expect(team.orgId, o);
-      expect(team.id, t);
-      expect(team.memberIds, [u]);
+      team = await api.createTeam(o, name: 'Ops', memberIds: [u]);
       await api.updateTeam(o, t, memberIds: const []);
       await api.deleteTeam(o, t);
       await api.putAcl(f, [
         AclEntry(f, PrincipalType.team, t, const {Permission.view}, const {}),
       ]);
       final keys = FolderKeys.generate(1), me = await memberKeys();
-      final wrap = await WrappedFolderKeys.wrap(
+      wrap = await WrappedFolderKeys.wrap(
         keys,
         folderId: f,
         recipientPublicKey: me.publicKey,
@@ -53,6 +54,16 @@ void main() {
       await api.putFolderKeys(f, version: 1, wrapped: [wrap]);
       await api.rotationDone(f);
       await api.deleteOrg(o);
+    });
+
+    test('createOrg and createTeam parse the replies', () {
+      expect(createdOrgId, o);
+      expect(team.orgId, o);
+      expect(team.id, t);
+      expect(team.memberIds, [u]);
+    });
+
+    test('each call hits its documented route', () {
       expect(h.orgCalls.map((c) => c.route), [
         'POST /orgs',
         'PUT /orgs/$o',
@@ -67,6 +78,9 @@ void main() {
         'POST /folders/$f/rotation/done',
         'DELETE /orgs/$o',
       ]);
+    });
+
+    test('each call sends the documented body', () {
       final bodies = [for (final c in h.orgCalls) c.body];
       expect(bodies[1], {
         'name': 'Acme 2',
@@ -89,8 +103,8 @@ void main() {
         'wrapped': [wrap.toJson()],
         'history': null,
       });
-    },
-  );
+    });
+  });
 
   test('invites: create, list, revoke, join', () async {
     final (h, api) = await signedIn();
@@ -213,7 +227,7 @@ void main() {
           .having((x) => x.reason, 'reason', 'last_owner')
           .having((x) => x.orgs, 'orgs', ['Acme']),
     );
-    api.readOnly = true;
+    api.isReadOnly = () => true;
     for (final call in <Future<Object?> Function()>[
       () => api.createOrg('X'),
       () => api.joinInvite('t'),

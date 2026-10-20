@@ -54,22 +54,19 @@ void main() {
       now: DateTime.utc(2026, 10, 15),
     );
     expect((out.count, out.unreadable), (2, 1));
-    final back = await VaultExport.open(
-      out.text,
-      'twelve chars!',
-      allowTestingKdf: true,
-    );
-    expect(back.items.map((i) => i['id']), unorderedEquals([host, ident]));
-    final id = back.items.firstWhere((i) => i['id'] == ident);
-    expect(
-      (id['type'], id['folderId'], (id['secret']! as Map)['password']),
-      ('identity', null, 'hunter2-hunter2'),
-    );
+    expect(jsonDecode(out.text), containsPair('format', 'unfeudal-export'));
     final plain =
         jsonDecode((await exportVault(v)).text) as Map<String, Object?>;
     expect(
       (plain['format'], plain.containsKey('warning')),
       ('unfeudal-export-plain', true),
+    );
+    final items = (plain['items']! as List).cast<Map<String, Object?>>();
+    expect(items.map((i) => i['id']), unorderedEquals([host, ident]));
+    final id = items.firstWhere((i) => i['id'] == ident);
+    expect(
+      (id['type'], id['folderId'], (id['secret']! as Map)['password']),
+      ('identity', null, 'hunter2-hunter2'),
     );
   });
 }

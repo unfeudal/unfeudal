@@ -15,12 +15,7 @@ import '../util/clock.dart';
 List<int> _hmac(List<int> key, String msg) =>
     Hmac(sha256, key).convert(utf8.encode(msg)).bytes;
 
-class AccessClaims {
-  const AccessClaims(this.userId, this.deviceId);
-
-  final String userId;
-  final String deviceId;
-}
+typedef AccessClaims = ({String userId, String deviceId});
 
 /// `b64(json{u, d, exp ms}) . b64(HMAC-SHA256(server_secret, "access:" + payload))`.
 class AccessTokens {
@@ -38,7 +33,7 @@ class AccessTokens {
     return '$payload.${b64(_hmac(_secret, 'access:$payload'))}';
   }
 
-  /// One dot, constant-time MAC, valid JSON, now < exp; anything else → null.
+  /// One dot, constant-time MAC, valid JSON, now before exp; anything else returns null.
   AccessClaims? verify(String token) {
     final parts = token.split('.');
     if (parts.length != 2) return null;
@@ -60,11 +55,17 @@ class AccessTokens {
         return null;
       }
       if (_clock.now().millisecondsSinceEpoch >= exp) return null;
-      return AccessClaims(u, d);
+      return (userId: u, deviceId: d);
     } on FormatException {
       return null;
     }
   }
+
+  /// [verify] on an `Authorization: Bearer <token>` header; anything else returns null.
+  AccessClaims? verifyHeader(String? header) =>
+      header != null && header.startsWith('Bearer ')
+      ? verify(header.substring(7))
+      : null;
 }
 
 /// 32 random bytes in base64url (43 characters).
@@ -95,15 +96,21 @@ Future<void> revokeDevice(Tx tx, String deviceId, DateTime now) async {
 typedef Rotated = ({String userId, String deviceId, String refreshToken});
 
 class RefreshTokens {
-  RefreshTokens(this.db, this.clock, this.ttl, this._secret, {this.audit});
+  RefreshTokens(
+    this.db,
+    this.clock,
+    this.ttl,
+    this._secret, {
+    required this.audit,
+  });
 
   final Db db;
   final Clock clock;
   final Duration ttl;
   final List<int> _secret;
 
-  /// Records a replay in the revocation's transaction; optional for tests that only rotate.
-  final AuditLog? audit;
+  /// Records a replay in the revocation's transaction.
+  final AuditLog audit;
 
   /// A lost response is answered again with the same successor within this window.
   static const grace = Duration(seconds: 30);
@@ -153,7 +160,7 @@ class RefreshTokens {
           // Replay: revoked and committed, then 401.
           await revokeDevice(tx, deviceId, now);
           // no actor: whoever presented the token is unknown
-          await audit?.append(
+          await audit.append(
             tx,
             scope: AuditScope.user(userId),
             action: 'auth.refresh_replay',
