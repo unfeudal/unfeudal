@@ -86,6 +86,12 @@ class AuditLog {
       ...s,
       'h': hash,
     });
+    for (final id in event.targetIds.toSet()) {
+      await tx.execute(
+        'INSERT INTO audit_targets (scope, seq, target_id) VALUES (@s, @q, @t)',
+        {...s, 'q': event.seq, 't': id},
+      );
+    }
     if (ip != null) {
       await tx.execute(
         'INSERT INTO audit_ips (scope, seq, ip) VALUES (@s, @q, @ip)',

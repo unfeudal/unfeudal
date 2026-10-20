@@ -37,6 +37,7 @@ Future<void> migrate(Db db, [List<Migration> all = migrations]) async {
       for (final s in m.statements) {
         await tx.execute(s);
       }
+      await m.backfill?.call(tx);
       await setMeta(tx, 'schema_version', '${m.version}');
     });
   }
