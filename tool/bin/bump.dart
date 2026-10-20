@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import 'dart:io';
 
-import 'package:unfeudal_tool/checks.dart';
 import 'package:unfeudal_tool/release.dart';
 
 /// `bump.dart <server|client> <patch|minor|major|X.Y.Z>`, run from `tool/`; stdout is `$GITHUB_OUTPUT` lines.
@@ -13,17 +12,12 @@ void main(List<String> args) {
     exit(64);
   }
   final [package, level] = args;
-  final released = bump(
+  final version = bump(
     Directory('..'),
     package,
     level,
     date: DateTime.now().toUtc(),
   );
-  for (final (pkg, v) in released) {
-    final notes = File('../$pkg/CHANGELOG.md').readAsStringSync();
-    stderr.writeln('## $pkg $v\n${changelogSection(notes, v)}\n');
-  }
-  final version = released.first.$2;
   stdout
     ..writeln('version=$version')
     ..writeln('title=chore(release): $package $version');

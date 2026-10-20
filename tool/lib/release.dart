@@ -4,9 +4,9 @@ import 'dart:io';
 final _semver = RegExp(r'^\d+\.\d+\.\d+$');
 final _pubspecVersion = RegExp(r'^version: (\S+)$', multiLine: true);
 
-/// Releases [package] (`server` or `client`) at [level] (`patch`, `minor`, `major` or `X.Y.Z`); returns the
-/// released `(package, version)` pairs. A client release also releases a server patch announcing it.
-List<(String, String)> bump(
+/// Releases [package] (`server` or `client`) at [level] (`patch`, `minor`, `major` or `X.Y.Z`); returns its
+/// released version. A client release also releases a server patch announcing it.
+String bump(
   Directory root,
   String package,
   String level, {
@@ -17,7 +17,7 @@ List<(String, String)> bump(
   }
   final version = _resolve(_current(root, package), level);
   _release(root, package, version, date);
-  if (package == 'server') return [('server', version)];
+  if (package == 'server') return version;
   final serverPatch = _resolve(_current(root, 'server'), 'patch');
   _release(
     root,
@@ -26,7 +26,7 @@ List<(String, String)> bump(
     date,
     note: '### Changed\n- Announces client $version.\n',
   );
-  return [('client', version), ('server', serverPatch)];
+  return version;
 }
 
 /// What stops [tag] from being released: versions, constants, changelog section and fixtures must all match it.
@@ -67,7 +67,7 @@ List<String> checkTag(Directory root, String tag) {
   return problems;
 }
 
-/// The pubspec version without its `+build` part.
+// The pubspec version without its `+build` part.
 String _current(Directory root, String package) => _pubspecVersion
     .firstMatch(
       File('${root.path}/$package/pubspec.yaml').readAsStringSync(),
@@ -144,7 +144,7 @@ void _release(
   _copyFixtures(root, version);
 }
 
-/// The newest `shared/test/fixtures/v*` becomes `v<version>`: the formats this release reads.
+// The newest `shared/test/fixtures/v*` becomes `v<version>`: the formats this release reads.
 void _copyFixtures(Directory root, String version) {
   final fixtures = Directory('${root.path}/shared/test/fixtures');
   final target = Directory('${fixtures.path}/v$version');
