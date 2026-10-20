@@ -6,7 +6,10 @@ import '../../api/admin_models.dart';
 import '../../app_scope.dart';
 import '../../design/buttons.dart';
 import '../../design/dialog.dart';
+import '../../design/field.dart';
+import '../../design/icons.dart';
 import '../../design/motion.dart';
+import '../../design/rows.dart';
 import '../../design/tokens.dart';
 import '../describe_error.dart';
 import '../orgs/invite_dialog.dart';
@@ -168,7 +171,6 @@ class _InstanceAdminPanelState extends State<InstanceAdminPanel> {
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
     final colors = UfColors.of(context);
-    final muted = TextStyle(color: colors.muted, fontSize: 12);
     final dates = MaterialLocalizations.of(context);
     final created = _created;
     return DefaultTabController(
@@ -185,55 +187,51 @@ class _InstanceAdminPanelState extends State<InstanceAdminPanel> {
               Tab(key: const Key('admin-tab-orgs'), text: l.adminOrgs),
             ],
           ),
-          if (_error case final error?)
-            Text(error, style: TextStyle(color: colors.danger)),
+          if (_error case final error?) UfErrorLine(error),
           Expanded(
             child: TabBarView(
               children: [
                 ListView(
                   children: [
                     for (final u in _users)
-                      ListTile(
-                        title: Text(u.email),
-                        trailing: u.isInstanceOwner
-                            ? null
-                            : Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  TextButton(
-                                    key: Key('admin-user-disable-${u.id}'),
-                                    style: smallButton,
-                                    onPressed: () => _toggle(u),
-                                    child: Text(
-                                      u.disabled
-                                          ? l.adminEnable
-                                          : l.adminDisable,
-                                    ),
-                                  ),
-                                  TextButton(
-                                    key: Key('admin-user-delete-${u.id}'),
-                                    style: dangerQuietStyle(colors)
-                                        .merge(smallButton),
-                                    onPressed: () => _deleteUser(u),
-                                    child: Text(l.adminDelete),
-                                  ),
-                                ],
+                      ItemRow(
+                        icon: UfIcons.user,
+                        title: u.email,
+                        trailing: [
+                          if (!u.isInstanceOwner) ...[
+                            TextButton(
+                              key: Key('admin-user-disable-${u.id}'),
+                              style: smallButton,
+                              onPressed: () => _toggle(u),
+                              child: Text(
+                                u.disabled ? l.adminEnable : l.adminDisable,
                               ),
+                            ),
+                            TextButton(
+                              key: Key('admin-user-delete-${u.id}'),
+                              style: dangerQuietStyle(colors)
+                                  .merge(smallButton),
+                              onPressed: () => _deleteUser(u),
+                              child: Text(l.adminDelete),
+                            ),
+                          ],
+                        ],
                       ),
                   ],
                 ),
                 ListView(
                   children: [
                     Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
                       spacing: 8,
                       children: [
                         Expanded(
-                          child: TextField(
-                            key: const Key('admin-invite-email'),
-                            controller: _email,
-                            keyboardType: TextInputType.emailAddress,
-                            decoration: InputDecoration(
-                              hintText: l.inviteEmail,
+                          child: UfField(
+                            label: l.inviteEmail,
+                            child: TextField(
+                              key: const Key('admin-invite-email'),
+                              controller: _email,
+                              keyboardType: TextInputType.emailAddress,
                             ),
                           ),
                         ),
@@ -252,32 +250,27 @@ class _InstanceAdminPanelState extends State<InstanceAdminPanel> {
                 ListView(
                   children: [
                     for (final o in _orgs)
-                      ListTile(
-                        title: Text(o.name),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(o.owners.join(', ')),
-                            Text(
-                              [
-                                l.adminOrgMembers(o.memberCount),
-                                o.lastActivityAt == null
-                                    ? '—'
-                                    : dates.formatMediumDate(
-                                        o.lastActivityAt!.toLocal(),
-                                      ),
-                              ].join(' · '),
-                              style: muted,
-                            ),
-                            Text(sizeLabel(l, o.storageBytes), style: muted),
-                          ],
-                        ),
-                        trailing: TextButton(
-                          key: Key('admin-org-delete-${o.id}'),
-                          style: dangerQuietStyle(colors).merge(smallButton),
-                          onPressed: () => _deleteOrg(o),
-                          child: Text(l.adminOrgDelete),
-                        ),
+                      ItemRow(
+                        icon: UfIcons.usersThree,
+                        title: o.name,
+                        subtitle: [
+                          o.owners.join(', '),
+                          l.adminOrgMembers(o.memberCount),
+                          o.lastActivityAt == null
+                              ? '—'
+                              : dates.formatMediumDate(
+                                  o.lastActivityAt!.toLocal(),
+                                ),
+                        ].join(' · '),
+                        trailing: [
+                          UfTag(sizeLabel(l, o.storageBytes)),
+                          TextButton(
+                            key: Key('admin-org-delete-${o.id}'),
+                            style: dangerQuietStyle(colors).merge(smallButton),
+                            onPressed: () => _deleteOrg(o),
+                            child: Text(l.adminOrgDelete),
+                          ),
+                        ],
                       ),
                   ],
                 ),

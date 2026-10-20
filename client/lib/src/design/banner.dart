@@ -6,7 +6,20 @@ import 'buttons.dart';
 import 'icons.dart';
 import 'tokens.dart';
 
-enum BannerTone { info, warn, danger }
+enum BannerTone {
+  info,
+  success,
+  warn,
+  danger;
+
+  /// Ink, fill and icon. Status never by colour alone: each tone has its own icon shape.
+  (Color, Color, IconData) style(UfColors colors) => switch (this) {
+    info => (colors.accentText, colors.select, UfIcons.info),
+    success => (colors.ok, colors.okSoft, UfIcons.checkCircle),
+    warn => (colors.warn, colors.warnSoft, UfIcons.warning),
+    danger => (colors.danger, colors.dangerSoft, UfIcons.warningOctagon),
+  };
+}
 
 class StatusBanner extends StatelessWidget {
   const StatusBanner({
@@ -36,17 +49,7 @@ class StatusBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = UfColors.of(context);
-    // status never by colour alone: each tone has its own icon shape
-    final (color, fill, icon) = switch (tone) {
-      BannerTone.info => (colors.accentText, colors.select, UfIcons.info),
-      BannerTone.warn => (colors.warn, colors.warnSoft, UfIcons.warning),
-      BannerTone.danger => (
-        colors.danger,
-        colors.dangerSoft,
-        UfIcons.warningOctagon,
-      ),
-    };
+    final (color, fill, icon) = tone.style(UfColors.of(context));
     // full width above the main area; actions are small secondary buttons
     return Material(
       color: fill,

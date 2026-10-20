@@ -25,7 +25,7 @@ Finder underField(String key, String text) => find.descendant(
 
 void main() {
   testWidgets(
-    'new host: required fields, invalid port refused, saved with HostCreated',
+    'new host: required fields, an emptied port inherits, saved with HostCreated',
     (t) async {
       final s = await signedInState(t);
       final events = <AppEvent>[];
@@ -36,14 +36,15 @@ void main() {
       expect(find.text(l10n(t).fieldRequired), findsNWidgets(2));
       await t.enterText(find.byKey(const Key('host-name')), 'web');
       await t.enterText(find.byKey(const Key('host-address')), '10.0.0.5');
-      await t.enterText(find.byKey(const Key('host-port')), '70000');
-      await t.tap(find.byKey(const Key('host-save')));
-      await t.pump();
-      expect(find.text(l10n(t).fieldInvalid), findsOneWidget);
+      await t.enterText(find.byKey(const Key('host-port')), '2222');
       await t.enterText(find.byKey(const Key('host-port')), '');
       await t.tap(find.byKey(const Key('host-save')));
       await pumpReal(t, rounds: 10);
       expect(s.vault!.ofKind(ItemKind.host).single.name, 'web');
+      expect(
+        s.vault!.ofKind(ItemKind.host).single.meta,
+        isNot(contains('port')),
+      );
       expect(events.whereType<HostCreated>().single.name, 'web');
     },
   );
@@ -66,7 +67,12 @@ void main() {
       state: s,
       child: HostEditorPanel(hostId: host),
     );
-    final port = t.widget<TextField>(find.byKey(const Key('host-port')));
+    final port = t.widget<TextField>(
+      find.descendant(
+        of: find.byKey(const Key('host-port')),
+        matching: find.byType(TextField),
+      ),
+    );
     expect(port.decoration!.hintText, '2222');
     expect(
       underField('host-port', l10n(t).hostInherited('top')),

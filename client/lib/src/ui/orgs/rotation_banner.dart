@@ -8,11 +8,18 @@ import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
 import '../../app_state.dart';
 import '../../design/banner.dart';
+import '../../design/buttons.dart';
+import '../../design/feedback.dart';
 import '../../design/tokens.dart';
 
-/// Folder keys to change in the orgs the caller administers, readers to confirm first, refused keys.
+/// Folder keys to change in the orgs the caller administers, readers to confirm first, refused keys: full-width
+/// banners over the sessions, or [RotationBanner.row] notices at the top of a section.
 class RotationBanner extends StatelessWidget {
-  const RotationBanner({super.key});
+  const RotationBanner({super.key}) : _row = false;
+
+  const RotationBanner.row({super.key}) : _row = true;
+
+  final bool _row;
 
   static List<PendingRotation> _pending(AppState state) {
     final orgs = state.orgs;
@@ -46,12 +53,26 @@ class RotationBanner extends StatelessWidget {
       spacing: 4,
       children: [
         if (pending.isNotEmpty) ...[
-          StatusBanner(
-            tone: BannerTone.warn,
-            message: l.rotationPending(pending.length),
-            action: (l.rotationNow, () => unawaited(orgs.rotateNow())),
-            actionKey: const Key('rotation-now'),
-          ),
+          if (_row)
+            UfNotice.row(
+              tone: BannerTone.warn,
+              message: l.rotationPending(pending.length),
+              actions: [
+                OutlinedButton(
+                  key: const Key('rotation-now'),
+                  style: smallButton,
+                  onPressed: () => unawaited(orgs.rotateNow()),
+                  child: Text(l.rotationNow),
+                ),
+              ],
+            )
+          else
+            StatusBanner(
+              tone: BannerTone.warn,
+              message: l.rotationPending(pending.length),
+              action: (l.rotationNow, () => unawaited(orgs.rotateNow())),
+              actionKey: const Key('rotation-now'),
+            ),
           Text(l.rotationCredentials, style: note),
           if (emails.isNotEmpty)
             Text(
@@ -60,10 +81,16 @@ class RotationBanner extends StatelessWidget {
             ),
         ],
         if (orgs.alerts.isNotEmpty)
-          StatusBanner(
-            tone: BannerTone.danger,
-            message: l.keyAlert(orgs.alerts.length),
-          ),
+          if (_row)
+            UfNotice.row(
+              tone: BannerTone.danger,
+              message: l.keyAlert(orgs.alerts.length),
+            )
+          else
+            StatusBanner(
+              tone: BannerTone.danger,
+              message: l.keyAlert(orgs.alerts.length),
+            ),
       ],
     );
   }

@@ -54,6 +54,9 @@ abstract final class UfShortcuts {
     return _mac ? '⌘$letter' : 'Ctrl+Shift+$letter';
   }
 
+  /// Ctrl K outside the terminal (⌘K on macOS); the Ctrl+Shift form is only needed inside it.
+  static String get searchLabel => _mac ? '⌘K' : 'Ctrl K';
+
   /// The vault switch for position [n] (1…9).
   static String vaultLabel(int n) => _mac ? '⌘$n' : 'Ctrl $n';
 

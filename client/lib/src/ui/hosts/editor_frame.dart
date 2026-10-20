@@ -3,14 +3,17 @@ import 'package:flutter/material.dart';
 
 import '../../../l10n/app_localizations.dart';
 import '../../app_state.dart';
+import '../../design/banner.dart';
 import '../../design/buttons.dart';
+import '../../design/choices.dart';
 import '../../design/dialog.dart';
+import '../../design/feedback.dart';
 import '../../design/field.dart';
 import '../../design/icons.dart';
 import '../../design/tokens.dart';
 import '../../vault/vault.dart';
 
-/// A labelled dropdown of [entries] after a [none] item; a [value] not among them shows as [none].
+/// A labelled select of [entries] after a [none] option; a [value] not among them shows as [none].
 Widget entryPicker({
   required String key,
   required String label,
@@ -22,17 +25,13 @@ Widget entryPicker({
 }) => UfField(
   label: label,
   source: source,
-  child: DropdownButtonFormField<String?>(
+  child: UfSelect<String?>(
     key: Key(key),
-    initialValue: entries.any((e) => e.id == value) ? value : null,
-    items: [
-      DropdownMenuItem(key: Key('$key-root'), child: Text(none)),
+    value: entries.any((e) => e.id == value) ? value : null,
+    options: [
+      UfOption(null, none, key: Key('$key-root')),
       for (final e in entries)
-        DropdownMenuItem(
-          key: Key('$key-${e.id}'),
-          value: e.id,
-          child: Text(e.name ?? ''),
-        ),
+        UfOption(e.id, e.name ?? '', key: Key('$key-${e.id}')),
     ],
     onChanged: onChanged,
   ),
@@ -124,11 +123,12 @@ class EditorFrame extends StatelessWidget {
                       ),
                     ),
                     if (onConnect case final connect?)
-                      FilledButton(
+                      OutlinedButton.icon(
                         key: const Key('inspector-connect'),
                         style: smallButton,
                         onPressed: connect,
-                        child: Text(l.inspectorConnect),
+                        icon: const Icon(UfIcons.terminal, size: 16),
+                        label: Text(l.inspectorConnect),
                       ),
                     if (onClose != null)
                       IconButton(
@@ -145,7 +145,6 @@ class EditorFrame extends StatelessWidget {
                   tabAlignment: TabAlignment.start,
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   labelPadding: const EdgeInsets.symmetric(horizontal: 8),
-                  indicatorSize: TabBarIndicatorSize.tab,
                   tabs: [
                     for (var i = 0; i < tabs.length; i++)
                       Tab(
@@ -165,29 +164,11 @@ class EditorFrame extends StatelessWidget {
                         padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
                         children: [
                           if (notice case final notice?)
-                            Container(
-                              margin: const EdgeInsets.only(bottom: 12),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 10,
-                              ),
-                              decoration: BoxDecoration(
-                                color: colors.warnSoft,
-                                borderRadius: UfRadius.control,
-                              ),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                spacing: 8,
-                                children: [
-                                  Icon(
-                                    UfIcons.warning,
-                                    size: 16,
-                                    color: colors.warn,
-                                  ),
-                                  Expanded(
-                                    child: Text(notice, style: text.bodySmall),
-                                  ),
-                                ],
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: UfNotice(
+                                tone: BannerTone.warn,
+                                message: notice,
                               ),
                             ),
                           for (final child in tabs[controller.index].$2)

@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:unfeudal_client/l10n/app_localizations.dart';
+import 'package:unfeudal_client/src/design/inputs.dart';
 import 'package:unfeudal_client/src/ui/hosts/folder_editor_panel.dart';
 import 'package:unfeudal_client/src/ui/hosts/host_editor_panel.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
@@ -114,7 +115,7 @@ void main() {
   });
 
   testWidgets(
-    'jump host: inherited value shown with its folder; self and loop-making hosts not offered',
+    'jump host: inherited value shown with its folder; self not offered, loop-making hosts disabled',
     (t) async {
       final s = await signedInState(t);
       late String other, web, viaWeb;
@@ -157,12 +158,51 @@ void main() {
       await t.tap(picker);
       await t.pumpAndSettle();
       expect(find.byKey(Key('jump-option-$web')), findsNothing);
-      expect(find.byKey(Key('jump-option-$viaWeb')), findsNothing);
+      expect(
+        t
+            .widget<MenuItemButton>(find.byKey(Key('jump-option-$viaWeb')).last)
+            .onPressed,
+        isNull,
+        reason: 'it would loop',
+      );
       await t.tap(find.byKey(Key('jump-option-$other')).last);
       await t.pumpAndSettle();
       await t.tap(find.byKey(const Key('host-save')));
       await pumpReal(t, rounds: 10);
       expect(s.vault!.entry(web)!.meta!['jumpHostId'], other);
+    },
+  );
+
+  testWidgets(
+    'jump host: past 8 hosts a filterable combobox; a loop-making host says why',
+    (t) async {
+      final s = await signedInState(t);
+      late String web, viaWeb;
+      await t.runAsync(() async {
+        final v = s.vault!;
+        for (var i = 0; i < 8; i++) {
+          await v.upsertItem(type: 'host', meta: hostJson('h$i'));
+        }
+        web = await v.upsertItem(type: 'host', meta: hostJson('web'));
+        viaWeb = await v.upsertItem(
+          type: 'host',
+          meta: {...hostJson('via-web'), 'jumpHostId': web},
+        );
+      });
+      await pumpApp(
+        t,
+        state: s,
+        child: HostEditorPanel(hostId: web),
+      );
+      final l = AppLocalizations.of(t.element(find.byType(HostEditorPanel)));
+      final combo = t.widget<UfCombobox<String?>>(
+        find.byType(UfCombobox<String?>),
+      );
+      expect(
+        combo.options.singleWhere((o) => o.value == viaWeb).disabledReason,
+        l.jumpBreaksChain,
+      );
+      expect(combo.options.where((o) => o.value == web), isEmpty);
     },
   );
 

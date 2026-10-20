@@ -3,8 +3,9 @@ import 'package:flutter/material.dart';
 
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
+import '../../design/buttons.dart';
 import '../../design/dialog.dart';
-import '../../design/tokens.dart';
+import '../../design/field.dart';
 import '../busy_action.dart';
 
 /// Creates an org with the caller as owner, then shows it.
@@ -43,27 +44,26 @@ class _CreateOrgDialogState extends State<CreateOrgDialog> with BusyAction {
     return UfDialog(
       title: l.railNewOrg,
       actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(l.cancel),
-        ),
+        CancelButton(onPressed: () => Navigator.of(context).pop()),
         FilledButton(
           key: const Key('org-create'),
           onPressed: busy ? null : _create,
-          child: Text(l.orgCreate),
+          child: BusyLabel(busy: busy, label: l.orgCreate),
         ),
       ],
       children: [
-        TextField(
-          key: const Key('org-name'),
-          controller: _name,
-          autofocus: true,
-          maxLength: 100,
-          decoration: InputDecoration(labelText: l.orgName),
-          onSubmitted: (_) => _create(),
+        UfField(
+          label: l.orgName,
+          child: TextField(
+            key: const Key('org-name'),
+            controller: _name,
+            autofocus: true,
+            maxLength: 100,
+            decoration: const InputDecoration(counterText: ''),
+            onSubmitted: (_) => _create(),
+          ),
         ),
-        if (problem case final error?)
-          Text(error, style: TextStyle(color: UfColors.of(context).danger)),
+        if (problem case final error?) UfErrorLine(error),
       ],
     );
   }

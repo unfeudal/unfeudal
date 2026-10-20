@@ -8,11 +8,16 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
 import '../../design/banner.dart';
+import '../../design/buttons.dart';
+import '../../design/choices.dart';
 import '../../design/field.dart';
 import '../../design/empty_state.dart';
-import '../../design/tokens.dart';
+import '../../design/feedback.dart';
+import '../../design/rows.dart';
+import '../../design/toast.dart';
 import '../../import/ssh_config_import.dart';
 import '../busy_action.dart';
+import '../fields.dart';
 import '../hosts/editor_frame.dart';
 import '../manage_frame.dart';
 
@@ -102,8 +107,7 @@ class _ImportPreviewScreenState extends State<ImportPreviewScreen>
         folderId: _folderId,
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(l.importDone(count))));
+      showUfToast(context, l.importDone(count));
       Navigator.of(context).maybePop();
     });
   }
@@ -123,20 +127,19 @@ class _ImportPreviewScreenState extends State<ImportPreviewScreen>
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
     final state = AppScope.read(context);
-    final colors = UfColors.of(context);
     final plan = _plan;
     // a Scaffold of its own: pushed alone, the confirmation still has somewhere to show
     return Scaffold(
       body: ManageFrame(
         title: l.settingsImportSshConfig,
         child: plan == null
-            ? const Center(child: CircularProgressIndicator())
+            ? Center(child: UfLoading(l.loading))
             : plan.hosts.isEmpty && plan.warnings.isEmpty
             ? EmptyState(title: l.settingsImportSshConfig, body: l.importEmpty)
             : ListView(
                 children: [
                   if (plan.warnings.isNotEmpty)
-                    StatusBanner(
+                    UfNotice(
                       tone: BannerTone.warn,
                       message: [
                         for (final w in plan.warnings)
@@ -144,36 +147,31 @@ class _ImportPreviewScreenState extends State<ImportPreviewScreen>
                       ].join('\n'),
                     ),
                   for (final h in plan.hosts)
-                    CheckboxListTile(
+                    UfCheckboxRow(
                       key: Key('import-row-${h.source.alias}'),
-                      controlAffinity: ListTileControlAffinity.leading,
                       value: _selected.contains(h.source.alias),
                       onChanged: (on) => setState(
-                        () => on == true
+                        () => on
                             ? _selected.add(h.source.alias)
                             : _selected.remove(h.source.alias),
                       ),
-                      title: Text(h.source.alias),
-                      subtitle: Text(
+                      label: h.source.alias,
+                      subtitle: [
                         [
-                          [
-                            ?h.source.user,
-                            h.source.hostName ?? h.source.alias,
-                          ].join('@'),
-                          if (h.jumpAlias case final jump?) '→ $jump',
-                          if (h.duplicate) l.importDuplicate,
-                        ].join('  ·  '),
-                      ),
+                          ?h.source.user,
+                          h.source.hostName ?? h.source.alias,
+                        ].join('@'),
+                        if (h.jumpAlias case final jump?) '→ $jump',
+                        if (h.duplicate) l.importDuplicate,
+                      ].join('  ·  '),
                     ),
                   for (final (i, k) in plan.keys.indexed)
                     if (_passphrases[k.path] case final controller?)
-                      UfField(
-                        label: l.importPassphrase(p.basename(k.path)),
-                        child: TextField(
-                          key: Key('import-passphrase-$i'),
-                          controller: controller,
-                          obscureText: true,
-                        ),
+                      keyedField(
+                        'import-passphrase-$i',
+                        controller,
+                        l.importPassphrase(p.basename(k.path)),
+                        secret: true,
                       ),
                   entryPicker(
                     key: 'import-folder',
@@ -186,8 +184,7 @@ class _ImportPreviewScreenState extends State<ImportPreviewScreen>
                     value: _folderId,
                     onChanged: (v) => setState(() => _folderId = v),
                   ),
-                  if (problem case final problem?)
-                    Text(problem, style: TextStyle(color: colors.danger)),
+                  if (problem case final problem?) UfErrorLine(problem),
                   Align(
                     alignment: Alignment.centerRight,
                     child: FilledButton(
@@ -198,7 +195,10 @@ class _ImportPreviewScreenState extends State<ImportPreviewScreen>
                               (state.sync?.readOnly ?? false)
                           ? null
                           : _submit,
-                      child: Text(l.importCount(_selected.length)),
+                      child: BusyLabel(
+                        busy: busy,
+                        label: l.importCount(_selected.length),
+                      ),
                     ),
                   ),
                 ],

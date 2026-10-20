@@ -57,7 +57,7 @@ class ManageFrame extends StatelessWidget {
                       key: const Key('manage-back'),
                       tooltip: AppLocalizations.of(context).manageBack,
                       onPressed: back,
-                      icon: const Icon(UfIcons.caretLeft, size: 18),
+                      icon: const Icon(UfIcons.caretLeft),
                     ),
                     Expanded(
                       child: Column(

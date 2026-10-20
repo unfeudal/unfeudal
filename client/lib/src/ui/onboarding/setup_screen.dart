@@ -126,6 +126,7 @@ class _SetupScreenState extends State<SetupScreen> with BusyAction {
                   _password,
                   l.setupPassword,
                   secret: true,
+                  strength: true,
                 ),
                 keyedField(
                   'setup-confirm',
@@ -138,7 +139,7 @@ class _SetupScreenState extends State<SetupScreen> with BusyAction {
             keyedField('setup-name', _name, l.setupDisplayName),
             LockNotice(l.setupWarning),
           ],
-          if (problem case final problem?) LockError(problem),
+          if (problem case final problem?) UfErrorLine(problem),
           if (first)
             LockActions(
               primary: FilledButton(

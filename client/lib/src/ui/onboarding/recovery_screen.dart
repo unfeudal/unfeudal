@@ -5,6 +5,8 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
+import '../../design/dialog.dart';
+import '../../design/toast.dart';
 import '../busy_action.dart';
 import '../describe_error.dart';
 import '../fields.dart';
@@ -105,7 +107,6 @@ class _RecoveryScreenState extends State<RecoveryScreen> with BusyAction {
     final l = AppLocalizations.of(context);
     final state = AppScope.read(context);
     final navigator = Navigator.of(context);
-    final messenger = ScaffoldMessenger.of(context);
     try {
       await state.login(
         server: done.server,
@@ -115,7 +116,11 @@ class _RecoveryScreenState extends State<RecoveryScreen> with BusyAction {
       navigator.maybePop();
     } on Exception catch (e) {
       navigator.maybePop();
-      messenger.showSnackBar(SnackBar(content: Text(describeError(l, e))));
+      // this screen is gone once popped: the navigator's context outlives it
+      final host = navigator.context;
+      if (host.mounted) {
+        showUfToast(host, describeError(l, e), tone: UfToastTone.warn);
+      }
     }
   }
 
@@ -172,6 +177,7 @@ class _RecoveryScreenState extends State<RecoveryScreen> with BusyAction {
               _password,
               l.recoverNewPassword,
               secret: true,
+              strength: true,
             ),
             keyedField(
               'recover-confirm',
@@ -181,7 +187,7 @@ class _RecoveryScreenState extends State<RecoveryScreen> with BusyAction {
             ),
             LockNotice(l.setupWarning),
           ],
-          if (problem case final problem?) LockError(problem),
+          if (problem case final problem?) UfErrorLine(problem),
           if (first)
             LockActions(
               primary: FilledButton(
@@ -190,10 +196,7 @@ class _RecoveryScreenState extends State<RecoveryScreen> with BusyAction {
                 child: Text(l.stepNext),
               ),
               links: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).maybePop(),
-                  child: Text(l.cancel),
-                ),
+                CancelButton(onPressed: () => Navigator.of(context).maybePop()),
               ],
             )
           else

@@ -82,7 +82,7 @@ class _MembersSectionState extends State<MembersSection> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         spacing: 16,
         children: [
-          if (RotationBanner.shows(state)) const RotationBanner(),
+          if (RotationBanner.shows(state)) const RotationBanner.row(),
           Expanded(
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,

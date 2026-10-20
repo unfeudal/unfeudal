@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import 'package:flutter/material.dart';
 
-import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
 import '../../design/buttons.dart';
 import '../../design/icons.dart';
@@ -10,6 +9,9 @@ import '../../design/tokens.dart';
 import '../../loquet/lock_mapping.dart';
 import '../../loquet/loquet_pose.dart';
 import '../../loquet/loquet_spot.dart';
+
+export '../../design/buttons.dart' show BusyLabel;
+export '../../design/field.dart' show UfErrorLine;
 
 /// Every screen before the vault: the form on the left (mark, step, title, fields, actions), the side panel on
 /// the right. The side panel holds Loquet, whose face follows the lock machine.
@@ -168,7 +170,8 @@ class LockActions extends StatelessWidget {
       children: [
         FilledButtonTheme(
           data: FilledButtonThemeData(
-            style: largeButton.merge(theme.filledButtonTheme.style),
+            style: largeButton(theme.textTheme)
+                .merge(theme.filledButtonTheme.style),
           ),
           child: primary,
         ),
@@ -208,35 +211,6 @@ class LockActions extends StatelessWidget {
   }
 }
 
-/// A form error under the fields: the error shape and `danger` text.
-class LockError extends StatelessWidget {
-  const LockError(this.message, {super.key});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    final danger = UfColors.of(context).danger;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      spacing: 6,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(top: 2),
-          child: Icon(UfIcons.warningOctagon, size: 14, color: danger),
-        ),
-        Expanded(
-          child: Text(
-            message,
-            style: Theme.of(context).textTheme.bodyMedium!
-                .copyWith(fontSize: 13.5, color: danger),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 /// The warning shape in `warn` beside a note: the master-password warning before an account is created.
 class LockNotice extends StatelessWidget {
   const LockNotice(this.message, {super.key});
@@ -261,33 +235,6 @@ class LockNotice extends StatelessWidget {
                 .copyWith(fontSize: 13),
           ),
         ),
-      ],
-    );
-  }
-}
-
-/// A primary button's label that turns into a spinner and "Vérification…" while the password key is derived.
-class BusyLabel extends StatelessWidget {
-  const BusyLabel({super.key, required this.busy, required this.label});
-
-  final bool busy;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    if (!busy) return Text(label);
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      spacing: 10,
-      children: [
-        SizedBox.square(
-          dimension: 14,
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
-            color: UfColors.of(context).accentFg,
-          ),
-        ),
-        Text(AppLocalizations.of(context).passwordChecking),
       ],
     );
   }

@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
+import 'dart:math' as math;
+
 import 'package:flutter/gestures.dart' show kDoubleTapTimeout;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -8,19 +10,25 @@ import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
 import '../../app_state.dart';
 import '../../design/buttons.dart';
+import '../../design/feedback.dart';
+import '../../design/inputs.dart';
 import '../../design/icons.dart';
+import '../../design/motion.dart';
+import '../../design/palette.dart';
 import '../../design/rows.dart';
 import '../../design/seal.dart';
 import '../../design/tokens.dart';
 import '../../terminal/snippet_insertion.dart';
 import '../../vault/snippet_store.dart';
 import '../../vault/vault.dart';
+import '../hosts/editor_frame.dart' show vaultNameOf;
 import '../terminal/multiline_dialog.dart';
 import '../orgs/members_screen.dart' show confirmAndLeaveOrg;
 import '../orgs/why_rights_view.dart';
 import 'shortcuts.dart';
 
-/// The search and host tree of the selected vault (personal or an org); the search covers name, address and tags.
+/// The search and host tree of the selected vault (personal or an org). The search opens a command palette over
+/// the tree: hosts by name, address or tag, snippets of this vault and the personal one, and actions.
 class TreePanel extends StatefulWidget {
   const TreePanel({
     super.key,
@@ -28,8 +36,10 @@ class TreePanel extends StatefulWidget {
     this.onNewHost,
     this.onNewFolder,
     this.onEdit,
+    this.onSettings,
   });
 
+  /// Focusing it (a click, Ctrl K) opens the palette.
   final FocusNode searchFocus;
 
   /// Null keeps the button disabled; both are disabled while the server is read-only.
@@ -38,13 +48,17 @@ class TreePanel extends StatefulWidget {
 
   /// Opens the editor of a host or folder (the pencil of its row).
   final void Function(VaultEntry entry)? onEdit;
+  final VoidCallback? onSettings;
 
   @override
   State<TreePanel> createState() => _TreePanelState();
 }
 
 class _TreePanelState extends State<TreePanel> {
-  final _query = TextEditingController();
+  final _palette = OverlayPortalController();
+  final _paletteAnchor = LayerLink();
+  final _paletteFocus = FocusNode();
+  var _paletteQuery = '';
   final _collapsed = <String>{};
   ({String id, DateTime at})? _lastTap;
 
@@ -52,10 +66,41 @@ class _TreePanelState extends State<TreePanel> {
   String? _selected;
 
   @override
+  void initState() {
+    super.initState();
+    widget.searchFocus.addListener(_onSearchFocus);
+  }
+
+  @override
   void dispose() {
-    _query.dispose();
+    widget.searchFocus.removeListener(_onSearchFocus);
+    _paletteFocus.dispose();
     super.dispose();
   }
+
+  void _onSearchFocus() {
+    if (!widget.searchFocus.hasFocus) return;
+    if (_palette.isShowing) return _paletteFocus.requestFocus();
+    setState(() => _paletteQuery = '');
+    _palette.show();
+    // the palette's field takes over from the one at rest, which still holds focus
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _paletteFocus.requestFocus();
+    });
+  }
+
+  void _closePalette() {
+    if (!_palette.isShowing) return;
+    // left to the scope, focus would return to the field at rest and reopen the palette
+    _paletteFocus.unfocus();
+    _palette.hide();
+  }
+
+  /// Closes the palette, then runs [action].
+  VoidCallback _thenClose(VoidCallback? action) => () {
+    _closePalette();
+    action?.call();
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -82,39 +127,64 @@ class _TreePanelState extends State<TreePanel> {
       for (final e in vault?.entries ?? const <VaultEntry>[])
         if (e.orgId == orgId && !vault!.isTrashed(e.id) && _shown(e)) e,
     ];
-    final query = _query.text.trim().toLowerCase();
-    final rows = query.isEmpty
-        ? _tree(context, state, visible)
-        : [
-            for (final e in visible)
-              if (e.kind == ItemKind.host && _matches(e, query))
-                _row(context, state, e, depth: 0),
-            ..._snippetResults(context, state, query, orgId),
-          ];
+    final rows = _tree(context, state, visible);
+    final sync = state.sync;
+    // the vault opening, or a first sync still bringing its items; a paused or failed round shows the vault
+    final loading =
+        vault == null ||
+        (visible.isEmpty &&
+            sync != null &&
+            sync.online &&
+            sync.lastSyncAt == null &&
+            sync.lastError == null &&
+            !sync.restorePending &&
+            (sync.compat == null || sync.compat!.api != null));
     final text = Theme.of(context).textTheme;
     final newFolderBlocked = org != null && !online;
+    final canNewHost = !readOnly && orgEdit && !awaiting;
+    final canNewFolder = canNewHost && !newFolderBlocked;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       spacing: 6,
       children: [
-        TextField(
-          key: const Key('tree-search'),
-          controller: _query,
-          focusNode: widget.searchFocus,
-          style: text.bodyMedium!.copyWith(fontSize: 13.5),
-          onChanged: (q) {
-            setState(() {});
-            state.loquet.watch((q.length / 30).clamp(0, 1));
-          },
-          decoration: InputDecoration(
-            hintText: l.treeSearch(UfShortcuts.label(UfShortcut.focusSearch)),
-            prefixIcon: Icon(
-              UfIcons.magnifyingGlass,
-              size: 14,
-              color: colors.muted,
+        OverlayPortal(
+          controller: _palette,
+          overlayChildBuilder: (context) => Positioned(
+            width: math.min(560, MediaQuery.sizeOf(context).width - 32),
+            child: CompositedTransformFollower(
+              link: _paletteAnchor,
+              showWhenUnlinked: false,
+              child: TapRegion(
+                onTapOutside: (_) => _closePalette(),
+                child: Material(
+                  type: MaterialType.transparency,
+                  child: UfCommandPalette(
+                    focusNode: _paletteFocus,
+                    hint: l.treeSearchHint,
+                    groups: _paletteGroups(
+                      context,
+                      state,
+                      newHost: canNewHost ? widget.onNewHost : null,
+                      newFolder: canNewFolder ? widget.onNewFolder : null,
+                    ),
+                    onQueryChanged: (q) {
+                      setState(() => _paletteQuery = q);
+                      state.loquet.watch((q.length / 30).clamp(0, 1));
+                    },
+                    onDismiss: _closePalette,
+                  ),
+                ),
+              ),
             ),
-            prefixIconConstraints: const BoxConstraints(minWidth: 32),
-            contentPadding: const EdgeInsets.symmetric(vertical: 8),
+          ),
+          child: CompositedTransformTarget(
+            link: _paletteAnchor,
+            child: UfSearchField(
+              key: const Key('tree-search'),
+              focusNode: widget.searchFocus,
+              hint: l.treeSearchHint,
+              shortcut: UfShortcuts.searchLabel,
+            ),
           ),
         ),
         Padding(
@@ -131,9 +201,7 @@ class _TreePanelState extends State<TreePanel> {
               IconButton(
                 key: const Key('tree-new-host'),
                 tooltip: l.treeNewHost,
-                onPressed: readOnly || !orgEdit || awaiting
-                    ? null
-                    : widget.onNewHost,
+                onPressed: canNewHost ? widget.onNewHost : null,
                 icon: const Icon(UfIcons.plus),
               ),
               IconButton(
@@ -141,9 +209,7 @@ class _TreePanelState extends State<TreePanel> {
                 tooltip: newFolderBlocked
                     ? l.treeNewFolderOnline
                     : l.treeNewFolder,
-                onPressed: readOnly || !orgEdit || awaiting || newFolderBlocked
-                    ? null
-                    : widget.onNewFolder,
+                onPressed: canNewFolder ? widget.onNewFolder : null,
                 icon: const Icon(UfIcons.folderSimplePlus),
               ),
             ],
@@ -171,90 +237,129 @@ class _TreePanelState extends State<TreePanel> {
                     ],
                   ),
                 )
+              : loading
+              ? const Padding(
+                  padding: EdgeInsets.fromLTRB(8, 6, 8, 0),
+                  child: UfTreeSkeleton(),
+                )
               : rows.isEmpty
               ? Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 8),
                   child: Text(
-                    query.isEmpty ? l.treeEmpty : l.searchNoResult,
+                    l.treeEmpty,
                     style: text.bodySmall!.copyWith(color: colors.muted),
                   ),
                 )
-              : ListView(children: rows),
+              : UfStagger(
+                  child: ListView(
+                    children: [
+                      for (final (i, row) in rows.indexed)
+                        UfStaggerItem(index: i, child: row),
+                    ],
+                  ),
+                ),
         ),
       ],
     );
   }
 
-  /// Snippets of this vault and of the personal one matching [query], under their own heading; a click inserts
-  /// one into the active session.
-  List<Widget> _snippetResults(
+  /// Hosts of this vault matching the query, then snippets of this vault and the personal one (inserted into
+  /// the active session), then the actions the panel allows.
+  List<UfPaletteGroup> _paletteGroups(
     BuildContext context,
-    AppState state,
-    String query,
-    String? orgId,
-  ) {
+    AppState state, {
+    required VoidCallback? newHost,
+    required VoidCallback? newFolder,
+  }) {
     final vault = state.vault;
     if (vault == null) return const [];
-    final found = [
+    final l = AppLocalizations.of(context);
+    final query = _paletteQuery.trim().toLowerCase();
+    final orgId = state.orgs?.selected;
+    // ponytail: the first 20 of each group, typing narrows them; a lazy list if vaults outgrow that
+    const shown = 20;
+    final hosts = [
+      for (final e in vault.ofKind(ItemKind.host))
+        if (e.orgId == orgId &&
+            !vault.isTrashed(e.id) &&
+            e.state != EntryState.unreadable &&
+            e.state != EntryState.unsupported &&
+            _matches(e, query))
+          e,
+    ]..sort((a, b) => (a.name ?? '').compareTo(b.name ?? ''));
+    final tab = state.activeSession;
+    final canInsert = tab?.state == SealState.connected;
+    final snippets = [
       for (final s in SnippetStore(vault).list(query: query))
         if (vault.entry(s.id)?.orgId case final owner
             when owner == null || owner == orgId)
-          s,
+          (snippet: s, owner: owner),
     ];
-    if (found.isEmpty) return const [];
-    final l = AppLocalizations.of(context);
-    final colors = UfColors.of(context);
-    final tab = state.activeSession;
-    final canInsert = tab?.state == SealState.connected;
-    final text = Theme.of(context).textTheme;
+    final actions = [
+      if (newHost != null) (l.treeNewHost, UfIcons.plus, newHost),
+      if (newFolder != null)
+        (l.treeNewFolder, UfIcons.folderSimplePlus, newFolder),
+      if (widget.onSettings case final settings?)
+        (l.railSettings, UfIcons.gear, settings),
+      (l.railLock, UfIcons.lock, state.lock),
+    ];
     return [
-      Padding(
-        padding: const EdgeInsets.fromLTRB(8, 10, 8, 4),
-        child: Text(
-          l.searchSnippets,
-          style: text.labelSmall!.copyWith(color: colors.muted),
-        ),
-      ),
-      for (final s in found)
-        Tooltip(
-          message: canInsert ? s.meta.command : l.snippetNoTerminal,
-          child: InkWell(
-            key: Key('search-snippet-${s.id}'),
-            borderRadius: UfRadius.control,
-            hoverColor: colors.panelHover,
-            onTap: canInsert
-                ? () => insertSnippet(
-                    tab!,
-                    s.meta.command,
-                    confirm: () => confirmUnsafeMultiline(context),
-                  )
-                : null,
-            child: Container(
-              constraints: const BoxConstraints(minHeight: UfHeight.small),
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Row(
-                spacing: 8,
-                children: [
-                  Icon(UfIcons.terminal, size: 14, color: colors.muted),
-                  Expanded(
-                    child: Text(
-                      s.meta.name,
-                      overflow: TextOverflow.ellipsis,
-                      style: _rowStyle(
-                        context,
-                        false,
-                      ).copyWith(color: canInsert ? colors.text : colors.muted),
-                    ),
-                  ),
-                ],
-              ),
+      UfPaletteGroup(l.paletteHosts(vaultNameOf(l, state, orgId)), [
+        for (final e in hosts.take(shown))
+          UfPaletteRow(
+            label: e.name ?? '',
+            detail: [
+              ?vault.entry(e.folderId ?? '')?.name,
+              ?_target(state, e.id),
+            ].join(' · '),
+            hint: l.paletteConnect,
+            icon: Seal(state: state.sealFor(e.id)),
+            onSelected: _thenClose(() => state.connect(e.id)),
+          ),
+      ]),
+      UfPaletteGroup(l.searchSnippets, [
+        for (final (:snippet, :owner) in snippets.take(shown))
+          UfPaletteRow(
+            label: snippet.meta.name,
+            detail: canInsert
+                ? vaultNameOf(l, state, owner)
+                : l.snippetNoTerminal,
+            hint: canInsert ? l.paletteInsert : null,
+            icon: const Icon(UfIcons.terminal),
+            onSelected: _thenClose(
+              canInsert
+                  ? () => insertSnippet(
+                      tab!,
+                      snippet.meta.command,
+                      confirm: () => confirmUnsafeMultiline(this.context),
+                    )
+                  : null,
             ),
           ),
-        ),
+      ]),
+      UfPaletteGroup(l.paletteActions, [
+        for (final (label, icon, run) in actions)
+          if (label.toLowerCase().contains(query))
+            UfPaletteRow(
+              label: label,
+              icon: Icon(icon),
+              onSelected: _thenClose(run),
+            ),
+      ]),
     ];
   }
 
-  /// Org screens open over the shell; their back arrow pops them.
+  /// `user@address:port` of a host, from its resolved values.
+  static String? _target(AppState state, String hostId) =>
+      switch (state.vault?.hostLookup(hostId)) {
+        (:final meta, :final resolved, org: _) => [
+          if (resolved.user case final user?) '$user@',
+          meta.address,
+          if (resolved.port != 22) ':${resolved.port}',
+        ].join(),
+        null => null,
+      };
+
   /// Hosts, folders, and the entries the tree must label (unreadable, newer type).
   static bool _shown(VaultEntry e) =>
       e.kind == ItemKind.host ||
@@ -358,46 +463,49 @@ class _TreePanelState extends State<TreePanel> {
     final style = _rowStyle(context, selected);
     return Padding(
       padding: const EdgeInsets.only(bottom: 1),
-      child: Material(
-        color: selected ? colors.select : Colors.transparent,
-        borderRadius: UfRadius.control,
-        child: InkWell(
-          key: Key('folder-${e.id}'),
+      child: UfFocusRing(
+        child: Material(
+          color: selected ? colors.select : Colors.transparent,
           borderRadius: UfRadius.control,
-          hoverColor: colors.panelHover,
-          onTap: () => setState(() {
-            _selected = e.id;
-            open ? _collapsed.add(e.id) : _collapsed.remove(e.id);
-          }),
-          child: Container(
-            constraints: const BoxConstraints(minHeight: UfHeight.small),
-            padding: EdgeInsets.only(left: 8.0 + depth * 14, right: 4),
-            child: Row(
-              spacing: 8,
-              children: [
-                Icon(
-                  open ? UfIcons.caretDown : UfIcons.caretRight,
-                  size: 12,
-                  color: selected ? colors.accentText : colors.muted,
-                ),
-                Expanded(
-                  child: Text(
-                    e.name ?? '',
-                    style: style,
-                    overflow: TextOverflow.ellipsis,
+          child: InkWell(
+            key: Key('folder-${e.id}'),
+            borderRadius: UfRadius.control,
+            hoverColor: colors.panelHover,
+            hoverDuration: UfMotion.of(context).instant,
+            onTap: () => setState(() {
+              _selected = e.id;
+              open ? _collapsed.add(e.id) : _collapsed.remove(e.id);
+            }),
+            child: Container(
+              constraints: const BoxConstraints(minHeight: UfHeight.small),
+              padding: EdgeInsets.only(left: 8.0 + depth * 14, right: 4),
+              child: Row(
+                spacing: 8,
+                children: [
+                  Icon(
+                    open ? UfIcons.caretDown : UfIcons.caretRight,
+                    size: 12,
+                    color: selected ? colors.accentText : colors.muted,
                   ),
-                ),
-                if (selected && e.orgId != null)
-                  ..._orgFolderButtons(context, e),
-                if (selected)
-                  _editButton(context, e)
-                else
-                  Text(
-                    '$hosts',
-                    style: Theme.of(context).textTheme.bodySmall!
-                        .copyWith(color: colors.muted),
+                  Expanded(
+                    child: Text(
+                      e.name ?? '',
+                      style: style,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-              ],
+                  if (selected && e.orgId != null)
+                    ..._orgFolderButtons(context, e),
+                  if (selected)
+                    _editButton(context, e)
+                  else
+                    Text(
+                      '$hosts',
+                      style: Theme.of(context).textTheme.bodySmall!
+                          .copyWith(color: colors.muted),
+                    ),
+                ],
+              ),
             ),
           ),
         ),
@@ -424,7 +532,7 @@ class _TreePanelState extends State<TreePanel> {
   }) {
     final l = AppLocalizations.of(context);
     final colors = UfColors.of(context);
-    final padding = EdgeInsets.fromLTRB(8.0 + depth * 14, 6, 4, 6);
+    final padding = EdgeInsets.fromLTRB(8.0 + depth * 14, 5, 4, 5);
     final muted = Theme.of(context).textTheme.bodySmall!
         .copyWith(color: colors.muted);
     if (e.state == EntryState.unreadable || e.state == EntryState.unsupported) {
@@ -447,82 +555,80 @@ class _TreePanelState extends State<TreePanel> {
       if (e.pending) l.treePending,
     ];
     final selected = _selected == e.id;
-    final lookup = selected ? state.vault?.hostLookup(e.id) : null;
-    final target = switch (lookup) {
-      (:final meta, :final resolved, org: _) => [
-        if (resolved.user case final user?) '$user@',
-        meta.address,
-        if (resolved.port != 22) ':${resolved.port}',
-      ].join(),
-      null => null,
-    };
+    final target = selected ? _target(state, e.id) : null;
     return CallbackShortcuts(
       bindings: {const SingleActivator(LogicalKeyboardKey.enter): connect},
       child: Focus(
         child: Builder(
           builder: (row) => Padding(
             padding: const EdgeInsets.only(bottom: 1),
-            child: Material(
-              color: selected ? colors.select : Colors.transparent,
-              borderRadius: UfRadius.control,
-              child: InkWell(
-                key: Key('host-${e.id}'),
+            child: UfFocusRing(
+              child: Material(
+                color: selected ? colors.select : Colors.transparent,
                 borderRadius: UfRadius.control,
-                hoverColor: colors.panelHover,
-                // a click selects the row (its own focus node, so Enter connects); a second one in time connects.
-                // Detected here: onDoubleTap would hold back onTap and leave a timer behind every click
-                onTap: () {
-                  Focus.of(row).requestFocus();
-                  setState(() => _selected = e.id);
-                  final now = DateTime.now();
-                  final last = _lastTap;
-                  if (last != null &&
-                      last.id == e.id &&
-                      now.difference(last.at) < kDoubleTapTimeout) {
-                    _lastTap = null;
-                    connect();
-                  } else {
-                    _lastTap = (id: e.id, at: now);
-                  }
-                },
-                child: Padding(
-                  padding: padding,
-                  child: Row(
-                    spacing: 8,
-                    children: [
-                      Seal(state: state.sealFor(e.id)),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              e.name ?? '',
-                              overflow: TextOverflow.ellipsis,
-                              style: _rowStyle(context, selected),
-                            ),
-                            if (target != null)
+                child: InkWell(
+                  key: Key('host-${e.id}'),
+                  borderRadius: UfRadius.control,
+                  hoverColor: colors.panelHover,
+                  hoverDuration: UfMotion.of(context).instant,
+                  // a click selects the row (its own focus node, so Enter connects); a second one in time connects.
+                  // Detected here: onDoubleTap would hold back onTap and leave a timer behind every click
+                  onTap: () {
+                    Focus.of(row).requestFocus();
+                    setState(() => _selected = e.id);
+                    final now = DateTime.now();
+                    final last = _lastTap;
+                    if (last != null &&
+                        last.id == e.id &&
+                        now.difference(last.at) < kDoubleTapTimeout) {
+                      _lastTap = null;
+                      connect();
+                    } else {
+                      _lastTap = (id: e.id, at: now);
+                    }
+                  },
+                  child: Container(
+                    constraints: const BoxConstraints(
+                      minHeight: UfHeight.small,
+                    ),
+                    padding: padding,
+                    child: Row(
+                      spacing: 8,
+                      children: [
+                        Seal(state: state.sealFor(e.id)),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
                               Text(
-                                target,
+                                e.name ?? '',
                                 overflow: TextOverflow.ellipsis,
-                                style: monoStyle.copyWith(
-                                  fontSize: 11,
-                                  color: colors.muted,
-                                ),
+                                style: _rowStyle(context, selected),
                               ),
-                          ],
+                              if (target != null)
+                                Text(
+                                  target,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: monoStyle.copyWith(
+                                    fontSize: 11,
+                                    color: colors.muted,
+                                  ),
+                                ),
+                            ],
+                          ),
                         ),
-                      ),
-                      if (notes.isNotEmpty)
-                        Flexible(child: UfTag(notes.join(', '))),
-                      if (state.tabs.any((tab) => tab.hostId == e.id))
-                        Icon(
-                          UfIcons.terminalWindow,
-                          size: 14,
-                          color: colors.muted,
-                          semanticLabel: l.tabOpen,
-                        ),
-                      if (selected) _editButton(context, e),
-                    ],
+                        if (notes.isNotEmpty)
+                          Flexible(child: UfTag(notes.join(', '))),
+                        if (state.tabs.any((tab) => tab.hostId == e.id))
+                          Icon(
+                            UfIcons.terminalWindow,
+                            size: 14,
+                            color: colors.muted,
+                            semanticLabel: l.tabOpen,
+                          ),
+                        if (selected) _editButton(context, e),
+                      ],
+                    ),
                   ),
                 ),
               ),

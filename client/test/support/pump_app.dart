@@ -11,19 +11,18 @@ import 'sync_harness.dart';
 
 const testEmail = 'camille@example.org', testPassword = 'password-123';
 
-/// Pumps the whole app, or [child] inside the same theme, scopes and l10n (English).
+/// Pumps the whole app, or [child] inside the same theme, scopes and l10n (English unless [locale] says).
 Future<AppState> pumpApp(
   WidgetTester tester, {
   AppState? state,
   Settings? settings,
   Widget? child,
+  Locale locale = const Locale('en'),
 }) async {
   final s = state ?? testAppState(settings: settings ?? const Settings());
   if (state == null) await tester.runAsync(s.boot);
   await tester.binding.setSurfaceSize(const Size(1280, 800));
-  await tester.pumpWidget(
-    UnfeudalApp(state: s, locale: const Locale('en'), home: child),
-  );
+  await tester.pumpWidget(UnfeudalApp(state: s, locale: locale, home: child));
   await tester.pump();
   return s;
 }

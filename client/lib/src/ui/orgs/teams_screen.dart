@@ -4,9 +4,12 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
+import '../../design/choices.dart';
 import '../../design/dialog.dart';
+import '../../design/feedback.dart';
 import '../../design/field.dart';
 import '../../design/icons.dart';
+import '../../design/motion.dart';
 import '../../design/rows.dart';
 import '../../design/tokens.dart';
 import '../describe_error.dart';
@@ -137,17 +140,16 @@ class _TeamsScreenState extends State<TeamsScreen> {
                         key: const Key('team-name'),
                         controller: editing.name,
                         maxLength: 100,
+                        decoration: const InputDecoration(counterText: ''),
                       ),
                     ),
                     for (final m in members)
-                      CheckboxListTile(
+                      UfCheckboxRow(
                         key: Key('team-member-${m.userId}'),
                         value: editing.memberIds.contains(m.userId),
-                        contentPadding: EdgeInsets.zero,
-                        controlAffinity: ListTileControlAffinity.leading,
-                        title: Text(m.email),
+                        label: m.email,
                         onChanged: (on) => setState(
-                          () => on == true
+                          () => on
                               ? editing.memberIds.add(m.userId)
                               : editing.memberIds.remove(m.userId),
                         ),
@@ -164,30 +166,36 @@ class _TeamsScreenState extends State<TeamsScreen> {
                 ),
               ),
             ),
-          if (_error case final error?)
-            Text(error, style: TextStyle(color: colors.danger)),
+          if (_error case final error?) UfErrorLine(error),
           const SizedBox(height: 8),
           if (teams.isEmpty && editing == null)
             Text(l.teamsEmpty, style: muted),
           for (final t in teams)
-            InkWell(
-              key: Key('team-${t.id}'),
-              onTap: () => _edit(t),
-              child: ItemRow(
-                icon: UfIcons.usersThree,
-                title: t.name,
-                subtitle: [
-                  for (final m in members)
-                    if (t.memberIds.contains(m.userId)) m.email,
-                ].join(', '),
-                trailing: [
-                  IconButton(
-                    key: Key('team-delete-${t.id}'),
-                    tooltip: l.teamDelete,
-                    onPressed: () => _delete(t),
-                    icon: const Icon(UfIcons.trash),
-                  ),
-                ],
+            UfFocusRing(
+              child: InkWell(
+                key: Key('team-${t.id}'),
+                hoverDuration: UfMotion.of(context).fast,
+                onTap: () => _edit(t),
+                child: ItemRow(
+                  icon: UfIcons.usersThree,
+                  title: t.name,
+                  subtitle: [
+                    for (final m in members)
+                      if (t.memberIds.contains(m.userId)) m.email,
+                  ].join(', '),
+                  trailing: [
+                    UfStatusChip(
+                      l.teamMemberCount(t.memberIds.length),
+                      tone: UfChipTone.muted,
+                    ),
+                    IconButton(
+                      key: Key('team-delete-${t.id}'),
+                      tooltip: l.teamDelete,
+                      onPressed: () => _delete(t),
+                      icon: const Icon(UfIcons.trash),
+                    ),
+                  ],
+                ),
               ),
             ),
         ],

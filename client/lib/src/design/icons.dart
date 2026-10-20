@@ -5,7 +5,6 @@ import 'package:flutter/widgets.dart';
 abstract final class UfIcons {
   static const _family = 'Phosphor';
   static const arrowCounterClockwise = IconData(0xe038, fontFamily: _family);
-  static const arrowElbowDownRight = IconData(0xe046, fontFamily: _family);
   static const arrowSquareOut = IconData(0xe5de, fontFamily: _family);
   static const caretDown = IconData(0xe136, fontFamily: _family);
   static const caretLeft = IconData(0xe138, fontFamily: _family);
@@ -13,6 +12,7 @@ abstract final class UfIcons {
   static const caretUpDown = IconData(0xe140, fontFamily: _family);
   static const certificate = IconData(0xe766, fontFamily: _family);
   static const check = IconData(0xe182, fontFamily: _family);
+  static const checkCircle = IconData(0xe184, fontFamily: _family);
   static const clockCounterClockwise = IconData(0xe1a0, fontFamily: _family);
   static const copy = IconData(0xe1ca, fontFamily: _family);
   static const copySimple = IconData(0xe1cc, fontFamily: _family);

@@ -11,6 +11,7 @@ import 'package:printing/printing.dart';
 
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
+import '../../design/choices.dart';
 import '../../design/tokens.dart';
 import '../lock/lock_frame.dart';
 import '../save_file.dart';
@@ -251,17 +252,11 @@ class _RecoveryKitViewState extends State<RecoveryKitView> {
               fontSize: 13,
             ),
           ),
-          CheckboxListTile(
+          UfCheckboxRow(
             key: const Key('recovery-confirm'),
             value: _confirmed,
-            onChanged: (v) => setState(() => _confirmed = v ?? false),
-            controlAffinity: ListTileControlAffinity.leading,
-            contentPadding: EdgeInsets.zero,
-            dense: true,
-            title: Text(
-              l.kitConfirm,
-              style: theme.textTheme.bodyMedium!.copyWith(fontSize: 13.5),
-            ),
+            onChanged: (v) => setState(() => _confirmed = v),
+            label: l.kitConfirm,
           ),
           LockActions(
             primary: FilledButton(

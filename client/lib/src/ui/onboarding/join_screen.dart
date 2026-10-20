@@ -130,11 +130,12 @@ class _JoinScreenState extends State<JoinScreen> with BusyAction {
               _password,
               l.setupPassword,
               secret: true,
+              strength: true,
             ),
             keyedField('join-confirm', _confirm, l.setupConfirm, secret: true),
             LockNotice(l.setupWarning),
           ],
-          if (problem case final problem?) LockError(problem),
+          if (problem case final problem?) UfErrorLine(problem),
           LockActions(
             primary: FilledButton(
               key: Key(invite == null ? 'join-submit' : 'join-accept'),

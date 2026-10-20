@@ -6,9 +6,10 @@ import 'app_scope.dart';
 import 'app_state.dart';
 import 'debug_trace.dart';
 import 'design/dialog.dart';
-import 'design/icons.dart';
 import 'design/motion.dart';
 import 'design/tokens.dart';
+import 'loquet/loquet_pose.dart';
+import 'loquet/loquet_spot.dart';
 import 'settings/settings.dart';
 import 'ui/lock/lock_frame.dart';
 import 'ui/lock/login_screen.dart';
@@ -81,19 +82,18 @@ class _UnfeudalAppState extends State<UnfeudalApp> {
     final context = _navigator.currentContext;
     if (context == null) return false;
     final l = AppLocalizations.of(context);
-    return await showUfDialog<bool>(context, alert: true, (dialog) {
+    return await showUfDialog<bool>(context, (dialog) {
           void answer(bool value) => Navigator.pop(dialog, value);
           final colors = UfColors.of(dialog);
           return UfDialog(
-            leading: Icon(
-              UfIcons.warningOctagon,
-              size: 28,
-              color: colors.danger,
+            leading: const LoquetSpot(
+              placement: LoquetPlacement.dialog,
+              mood: LoquetMood.concerned,
             ),
             title: l.plainHttpTitle,
             message: l.plainHttpBody('$server'),
             actions: [
-              CancelButton(onPressed: () => answer(false)),
+              CancelButton(autofocus: true, onPressed: () => answer(false)),
               FilledButton(
                 key: const Key('plain-http-continue'),
                 style: dangerButtonStyle(colors),

@@ -18,7 +18,7 @@ class UfDialog extends StatelessWidget {
     this.leading,
     this.children = const [],
     required this.actions,
-    this.width = 540,
+    this.width = 440,
   });
 
   final String? title;
@@ -57,16 +57,16 @@ class UfDialog extends StatelessWidget {
           borderRadius: UfRadius.dialog,
           clipBehavior: Clip.antiAlias,
           child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(22, 22, 22, 18),
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
-              spacing: 14,
+              spacing: 10,
               children: [
                 if (heading.isNotEmpty)
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    spacing: 14,
+                    spacing: 12,
                     children: [
                       ?leading,
                       Expanded(
@@ -79,11 +79,14 @@ class UfDialog extends StatelessWidget {
                     ],
                   ),
                 ...children,
-                Wrap(
-                  alignment: WrapAlignment.end,
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: actions,
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Wrap(
+                    alignment: WrapAlignment.end,
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: actions,
+                  ),
                 ),
               ],
             ),
@@ -94,53 +97,51 @@ class UfDialog extends StatelessWidget {
   }
 }
 
-/// "Annuler" in the body colour, next to a primary action.
+/// "Annuler" as a secondary button, next to a primary action. [autofocus] gives it the dialog's initial focus,
+/// for a risky question.
 class CancelButton extends StatelessWidget {
-  const CancelButton({super.key, required this.onPressed});
+  const CancelButton({
+    super.key,
+    required this.onPressed,
+    this.autofocus = false,
+  });
 
   final VoidCallback? onPressed;
+  final bool autofocus;
 
   @override
-  Widget build(BuildContext context) => TextButton(
+  Widget build(BuildContext context) => OutlinedButton(
     onPressed: onPressed,
+    autofocus: autofocus,
     child: Text(MaterialLocalizations.of(context).cancelButtonLabel),
   );
 }
 
-/// Yes or no before something goes to the trash or signs out: the question, Cancel and a danger action.
+/// Yes or no before something goes to the trash or signs out: Loquet beside the question, then Cancel (focused)
+/// and a danger action. Escape or a click on the scrim answers no.
 Future<bool> confirmDanger(
   BuildContext context, {
   required String question,
   required String action,
 }) async =>
-    await showUfDialog<bool>(context, alert: true, (dialog) {
+    await showUfDialog<bool>(context, (dialog) {
       final colors = UfColors.of(dialog);
       return UfDialog(
-        width: 480,
+        leading: const LoquetSpot(
+          placement: LoquetPlacement.dialog,
+          mood: LoquetMood.concerned,
+        ),
+        title: question,
         actions: [
-          CancelButton(onPressed: () => Navigator.pop(dialog, false)),
+          CancelButton(
+            autofocus: true,
+            onPressed: () => Navigator.pop(dialog, false),
+          ),
           FilledButton(
             key: const Key('confirm-yes'),
             style: dangerButtonStyle(colors),
             onPressed: () => Navigator.pop(dialog, true),
             child: Text(action),
-          ),
-        ],
-        children: [
-          Row(
-            spacing: 16,
-            children: [
-              const LoquetSpot(
-                placement: LoquetPlacement.dialog,
-                mood: LoquetMood.concerned,
-              ),
-              Expanded(
-                child: Text(
-                  question,
-                  style: Theme.of(dialog).textTheme.titleMedium,
-                ),
-              ),
-            ],
           ),
         ],
       );

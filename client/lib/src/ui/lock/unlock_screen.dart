@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
 import '../../app_state.dart';
+import '../../design/feedback.dart';
 import '../../design/field.dart';
 import '../../design/icons.dart';
 import '../../design/tokens.dart';
@@ -28,6 +29,9 @@ class _UnlockScreenState extends State<UnlockScreen> {
   final _password = TextEditingController();
   final _focus = FocusNode();
   Object? _error;
+
+  /// Bumped by a refused password, to shake the field.
+  int _shakes = 0;
 
   /// The key derivation takes seconds: one at a time, the button waits for it.
   bool _busy = false;
@@ -74,6 +78,7 @@ class _UnlockScreenState extends State<UnlockScreen> {
       if (mounted) {
         setState(() {
           _error = e;
+          _shakes++;
         });
       }
     } finally {
@@ -99,31 +104,34 @@ class _UnlockScreenState extends State<UnlockScreen> {
               name: stored.displayName,
               email: stored.email,
             ),
-          UfField(
-            label: l.unlockPassword,
-            child: TextField(
-              key: const Key('unlock-password'),
-              controller: _password,
-              focusNode: _focus,
-              obscureText: !peeking,
-              readOnly: _busy,
-              onChanged: (_) {
-                _machine.input();
-                setState(() {});
-              },
-              onSubmitted: (_) => _submit(),
-              decoration: InputDecoration(
-                suffixIcon: IconButton(
-                  key: const Key('unlock-peek'),
-                  tooltip: l.unlockPeek,
-                  icon: Icon(peeking ? UfIcons.eyeSlash : UfIcons.eye),
-                  color: peeking ? UfColors.of(context).accentText : null,
-                  onPressed: _machine.togglePeek,
+          UfShake(
+            shakes: _shakes,
+            child: UfField(
+              label: l.unlockPassword,
+              child: TextField(
+                key: const Key('unlock-password'),
+                controller: _password,
+                focusNode: _focus,
+                obscureText: !peeking,
+                readOnly: _busy,
+                onChanged: (_) {
+                  _machine.input();
+                  setState(() {});
+                },
+                onSubmitted: (_) => _submit(),
+                decoration: InputDecoration(
+                  suffixIcon: IconButton(
+                    key: const Key('unlock-peek'),
+                    tooltip: l.unlockPeek,
+                    icon: Icon(peeking ? UfIcons.eyeSlash : UfIcons.eye),
+                    color: peeking ? UfColors.of(context).accentText : null,
+                    onPressed: _machine.togglePeek,
+                  ),
                 ),
               ),
             ),
           ),
-          if (_error case final error?) LockError(describeError(l, error)),
+          if (_error case final error?) UfErrorLine(describeError(l, error)),
           LockActions(
             primary: FilledButton(
               key: const Key('unlock-submit'),

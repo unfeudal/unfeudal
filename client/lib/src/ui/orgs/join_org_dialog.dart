@@ -5,8 +5,9 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
+import '../../design/buttons.dart';
 import '../../design/dialog.dart';
-import '../../design/tokens.dart';
+import '../../design/field.dart';
 import '../busy_action.dart';
 
 /// An existing account joins an org from an invitation link or file of its own server.
@@ -71,23 +72,22 @@ class _JoinOrgDialogState extends State<JoinOrgDialog> with BusyAction {
     return UfDialog(
       title: l.railJoinOrg,
       actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(l.cancel),
-        ),
+        CancelButton(onPressed: () => Navigator.of(context).pop()),
         FilledButton(
           key: const Key('join-submit'),
           onPressed: busy ? null : _join,
-          child: Text(l.orgJoinSubmit),
+          child: BusyLabel(busy: busy, label: l.orgJoinSubmit),
         ),
       ],
       children: [
-        TextField(
-          key: const Key('join-link'),
-          controller: _link,
-          autofocus: true,
-          decoration: InputDecoration(labelText: l.joinPaste),
-          onSubmitted: (_) => _join(),
+        UfField(
+          label: l.joinPaste,
+          child: TextField(
+            key: const Key('join-link'),
+            controller: _link,
+            autofocus: true,
+            onSubmitted: (_) => _join(),
+          ),
         ),
         Align(
           alignment: Alignment.centerLeft,
@@ -97,8 +97,7 @@ class _JoinOrgDialogState extends State<JoinOrgDialog> with BusyAction {
             child: Text(l.joinOpenFile),
           ),
         ),
-        if (problem case final error?)
-          Text(error, style: TextStyle(color: UfColors.of(context).danger)),
+        if (problem case final error?) UfErrorLine(error),
       ],
     );
   }

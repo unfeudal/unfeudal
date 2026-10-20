@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
+import '../../design/choices.dart';
 import '../../design/dialog.dart';
+import '../../design/field.dart';
+import '../../design/inputs.dart';
 import '../../design/motion.dart';
 import '../../design/rows.dart';
 import '../../design/tokens.dart';
@@ -26,7 +28,7 @@ class OrgSettingsScreen extends StatefulWidget {
 class _OrgSettingsScreenState extends State<OrgSettingsScreen> {
   static const _retention = ['auditDays', 'maxVersions', 'trashDays'];
   final _name = TextEditingController();
-  final _fields = {for (final k in _retention) k: TextEditingController()};
+  final _values = <String, int?>{};
   bool _mascot = true;
 
   /// What the server holds, as last read or saved.
@@ -50,7 +52,7 @@ class _OrgSettingsScreenState extends State<OrgSettingsScreen> {
     _name.text = _saved['name']! as String;
     _mascot = _saved['mascot']! as bool;
     for (final k in _retention) {
-      _fields[k]!.text = _saved[k] == null ? '' : '${_saved[k]}';
+      _values[k] = _saved[k] as int?;
     }
     _loadRetention();
   }
@@ -73,7 +75,7 @@ class _OrgSettingsScreenState extends State<OrgSettingsScreen> {
         };
         for (final k in _retention) {
           _saved[k] = org[k];
-          _fields[k]!.text = org[k] == null ? '' : '${org[k]}';
+          _values[k] = org[k];
         }
       });
     } on Exception {
@@ -84,9 +86,6 @@ class _OrgSettingsScreenState extends State<OrgSettingsScreen> {
   @override
   void dispose() {
     _name.dispose();
-    for (final c in _fields.values) {
-      c.dispose();
-    }
     super.dispose();
   }
 
@@ -95,7 +94,7 @@ class _OrgSettingsScreenState extends State<OrgSettingsScreen> {
     final state = AppScope.read(context);
     final current = <String, Object?>{
       'mascot': _mascot,
-      for (final k in _retention) k: int.tryParse(_fields[k]!.text.trim()),
+      for (final k in _retention) k: _values[k],
     };
     final settings = {
       for (final MapEntry(:key, :value) in current.entries)
@@ -157,14 +156,11 @@ class _OrgSettingsScreenState extends State<OrgSettingsScreen> {
         0 => l.orgRetentionUnlimited,
         final days => l.orgRetentionServer(days),
       },
-      trailing: SizedBox(
+      trailing: UfNumberField(
+        key: Key(key),
+        value: _values[settingKey],
         width: 96,
-        child: TextField(
-          key: Key(key),
-          controller: _fields[settingKey],
-          keyboardType: TextInputType.number,
-          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-        ),
+        onChanged: (v) => setState(() => _values[settingKey] = v),
       ),
     );
     // a Material of its own: the section, a dialog or a test may host it
@@ -188,8 +184,10 @@ class _OrgSettingsScreenState extends State<OrgSettingsScreen> {
             ),
             SettingRow(
               label: l.orgMascot,
-              trailing: Switch(
+              onTap: () => setState(() => _mascot = !_mascot),
+              trailing: UfSwitch(
                 key: const Key('org-mascot'),
+                semanticLabel: l.orgMascot,
                 value: _mascot,
                 onChanged: (v) => setState(() => _mascot = v),
               ),
@@ -200,7 +198,7 @@ class _OrgSettingsScreenState extends State<OrgSettingsScreen> {
             if (_error case final error?)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
-                child: Text(error, style: TextStyle(color: colors.danger)),
+                child: UfErrorLine(error),
               ),
             Padding(
               padding: const EdgeInsets.only(top: 12, bottom: 24),

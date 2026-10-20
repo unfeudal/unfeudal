@@ -9,9 +9,11 @@ import '../../../l10n/app_localizations.dart';
 import '../../api/admin_models.dart';
 import '../../app_scope.dart';
 import '../../design/buttons.dart';
+import '../../design/choices.dart';
 import '../../design/dialog.dart';
 import '../../design/field.dart';
 import '../../design/icons.dart';
+import '../../design/inputs.dart';
 import '../../design/rows.dart';
 import '../../design/tokens.dart';
 import '../busy_action.dart';
@@ -60,7 +62,6 @@ class _InviteDialogState extends State<InviteDialog> with BusyAction {
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
-    final colors = UfColors.of(context);
     final state = AppScope.of(context);
     final isOwner = state.orgs?.isOwner(widget.orgId) ?? false;
     final created = _created;
@@ -72,7 +73,7 @@ class _InviteDialogState extends State<InviteDialog> with BusyAction {
         FilledButton(
           key: const Key('invite-create'),
           onPressed: busy ? null : _create,
-          child: Text(l.inviteCreate),
+          child: BusyLabel(busy: busy, label: l.inviteCreate),
         ),
       ],
       children: [
@@ -87,22 +88,21 @@ class _InviteDialogState extends State<InviteDialog> with BusyAction {
         ),
         UfField(
           label: l.inviteRole,
-          child: DropdownButtonFormField<OrgRole>(
+          child: UfSelect<OrgRole>(
             key: const Key('invite-role'),
-            initialValue: _role,
-            items: [
+            value: _role,
+            options: [
               for (final r in OrgRole.values)
-                DropdownMenuItem(
-                  value: r,
+                UfOption(
+                  r,
+                  roleLabel(l, r),
                   enabled: isOwner || r == OrgRole.member,
-                  child: Text(roleLabel(l, r)),
                 ),
             ],
-            onChanged: (r) => setState(() => _role = r ?? OrgRole.member),
+            onChanged: (r) => setState(() => _role = r),
           ),
         ),
-        if (problem case final error?)
-          Text(error, style: TextStyle(color: colors.danger)),
+        if (problem case final error?) UfErrorLine(error),
         if (created != null)
           InviteResult(created: created, saveLocation: widget.saveLocation),
       ],
@@ -133,18 +133,7 @@ class InviteResult extends StatelessWidget {
       spacing: 8,
       children: [
         Text(created.mailSent ? l.inviteMailSent : l.inviteShare),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            border: Border.all(color: UfColors.of(context).line),
-            borderRadius: UfRadius.control,
-          ),
-          child: SelectableText(
-            created.link,
-            style: monoStyle.copyWith(fontSize: 12),
-          ),
-        ),
+        UfReadOnlyField(value: created.link, mono: true),
         Row(
           spacing: 8,
           children: [

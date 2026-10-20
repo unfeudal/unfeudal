@@ -49,10 +49,6 @@ class UfTitleBar extends StatelessWidget {
             IconButton(
               key: Key(key),
               onPressed: onPressed,
-              style: ButtonStyle(
-                foregroundColor: _glyph(colors.muted, colors.text),
-                iconColor: _glyph(colors.muted, colors.text),
-              ),
               icon: Icon(UfIcons.sidebarSimple, semanticLabel: label),
             );
         // Close: `danger` fill and `onDanger` glyph; the others take `neutral`

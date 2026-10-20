@@ -7,6 +7,7 @@ import '../../app_scope.dart';
 import '../../app_state.dart';
 import '../../design/icons.dart';
 import '../../design/motion.dart';
+import '../../design/rows.dart';
 import '../../design/tokens.dart';
 import '../../loquet/line_bank.dart';
 import '../../loquet/loquet_pose.dart';
@@ -195,27 +196,30 @@ class SidebarEntry extends StatelessWidget {
     return Semantics(
       selected: current,
       button: true,
-      child: Material(
-        color: current ? colors.panelHover : Colors.transparent,
-        borderRadius: UfRadius.control,
-        child: InkWell(
+      child: UfFocusRing(
+        child: Material(
+          color: current ? colors.panelHover : Colors.transparent,
           borderRadius: UfRadius.control,
-          hoverColor: colors.panelHover,
-          onTap: onTap,
-          child: SizedBox(
-            height: UfHeight.medium,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Row(
-                spacing: 10,
-                children: [
-                  Icon(
-                    icon,
-                    size: 16,
-                    color: current ? colors.text : colors.muted,
-                  ),
-                  Expanded(child: Text(label, style: style)),
-                ],
+          child: InkWell(
+            borderRadius: UfRadius.control,
+            hoverColor: colors.panelHover,
+            hoverDuration: UfMotion.of(context).fast,
+            onTap: onTap,
+            child: SizedBox(
+              height: 30,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Row(
+                  spacing: 10,
+                  children: [
+                    Icon(
+                      icon,
+                      size: 16,
+                      color: current ? colors.text : colors.muted,
+                    ),
+                    Expanded(child: Text(label, style: style)),
+                  ],
+                ),
               ),
             ),
           ),
@@ -259,13 +263,12 @@ class VaultSelector extends StatelessWidget {
       onPicked();
     }
 
-    // Menu rows: 32 px minimum, 4/8 padding, radius 6, the selected one on panelHover.
-    ButtonStyle rowStyle({bool selected = false}) => MenuItemButton.styleFrom(
-      minimumSize: const Size(0, 32),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      shape: const RoundedRectangleBorder(borderRadius: UfRadius.control),
-      backgroundColor: selected ? colors.panelHover : null,
-      textStyle: text.bodyMedium!.copyWith(fontSize: 13.5),
+    // Vault rows hold two lines: 32 px minimum, 4/8 padding over the themed 30 px row.
+    const rowStyle = ButtonStyle(
+      minimumSize: WidgetStatePropertyAll(Size(0, 32)),
+      padding: WidgetStatePropertyAll(
+        EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      ),
     );
     // set by the LayoutBuilder below: the menu is as wide as the selector
     late double menuWidth;
@@ -288,7 +291,7 @@ class VaultSelector extends StatelessWidget {
       MenuItemButton(
         key: key,
         onPressed: onPressed,
-        style: rowStyle(selected: selected),
+        style: rowStyle,
         overflowAxis: Axis.vertical,
         leadingIcon: tile,
         trailingIcon: selected
@@ -323,7 +326,7 @@ class VaultSelector extends StatelessWidget {
           1,
           MenuItemButton(
             key: key,
-            style: rowStyle(),
+            style: rowStyle,
             leadingIcon: SizedBox.square(
               dimension: 28,
               child: Icon(icon, size: 16, color: colors.muted),
@@ -400,9 +403,8 @@ class VaultSelector extends StatelessWidget {
             ),
           ],
         ],
-        builder: (context, menu, _) => _trigger(
-          context,
-          menu,
+        builder: (context, menu, _) => _VaultTrigger(
+          menu: menu,
           name: name,
           subtitle: subtitle,
           current: current,
@@ -410,14 +412,38 @@ class VaultSelector extends StatelessWidget {
       ),
     );
   }
+}
 
-  Widget _trigger(
-    BuildContext context,
-    MenuController menu, {
-    required String name,
-    required String subtitle,
-    required OrgSummary? current,
-  }) {
+/// The selector itself: an `edge` border on hover, the outer focus ring while its menu is open or it holds
+/// keyboard focus.
+class _VaultTrigger extends StatefulWidget {
+  const _VaultTrigger({
+    required this.menu,
+    required this.name,
+    required this.subtitle,
+    required this.current,
+  });
+
+  final MenuController menu;
+  final String name;
+  final String subtitle;
+  final OrgSummary? current;
+
+  @override
+  State<_VaultTrigger> createState() => _VaultTriggerState();
+}
+
+class _VaultTriggerState extends State<_VaultTrigger> {
+  bool _hover = false, _focus = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final menu = widget.menu;
+    final name = widget.name;
+    final current = widget.current;
+    final keyboardFocus =
+        _focus &&
+        FocusManager.instance.highlightMode == FocusHighlightMode.traditional;
     final l = AppLocalizations.of(context);
     final colors = UfColors.of(context);
     final text = Theme.of(context).textTheme;
@@ -428,8 +454,8 @@ class VaultSelector extends StatelessWidget {
         duration: UfMotion.of(context).fast,
         decoration: BoxDecoration(
           borderRadius: UfRadius.card,
-          // open: the 2 px focus ring outside a 2 px gap, as on keyboard focus
-          boxShadow: menu.isOpen
+          // the 2 px focus ring outside a 2 px gap
+          boxShadow: menu.isOpen || keyboardFocus
               ? [
                   BoxShadow(color: colors.bg, spreadRadius: 2),
                   BoxShadow(color: colors.focus, spreadRadius: 4),
@@ -440,12 +466,16 @@ class VaultSelector extends StatelessWidget {
           color: colors.panel,
           shape: RoundedRectangleBorder(
             borderRadius: UfRadius.card,
-            side: BorderSide(color: menu.isOpen ? colors.edge : colors.line),
+            side: BorderSide(
+              color: menu.isOpen || _hover ? colors.edge : colors.line,
+            ),
           ),
           child: InkWell(
             key: const Key('vault-selector'),
             borderRadius: UfRadius.card,
             hoverColor: Colors.transparent,
+            onHover: (hover) => setState(() => _hover = hover),
+            onFocusChange: (focus) => setState(() => _focus = focus),
             onTap: () => menu.isOpen ? menu.close() : menu.open(),
             child: SizedBox(
               height: 44,
@@ -472,7 +502,7 @@ class VaultSelector extends StatelessWidget {
                             style: text.labelLarge!.copyWith(fontSize: 13.5),
                           ),
                           Text(
-                            subtitle,
+                            widget.subtitle,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: text.bodySmall!.copyWith(

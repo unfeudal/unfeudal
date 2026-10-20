@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../../../l10n/app_localizations.dart';
+import '../../design/choices.dart';
 import '../../design/dialog.dart';
 import '../../design/motion.dart';
 import '../../design/tokens.dart';
@@ -43,7 +44,7 @@ class _SafetyCodeDialogState extends State<SafetyCodeDialog> {
       title: l.safetyTitle(widget.email),
       message: l.safetyHint(widget.email),
       actions: [
-        TextButton(
+        OutlinedButton(
           key: const Key('safety-no-match'),
           onPressed: () => Navigator.of(context).pop(),
           child: Text(l.safetyNoMatch),
@@ -67,13 +68,11 @@ class _SafetyCodeDialogState extends State<SafetyCodeDialog> {
             style: monoStyle.copyWith(fontSize: 18, letterSpacing: 1),
           ),
         ),
-        CheckboxListTile(
+        UfCheckboxRow(
           key: const Key('safety-compared'),
           value: _compared,
-          contentPadding: EdgeInsets.zero,
-          controlAffinity: ListTileControlAffinity.leading,
-          onChanged: (v) => setState(() => _compared = v ?? false),
-          title: Text(l.safetyCompared),
+          onChanged: (v) => setState(() => _compared = v),
+          label: l.safetyCompared,
         ),
       ],
     );

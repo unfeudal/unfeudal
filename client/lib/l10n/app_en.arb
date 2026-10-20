@@ -139,6 +139,7 @@
       }
     }
   },
+  "treeSearchHint": "Hosts, snippets, actions",
   "treeNewHost": "New host",
   "treeNewFolder": "New folder",
   "treeEmpty": "No host yet. Add one to connect.",
@@ -413,7 +414,7 @@
   "windowMaximize": "Maximize",
   "windowRestore": "Restore",
   "windowClose": "Close",
-  "passwordChecking": "Checking…",
+  "loading": "Loading…",
   "errorJumpLoop": "These jump hosts lead back to each other. Change one of them.",
   "errorJumpTooDeep": "More than 8 jump hosts in a row. Shorten the chain.",
   "errorJumpMissing": "A jump host of this chain no longer exists. Pick another one.",
@@ -1392,7 +1393,25 @@
     }
   },
   "searchSnippets": "Snippets",
-  "searchNoResult": "Nothing matches.",
+  "searchNoMatch": "Nothing matches “{query}”.",
+  "@searchNoMatch": {
+    "placeholders": {
+      "query": {
+        "type": "String"
+      }
+    }
+  },
+  "keyEscape": "Esc",
+  "fieldCopy": "Copy",
+  "fieldIncrease": "Increase",
+  "fieldDecrease": "Decrease",
+  "strengthWeak": "Weak.",
+  "strengthFair": "Fair.",
+  "strengthGood": "Good.",
+  "strengthStrong": "Strong.",
+  "capsLockOn": "Caps Lock on.",
+  "capsLockOff": "Caps Lock off.",
+  "aclUnset": "Not set",
   "sectionMembers": "Members and access",
   "membersGroupFolders": "Folder access",
   "settingsAppearance": "Appearance",
@@ -1477,5 +1496,26 @@
         "type": "int"
       }
     }
-  }
+  },
+  "teamMemberCount": "{count, plural, =1{1 member} other{{count} members}}",
+  "@teamMemberCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "aclWho": "Who",
+  "jumpBreaksChain": "Would loop or break the chain",
+  "paletteHosts": "Hosts · {vault}",
+  "@paletteHosts": {
+    "placeholders": {
+      "vault": {
+        "type": "String"
+      }
+    }
+  },
+  "paletteActions": "Actions",
+  "paletteConnect": "Enter: connect",
+  "paletteInsert": "Insert"
 }

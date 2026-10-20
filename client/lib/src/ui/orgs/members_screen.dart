@@ -7,7 +7,10 @@ import '../../app_scope.dart';
 import '../../app_state.dart';
 import '../../design/banner.dart';
 import '../../design/buttons.dart';
+import '../../design/choices.dart';
 import '../../design/dialog.dart';
+import '../../design/feedback.dart';
+import '../../design/icons.dart';
 import '../../design/rows.dart';
 import '../../design/tokens.dart';
 import '../../orgs/member_pins.dart';
@@ -195,119 +198,80 @@ class _MembersScreenState extends State<MembersScreen> {
         !accepted &&
         pin == null &&
         (m.status != null || unconfirmed.contains(m.userId));
-    final muted = Theme.of(context).textTheme.bodySmall!
-        .copyWith(color: colors.muted);
     final badges = <Widget>[
       if (isAdmin && accepted)
-        Text(l.memberAwaiting, style: muted.copyWith(color: colors.warn)),
+        UfStatusChip(l.memberAwaiting, tone: UfChipTone.warn),
       if (isAdmin && !self && changed)
-        Text(
+        UfStatusChip(
           l.memberKeyChanged,
           key: Key('member-key-changed-${m.userId}'),
-          style: muted.copyWith(color: colors.danger),
+          tone: UfChipTone.danger,
         )
       else if (isAdmin && !self && pin != null)
-        Text(
+        UfStatusChip(
           pin.verified ? l.memberVerified : l.memberNotVerified,
-          style: pin.verified ? muted.copyWith(color: colors.ok) : muted,
+          tone: pin.verified ? UfChipTone.ok : UfChipTone.muted,
         )
       else if (isAdmin && !self && unpinned)
-        Text(l.memberUnpinned, style: muted),
+        UfStatusChip(l.memberUnpinned, tone: UfChipTone.muted),
     ];
     final touchable = isOwner || role == OrgRole.member;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: colors.line)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        child: Row(
-          spacing: 12,
-          children: [
-            Container(
-              width: 32,
-              height: 32,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: colors.neutral,
-                borderRadius: UfRadius.control,
-              ),
-              child: Text(
-                m.email.isEmpty ? '?' : m.email[0].toUpperCase(),
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-            ),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    m.email,
-                    style: Theme.of(context).textTheme.labelLarge!
-                        .copyWith(fontSize: 13.5),
-                  ),
-                  ...badges,
-                ],
-              ),
-            ),
-            if (isAdmin && role != null)
-              DropdownButton<OrgRole>(
-                key: Key('member-role-${m.userId}'),
-                value: role,
-                underline: const SizedBox.shrink(),
-                onChanged: touchable && (!self || (isOwner && anotherOwner))
-                    ? (r) {
-                        if (r == null || r == role) return;
-                        _run((state) async {
-                          await state.api!.setMemberRole(
-                            widget.orgId,
-                            m.userId,
-                            r,
-                          );
-                          await state.sync!.syncNow();
-                        });
-                      }
-                    : null,
-                items: [
-                  for (final r in OrgRole.values)
-                    DropdownMenuItem(
-                      key: Key('role-option-${r.name}'),
-                      value: r,
-                      enabled: isOwner || r == OrgRole.member,
-                      child: Text(roleLabel(l, r)),
-                    ),
-                ],
-              )
-            else if (role != null)
-              UfTag(roleLabel(l, role)),
-            if (isAdmin && accepted && key != null)
-              FilledButton(
-                key: Key('member-confirm-${m.userId}'),
-                style: smallButton,
-                onPressed: () => _confirm(m),
-                child: Text(l.memberConfirm),
-              ),
-            if (isAdmin &&
-                !self &&
-                !accepted &&
-                key != null &&
-                (pin == null || !pin.verified || changed))
-              OutlinedButton(
-                key: Key('member-verify-${m.userId}'),
-                style: smallButton,
-                onPressed: () => _verify(m),
-                child: Text(l.memberVerify),
-              ),
-            if (isAdmin && !self && touchable)
-              TextButton(
-                key: Key('member-remove-${m.userId}'),
-                style: dangerQuietStyle(colors).merge(smallButton),
-                onPressed: () => _remove(m),
-                child: Text(l.memberRemove),
-              ),
-          ],
-        ),
-      ),
+    return ItemRow(
+      icon: UfIcons.user,
+      title: m.email,
+      trailing: [
+        ...badges,
+        if (isAdmin && role != null)
+          UfSelect<OrgRole>(
+            key: Key('member-role-${m.userId}'),
+            value: role,
+            onChanged: touchable && (!self || (isOwner && anotherOwner))
+                ? (r) {
+                    if (r == role) return;
+                    _run((state) async {
+                      await state.api!.setMemberRole(widget.orgId, m.userId, r);
+                      await state.sync!.syncNow();
+                    });
+                  }
+                : null,
+            options: [
+              for (final r in OrgRole.values)
+                UfOption(
+                  r,
+                  roleLabel(l, r),
+                  key: Key('role-option-${r.name}'),
+                  enabled: isOwner || r == OrgRole.member,
+                ),
+            ],
+          )
+        else if (role != null)
+          UfTag(roleLabel(l, role)),
+        if (isAdmin && accepted && key != null)
+          FilledButton(
+            key: Key('member-confirm-${m.userId}'),
+            style: smallButton,
+            onPressed: () => _confirm(m),
+            child: Text(l.memberConfirm),
+          ),
+        if (isAdmin &&
+            !self &&
+            !accepted &&
+            key != null &&
+            (pin == null || !pin.verified || changed))
+          OutlinedButton(
+            key: Key('member-verify-${m.userId}'),
+            style: smallButton,
+            onPressed: () => _verify(m),
+            child: Text(l.memberVerify),
+          ),
+        if (isAdmin && !self && touchable)
+          TextButton(
+            key: Key('member-remove-${m.userId}'),
+            style: dangerQuietStyle(colors).merge(smallButton),
+            onPressed: () => _remove(m),
+            child: Text(l.memberRemove),
+          ),
+      ],
     );
   }
 }

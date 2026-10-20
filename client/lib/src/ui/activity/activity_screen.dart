@@ -11,7 +11,9 @@ import '../../audit/activity_model.dart';
 import '../../audit/audit_anchors.dart';
 import '../../design/banner.dart';
 import '../../design/buttons.dart';
+import '../../design/choices.dart';
 import '../../design/empty_state.dart';
+import '../../design/feedback.dart';
 import '../../design/tokens.dart';
 import '../describe_error.dart';
 import '../hosts/editor_frame.dart';
@@ -205,16 +207,15 @@ class _ActivityScreenState extends State<ActivityScreen> {
                 spacing: 8,
                 children: [
                   if (scopes.length > 1)
-                    DropdownButton<String>(
+                    UfSelect<String?>(
                       key: const Key('activity-scope'),
                       value: scopes.any((s) => s.$1 == _scope) ? _scope : null,
-                      underline: const SizedBox.shrink(),
-                      items: [
+                      options: [
                         for (final (scope, label) in scopes)
-                          DropdownMenuItem(
+                          UfOption(
+                            scope,
+                            label,
                             key: Key('activity-scope-$scope'),
-                            value: scope,
-                            child: Text(label),
                           ),
                       ],
                       onChanged: (s) {
@@ -245,7 +246,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                 ],
               ),
               if (alert != null)
-                StatusBanner(
+                UfNotice(
                   key: const Key('activity-alert'),
                   tone: BannerTone.danger,
                   message: alert.kind == AnchorAlertKind.rewritten
@@ -253,43 +254,46 @@ class _ActivityScreenState extends State<ActivityScreen> {
                       : l.activityVanished(alert.scope, alert.seq),
                 ),
               if (m.error case final Exception e)
-                StatusBanner(
-                  tone: BannerTone.warn,
-                  message: describeError(l, e),
-                ),
+                UfNotice(tone: BannerTone.warn, message: describeError(l, e)),
               if (_notice case final notice?) Text(notice, style: muted),
               Expanded(
                 child: m.events.isEmpty && !m.loading
                     ? EmptyState(title: l.activityTitle, body: l.activityEmpty)
-                    : ListView.builder(
-                        itemCount: m.events.length,
-                        itemBuilder: (context, i) {
-                          final e = m.events[i];
-                          final ts = DateTime.parse(e.ts).toLocal();
-                          return EventRow(
-                            when:
-                                '${dates.formatShortDate(ts)} ${dates.formatTimeOfDay(TimeOfDay.fromDateTime(ts))}',
-                            text: describeEvent(l, e, nameOf),
-                            who: [
-                              if (e.actorUser case final actor?) nameOf(actor),
-                              ?e.ipAddress,
-                            ].join(' · '),
-                            trailing:
-                                e.action == 'org.deleted' &&
-                                    state.stored!.isInstanceOwner &&
-                                    e.targetIds.isNotEmpty
-                                ? OutlinedButton(
-                                    key: Key(
-                                      'activity-open-org-${e.targetIds.first}',
-                                    ),
-                                    style: smallButton,
-                                    onPressed: () =>
-                                        _select('org:${e.targetIds.first}'),
-                                    child: Text(l.activityOpenDeletedOrg),
-                                  )
-                                : null,
-                          );
-                        },
+                    : UfStagger(
+                        child: ListView.builder(
+                          itemCount: m.events.length,
+                          itemBuilder: (context, i) {
+                            final e = m.events[i];
+                            final ts = DateTime.parse(e.ts).toLocal();
+                            return UfStaggerItem(
+                              index: i,
+                              child: EventRow(
+                                when:
+                                    '${dates.formatShortDate(ts)} ${dates.formatTimeOfDay(TimeOfDay.fromDateTime(ts))}',
+                                text: describeEvent(l, e, nameOf),
+                                who: [
+                                  if (e.actorUser case final actor?)
+                                    nameOf(actor),
+                                  ?e.ipAddress,
+                                ].join(' · '),
+                                trailing:
+                                    e.action == 'org.deleted' &&
+                                        state.stored!.isInstanceOwner &&
+                                        e.targetIds.isNotEmpty
+                                    ? OutlinedButton(
+                                        key: Key(
+                                          'activity-open-org-${e.targetIds.first}',
+                                        ),
+                                        style: smallButton,
+                                        onPressed: () =>
+                                            _select('org:${e.targetIds.first}'),
+                                        child: Text(l.activityOpenDeletedOrg),
+                                      )
+                                    : null,
+                              ),
+                            );
+                          },
+                        ),
                       ),
               ),
               if (m.hasMore)
@@ -297,7 +301,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                   child: TextButton(
                     key: const Key('activity-more'),
                     onPressed: m.loading ? null : m.more,
-                    child: Text(l.activityMore),
+                    child: BusyLabel(busy: m.loading, label: l.activityMore),
                   ),
                 ),
               Padding(

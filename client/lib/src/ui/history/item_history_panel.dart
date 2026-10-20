@@ -9,6 +9,8 @@ import '../../app_scope.dart';
 import '../../app_state.dart';
 import '../../audit/payload_diff.dart';
 import '../../design/dialog.dart';
+import '../../design/field.dart';
+import '../../design/rows.dart';
 import '../../design/tokens.dart';
 import '../../events/app_events.dart';
 import '../../orgs/block_permissions.dart';
@@ -209,13 +211,9 @@ class _ItemHistoryPanelState extends State<ItemHistoryPanel> {
 
     final children = [
       if (_error case final error?)
-        Text(
-          error,
-          key: const Key('history-error'),
-          style: TextStyle(color: colors.danger),
-        ),
+        UfErrorLine(error, key: const Key('history-error')),
       if (versions == null && _error == null)
-        const Center(child: CircularProgressIndicator()),
+        Center(child: UfLoading(l.loading)),
       for (final (i, v) in (versions ?? const <_Version>[]).indexed)
         Container(
           key: Key('history-rev-${v.item.revision}'),

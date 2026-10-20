@@ -17,6 +17,7 @@ abstract final class _Ramp {
   static const p700 = Color(0xFF3A4740);
   static const p750 = Color(0xFF313C36);
   static const p800 = Color(0xFF28322D);
+  static const p850 = Color(0xFF222B27);
   static const p875 = Color(0xFF1E2622);
   static const p900 = Color(0xFF1B221F);
   static const p925 = Color(0xFF161C19);
@@ -62,6 +63,8 @@ class UfColors extends ThemeExtension<UfColors> {
     required this.panel,
     required this.panelHover,
     required this.field,
+    required this.fieldHover,
+    required this.fieldPress,
     required this.term,
     required this.line,
     required this.edge,
@@ -93,6 +96,9 @@ class UfColors extends ThemeExtension<UfColors> {
   /// Grounds: main area, sidebar and bars, floating surfaces, hovered rows, inside inputs, terminal.
   final Color bg, side, panel, panelHover, field, term;
 
+  /// Hovered and pressed choice surfaces: a choice card, a pressed radio.
+  final Color fieldHover, fieldPress;
+
   /// Separators and floating edges; the edge of inputs, boxes and radios.
   final Color line, edge;
   final Color text, muted, disabledBg, disabledFg;
@@ -112,6 +118,8 @@ class UfColors extends ThemeExtension<UfColors> {
     panel: _Ramp.p0,
     panelHover: _Ramp.p50,
     field: _Ramp.p0,
+    fieldHover: _Ramp.p25,
+    fieldPress: _Ramp.p100,
     term: _Ramp.p0,
     line: _Ramp.p150,
     edge: _Ramp.p400,
@@ -146,6 +154,8 @@ class UfColors extends ThemeExtension<UfColors> {
     panel: _Ramp.p875,
     panelHover: _Ramp.p800,
     field: _Ramp.p900,
+    fieldHover: _Ramp.p850,
+    fieldPress: _Ramp.p800,
     term: _Ramp.p975,
     line: _Ramp.p800,
     edge: _Ramp.p500,
@@ -184,6 +194,7 @@ class UfColors extends ThemeExtension<UfColors> {
     disabledBg, disabledFg, neutral, neutralHover, neutralPress, accent,
     accentHover, accentPress, accentFg, accentText, select, focus, danger,
     dangerHover, onDanger, dangerSoft, ok, okSoft, warn, warnSoft, scrim,
+    fieldHover, fieldPress,
   ];
 
   static UfColors _fromList(List<Color> c) => UfColors(
@@ -218,6 +229,8 @@ class UfColors extends ThemeExtension<UfColors> {
     warn: c[28],
     warnSoft: c[29],
     scrim: c[30],
+    fieldHover: c[31],
+    fieldPress: c[32],
   );
 
   // ponytail: no per-role overrides, the two palettes are fixed; add named parameters when a caller needs one
@@ -268,7 +281,7 @@ abstract final class UfElevation {
   ];
 }
 
-/// Radii: 4 keys, badges, tooltips · 6 controls and rows · 8 menus, notifications, cards · 10 dialogs.
+/// Radii: 4 keys, badges · 6 controls, rows, tooltips · 8 menus, notifications, cards · 10 dialogs.
 abstract final class UfRadius {
   static const key = BorderRadius.all(Radius.circular(4));
   static const control = BorderRadius.all(Radius.circular(6));
@@ -278,6 +291,9 @@ abstract final class UfRadius {
 
 /// Terminal, fingerprints, commands and shortcuts only.
 const monoStyle = TextStyle(fontFamily: 'JetBrainsMono');
+
+/// The text of a mono input: keys, fingerprints, commands.
+final monoField = monoStyle.copyWith(fontSize: 12);
 
 const _ui = 'HankenGrotesk';
 const _titles = 'Alegreya';
@@ -314,7 +330,7 @@ ThemeData ufTheme(Brightness brightness) {
     titleLarge: title(20, 1.2),
     titleMedium: ui(16, FontWeight.w600).copyWith(height: 1.3),
     titleSmall: ui(13, FontWeight.w600),
-    bodyLarge: ui(14),
+    bodyLarge: ui(13.5),
     bodyMedium: ui(14),
     bodySmall: ui(12),
     labelLarge: ui(13, FontWeight.w600),
@@ -337,6 +353,19 @@ ThemeData ufTheme(Brightness brightness) {
         WidgetState.disabled: c.disabledFg,
         WidgetState.any: rest,
       });
+  // keyboard focus: a 2 px `focus` stroke outside the shape
+  final focusRing = WidgetStateBorderSide.fromMap({
+    WidgetState.focused: BorderSide(
+      color: c.focus,
+      width: 2,
+      strokeAlign: BorderSide.strokeAlignOutside,
+    ),
+    WidgetState.any: BorderSide.none,
+  });
+  const cursor = WidgetStateMouseCursor.fromMap({
+    WidgetState.disabled: SystemMouseCursors.forbidden,
+    WidgetState.any: SystemMouseCursors.click,
+  });
   ButtonStyle button(WidgetStateProperty<Color> background, Color foreground) =>
       ButtonStyle(
         backgroundColor: background,
@@ -344,15 +373,21 @@ ThemeData ufTheme(Brightness brightness) {
         iconColor: ink(foreground),
         overlayColor: const WidgetStatePropertyAll(Colors.transparent),
         textStyle: WidgetStatePropertyAll(text.labelLarge),
+        mouseCursor: cursor,
         padding: const WidgetStatePropertyAll(padding),
         minimumSize: const WidgetStatePropertyAll(size),
         shape: const WidgetStatePropertyAll(shape),
         iconSize: const WidgetStatePropertyAll(16),
         elevation: const WidgetStatePropertyAll(0),
-        side: const WidgetStatePropertyAll(BorderSide.none),
+        side: focusRing,
         animationDuration: const Duration(milliseconds: 120),
         visualDensity: VisualDensity.standard,
       );
+  final glyph = WidgetStateProperty<Color>.fromMap({
+    WidgetState.disabled: c.disabledFg,
+    WidgetState.selected | WidgetState.hovered: c.text,
+    WidgetState.any: c.muted,
+  });
   final transparent = WidgetStateProperty<Color>.fromMap({
     WidgetState.disabled: Colors.transparent,
     WidgetState.pressed: c.neutralHover,
@@ -366,16 +401,19 @@ ThemeData ufTheme(Brightness brightness) {
       );
   final checked = WidgetStateProperty<Color>.fromMap({
     WidgetState.disabled: c.disabledBg,
+    WidgetState.selected & WidgetState.hovered: c.accentHover,
     WidgetState.selected: c.accent,
     WidgetState.any: c.field,
   });
   final boxEdge = WidgetStateBorderSide.fromMap({
     WidgetState.disabled: BorderSide(color: c.line),
+    WidgetState.focused: BorderSide(color: c.focus, width: 2),
     WidgetState.selected: BorderSide(color: c.accent),
     WidgetState.error: BorderSide(color: c.danger, width: 1.5),
     WidgetState.hovered: BorderSide(color: c.muted),
     WidgetState.any: BorderSide(color: c.edge),
   });
+  final menuShadow = Color(c.isDark ? 0x73000000 : 0x1A18201C);
   return ThemeData(
     useMaterial3: true,
     brightness: brightness,
@@ -422,10 +460,18 @@ ThemeData ufTheme(Brightness brightness) {
     textButtonTheme: TextButtonThemeData(style: button(transparent, c.text)),
     iconButtonTheme: IconButtonThemeData(
       style: ButtonStyle(
-        backgroundColor: transparent,
-        foregroundColor: ink(c.muted),
-        iconColor: ink(c.muted),
+        backgroundColor: WidgetStateProperty<Color>.fromMap({
+          WidgetState.disabled: Colors.transparent,
+          WidgetState.selected: c.panelHover,
+          WidgetState.pressed: c.neutralHover,
+          WidgetState.hovered: c.neutral,
+          WidgetState.any: Colors.transparent,
+        }),
+        foregroundColor: glyph,
+        iconColor: glyph,
         overlayColor: const WidgetStatePropertyAll(Colors.transparent),
+        mouseCursor: cursor,
+        side: focusRing,
         iconSize: const WidgetStatePropertyAll(16),
         minimumSize: const WidgetStatePropertyAll(Size.square(UfHeight.small)),
         maximumSize: const WidgetStatePropertyAll(Size.square(UfHeight.small)),
@@ -435,42 +481,32 @@ ThemeData ufTheme(Brightness brightness) {
         visualDensity: VisualDensity.compact,
       ),
     ),
-    segmentedButtonTheme: SegmentedButtonThemeData(
-      style: ButtonStyle(
-        backgroundColor: WidgetStateProperty<Color>.fromMap({
-          WidgetState.selected: c.panel,
-          WidgetState.any: c.neutral,
-        }),
-        foregroundColor: WidgetStateProperty<Color>.fromMap({
-          WidgetState.selected: c.text,
-          WidgetState.hovered: c.text,
-          WidgetState.any: c.muted,
-        }),
-        overlayColor: const WidgetStatePropertyAll(Colors.transparent),
-        side: WidgetStatePropertyAll(BorderSide(color: c.neutral, width: 2)),
-        textStyle: WidgetStatePropertyAll(text.labelLarge),
-        minimumSize: const WidgetStatePropertyAll(Size(0, UfHeight.medium)),
-        shape: const WidgetStatePropertyAll(
-          RoundedRectangleBorder(borderRadius: UfRadius.card),
-        ),
-        visualDensity: VisualDensity.compact,
-      ),
-      selectedIcon: const SizedBox.shrink(),
-    ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: c.field,
+      fillColor: _StateColor({
+        WidgetState.disabled: c.disabledBg,
+        WidgetState.any: c.field,
+      }),
       isDense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       hintStyle: text.bodyMedium!.copyWith(color: c.muted, fontSize: 13.5),
       helperStyle: text.bodySmall!.copyWith(color: c.muted),
-      errorStyle: text.bodySmall!.copyWith(color: c.danger),
-      enabledBorder: edge(c.edge),
-      border: edge(c.edge),
-      disabledBorder: edge(c.line),
-      focusedBorder: edge(c.focus, 2),
-      errorBorder: edge(c.danger),
-      focusedErrorBorder: edge(c.danger, 2),
+      errorStyle: text.bodySmall!.copyWith(
+        color: c.danger,
+        fontWeight: FontWeight.w600,
+      ),
+      // the only border: the state-specific ones would take precedence over it
+      border: _FieldBorder({
+        WidgetState.disabled: edge(c.line),
+        WidgetState.error & WidgetState.focused: edge(c.danger, 2),
+        WidgetState.focused: edge(c.focus, 2),
+        WidgetState.error: edge(c.danger),
+        WidgetState.hovered: edge(c.muted),
+        WidgetState.any: edge(c.edge),
+      }),
+      // icon slots default to 48 px and would stretch the 32 px field
+      prefixIconConstraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+      suffixIconConstraints: const BoxConstraints(minWidth: 28, minHeight: 28),
       hoverColor: Colors.transparent,
     ),
     chipTheme: ChipThemeData(
@@ -479,16 +515,30 @@ ThemeData ufTheme(Brightness brightness) {
         WidgetState.hovered: c.neutral,
         WidgetState.any: Colors.transparent,
       }),
-      labelStyle: text.bodyMedium!.copyWith(fontSize: 13),
+      labelStyle: text.bodyMedium!.copyWith(
+        fontSize: 13,
+        color: _StateColor({
+          WidgetState.disabled: c.disabledFg,
+          WidgetState.selected: c.accentText,
+          WidgetState.any: c.text,
+        }),
+      ),
       secondaryLabelStyle: text.labelLarge!.copyWith(color: c.accentText),
-      side: BorderSide(color: c.line),
+      side: WidgetStateBorderSide.fromMap({
+        WidgetState.selected: const BorderSide(color: Colors.transparent),
+        WidgetState.any: BorderSide(color: c.line),
+      }),
       shape: const RoundedRectangleBorder(borderRadius: UfRadius.control),
-      showCheckmark: false,
+      showCheckmark: true,
+      checkmarkColor: c.accentText,
       padding: const EdgeInsets.symmetric(horizontal: 4),
     ),
     checkboxTheme: CheckboxThemeData(
       fillColor: checked,
-      checkColor: WidgetStatePropertyAll(c.accentFg),
+      checkColor: WidgetStateProperty<Color>.fromMap({
+        WidgetState.disabled: c.disabledFg,
+        WidgetState.any: c.accentFg,
+      }),
       side: boxEdge,
       overlayColor: const WidgetStatePropertyAll(Colors.transparent),
       shape: const RoundedRectangleBorder(borderRadius: UfRadius.key),
@@ -517,17 +567,20 @@ ThemeData ufTheme(Brightness brightness) {
       thumbIcon: const WidgetStatePropertyAll(null),
     ),
     tooltipTheme: TooltipThemeData(
-      decoration: BoxDecoration(color: c.text, borderRadius: UfRadius.key),
-      textStyle: text.bodySmall!.copyWith(color: c.bg),
+      decoration: BoxDecoration(color: c.text, borderRadius: UfRadius.control),
+      textStyle: text.bodySmall!.copyWith(color: c.isDark ? c.bg : c.side),
       waitDuration: const Duration(milliseconds: 500),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
     ),
     snackBarTheme: SnackBarThemeData(
       backgroundColor: c.panel,
       contentTextStyle: text.bodyMedium,
       actionTextColor: c.accentText,
       behavior: SnackBarBehavior.floating,
-      elevation: 0,
+      width: 380,
+      showCloseIcon: true,
+      closeIconColor: c.muted,
+      elevation: 8,
       shape: RoundedRectangleBorder(
         borderRadius: UfRadius.card,
         side: BorderSide(color: c.line),
@@ -535,7 +588,8 @@ ThemeData ufTheme(Brightness brightness) {
     ),
     popupMenuTheme: PopupMenuThemeData(
       color: c.panel,
-      elevation: 0,
+      elevation: 8,
+      shadowColor: menuShadow,
       shape: RoundedRectangleBorder(
         borderRadius: UfRadius.card,
         side: BorderSide(color: c.line),
@@ -546,12 +600,33 @@ ThemeData ufTheme(Brightness brightness) {
     menuTheme: MenuThemeData(
       style: MenuStyle(
         backgroundColor: WidgetStatePropertyAll(c.panel),
-        elevation: const WidgetStatePropertyAll(0),
+        elevation: const WidgetStatePropertyAll(8),
+        shadowColor: WidgetStatePropertyAll(menuShadow),
         side: WidgetStatePropertyAll(BorderSide(color: c.line)),
         shape: const WidgetStatePropertyAll(
           RoundedRectangleBorder(borderRadius: UfRadius.card),
         ),
         padding: const WidgetStatePropertyAll(EdgeInsets.all(4)),
+      ),
+    ),
+    menuButtonTheme: MenuButtonThemeData(
+      style: ButtonStyle(
+        minimumSize: const WidgetStatePropertyAll(Size(0, 30)),
+        padding: const WidgetStatePropertyAll(
+          EdgeInsets.symmetric(horizontal: 8),
+        ),
+        shape: const WidgetStatePropertyAll(shape),
+        textStyle: WidgetStatePropertyAll(
+          text.bodyMedium!.copyWith(fontSize: 13.5),
+        ),
+        foregroundColor: ink(c.text),
+        iconColor: ink(c.muted),
+        backgroundColor: WidgetStateProperty<Color>.fromMap({
+          WidgetState.hovered | WidgetState.focused: c.panelHover,
+          WidgetState.any: Colors.transparent,
+        }),
+        overlayColor: const WidgetStatePropertyAll(Colors.transparent),
+        mouseCursor: cursor,
       ),
     ),
     dropdownMenuTheme: DropdownMenuThemeData(
@@ -566,6 +641,9 @@ ThemeData ufTheme(Brightness brightness) {
       shape: const RoundedRectangleBorder(borderRadius: UfRadius.control),
       contentPadding: const EdgeInsets.symmetric(horizontal: 8),
       minTileHeight: UfHeight.medium,
+      horizontalTitleGap: 8,
+      titleTextStyle: text.bodyMedium!.copyWith(fontSize: 13.5),
+      subtitleTextStyle: text.bodySmall!.copyWith(color: c.muted),
     ),
     tabBarTheme: TabBarThemeData(
       labelColor: c.text,
@@ -575,12 +653,17 @@ ThemeData ufTheme(Brightness brightness) {
       indicatorColor: c.accent,
       dividerColor: c.line,
       overlayColor: const WidgetStatePropertyAll(Colors.transparent),
-      indicatorSize: TabBarIndicatorSize.label,
+      // at tab size the default indicator is a 2 px square underline
+      indicatorSize: TabBarIndicatorSize.tab,
+      labelPadding: const EdgeInsets.symmetric(horizontal: 8),
+      mouseCursor: cursor,
     ),
     progressIndicatorTheme: ProgressIndicatorThemeData(
       color: c.accent,
-      linearTrackColor: c.neutral,
-      circularTrackColor: Colors.transparent,
+      linearTrackColor: c.line,
+      circularTrackColor: c.line,
+      borderRadius: const BorderRadius.all(Radius.circular(2)),
+      strokeWidth: 2,
     ),
     scrollbarTheme: ScrollbarThemeData(
       thumbColor: WidgetStatePropertyAll(c.edge.withValues(alpha: 0.5)),
@@ -604,4 +687,45 @@ ThemeData ufTheme(Brightness brightness) {
       titleTextStyle: text.titleLarge,
     ),
   );
+}
+
+/// A colour per state that is also a real [Color], its last value: themes lerp colour slots, which a
+/// [WidgetStateColor.fromMap] cannot do.
+class _StateColor extends WidgetStateColor {
+  _StateColor(WidgetStateMap<Color> map)
+    : _states = WidgetStateMapper(map),
+      super(map.values.last.toARGB32());
+
+  final WidgetStateMapper<Color> _states;
+
+  @override
+  Color resolve(Set<WidgetState> states) => _states.resolve(states);
+
+  @override
+  bool operator ==(Object other) =>
+      other is _StateColor && other._states == _states;
+
+  @override
+  int get hashCode => _states.hashCode;
+}
+
+/// An input border per state that is also a real [OutlineInputBorder]: DropdownButton reads the theme's
+/// border as one, which a [WidgetStateInputBorder.fromMap] cannot answer.
+class _FieldBorder extends OutlineInputBorder
+    implements WidgetStateInputBorder {
+  _FieldBorder(WidgetStateMap<InputBorder> map)
+    : _states = WidgetStateMapper(map),
+      super(borderRadius: UfRadius.control);
+
+  final WidgetStateMapper<InputBorder> _states;
+
+  @override
+  InputBorder resolve(Set<WidgetState> states) => _states.resolve(states);
+
+  @override
+  bool operator ==(Object other) =>
+      other is _FieldBorder && other._states == _states;
+
+  @override
+  int get hashCode => _states.hashCode;
 }

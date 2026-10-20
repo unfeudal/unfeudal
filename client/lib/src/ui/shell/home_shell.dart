@@ -358,6 +358,7 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
 
   TreePanel _treePanel() => TreePanel(
     searchFocus: _searchFocus,
+    onSettings: () => _show(ShellPage.settings),
     onNewHost: () => _openEditor(
       (close) => HostEditorPanel(orgId: _state.orgs?.selected, onClose: close),
     ),

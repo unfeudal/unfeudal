@@ -3,11 +3,11 @@ import 'package:flutter/material.dart';
 
 import '../../../l10n/app_localizations.dart';
 import '../../design/dialog.dart';
-import '../../design/field.dart';
 import '../../design/tokens.dart';
 import '../../loquet/loquet_pose.dart';
 import '../../loquet/loquet_spot.dart';
 import '../../ssh/ssh_connector.dart';
+import '../fields.dart';
 
 /// An org host's startup command, shown in full before it runs.
 class StartupCommandDialog extends StatelessWidget {
@@ -32,7 +32,7 @@ class StartupCommandDialog extends StatelessWidget {
       title: l.startupCommandTitle(hostName),
       message: l.startupCommandBody,
       actions: [
-        TextButton(
+        OutlinedButton(
           key: const Key('startup-skip'),
           onPressed: () => Navigator.pop(context, false),
           child: Text(l.startupCommandSkip),
@@ -97,10 +97,11 @@ class _PasswordPromptDialogState extends State<PasswordPromptDialog> {
         ),
       ],
       children: [
-        TextField(
-          key: const Key('password-prompt'),
-          controller: _password,
-          obscureText: true,
+        keyedField(
+          'password-prompt',
+          _password,
+          null,
+          secret: true,
           autofocus: true,
           onSubmitted: (_) => submit(),
         ),
@@ -158,13 +159,12 @@ class _KeyboardInteractiveDialogState extends State<KeyboardInteractiveDialog> {
       ],
       children: [
         for (var i = 0; i < widget.prompts.length; i++)
-          UfField(
-            label: widget.prompts[i].text.trim(),
-            child: TextField(
-              controller: _answers[i],
-              obscureText: !widget.prompts[i].echo,
-              autofocus: i == 0,
-            ),
+          keyedField(
+            'prompt-answer-$i',
+            _answers[i],
+            widget.prompts[i].text.trim(),
+            secret: !widget.prompts[i].echo,
+            autofocus: i == 0,
           ),
       ],
     );

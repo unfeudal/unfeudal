@@ -4,6 +4,7 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
+import '../../design/choices.dart';
 import '../../design/tokens.dart';
 import '../manage_frame.dart';
 import 'acl_editor.dart';
@@ -102,14 +103,19 @@ class _WhyRightsViewState extends State<WhyRightsView> {
       child: ListView(
         children: [
           if (orgs.isAdmin(widget.orgId))
-            DropdownButton<String>(
-              key: const Key('why-member'),
-              value: _userId,
-              items: [
-                for (final m in members)
-                  DropdownMenuItem(value: m.userId, child: Text(m.email)),
-              ],
-              onChanged: (id) => setState(() => _userId = id ?? _userId),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: SizedBox(
+                width: 320,
+                child: UfSelect<String>(
+                  key: const Key('why-member'),
+                  value: _userId,
+                  options: [
+                    for (final m in members) UfOption(m.userId, m.email),
+                  ],
+                  onChanged: (id) => setState(() => _userId = id),
+                ),
+              ),
             ),
           for (final line in lines)
             Padding(
@@ -122,7 +128,7 @@ class _WhyRightsViewState extends State<WhyRightsView> {
               why.effective.isEmpty
                   ? l.whyNone
                   : l.whyResult(permissionList(l, why.effective)),
-              style: TextStyle(color: colors.accent),
+              style: TextStyle(color: colors.accentText),
             ),
           ),
         ],

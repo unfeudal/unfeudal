@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:unfeudal_client/src/app_state.dart';
+import 'package:unfeudal_client/src/design/choices.dart';
 import 'package:unfeudal_client/src/orgs/member_pins.dart';
 import 'package:unfeudal_client/src/ui/orgs/invite_dialog.dart';
 import 'package:unfeudal_client/src/ui/orgs/members_screen.dart';
@@ -117,8 +118,8 @@ void main() {
     (t) async {
       final s = await admin(t, role: 'owner');
       final me = s.stored!.userId;
-      DropdownButton<OrgRole> mine() =>
-          t.widget<DropdownButton<OrgRole>>(find.byKey(Key('member-role-$me')));
+      UfSelect<OrgRole> mine() =>
+          t.widget<UfSelect<OrgRole>>(find.byKey(Key('member-role-$me')));
       expect(mine().onChanged, isNull, reason: 'the last owner');
       await t.runAsync(() async {
         h.orgBlock = orgBlock(
@@ -153,16 +154,16 @@ void main() {
     await admin(t);
     expect(
       t
-          .widget<DropdownButton<OrgRole>>(find.byKey(Key('member-role-$mia')))
+          .widget<UfSelect<OrgRole>>(find.byKey(Key('member-role-$mia')))
           .onChanged,
       isNull,
     );
     await t.tap(find.byKey(Key('member-role-$ana')));
     await t.pumpAndSettle();
-    final owner = t.widget<DropdownMenuItem<OrgRole>>(
+    final owner = t.widget<MenuItemButton>(
       find.byKey(const Key('role-option-owner')).last,
     );
-    expect(owner.enabled, isFalse);
+    expect(owner.onPressed, isNull);
   });
 
   testWidgets(
@@ -276,6 +277,29 @@ void main() {
     await pumpReal(t);
     expect(h.orgCalls.last.route, 'DELETE /invites/$id');
   });
+
+  testWidgets(
+    'members in French at 600 px: the actions wrap, nothing overflows',
+    (t) async {
+      final s = await admin(t);
+      await pumpApp(
+        t,
+        state: s,
+        locale: const Locale('fr'),
+        child: const Align(
+          alignment: Alignment.topLeft,
+          child: SizedBox(
+            width: 600,
+            height: 800,
+            child: MembersSection(orgId: testOrgId),
+          ),
+        ),
+      );
+      await pumpReal(t);
+      expect(find.byKey(Key('member-confirm-$ana')), findsOneWidget);
+      expect(t.takeException(), isNull);
+    },
+  );
 
   testWidgets(
     'the section: groups on the left, an admin sees invitations, anyone leaves from Organization',

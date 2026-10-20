@@ -7,6 +7,7 @@ import '../../app_state.dart';
 import '../../design/empty_state.dart';
 import '../../design/icons.dart';
 import '../../design/motion.dart';
+import '../../design/rows.dart';
 import '../../design/seal.dart';
 import '../../design/tokens.dart';
 import '../shell/shortcuts.dart';
@@ -87,7 +88,6 @@ class TerminalTabs extends StatelessWidget {
                 child: IconButton(
                   key: const Key('tab-new'),
                   tooltip: l.treeSearch(UfShortcuts.label(UfShortcut.newTab)),
-                  iconSize: 14,
                   onPressed: onNewTab,
                   icon: const Icon(UfIcons.plus),
                 ),
@@ -186,34 +186,41 @@ class _TabChipState extends State<_TabChip> {
               ),
               child: Material(
                 type: MaterialType.transparency,
-                child: InkWell(
+                child: UfFocusRing(
                   borderRadius: top,
-                  hoverColor: Colors.transparent,
-                  onTap: widget.onSelect,
-                  child: Padding(
-                    padding: const EdgeInsets.only(left: 10, right: 2),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      spacing: 8,
-                      children: [
-                        Seal(state: widget.seal, size: 12),
-                        Text(widget.title, style: text),
-                        widget.badge,
-                        Opacity(
-                          opacity: selected || _hover ? 0.8 : 0,
-                          child: IconButton(
-                            key: Key('tab-close-${widget.index}'),
-                            tooltip: AppLocalizations.of(context).tabClose,
-                            iconSize: 12,
-                            style: IconButton.styleFrom(
-                              fixedSize: const Size.square(22),
-                              minimumSize: const Size.square(22),
+                  child: InkWell(
+                    borderRadius: top,
+                    hoverColor: Colors.transparent,
+                    onTap: widget.onSelect,
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 10, right: 6),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        spacing: 8,
+                        children: [
+                          Seal(state: widget.seal, size: 12),
+                          Text(widget.title, style: text),
+                          widget.badge,
+                          Opacity(
+                            opacity: selected || _hover ? 0.75 : 0,
+                            child: IconButton(
+                              key: Key('tab-close-${widget.index}'),
+                              tooltip: AppLocalizations.of(context).tabClose,
+                              iconSize: 12,
+                              style: IconButton.styleFrom(
+                                fixedSize: const Size.square(16),
+                                minimumSize: const Size.square(16),
+                                padding: EdgeInsets.zero,
+                                shape: const RoundedRectangleBorder(
+                                  borderRadius: UfRadius.key,
+                                ),
+                              ),
+                              onPressed: widget.onClose,
+                              icon: const Icon(UfIcons.x),
                             ),
-                            onPressed: widget.onClose,
-                            icon: const Icon(UfIcons.x),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),

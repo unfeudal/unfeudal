@@ -5,10 +5,13 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../api/api_client.dart';
 import '../../app_scope.dart';
-import '../../design/dialog.dart';
+import '../../design/banner.dart';
 import '../../design/field.dart';
+import '../../design/feedback.dart';
+import '../../design/buttons.dart';
 import '../../design/tokens.dart';
 import '../busy_action.dart';
+import '../fields.dart';
 import '../manage_frame.dart';
 
 /// Deletes the account for good: the master password and the typed account email first.
@@ -46,7 +49,7 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen>
       } on WrongPassword {
         if (mounted) setState(() => problem = l.passwordCurrentWrong);
       } on ApiException catch (e) {
-        if (e.reason != 'last_owner') rethrow;
+        if (e.reason != ConflictReason.lastOwner.wire) rethrow;
         if (mounted) {
           setState(
             () => problem = l.deleteLastOwner((e.orgs ?? const []).join(', ')),
@@ -66,32 +69,27 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen>
       child: ListView(
         shrinkWrap: true,
         children: [
-          Text(l.deleteAccountBody, style: TextStyle(color: colors.danger)),
-          UfField(
-            label: l.deletePassword,
-            child: TextField(
-              key: const Key('delete-password'),
-              controller: _password,
-              obscureText: true,
-            ),
+          UfNotice(tone: BannerTone.danger, message: l.deleteAccountBody),
+          keyedField(
+            'delete-password',
+            _password,
+            l.deletePassword,
+            secret: true,
           ),
-          UfField(
-            label: l.deleteConfirmEmail,
-            child: TextField(
-              key: const Key('delete-confirm-email'),
-              controller: _email,
-              keyboardType: TextInputType.emailAddress,
-            ),
+          keyedField(
+            'delete-confirm-email',
+            _email,
+            l.deleteConfirmEmail,
+            keyboard: TextInputType.emailAddress,
           ),
-          if (problem case final problem?)
-            Text(problem, style: TextStyle(color: colors.danger)),
+          if (problem case final problem?) UfErrorLine(problem),
           Align(
             alignment: Alignment.centerRight,
             child: FilledButton(
               key: const Key('delete-submit'),
               style: dangerButtonStyle(colors),
               onPressed: busy ? null : _submit,
-              child: Text(l.deleteSubmit),
+              child: BusyLabel(busy: busy, label: l.deleteSubmit),
             ),
           ),
         ],

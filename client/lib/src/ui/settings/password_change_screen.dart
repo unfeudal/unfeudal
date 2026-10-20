@@ -4,9 +4,11 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
+import '../../design/buttons.dart';
 import '../../design/field.dart';
-import '../../design/tokens.dart';
+import '../../design/toast.dart';
 import '../busy_action.dart';
+import '../fields.dart';
 import '../manage_frame.dart';
 import '../onboarding/recovery_kit_view.dart';
 import '../onboarding/setup_screen.dart' show checkNewPassword;
@@ -57,8 +59,7 @@ class _PasswordChangeScreenState extends State<PasswordChangeScreen>
         } else {
           await state.changeMasterPassword(_current.text, _next.text);
           if (!mounted) return;
-          ScaffoldMessenger.of(context)
-              .showSnackBar(SnackBar(content: Text(l.passwordChanged)));
+          showUfToast(context, l.passwordChanged);
           Navigator.of(context).maybePop();
         }
       } on WrongPassword {
@@ -74,7 +75,6 @@ class _PasswordChangeScreenState extends State<PasswordChangeScreen>
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
-    final colors = UfColors.of(context);
     final kit = _kit;
     if (kit != null) {
       return RecoveryKitView(
@@ -82,14 +82,18 @@ class _PasswordChangeScreenState extends State<PasswordChangeScreen>
         onDone: () => Navigator.of(context).maybePop(),
       );
     }
-    Widget field(String key, TextEditingController c, String label) => UfField(
-      label: label,
-      child: TextField(
-        key: Key(key),
-        controller: c,
-        obscureText: true,
-        enabled: !_done,
-      ),
+    Widget field(
+      String key,
+      TextEditingController c,
+      String label, {
+      bool strength = false,
+    }) => keyedField(
+      key,
+      c,
+      label,
+      secret: true,
+      strength: strength,
+      enabled: !_done,
     );
     // a Scaffold of its own: pushed alone, the confirmation still has somewhere to show
     return Scaffold(
@@ -103,10 +107,9 @@ class _PasswordChangeScreenState extends State<PasswordChangeScreen>
           children: [
             if (widget.securityReset) Text(l.securityResetBody),
             field('pw-current', _current, l.pwCurrent),
-            field('pw-next', _next, l.pwNext),
+            field('pw-next', _next, l.pwNext, strength: true),
             field('pw-confirm', _confirm, l.pwConfirm),
-            if (problem case final problem?)
-              Text(problem, style: TextStyle(color: colors.danger)),
+            if (problem case final problem?) UfErrorLine(problem),
             if (_done)
               Text(l.securityResetNoKit)
             else
@@ -115,7 +118,7 @@ class _PasswordChangeScreenState extends State<PasswordChangeScreen>
                 child: FilledButton(
                   key: const Key('pw-submit'),
                   onPressed: busy ? null : _submit,
-                  child: Text(l.pwSubmit),
+                  child: BusyLabel(busy: busy, label: l.pwSubmit),
                 ),
               ),
           ],

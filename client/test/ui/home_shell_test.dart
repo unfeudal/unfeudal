@@ -4,8 +4,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:unfeudal_client/l10n/app_localizations.dart';
 import 'package:unfeudal_client/src/app_state.dart';
+import 'package:unfeudal_client/src/design/inputs.dart';
+import 'package:unfeudal_client/src/design/palette.dart';
 
 import 'package:unfeudal_client/src/ui/keychain/keychain_screen.dart';
+import 'package:unfeudal_client/src/ui/settings/settings_screen.dart';
 import 'package:unfeudal_client/src/ui/shell/home_shell.dart';
 import 'package:unfeudal_client/src/vault/snippet_store.dart';
 import 'package:unfeudal_client/src/version.dart';
@@ -24,6 +27,28 @@ Future<AppState> shell(WidgetTester t, {SyncHarness? harness}) async {
 
 AppLocalizations l10n(WidgetTester t) =>
     AppLocalizations.of(t.element(find.byType(HomeShell)));
+
+final palette = find.byType(UfCommandPalette);
+final paletteField = find.descendant(
+  of: palette,
+  matching: find.byType(EditableText),
+);
+
+/// Opens the palette from the tree search, then types [query] into it.
+Future<void> search(WidgetTester t, String query) async {
+  if (palette.evaluate().isEmpty) {
+    await t.tap(find.byKey(const Key('tree-search')));
+    await t.pumpAndSettle();
+  }
+  await t.enterText(paletteField, query);
+  await t.pumpAndSettle();
+}
+
+/// A palette row whose label is [label].
+Finder paletteRow(String label) => find.descendant(
+  of: palette,
+  matching: find.byWidgetPredicate((w) => w is UfMatchText && w.text == label),
+);
 
 void main() {
   testWidgets(
@@ -54,7 +79,9 @@ void main() {
     },
   );
 
-  testWidgets('Ctrl+Shift+B hides the tree, Ctrl+K focuses search', (t) async {
+  testWidgets('Ctrl+Shift+B hides the tree, Ctrl+K opens the search palette', (
+    t,
+  ) async {
     await shell(t);
     await t.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
     await t.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
@@ -70,12 +97,11 @@ void main() {
     await t.sendKeyEvent(LogicalKeyboardKey.keyK);
     await t.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     await t.pumpAndSettle();
-    final search = t.widget<TextField>(find.byKey(const Key('tree-search')));
-    expect(search.focusNode!.hasFocus, isTrue);
+    expect(t.widget<EditableText>(paletteField).focusNode.hasFocus, isTrue);
   });
 
   testWidgets(
-    'tree: nested folders, search by name, address and tag; trashed hidden; unreadable labelled',
+    'tree: nested folders, palette search by name, address and tag; trashed hidden; unreadable labelled',
     (t) async {
       final s = await shell(t);
       await t.runAsync(() async {
@@ -109,14 +135,8 @@ void main() {
         ('db.lan', 'db'),
         ('nginx', 'web'),
       ]) {
-        await t.enterText(find.byKey(const Key('tree-search')), q);
-        await t.pumpAndSettle();
-        // not find.text: it also matches the search field holding the query
-        expect(
-          find.byWidgetPredicate((w) => w is Text && w.data == name),
-          findsOneWidget,
-          reason: q,
-        );
+        await search(t, q);
+        expect(paletteRow(name), findsOneWidget, reason: q);
       }
     },
   );
@@ -131,10 +151,53 @@ void main() {
             .save(SnippetMeta(name: 'Disk usage', command: 'df -h'));
       });
       await t.pumpAndSettle();
-      await t.enterText(find.byKey(const Key('tree-search')), 'disk');
+      expect(id, isNotEmpty);
+      await search(t, 'disk');
+      expect(paletteRow('Disk usage'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: palette,
+          matching: find.text(l10n(t).snippetNoTerminal),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: palette,
+          matching: find.text(l10n(t).paletteInsert),
+        ),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets(
+    'palette: Ctrl+K, typing filters, Enter runs the action; Escape clears then closes',
+    (t) async {
+      await shell(t);
+      await t.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await t.sendKeyEvent(LogicalKeyboardKey.keyK);
+      await t.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
       await t.pumpAndSettle();
-      final row = t.widget<InkWell>(find.byKey(Key('search-snippet-$id')));
-      expect(row.onTap, isNull);
+      await t.enterText(paletteField, 'zzz');
+      await t.pumpAndSettle();
+      expect(find.byType(UfNoMatch), findsOneWidget);
+      await t.sendKeyEvent(LogicalKeyboardKey.escape);
+      await t.pumpAndSettle();
+      expect(t.widget<EditableText>(paletteField).controller.text, isEmpty);
+      await t.sendKeyEvent(LogicalKeyboardKey.escape);
+      await t.pumpAndSettle();
+      expect(palette, findsNothing);
+      await t.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await t.sendKeyEvent(LogicalKeyboardKey.keyK);
+      await t.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await t.pumpAndSettle();
+      await t.enterText(paletteField, l10n(t).railSettings.substring(0, 4));
+      await t.pumpAndSettle();
+      await t.sendKeyEvent(LogicalKeyboardKey.enter);
+      await t.pumpAndSettle();
+      expect(palette, findsNothing);
+      expect(find.byType(SettingsScreen), findsOneWidget);
     },
   );
 

@@ -5,7 +5,8 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
 import '../../design/dialog.dart';
-import '../../design/tokens.dart';
+import '../../design/feedback.dart';
+import '../../design/field.dart';
 import '../../vault/org_writer.dart';
 import '../../vault/vault.dart';
 import '../describe_error.dart';
@@ -39,6 +40,9 @@ class _FolderEditorPanelState extends State<FolderEditorPanel> {
   String? _jumpHostId;
   final _problems = <String, String>{};
   String? _error;
+
+  /// Bumped by a refused save, to shake the panel.
+  int _shakes = 0;
 
   @override
   void initState() {
@@ -123,7 +127,7 @@ class _FolderEditorPanelState extends State<FolderEditorPanel> {
         _problems['name'] = l.fieldInvalid;
       }
     }
-    if (meta == null) return setState(() {});
+    if (meta == null) return setState(() => _shakes++);
     try {
       final orgId = _orgId;
       if (orgId == null) {
@@ -180,76 +184,88 @@ class _FolderEditorPanelState extends State<FolderEditorPanel> {
         .where((e) => e.state == EntryState.ok && e.orgId == _orgId)
         .toList();
     final parentName = vault.entry(_parentId ?? '')?.name;
-    return EditorFrame(
-      title: widget.folderId == null
-          ? l.treeNewFolder
-          : vault.entry(widget.folderId!)?.name ?? l.treeNewFolder,
-      crumb: [vaultNameOf(l, state, _orgId), ?parentName].join(' / '),
-      tabs: [
-        if ((_orgId, widget.folderId) case (final org?, final folder?))
-          (l.inspectorTabAccess, [AccessTab(orgId: org, folderId: folder)]),
-        if (state.serverHas('item_history') && widget.folderId != null)
-          (
-            l.itemHistory,
-            [ItemHistoryPanel.embedded(itemId: widget.folderId!)],
+    return UfShake(
+      shakes: _shakes,
+      child: EditorFrame(
+        title: widget.folderId == null
+            ? l.treeNewFolder
+            : vault.entry(widget.folderId!)?.name ?? l.treeNewFolder,
+        crumb: [vaultNameOf(l, state, _orgId), ?parentName].join(' / '),
+        tabs: [
+          if ((_orgId, widget.folderId) case (final org?, final folder?))
+            (l.inspectorTabAccess, [AccessTab(orgId: org, folderId: folder)]),
+          if (state.serverHas('item_history') && widget.folderId != null)
+            (
+              l.itemHistory,
+              [ItemHistoryPanel.embedded(itemId: widget.folderId!)],
+            ),
+        ],
+        onClose: widget.onClose,
+        save: FilledButton(
+          key: const Key('folder-save'),
+          onPressed: readOnly ? null : _save,
+          child: Text(l.folderSave),
+        ),
+        trash: widget.folderId != null && !readOnly
+            ? TextButton(
+                key: const Key('folder-delete'),
+                onPressed: _delete,
+                child: Text(l.folderDelete),
+              )
+            : null,
+        children: [
+          keyedField(
+            'folder-name',
+            _name,
+            l.folderName,
+            error: _problems['name'],
           ),
-      ],
-      onClose: widget.onClose,
-      save: FilledButton(
-        key: const Key('folder-save'),
-        onPressed: readOnly ? null : _save,
-        child: Text(l.folderSave),
+          entryPicker(
+            key: 'folder-parent',
+            label: l.folderParent,
+            none: l.folderRoot,
+            entries: parents,
+            value: _parentId,
+            onChanged: (v) => setState(() => _parentId = v),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              l.folderDefaults,
+              style: Theme.of(context).textTheme.titleMedium!
+                  .copyWith(fontSize: 14),
+            ),
+          ),
+          keyedField(
+            'folder-port',
+            _port,
+            l.hostPort,
+            error: _problems['port'],
+          ),
+          keyedField(
+            'folder-user',
+            _user,
+            l.hostUser,
+            error: _problems['user'],
+          ),
+          entryPicker(
+            key: 'folder-identity',
+            label: l.hostIdentity,
+            none: l.hostDefault,
+            entries: identities,
+            value: _identityId,
+            onChanged: (v) => setState(() => _identityId = v),
+          ),
+          JumpHostPicker(
+            key: const Key('folder-jump'),
+            hostId: null,
+            folderId: widget.folderId,
+            value: _jumpHostId,
+            onChanged: (v) => setState(() => _jumpHostId = v),
+          ),
+          if (_error case final error?) UfErrorLine(error),
+        ],
       ),
-      trash: widget.folderId != null && !readOnly
-          ? TextButton(
-              key: const Key('folder-delete'),
-              onPressed: _delete,
-              child: Text(l.folderDelete),
-            )
-          : null,
-      children: [
-        keyedField(
-          'folder-name',
-          _name,
-          l.folderName,
-          error: _problems['name'],
-        ),
-        entryPicker(
-          key: 'folder-parent',
-          label: l.folderParent,
-          none: l.folderRoot,
-          entries: parents,
-          value: _parentId,
-          onChanged: (v) => setState(() => _parentId = v),
-        ),
-        Padding(
-          padding: const EdgeInsets.only(top: 6),
-          child: Text(
-            l.folderDefaults,
-            style: Theme.of(context).textTheme.titleMedium!
-                .copyWith(fontSize: 14),
-          ),
-        ),
-        keyedField('folder-port', _port, l.hostPort, error: _problems['port']),
-        keyedField('folder-user', _user, l.hostUser, error: _problems['user']),
-        entryPicker(
-          key: 'folder-identity',
-          label: l.hostIdentity,
-          none: l.hostDefault,
-          entries: identities,
-          value: _identityId,
-          onChanged: (v) => setState(() => _identityId = v),
-        ),
-        JumpHostPicker(
-          key: const Key('folder-jump'),
-          hostId: null,
-          folderId: widget.folderId,
-          value: _jumpHostId,
-          onChanged: (v) => setState(() => _jumpHostId = v),
-        ),
-        if (_error case final error?)
-          Text(error, style: TextStyle(color: UfColors.of(context).danger)),
-      ],
     );
   }
 }

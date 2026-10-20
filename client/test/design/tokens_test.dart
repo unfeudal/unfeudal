@@ -15,6 +15,8 @@ void main() {
       'side': c.side,
       'panel': c.panel,
       'field': c.field,
+      'fieldHover': c.fieldHover,
+      'fieldPress': c.fieldPress,
       'term': c.term,
       'line': c.line,
       'edge': c.edge,
@@ -37,6 +39,8 @@ void main() {
       'side': Color(0xFFF6F8F7),
       'panel': Color(0xFFFFFFFF),
       'field': Color(0xFFFFFFFF),
+      'fieldHover': Color(0xFFF6F8F7),
+      'fieldPress': Color(0xFFE3E9E5),
       'term': Color(0xFFFFFFFF),
       'line': Color(0xFFD8E0DB),
       'edge': Color(0xFF7B8A83),
@@ -59,6 +63,8 @@ void main() {
       'side': Color(0xFF161C19),
       'panel': Color(0xFF1E2622),
       'field': Color(0xFF1B221F),
+      'fieldHover': Color(0xFF222B27),
+      'fieldPress': Color(0xFF28322D),
       'term': Color(0xFF0E1210),
       'line': Color(0xFF28322D),
       'edge': Color(0xFF6E8077),
@@ -104,6 +110,8 @@ void main() {
   test('theme uses the bundled fonts, 6 px controls and flat surfaces', () {
     for (final b in Brightness.values) {
       final t = ufTheme(b);
+      // state maps compare by value: an unequal rebuild would animate every theme change
+      expect(ufTheme(b), t);
       expect(
         t.extension<UfColors>(),
         b == Brightness.light ? UfColors.light : UfColors.dark,
@@ -125,5 +133,16 @@ void main() {
         UfRadius.dialog,
       );
     }
+  });
+
+  test('the theme lerps between light and dark, as on a theme switch', () {
+    expect(
+      () => ThemeData.lerp(
+        ufTheme(Brightness.light),
+        ufTheme(Brightness.dark),
+        0.5,
+      ),
+      returnsNormally,
+    );
   });
 }

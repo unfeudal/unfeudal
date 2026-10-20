@@ -5,6 +5,8 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
 import '../../design/buttons.dart';
+import '../../design/feedback.dart';
+import '../../design/field.dart';
 import '../../design/icons.dart';
 import '../../design/rows.dart';
 import '../../design/tokens.dart';
@@ -51,7 +53,6 @@ class _DeviceListState extends State<DeviceList> {
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
-    final colors = UfColors.of(context);
     final dates = MaterialLocalizations.of(context);
     return FutureBuilder(
       future: _devices,
@@ -61,13 +62,12 @@ class _DeviceListState extends State<DeviceList> {
         }
         final devices = snapshot.data;
         if (devices == null) {
-          return const Center(child: CircularProgressIndicator());
+          return Center(child: UfLoading(l.loading));
         }
         return ListView(
           padding: const EdgeInsets.only(bottom: 40),
           children: [
-            if (_error case final error?)
-              Text(error, style: TextStyle(color: colors.danger)),
+            if (_error case final error?) UfErrorLine(error),
             for (final d in devices)
               _DeviceRow(
                 key: ValueKey(d.id),
@@ -110,21 +110,10 @@ class _DeviceRow extends StatelessWidget {
         dimmed: revoked,
         trailing: [
           if (device.current)
-            Container(
+            UfStatusChip(
+              l.deviceCurrent,
               key: Key('device-current-${device.id}'),
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: colors.okSoft,
-                borderRadius: UfRadius.key,
-              ),
-              child: Text(
-                l.deviceCurrent,
-                style: TextStyle(
-                  color: colors.ok,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+              tone: UfChipTone.ok,
             ),
           if (revoked)
             UfTag(l.deviceRevoked)

@@ -117,7 +117,7 @@ class _HostKeyChangedDialogState extends State<HostKeyChangedDialog> {
             key: const Key('hostkey-confirm-input'),
             controller: _typed,
             onChanged: (_) => setState(() {}),
-            style: monoStyle.copyWith(fontSize: 13),
+            style: monoField,
             decoration: InputDecoration(hintText: check.hostName),
           ),
         ),

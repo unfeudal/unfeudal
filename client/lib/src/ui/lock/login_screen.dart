@@ -5,6 +5,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
 import '../../app_state.dart';
 import '../../design/banner.dart';
+import '../../design/feedback.dart';
 import '../../session/lock_machine.dart';
 import '../describe_error.dart';
 import '../fields.dart';
@@ -25,6 +26,9 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _busy = false;
   Object? _error;
   double _eyeX = 0.5;
+
+  /// Bumped by a refused sign-in, to shake the password field.
+  int _shakes = 0;
 
   @override
   void initState() {
@@ -67,6 +71,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (mounted) {
         setState(() {
           _error = e;
+          _shakes++;
         });
       }
     } finally {
@@ -105,19 +110,22 @@ class _LoginScreenState extends State<LoginScreen> {
               keyboard: TextInputType.emailAddress,
             ),
           ),
-          Focus(
-            onFocusChange: (on) {
-              if (on) _machine.focusPassword();
-            },
-            child: keyedField(
-              'login-password',
-              _password,
-              l.loginPassword,
-              secret: true,
-              onSubmitted: (_) => _submit(),
+          UfShake(
+            shakes: _shakes,
+            child: Focus(
+              onFocusChange: (on) {
+                if (on) _machine.focusPassword();
+              },
+              child: keyedField(
+                'login-password',
+                _password,
+                l.loginPassword,
+                secret: true,
+                onSubmitted: (_) => _submit(),
+              ),
             ),
           ),
-          if (_error case final error?) LockError(describeError(l, error)),
+          if (_error case final error?) UfErrorLine(describeError(l, error)),
           LockActions(
             primary: FilledButton(
               key: const Key('login-submit'),

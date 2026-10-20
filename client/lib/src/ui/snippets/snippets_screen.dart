@@ -103,12 +103,15 @@ class _SnippetsScreenState extends State<SnippetsScreen> {
               onChanged: (_) => setState(() {}),
               decoration: InputDecoration(
                 hintText: l.snippetsSearch,
-                prefixIcon: Icon(
-                  UfIcons.magnifyingGlass,
-                  size: 14,
-                  color: colors.muted,
+                prefixIcon: Padding(
+                  padding: const EdgeInsetsDirectional.only(start: 10, end: 8),
+                  child: Icon(
+                    UfIcons.magnifyingGlass,
+                    size: 14,
+                    color: colors.muted,
+                  ),
                 ),
-                prefixIconConstraints: const BoxConstraints(minWidth: 32),
+                prefixIconConstraints: const BoxConstraints(),
               ),
             ),
           ),
@@ -304,7 +307,7 @@ class _SnippetEditorState extends State<_SnippetEditor> {
             controller: _command,
             minLines: 3,
             maxLines: 8,
-            style: monoStyle.copyWith(fontSize: 13),
+            style: monoField,
           ),
         ),
         UfField(

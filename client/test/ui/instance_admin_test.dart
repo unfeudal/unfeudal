@@ -90,7 +90,7 @@ void main() {
     await open(t);
     await t.tap(find.byKey(const Key('admin-tab-orgs')));
     await t.pumpAndSettle();
-    expect(find.text('bob@example.org'), findsOneWidget);
+    expect(find.textContaining('bob@example.org'), findsOneWidget);
     expect(find.text('2 MB'), findsOneWidget);
     await t.tap(find.byKey(Key('admin-org-delete-$org')));
     await t.pump();

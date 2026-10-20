@@ -8,12 +8,15 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
 import '../../app_state.dart';
+import '../../design/choices.dart';
 import '../../design/empty_state.dart';
 import '../../design/dialog.dart';
 import '../../design/field.dart';
 import '../../design/icons.dart';
+import '../../design/inputs.dart';
 import '../../design/motion.dart';
 import '../../design/rows.dart';
+import '../../design/toast.dart';
 import '../../design/tokens.dart';
 import '../../events/app_events.dart';
 import '../../keys/key_tools.dart';
@@ -253,15 +256,15 @@ class _KeychainScreenState extends State<KeychainScreen> {
                       width: 320,
                       child: UfField(
                         label: l.keychainPlace,
-                        child: DropdownButtonFormField<String>(
+                        child: UfSelect<String?>(
                           key: const Key('keychain-place'),
-                          initialValue: _folderId,
-                          items: [
+                          value: _folderId,
+                          options: [
                             for (final f in orgFolders)
-                              DropdownMenuItem(
+                              UfOption(
+                                f.id,
+                                f.name ?? '',
                                 key: Key('keychain-place-${f.id}'),
-                                value: f.id,
-                                child: Text(f.name ?? ''),
                               ),
                           ],
                           onChanged: (v) => setState(() => _folderId = v),
@@ -446,9 +449,8 @@ class _IdentityRow extends StatelessWidget {
             key: Key('identity-copy-${entry.id}'),
             tooltip: l.keyCopyPublic,
             onPressed: () async {
-              final messenger = ScaffoldMessenger.of(context);
               await Clipboard.setData(ClipboardData(text: publicKey));
-              messenger.showSnackBar(SnackBar(content: Text(l.keyCopied)));
+              if (context.mounted) showUfToast(context, l.keyCopied);
             },
             icon: const Icon(UfIcons.copy),
           ),
@@ -526,26 +528,23 @@ class _RevealDialogState extends State<_RevealDialog> {
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
-    final copy = MaterialLocalizations.of(context).copyButtonLabel;
+    final material = MaterialLocalizations.of(context);
     final s = widget.secret;
-    Widget field(String value) => Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: SelectionArea(
-            child: Text(value, style: monoStyle.copyWith(fontSize: 13)),
-          ),
-        ),
-        IconButton(
-          tooltip: copy,
-          onPressed: () => _copy(value),
-          icon: const Icon(UfIcons.copy),
-        ),
-      ],
+    Widget field(String value) => UfReadOnlyField(
+      value: value,
+      mono: true,
+      onCopy: () => _copy(value),
+      copyTooltip: material.copyButtonLabel,
     );
     return UfDialog(
       title: l.identityRevealTitle(widget.name),
-      actions: [CancelButton(onPressed: () => Navigator.of(context).pop())],
+      actions: [
+        OutlinedButton(
+          autofocus: true,
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(material.closeButtonLabel),
+        ),
+      ],
       children: [
         if (s.password case final password?) field(password),
         if (s.passphrase case final passphrase?) field(passphrase),

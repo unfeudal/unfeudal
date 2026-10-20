@@ -192,6 +192,9 @@ class AppState extends ChangeNotifier implements SshCallbacks {
   /// The server version of the last ApiInfo seen with a token, if any.
   String? get serverVersion => _lastInfo?.server ?? _storedInfo?.server;
 
+  /// The last ApiInfo seen (a sync round or [checkServer]), else the stored one.
+  ApiInfo? get _info => _lastInfo ?? _storedInfo;
+
   /// The ApiInfo the last sync round stored in the mirror.
   ApiInfo? get _storedInfo => switch (mirror?.getKv(KvKey.apiInfo)) {
     final raw? => ApiInfo.fromJson(jsonDecode(raw)),
@@ -249,18 +252,17 @@ class AppState extends ChangeNotifier implements SshCallbacks {
     _ => '${event.runtimeType}',
   };
 
-  /// From the last ApiInfo seen (a sync round or [checkServer]), else the stored one; false when none.
   /// The effective trash retention in days (0 = never purged); null before the server said.
-  int? get trashDays => (_lastInfo ?? _storedInfo)?.trashDays;
+  int? get trashDays => _info?.trashDays;
 
   /// Where the server publishes its source (AGPL); null before the server said.
-  String? get serverSource => (_lastInfo ?? _storedInfo)?.source;
+  String? get serverSource => _info?.source;
 
   /// The KDF this client uses for new wraps (and vault exports).
   KdfParams get kdf => _crypto.kdf;
 
-  bool serverHas(String capability) =>
-      (_lastInfo ?? _storedInfo)?.has(capability) ?? false;
+  /// False when no ApiInfo was ever seen.
+  bool serverHas(String capability) => _info?.has(capability) ?? false;
 
   Future<void> boot() async {
     settings = await settingsStore.load();

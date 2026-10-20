@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:unfeudal_client/src/design/choices.dart';
 import 'package:unfeudal_client/src/ui/activity/activity_screen.dart';
 import 'package:unfeudal_client/src/ui/shell/home_shell.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
@@ -183,7 +184,12 @@ void main() {
       await t.tap(find.byKey(Key('activity-open-org-$gone')));
       await pumpReal(t);
       expect(h.requests.where((r) => r == 'GET /api/v1/audit'), hasLength(2));
-      expect(find.byKey(Key('activity-scope-org:$gone')), findsWidgets);
+      expect(
+        t
+            .widget<UfSelect<String?>>(find.byKey(const Key('activity-scope')))
+            .value,
+        'org:$gone',
+      );
     },
   );
 

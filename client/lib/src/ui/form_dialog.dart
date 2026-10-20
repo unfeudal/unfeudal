@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 import 'package:flutter/material.dart';
 
+import '../design/buttons.dart';
+import '../design/segmented.dart';
 import '../design/dialog.dart';
 import '../design/field.dart';
 import '../design/tokens.dart';
 import 'busy_action.dart';
+import 'fields.dart';
 
 enum FormFieldKind { text, secret, toggle }
 
@@ -83,7 +86,6 @@ class _FormDialogState extends State<FormDialog> with BusyAction {
 
   @override
   Widget build(BuildContext context) {
-    final colors = UfColors.of(context);
     return UfDialog(
       width: 440,
       title: widget.title,
@@ -92,23 +94,29 @@ class _FormDialogState extends State<FormDialog> with BusyAction {
         FilledButton(
           key: Key(widget.saveKey),
           onPressed: busy ? null : _save,
-          child: Text(widget.saveLabel),
+          child: BusyLabel(busy: busy, label: widget.saveLabel),
         ),
       ],
       children: [
         for (final f in widget.fields)
           if (f.kind == FormFieldKind.toggle)
-            SegmentedButton<bool>(
+            UfSegmented<bool>(
               key: Key(f.key),
-              showSelectedIcon: false,
-              expandedInsets: EdgeInsets.zero,
+              expand: true,
               segments: [
-                ButtonSegment(value: false, label: Text(f.offLabel ?? '')),
-                ButtonSegment(value: true, label: Text(f.label)),
+                (false, Text(f.offLabel ?? '')),
+                (true, Text(f.label)),
               ],
-              selected: {_toggles[f.key]!},
-              onSelectionChanged: (s) =>
-                  setState(() => _toggles[f.key] = s.first),
+              selected: _toggles[f.key]!,
+              onChanged: (v) => setState(() => _toggles[f.key] = v),
+            )
+          else if (f.kind == FormFieldKind.secret)
+            keyedField(
+              f.key,
+              _text[f.key]!,
+              f.label,
+              secret: true,
+              mono: f.mono,
             )
           else
             UfField(
@@ -116,16 +124,11 @@ class _FormDialogState extends State<FormDialog> with BusyAction {
               child: TextField(
                 key: Key(f.key),
                 controller: _text[f.key],
-                obscureText: f.kind == FormFieldKind.secret,
-                maxLines: f.kind == FormFieldKind.secret ? 1 : f.lines,
-                style: f.mono ? monoStyle.copyWith(fontSize: 12) : null,
+                maxLines: f.lines,
+                style: f.mono ? monoField : null,
               ),
             ),
-        if (problem case final error?)
-          Text(
-            error,
-            style: TextStyle(color: colors.danger, fontWeight: FontWeight.w600),
-          ),
+        if (problem case final error?) UfErrorLine(error),
       ],
     );
   }

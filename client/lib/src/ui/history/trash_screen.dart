@@ -7,10 +7,10 @@ import '../../app_scope.dart';
 import '../../design/buttons.dart';
 import '../../design/dialog.dart';
 import '../../design/empty_state.dart';
+import '../../design/field.dart';
 import '../../design/icons.dart';
 import '../../design/motion.dart';
 import '../../design/rows.dart';
-import '../../design/tokens.dart';
 import '../../vault/org_writer.dart';
 import '../../vault/vault.dart';
 import '../describe_error.dart';
@@ -86,7 +86,6 @@ class _TrashScreenState extends State<TrashScreen> {
 
   Widget _trash(BuildContext context) {
     final l = AppLocalizations.of(context);
-    final colors = UfColors.of(context);
     final state = AppScope.of(context);
     final vault = state.vault!;
     final readOnly = state.sync?.readOnly ?? true;
@@ -122,8 +121,7 @@ class _TrashScreenState extends State<TrashScreen> {
           : ListView(
               padding: const EdgeInsets.only(bottom: 40),
               children: [
-                if (_error case final error?)
-                  Text(error, style: TextStyle(color: colors.danger)),
+                if (_error case final error?) UfErrorLine(error),
                 for (final e in trashed) ...[
                   ItemRow(
                     key: Key('trash-${e.id}'),

@@ -4,6 +4,9 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
+import '../../design/acl_grid.dart';
+import '../../design/buttons.dart';
+import '../../design/field.dart';
 import '../../design/tokens.dart';
 import '../busy_action.dart';
 import '../manage_frame.dart';
@@ -88,75 +91,75 @@ class _AclEditorState extends State<AclEditor> with BusyAction {
         : const <OrgMember>[];
     final folderName = state.vault?.entry(widget.folderId)?.name ?? '';
 
-    Widget chips(String id, PrincipalType type, {required bool deny}) {
-      final (_, allow, denied) =
+    /// One right of one principal: allow, deny (members only) or unset. A manager who is not an admin can only
+    /// deny what they lack, and keeps their own manage.
+    Widget toggle(String id, PrincipalType type, Permission p) {
+      final (_, allow, deny) =
           _entries[id] ?? (type, <Permission>{}, <Permission>{});
-      final set = deny ? denied : allow;
-      return Wrap(
-        spacing: 6,
-        runSpacing: 6,
-        children: [
-          for (final p in Permission.values)
-            FilterChip(
-              key: Key('acl-$id-${deny ? 'deny' : 'allow'}-${p.name}'),
-              label: Text(permissionLabel(l, p)),
-              selected: set.contains(p),
-              onSelected:
-                  !deny &&
-                      !isAdmin &&
-                      ((!set.contains(p) && !held.contains(p)) ||
-                          (id == me && p == Permission.manage))
-                  ? null
-                  : (on) => setState(() {
-                      final entry = _entries[id] ??= (
-                        type,
-                        <Permission>{},
-                        <Permission>{},
-                      );
-                      final target = deny ? entry.$3 : entry.$2;
-                      on ? target.add(p) : target.remove(p);
-                    }),
-            ),
-        ],
+      final state = allow.contains(p)
+          ? UfTriState.allow
+          : deny.contains(p)
+          ? UfTriState.deny
+          : UfTriState.unset;
+      final canDeny = type == PrincipalType.user;
+      final canGrant = isAdmin || held.contains(p);
+      final locked =
+          !isAdmin &&
+          ((id == me && p == Permission.manage) ||
+              (!canGrant && !canDeny && state == UfTriState.unset));
+      return UfTriToggle(
+        key: Key('acl-$id-${p.name}'),
+        state: state,
+        canDeny: canDeny,
+        semanticLabel: permissionLabel(l, p),
+        onChanged: locked
+            ? null
+            : (next) => setState(() {
+                final to = next == UfTriState.allow && !canGrant
+                    ? UfTriState.deny
+                    : next;
+                final entry = _entries[id] ??= (
+                  type,
+                  <Permission>{},
+                  <Permission>{},
+                );
+                entry.$2.remove(p);
+                entry.$3.remove(p);
+                if (to == UfTriState.allow) entry.$2.add(p);
+                if (to == UfTriState.deny) entry.$3.add(p);
+              }),
       );
     }
 
-    Widget row(String id, String name, PrincipalType type) => Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        spacing: 6,
-        children: [
-          Text(name, style: Theme.of(context).textTheme.titleSmall),
-          Text(l.aclAllow, style: TextStyle(color: colors.muted, fontSize: 12)),
-          chips(id, type, deny: false),
-          if (type == PrincipalType.user) ...[
-            Text(
-              l.aclDeny,
-              style: TextStyle(color: colors.muted, fontSize: 12),
-            ),
-            chips(id, type, deny: true),
-          ],
-        ],
-      ),
-    );
+    List<Widget> row(String id, String name, PrincipalType type) => [
+      Text(name, overflow: TextOverflow.ellipsis),
+      for (final p in Permission.values) toggle(id, type, p),
+    ];
 
     return ManageFrame(
       title: l.aclTitle(folderName),
       child: ListView(
         padding: const EdgeInsets.only(bottom: 40),
         children: [
+          UfAclGrid(
+            headers: [
+              l.aclWho,
+              for (final p in Permission.values) permissionLabel(l, p),
+            ],
+            rows: [
+              for (final t in teams) row(t.id, t.name, PrincipalType.team),
+              for (final m in members)
+                row(m.userId, m.email, PrincipalType.user),
+            ],
+          ),
           Text(l.aclRevealNote, style: TextStyle(color: colors.muted)),
-          for (final t in teams) row(t.id, t.name, PrincipalType.team),
-          for (final m in members) row(m.userId, m.email, PrincipalType.user),
-          if (problem case final error?)
-            Text(error, style: TextStyle(color: colors.danger)),
+          if (problem case final error?) UfErrorLine(error),
           Align(
             alignment: Alignment.centerRight,
             child: FilledButton(
               key: const Key('acl-save'),
               onPressed: busy ? null : _save,
-              child: Text(l.aclSave),
+              child: BusyLabel(busy: busy, label: l.aclSave),
             ),
           ),
         ],

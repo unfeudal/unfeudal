@@ -38,6 +38,7 @@ class _TerminalPaneState extends State<TerminalPane> {
   final _scroll = ScrollController();
   final _query = TextEditingController();
   final _searchFocus = FocusNode();
+  final _contextMenu = MenuController();
   bool _searching = false;
   List<TerminalMatch> _hits = const [];
   int _current = 0;
@@ -104,33 +105,46 @@ class _TerminalPaneState extends State<TerminalPane> {
   Future<void> _reconnect() => AppScope.read(context).reconnect(_session);
 
   void _menu(TapDownDetails details, CellOffset _) {
-    final l = AppLocalizations.of(context);
-    final at = details.globalPosition;
-    unawaited(
-      showMenu<void>(
-        context: context,
-        position: RelativeRect.fromLTRB(at.dx, at.dy, at.dx, at.dy),
-        items: [
-          PopupMenuItem(
-            key: const Key('term-menu-copy'),
-            enabled: _session.controller.selection != null,
-            onTap: _copy,
-            child: Text(l.termCopy),
-          ),
-          PopupMenuItem(
-            key: const Key('term-menu-paste'),
-            enabled: _session.state == SealState.connected,
-            onTap: () => unawaited(_paste()),
-            child: Text(l.termPaste),
-          ),
-          PopupMenuItem(
-            key: const Key('term-menu-search'),
-            onTap: _openSearch,
-            child: Text(l.termSearch),
-          ),
-        ],
+    setState(() {}); // the items' enabled state follows the selection
+    _contextMenu.open(position: details.localPosition);
+  }
+
+  List<Widget> _menuItems(AppLocalizations l) {
+    final colors = UfColors.of(context);
+    Widget item(
+      String key,
+      String label,
+      UfShortcut shortcut,
+      VoidCallback? onPressed,
+    ) => MenuItemButton(
+      key: Key(key),
+      onPressed: onPressed,
+      trailingIcon: Text(
+        UfShortcuts.label(shortcut),
+        style: monoStyle.copyWith(fontSize: 11, color: colors.muted),
+      ),
+      child: Padding(
+        padding: const EdgeInsetsDirectional.only(end: 12),
+        child: Text(label),
       ),
     );
+    return [
+      item(
+        'term-menu-copy',
+        l.termCopy,
+        UfShortcut.copy,
+        _session.controller.selection == null ? null : _copy,
+      ),
+      item(
+        'term-menu-paste',
+        l.termPaste,
+        UfShortcut.paste,
+        _session.state == SealState.connected
+            ? () => unawaited(_paste())
+            : null,
+      ),
+      item('term-menu-search', l.termSearch, UfShortcut.find, _openSearch),
+    ];
   }
 
   void _openSearch() {
@@ -224,21 +238,25 @@ class _TerminalPaneState extends State<TerminalPane> {
             Expanded(
               child: Stack(
                 children: [
-                  TerminalView(
-                    _session.terminal,
-                    controller: _session.controller,
-                    scrollController: _scroll,
-                    autofocus: true,
-                    shortcuts: const {}, // drops xterm2's own Ctrl+C/V
-                    onKeyEvent: _onKey,
-                    onSecondaryTapDown: _menu,
-                    theme: terminalThemeFor(
-                      settings.terminalTheme,
-                      Theme.of(context).brightness,
-                    ),
-                    textStyle: TerminalStyle(
-                      fontFamily: settings.terminalFont,
-                      fontSize: settings.terminalFontSize.toDouble(),
+                  MenuAnchor(
+                    controller: _contextMenu,
+                    menuChildren: _menuItems(l),
+                    child: TerminalView(
+                      _session.terminal,
+                      controller: _session.controller,
+                      scrollController: _scroll,
+                      autofocus: true,
+                      shortcuts: const {}, // drops xterm2's own Ctrl+C/V
+                      onKeyEvent: _onKey,
+                      onSecondaryTapDown: _menu,
+                      theme: terminalThemeFor(
+                        settings.terminalTheme,
+                        Theme.of(context).brightness,
+                      ),
+                      textStyle: TerminalStyle(
+                        fontFamily: settings.terminalFont,
+                        fontSize: settings.terminalFontSize.toDouble(),
+                      ),
                     ),
                   ),
                   if (_searching)
@@ -286,31 +304,25 @@ class _TerminalPaneState extends State<TerminalPane> {
                     _step(1);
                     _searchFocus.requestFocus();
                   },
-                  decoration: InputDecoration(
-                    hintText: l.termSearch,
-                    isDense: true,
-                  ),
+                  decoration: InputDecoration(hintText: l.termSearch),
                 ),
               ),
               Text(status, style: TextStyle(color: colors.muted)),
               IconButton(
                 key: const Key('term-search-prev'),
                 tooltip: l.termSearchPrev,
-                iconSize: 14,
                 onPressed: () => _step(-1),
                 icon: const Icon(UfIcons.caretLeft),
               ),
               IconButton(
                 key: const Key('term-search-next'),
                 tooltip: l.termSearchNext,
-                iconSize: 14,
                 onPressed: () => _step(1),
                 icon: const Icon(UfIcons.caretRight),
               ),
               IconButton(
                 key: const Key('term-search-close'),
                 tooltip: l.termSearchClose,
-                iconSize: 14,
                 onPressed: _closeSearch,
                 icon: const Icon(UfIcons.x),
               ),

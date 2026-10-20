@@ -7,10 +7,13 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
 import '../../design/banner.dart';
+import '../../design/buttons.dart';
+import '../../design/choices.dart';
+import '../../design/feedback.dart';
 import '../../design/field.dart';
-import '../../design/tokens.dart';
 import '../../export/vault_export_service.dart';
 import '../busy_action.dart';
+import '../fields.dart';
 import '../manage_frame.dart';
 import '../save_file.dart';
 
@@ -81,70 +84,61 @@ class _ExportScreenState extends State<ExportScreen> with BusyAction {
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
-    final colors = UfColors.of(context);
     return ManageFrame(
       title: l.settingsExport,
       maxWidth: 520,
       child: ListView(
         shrinkWrap: true,
         children: [
-          Wrap(
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             spacing: 8,
             children: [
-              ChoiceChip(
-                key: const Key('export-encrypted'),
-                label: Text(l.exportEncrypted),
-                selected: !_plain,
-                onSelected: (_) => setState(() => _plain = false),
-              ),
-              ChoiceChip(
-                key: const Key('export-plain'),
-                label: Text(l.exportPlain),
-                selected: _plain,
-                onSelected: (_) => setState(() => _plain = true),
-              ),
+              for (final (key, plain, title) in [
+                ('export-encrypted', false, l.exportEncrypted),
+                ('export-plain', true, l.exportPlain),
+              ])
+                Expanded(
+                  child: UfChoiceCard<bool>(
+                    key: Key(key),
+                    value: plain,
+                    groupValue: _plain,
+                    onChanged: (v) => setState(() => _plain = v),
+                    title: title,
+                  ),
+                ),
             ],
           ),
           if (_plain) ...[
-            StatusBanner(
-              tone: BannerTone.danger,
-              message: l.exportPlainWarning,
-            ),
-            CheckboxListTile(
+            UfNotice(tone: BannerTone.danger, message: l.exportPlainWarning),
+            UfCheckboxRow(
               key: const Key('export-plain-confirm'),
-              contentPadding: EdgeInsets.zero,
-              controlAffinity: ListTileControlAffinity.leading,
               value: _plainConfirmed,
-              onChanged: (v) => setState(() => _plainConfirmed = v ?? false),
-              title: Text(l.exportPlainConfirm),
+              onChanged: (v) => setState(() => _plainConfirmed = v),
+              label: l.exportPlainConfirm,
             ),
           ] else ...[
-            UfField(
-              label: l.exportPassphrase,
-              child: TextField(
-                key: const Key('export-passphrase'),
-                controller: _passphrase,
-                obscureText: true,
-              ),
+            keyedField(
+              'export-passphrase',
+              _passphrase,
+              l.exportPassphrase,
+              secret: true,
             ),
-            UfField(
-              label: l.exportPassphraseConfirm,
-              child: TextField(
-                key: const Key('export-passphrase-confirm'),
-                controller: _confirm,
-                obscureText: true,
-              ),
+            keyedField(
+              'export-passphrase-confirm',
+              _confirm,
+              l.exportPassphraseConfirm,
+              secret: true,
             ),
           ],
-          if (problem case final problem?)
-            Text(problem, style: TextStyle(color: colors.danger)),
+          if (problem case final problem?) UfErrorLine(problem),
           if (_done case final done?) Text(done),
           Align(
             alignment: Alignment.centerRight,
             child: FilledButton(
               key: const Key('export-submit'),
               onPressed: busy ? null : _submit,
-              child: Text(l.exportSubmit),
+              child: BusyLabel(busy: busy, label: l.exportSubmit),
             ),
           ),
         ],

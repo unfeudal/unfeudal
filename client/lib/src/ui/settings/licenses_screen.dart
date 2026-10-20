@@ -52,7 +52,7 @@ class LicensesScreen extends StatelessWidget {
                 IconButton(
                   key: const Key('licenses-copy-source'),
                   tooltip: MaterialLocalizations.of(context).copyButtonLabel,
-                  icon: const Icon(UfIcons.copy, size: 18),
+                  icon: const Icon(UfIcons.copy),
                   onPressed: () =>
                       Clipboard.setData(ClipboardData(text: source)),
                 ),

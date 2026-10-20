@@ -6,7 +6,9 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
 
+import '../../design/segmented.dart';
 import '../../design/buttons.dart';
+import '../../design/choices.dart';
 import '../../design/motion.dart';
 import '../../design/rows.dart';
 import '../../design/tokens.dart';
@@ -190,18 +192,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     List<(T, String, String)> options,
     T selected,
     void Function(T)? pick,
-  ) => SegmentedButton<T>(
+  ) => UfSegmented<T>(
     key: Key(prefix),
-    showSelectedIcon: false,
     segments: [
       for (final (value, key, label) in options)
-        ButtonSegment(
-          value: value,
-          label: Text(label, key: Key('$prefix-$key')),
-        ),
+        (value, Text(label, key: Key('$prefix-$key'))),
     ],
-    selected: {selected},
-    onSelectionChanged: pick == null ? null : (s) => pick(s.first),
+    selected: selected,
+    onChanged: pick,
   );
 
   List<Widget> _appearance(BuildContext context) {
@@ -247,19 +245,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
         label: l.settingsTerminalFont,
         trailing: SizedBox(
           width: 200,
-          child: DropdownButton<String>(
+          child: UfSelect<String>(
             key: const Key('terminal-font'),
-            isExpanded: true,
             value: settings.terminalFont,
-            items: [
+            options: [
               for (final family in {..._terminalFonts, settings.terminalFont})
-                DropdownMenuItem(
+                UfOption(
+                  family,
+                  family == 'JetBrainsMono' ? 'JetBrains Mono' : family,
                   key: Key('terminal-font-$family'),
-                  value: family,
-                  child: Text(
-                    family == 'JetBrainsMono' ? 'JetBrains Mono' : family,
-                    style: TextStyle(fontFamily: family),
-                  ),
+                  style: TextStyle(fontFamily: family),
                 ),
             ],
             onChanged: (v) => update(settings.copyWith(terminalFont: v)),
@@ -270,17 +265,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
         label: l.settingsTerminalFontSize,
         trailing: SizedBox(
           width: 80,
-          child: DropdownButton<int>(
+          child: UfSelect<int>(
             key: const Key('terminal-font-size'),
-            isExpanded: true,
             value: settings.terminalFontSize,
-            items: [
+            options: [
               for (var n = 10; n <= 24; n++)
-                DropdownMenuItem(
-                  key: Key('terminal-font-size-$n'),
-                  value: n,
-                  child: Text(n.toString()),
-                ),
+                UfOption(n, n.toString(), key: Key('terminal-font-size-$n')),
             ],
             onChanged: (v) => update(settings.copyWith(terminalFontSize: v)),
           ),
@@ -315,8 +305,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
       SettingRow(
         label: l.settingsPerformance,
-        trailing: Switch(
+        onTap: () => update(
+          settings.copyWith(performanceMode: !settings.performanceMode),
+        ),
+        trailing: UfSwitch(
           key: const Key('settings-performance'),
+          semanticLabel: l.settingsPerformance,
           value: settings.performanceMode,
           onChanged: (v) => update(settings.copyWith(performanceMode: v)),
         ),
@@ -335,16 +329,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
         label: l.settingsAutoLock,
         trailing: SizedBox(
           width: 160,
-          child: DropdownButton<int>(
+          child: UfSelect<int>(
             key: const Key('autolock'),
-            isExpanded: true,
             value: settings.autoLockMinutes,
-            items: [
+            options: [
               for (final m in Settings.autoLockChoices)
-                DropdownMenuItem(
+                UfOption(
+                  m,
+                  m == 0 ? l.autoLockNever : l.autoLockMinutes(m),
                   key: Key('autolock-$m'),
-                  value: m,
-                  child: Text(m == 0 ? l.autoLockNever : l.autoLockMinutes(m)),
                 ),
             ],
             onChanged: (v) =>
@@ -360,8 +353,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           return SettingRow(
             label: l.settingsBiometric,
             hint: l.settingsBiometricBody,
-            trailing: Switch(
+            onTap: () => _setBiometric(!on),
+            trailing: UfSwitch(
               key: const Key('settings-biometric'),
+              semanticLabel: l.settingsBiometric,
               value: on,
               onChanged: _setBiometric,
             ),
@@ -390,7 +385,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         label: l.settingsSafetyCode,
         trailing: SelectableText(
           safetyCode(state.accountPublicKey),
-          style: monoStyle.copyWith(fontSize: 14),
+          style: monoField,
         ),
       ),
       SettingRow(
@@ -510,7 +505,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         hint: l.settingsVersion(clientVersion, state.serverVersion ?? '?'),
         trailing: Text(
           state.stored?.serverUrl.toString() ?? '',
-          style: monoStyle.copyWith(fontSize: 13),
+          style: monoField,
         ),
       ),
       SettingRow(
