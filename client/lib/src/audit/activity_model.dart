@@ -24,10 +24,10 @@ class ActivityModel extends ChangeNotifier {
 
   final events = <AuditEvent>[];
   final alerts = <AnchorAlert>[];
-  bool hasMore = false;
   bool loading = false;
   Object? error;
   String? _next;
+  bool get hasMore => _next != null;
 
   /// The chain a view reads: `me` reads the caller's own chain; a folder view has no chain of its own.
   static String? chainOf(String scope) => switch (scope) {
@@ -52,7 +52,6 @@ class ActivityModel extends ChangeNotifier {
     events.addAll(page.events);
     alerts.addAll(anchors.check(page.events));
     _next = page.next;
-    hasMore = page.next != null;
   });
 
   /// Pages the whole chain at 500 a read and checks it against the anchors, an empty one too

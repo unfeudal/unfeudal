@@ -294,12 +294,7 @@ Future<Response> deleteAccount(Request request) async {
   await limitCredentials(request, user.email);
   await _requireCurrentAuthKey(request, user, body);
   await deps.db.transaction(
-    (tx) => deleteUser(
-      tx,
-      auth.userId,
-      actor: auth.userId,
-      audit: auditWriter(request, tx),
-    ),
+    (tx) => deleteUser(tx, auth.userId, audit: auditWriter(request, tx)),
   ); // 5. last owner → 409 inside
   return noContent();
 }

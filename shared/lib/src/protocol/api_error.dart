@@ -34,6 +34,21 @@ enum UnauthorizedReason {
   final String wire;
 }
 
+enum ConflictReason {
+  clientTooOld('client_too_old'),
+  cursorAhead('cursor_ahead'),
+  accountExists('account_exists'),
+  lastOwner('last_owner');
+
+  const ConflictReason(this.wire);
+
+  final String wire;
+
+  /// Null for no reason or one this version does not know.
+  static ConflictReason? fromWire(String? wire) =>
+      values.where((r) => r.wire == wire).firstOrNull;
+}
+
 /// `{error, message, item?, reason?, ...extra}`. An unknown [error] is kept
 /// as text.
 class ApiErrorBody {

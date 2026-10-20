@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import 'package:test/test.dart';
 import 'package:unfeudal_server/src/config/config.dart';
-import 'package:unfeudal_server/src/config/features.dart';
+import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 const base = {'UNFEUDAL_PUBLIC_URL': 'https://vault.test'};
 Config load(Map<String, String> env, [String? yaml]) =>

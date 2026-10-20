@@ -9,7 +9,6 @@ import '../api/errors.dart';
 import '../api/middleware.dart';
 import '../audit/audit_log.dart';
 import '../audit/retention.dart';
-import '../config/features.dart';
 import '../db/db.dart';
 import '../orgs/org_access.dart';
 import '../orgs/rotations.dart';
@@ -211,8 +210,7 @@ Future<Item> writeItem(
         ..remove('type'),
     );
   }
-  if (cur != null && deps.features.enabled(Flag.itemHistory)) {
-    // the replaced version becomes a revision
+  if (addsRevision) {
     await tx.execute(
       'INSERT INTO item_revisions (item_id, revision, body, size, created_at) VALUES (@i, @r, @b, @z, @t)',
       {

@@ -19,14 +19,14 @@ class PlannedHost {
 }
 
 class PlannedKey {
-  const PlannedKey(this.path, this.pem, this.publicKey, this.needsPassphrase);
+  const PlannedKey(this.path, this.pem, this.publicKey);
 
   final String path;
   final String pem;
 
   /// Null until the passphrase is known.
   final String? publicKey;
-  final bool needsPassphrase;
+  bool get needsPassphrase => publicKey == null;
 }
 
 class ImportPlan {
@@ -157,9 +157,9 @@ class SshConfigImporter {
     final pem = await readFile(path);
     if (pem == null) return null;
     try {
-      return PlannedKey(path, pem, publicKeyOf(pem), false);
+      return PlannedKey(path, pem, publicKeyOf(pem));
     } on InvalidKey {
-      return PlannedKey(path, pem, null, true);
+      return PlannedKey(path, pem, null);
     }
   }
 

@@ -4,7 +4,6 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 import '../api/app.dart';
 import '../api/errors.dart';
 import '../auth/rate_limit.dart';
-import '../config/features.dart';
 import 'mailer.dart';
 
 class SecurityNotifier {

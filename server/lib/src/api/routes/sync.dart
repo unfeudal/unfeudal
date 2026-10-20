@@ -4,7 +4,6 @@ import 'dart:convert';
 import 'package:shelf/shelf.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
-import '../../config/features.dart';
 import '../../orgs/org_block.dart';
 import '../app.dart';
 import '../errors.dart';
@@ -45,7 +44,7 @@ Future<Response> sync(Request request) async {
       throw ApiError(
         ApiErrorCode.conflict,
         'The server is behind this device.',
-        extra: {'reason': 'cursor_ahead'},
+        extra: {'reason': ConflictReason.cursorAhead.wire},
       );
     }
     final personal = [

@@ -104,7 +104,7 @@ void main() {
 
   test('deleteUser: Instance Owner 403, last owner 409, else personal data and each membership', () async {
     await expectLater(
-      s.db.transaction((tx) => deleteUser(tx, w.io.userId, actor: w.io.userId)),
+      s.db.transaction((tx) => deleteUser(tx, w.io.userId)),
       throwsApi(ApiErrorCode.forbidden),
     );
     await s.db.execute(
@@ -112,9 +112,7 @@ void main() {
       {'u': w.id('oscar')},
     );
     await expectLater(
-      s.db.transaction(
-        (tx) => deleteUser(tx, w.id('olivia'), actor: w.io.userId),
-      ),
+      s.db.transaction((tx) => deleteUser(tx, w.id('olivia'))),
       throwsApi(ApiErrorCode.conflict),
     );
     final mia = w['mia'];
@@ -152,9 +150,7 @@ void main() {
         {'q': seq},
       );
     }
-    await s.db.transaction(
-      (tx) => deleteUser(tx, mia.userId, actor: w.io.userId),
-    );
+    await s.db.transaction((tx) => deleteUser(tx, mia.userId));
     expect(
       (await s.db.query(
         "SELECT seq FROM audit_ips WHERE scope = 'instance' AND seq > 90000",

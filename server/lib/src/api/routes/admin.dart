@@ -104,12 +104,11 @@ Future<Response> setDisabled(Request request) async {
 Future<Response> deleteUserRoute(Request request) async {
   final id = request.params['id']!;
   _requireIo(request);
-  final deps = depsOf(request), auth = authOf(request);
+  final deps = depsOf(request);
   parseUuid(id);
   // deleteUser refuses the Instance Owner (1.), an unknown id (2.) and a last owner (409)
   await deps.db.transaction(
-    (tx) =>
-        deleteUser(tx, id, actor: auth.userId, audit: auditWriter(request, tx)),
+    (tx) => deleteUser(tx, id, audit: auditWriter(request, tx)),
   );
   return noContent();
 }

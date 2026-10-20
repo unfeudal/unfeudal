@@ -3,7 +3,6 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../api/app.dart';
 import '../auth/tokens.dart';
-import '../config/features.dart';
 import '../db/db.dart';
 import '../mail/mailer.dart';
 

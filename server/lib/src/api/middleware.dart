@@ -2,7 +2,6 @@
 import 'package:shelf/shelf.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
-import '../config/features.dart';
 import '../net/client_ip.dart';
 import 'app.dart';
 import 'errors.dart';
@@ -80,7 +79,7 @@ Middleware clientVersionGate() =>
         throw ApiError(
           ApiErrorCode.conflict,
           'Update Unfeudal to make changes.',
-          extra: {'reason': 'client_too_old'},
+          extra: {'reason': ConflictReason.clientTooOld.wire},
         );
       }
       return inner(request);

@@ -171,7 +171,7 @@ class SyncEngine extends ChangeNotifier {
       );
       if (e.status == 401) {
         onUnauthorized?.call(e.reason);
-      } else if (e.reason == 'cursor_ahead') {
+      } else if (e.reason == ConflictReason.cursorAhead.wire) {
         _pause();
       } else {
         lastError = e;
@@ -346,7 +346,9 @@ class SyncEngine extends ChangeNotifier {
           TraceArea.sync,
           'push ${shortId(e.item.id)} refused: ${x.status} ${x.reason ?? x.code}',
         );
-        if (x.status == 409 && x.reason == 'client_too_old') return _tooOld();
+        if (x.status == 409 && x.reason == ConflictReason.clientTooOld.wire) {
+          return _tooOld();
+        }
         if (x.status == 409) {
           await _conflict(e.item, x.item);
         } else if (x.status == 429 || x.status >= 500) {

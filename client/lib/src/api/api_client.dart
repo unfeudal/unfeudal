@@ -225,13 +225,8 @@ class ApiClient {
   Future<void> setLocale(String locale) =>
       _send('PUT', '/account/locale', body: {'locale': locale});
 
-  Future<List<Device>> devices() async {
-    final json = await _send('GET', '/devices');
-    if (json case {'devices': final List<Object?> devices}) {
-      return [for (final d in devices) Device.fromJson(d)];
-    }
-    throw const FormatException('devices: unexpected body');
-  }
+  Future<List<Device>> devices() =>
+      _list('/devices', 'devices', Device.fromJson);
 
   Future<void> revokeDevice(String id) => _send('DELETE', '/devices/$id');
 
@@ -278,13 +273,8 @@ class ApiClient {
   }
 
   /// The current version first, then the older ones, newest first.
-  Future<List<Item>> revisions(String itemId) async {
-    final json = await _send('GET', '/items/$itemId/revisions');
-    if (json case {'revisions': final List<Object?> revisions}) {
-      return [for (final i in revisions) Item.fromJson(i)];
-    }
-    throw const FormatException('revisions: unexpected body');
-  }
+  Future<List<Item>> revisions(String itemId) =>
+      _list('/items/$itemId/revisions', 'revisions', Item.fromJson);
 
   Future<void> reportSsh({
     required String event,
@@ -382,8 +372,8 @@ class ApiClient {
     ),
   );
 
-  Future<List<PendingInvite>> orgInvites(String orgId) async =>
-      _invites(await _send('GET', '/orgs/$orgId/invites'));
+  Future<List<PendingInvite>> orgInvites(String orgId) =>
+      _list('/orgs/$orgId/invites', 'invites', PendingInvite.fromJson);
 
   Future<void> revokeInvite(String id) => _send('DELETE', '/invites/$id');
 
@@ -459,13 +449,8 @@ class ApiClient {
   Future<void> rotationDone(String folderId) =>
       _send('POST', '/folders/$folderId/rotation/done');
 
-  Future<List<AdminUser>> adminUsers() async {
-    final json = await _send('GET', '/admin/users');
-    if (json case {'users': final List<Object?> users}) {
-      return [for (final u in users) AdminUser.fromJson(u)];
-    }
-    throw const FormatException('admin/users: unexpected body');
-  }
+  Future<List<AdminUser>> adminUsers() =>
+      _list('/admin/users', 'users', AdminUser.fromJson);
 
   Future<void> adminSetDisabled(String userId, bool disabled) =>
       _send('PUT', '/admin/users/$userId', body: {'disabled': disabled});
@@ -473,13 +458,8 @@ class ApiClient {
   Future<void> adminDeleteUser(String userId) =>
       _send('DELETE', '/admin/users/$userId');
 
-  Future<List<AdminOrg>> adminOrgs() async {
-    final json = await _send('GET', '/admin/orgs');
-    if (json case {'orgs': final List<Object?> orgs}) {
-      return [for (final o in orgs) AdminOrg.fromJson(o)];
-    }
-    throw const FormatException('admin/orgs: unexpected body');
-  }
+  Future<List<AdminOrg>> adminOrgs() =>
+      _list('/admin/orgs', 'orgs', AdminOrg.fromJson);
 
   Future<void> adminDeleteOrg(String orgId, String confirmName) =>
       _send('DELETE', '/admin/orgs/$orgId', body: {'confirmName': confirmName});
@@ -489,14 +469,20 @@ class ApiClient {
         await _send('POST', '/admin/invites', body: {'email': email}),
       );
 
-  Future<List<PendingInvite>> adminInvites() async =>
-      _invites(await _send('GET', '/admin/invites'));
+  Future<List<PendingInvite>> adminInvites() =>
+      _list('/admin/invites', 'invites', PendingInvite.fromJson);
 
-  static List<PendingInvite> _invites(Object? json) {
-    if (json case {'invites': final List<Object?> invites}) {
-      return [for (final i in invites) PendingInvite.fromJson(i)];
+  /// GET [path], then the list under [key].
+  Future<List<T>> _list<T>(
+    String path,
+    String key,
+    T Function(Object?) from,
+  ) async {
+    final json = await _send('GET', path);
+    if (json is Map ? json[key] : null case final List<Object?> list) {
+      return [for (final e in list) from(e)];
     }
-    throw const FormatException('invites: unexpected body');
+    throw FormatException('$key: unexpected body');
   }
 
   /// `GET /api/info` with the token. A public answer while signed in (a refresh token held; right after

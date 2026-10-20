@@ -260,7 +260,7 @@ ApiError lastOwnerError(List<String> names) => ApiError(
   ApiErrorCode.conflict,
   'The organization needs another owner first.',
   extra: {
-    'reason': 'last_owner',
+    'reason': ConflictReason.lastOwner.wire,
     'orgs': [...names]..sort(),
   },
 );

@@ -5,6 +5,7 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../api/errors.dart';
 import '../audit/audit_log.dart';
+import '../auth/rate_limit.dart';
 import '../orgs/org_access.dart';
 import '../orgs/rotations.dart';
 import 'db.dart';
@@ -86,12 +87,7 @@ Future<void> deleteOrg(Tx tx, String orgId) async {
 }
 
 /// Deletes an account: refusals, every org loaded before any delete, member removal per org, personal data.
-Future<void> deleteUser(
-  Tx tx,
-  String userId, {
-  required String actor,
-  AuditWrite? audit,
-}) async {
+Future<void> deleteUser(Tx tx, String userId, {AuditWrite? audit}) async {
   final user = (await tx.query(
     'SELECT email, is_instance_owner FROM users WHERE id = @u',
     {'u': userId},
@@ -140,12 +136,17 @@ Future<void> deleteUser(
   await tx.execute(
     "DELETE FROM login_attempts WHERE key IN (@a, @e, @ic, @m) OR key LIKE @ai ESCAPE '\\'",
     {
-      'a': 'acct:$email',
-      'e': 'events:$userId',
-      'ic': 'invite-create:$userId',
-      'm': 'mail:$userId',
-      'ai':
-          'acct:${email.replaceAll(r'\', r'\\').replaceAll('%', r'\%').replaceAll('_', r'\_')}|%',
+      'a': acctKey(email),
+      'e': eventsKey(userId),
+      'ic': inviteCreateKey(userId),
+      'm': mailKey(userId),
+      'ai': acctIpKey(
+        email
+            .replaceAll(r'\', r'\\')
+            .replaceAll('%', r'\%')
+            .replaceAll('_', r'\_'),
+        '%',
+      ),
     },
   );
   await tx.execute('DELETE FROM users WHERE id = @u', p);

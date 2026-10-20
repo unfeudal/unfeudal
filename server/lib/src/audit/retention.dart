@@ -6,7 +6,6 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../api/app.dart';
 import '../config/config.dart';
-import '../config/features.dart';
 import '../db/db.dart';
 import '../db/deletion.dart';
 import '../db/maintenance.dart';

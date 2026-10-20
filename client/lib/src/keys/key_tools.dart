@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 import 'dart:convert';
 import 'dart:isolate';
-import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:cryptography/cryptography.dart';
 import 'package:dartssh2/dartssh2.dart';
 import 'package:pointycastle/export.dart';
+import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 /// Not a private key this app can read: wrong passphrase, PuTTY `.ppk`, or anything else.
 class InvalidKey implements Exception {
@@ -90,13 +90,7 @@ String _publicLine(SSHKeyPair pair) =>
     '${pair.name} ${base64.encode(pair.toPublicKey().encode())}';
 
 List<BigInt> _rsaParts(int bits) {
-  final secure = Random.secure();
-  final random = FortunaRandom()
-    ..seed(
-      KeyParameter(
-        Uint8List.fromList([for (var i = 0; i < 32; i++) secure.nextInt(256)]),
-      ),
-    );
+  final random = FortunaRandom()..seed(KeyParameter(secureBytes(32)));
   final generator = RSAKeyGenerator()
     ..init(
       ParametersWithRandom(

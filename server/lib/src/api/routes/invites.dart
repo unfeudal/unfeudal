@@ -9,7 +9,6 @@ import '../../audit/audit_log.dart';
 import '../../auth/rate_limit.dart';
 import '../../auth/secret_hash.dart';
 import '../../auth/tokens.dart';
-import '../../config/features.dart';
 import '../../db/db.dart';
 import '../../net/client_ip.dart';
 import '../../orgs/invites.dart';
@@ -204,7 +203,7 @@ Future<Response> acceptInvite(Request request) async {
       throw ApiError(
         ApiErrorCode.conflict,
         'An account already uses this email.',
-        extra: {'reason': 'account_exists'},
+        extra: {'reason': ConflictReason.accountExists.wire},
       ); // 6.
     }
   }
@@ -299,7 +298,7 @@ Future<Response> joinInvite(Request request) async {
       throw ApiError(
         ApiErrorCode.conflict,
         'This invitation creates an account.',
-        extra: {'reason': 'account_exists'},
+        extra: {'reason': ConflictReason.accountExists.wire},
       ); // 4.
     }
     _orgGates(deps, inv); // 5, 6.

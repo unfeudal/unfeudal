@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import 'package:test/test.dart';
 import 'package:unfeudal_server/src/config/features.dart';
+import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 void main() {
   test('fifteen flags with their wire names; all on except plain_http_lan', () {

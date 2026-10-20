@@ -4,7 +4,6 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../../audit/audit_log.dart';
 import '../../auth/rate_limit.dart';
-import '../../config/features.dart';
 import '../../db/db.dart';
 import '../../orgs/org_access.dart';
 import '../app.dart';
