@@ -55,13 +55,18 @@ Future<void> waitForSsh() async {
         port,
         timeout: const Duration(seconds: 2),
       );
-      final first = await socket.first.timeout(const Duration(seconds: 2));
+      // Empty when docker-proxy accepted and closed before sshd was up.
+      final chunks = await socket
+          .take(1)
+          .toList()
+          .timeout(const Duration(seconds: 2));
       socket.destroy();
-      if (utf8.decode(first, allowMalformed: true).startsWith('SSH-')) return;
+      final banner = chunks.isEmpty
+          ? ''
+          : utf8.decode(chunks.single, allowMalformed: true);
+      if (banner.startsWith('SSH-')) return;
     } on Exception {
       // not listening yet
-    } on StateError {
-      // docker-proxy accepted and closed before sshd was up: no banner yet
     }
     await Future<void>.delayed(const Duration(seconds: 1));
   }

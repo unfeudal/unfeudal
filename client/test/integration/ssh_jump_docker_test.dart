@@ -17,7 +17,9 @@ import '../support/fakes.dart';
 const net = 'uf-jump',
     bastionName = 'uf-jump-bastion',
     targetName = 'uf-jump-target';
-const tunnelMod = 'DOCKER_MODS=linuxserver/mods:openssh-server-ssh-tunnel'; // AllowTcpForwarding yes
+// What the openssh-server-ssh-tunnel mod sets, mounted instead of downloaded at each start:
+// the download from lscr.io can stall on CI runners past the start deadline.
+const tunnelConf = 'AllowTcpForwarding yes\nGatewayPorts clientspecified\n';
 const image =
     'lscr.io/linuxserver/openssh-server:10.3_p1-r1-ls239@sha256:bef23ec7e4b6849f8c61b7e5fc1c67fc38bafe100539d5c34fc2d682c582bbf2';
 
@@ -47,8 +49,12 @@ void main() {
     hop(target, targetName, 2222),
   );
 
+  late Directory sshdConf;
+
   setUpAll(() async {
     key = await generateEd25519();
+    sshdConf = await Directory.systemTemp.createTemp('sshd');
+    File('${sshdConf.path}/tunnel.conf').writeAsStringSync(tunnelConf);
     await Process.run('docker', ['rm', '-f', bastionName, targetName]);
     await Process.run('docker', ['network', 'create', net]);
     for (final (name, publish) in [
@@ -69,8 +75,8 @@ void main() {
         'USER_NAME=uf',
         '-e',
         'PUBLIC_KEY=${key.publicKey}',
-        '-e',
-        tunnelMod,
+        '-v',
+        '${sshdConf.path}:/config/sshd/sshd_config.d:ro',
         image,
       ]);
     }
@@ -104,6 +110,7 @@ void main() {
   tearDownAll(() async {
     await Process.run('docker', ['rm', '-f', bastionName, targetName]);
     await Process.run('docker', ['network', 'rm', net]);
+    await sshdConf.delete(recursive: true);
   });
 
   test(
