@@ -8,6 +8,9 @@
 - Mail over SMTP (STARTTLS, implicit TLS or plain): security notices for new sign-ins, password changes, recovery key use and sign-in lockouts, in English or French; account deletion; the `transfer-owner` command; a clean shutdown that lets open requests and queued mails finish.
 - The container image names its source and licence, and the documentation covers configuration, HTTPS, mail, backup, restore, upgrades and every command.
 
+### Changed
+- The container image runs on Debian 13 (trixie), the release its build stage uses.
+
 ### Fixed
 - A configuration file with broken YAML stops the server with exit code 2 and never prints its content.
 - A sign-in refused because the server is busy no longer counts as a failed attempt.

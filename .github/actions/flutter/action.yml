@@ -3,7 +3,10 @@ description: Installs the pinned Flutter SDK and puts it on the PATH.
 runs:
   using: composite
   steps:
+    # The tag is checked against its commit, like every action pinned by SHA: a moved tag fails the job.
+    # GITHUB_PATH only receives a fixed directory under RUNNER_TEMP, never untrusted input.
     - shell: bash
-      run: |
+      run: | # zizmor: ignore[github-env]
         git clone --depth 1 --branch 3.47.7 https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+        test "$(git -C "$RUNNER_TEMP/flutter" rev-parse HEAD)" = abaf9c523780a608bd46686fd5e53740a07077f8
         echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"

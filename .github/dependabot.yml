@@ -1,14 +1,18 @@
 version: 2
 updates:
+  # each update waits a week after its release, so a compromised version is caught before it lands here
   - package-ecosystem: github-actions
     directory: /
     schedule: {interval: weekly}
+    cooldown: {default-days: 7}
     groups: {actions: {patterns: ["*"]}}
   - package-ecosystem: pub
     directories: [/server, /client, /shared, /tool]
     schedule: {interval: weekly}
+    cooldown: {default-days: 7}
     groups: {pub: {patterns: ["*"]}}
   - package-ecosystem: docker
     directory: /
     schedule: {interval: weekly}
+    cooldown: {default-days: 7}
     groups: {docker: {patterns: ["*"]}}

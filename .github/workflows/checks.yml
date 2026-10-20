@@ -9,15 +9,29 @@ concurrency:
   group: checks-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
-  tool:
+  # which parts a pull request touches; on main every part runs
+  changes:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
+    outputs:
+      tool: ${{ steps.diff.outputs.tool }}
+      server: ${{ steps.diff.outputs.server }}
+      client: ${{ steps.diff.outputs.client }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: {persist-credentials: false}
-      - uses: dart-lang/setup-dart@6afc89df92d6eb3834022f73cd65adc8cdfcb92d # v1.8.1
-      - run: cd tool && dart pub get && dart format --output=none --set-exit-if-changed . && dart analyze --fatal-infos && dart test
-      - run: cd tool && dart run bin/spdx.dart ..
+        with: {fetch-depth: 0, persist-credentials: false}
+      - id: diff
+        run: |
+          if [ "$EVENT" = pull_request ]; then files=$(git diff --name-only "$BASE...$HEAD"); else files=all; fi
+          touches() { [ "$files" = all ] || grep -qE "$1|^\.github/workflows/checks\.yml$" <<< "$files"; }
+          part() { if touches "$2"; then echo "$1=true"; else echo "$1=false"; fi >> "$GITHUB_OUTPUT"; }
+          part tool '^tool/'
+          part server '^(server|shared)/|^Dockerfile$|^\.dockerignore$|^\.github/workflows/server\.yml$'
+          part client '^(client|shared)/|^\.github/workflows/client\.yml$|^\.github/actions/flutter/'
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
   title:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
@@ -36,10 +50,10 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: {persist-credentials: false}
-      - run: pipx run zizmor==1.31.1 --config .github/zizmor.yml .github/workflows
+      - run: pipx run zizmor==1.31.1 --config .github/zizmor.yml .github
         env:
           GH_TOKEN: ${{ github.token }}
-  secrets:
+  repo:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -47,26 +61,27 @@ jobs:
         with: {fetch-depth: 0, persist-credentials: false}
       # whole history: private keys, tokens and generic secrets that GitHub's provider patterns miss
       - run: docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f git /repo --redact --no-banner
-  changes:
+      # every source starts with its SPDX header: AGPL under server/, Apache elsewhere
+      - run: |
+          fail=0
+          for f in $(git ls-files 'shared/*.dart' 'server/*.dart' 'client/*.dart' 'tool/*.dart' client/macos/Runner/BiometricVault.swift client/windows/runner/biometric_vault.h client/windows/runner/biometric_vault.cpp); do
+            case $f in server/*) h='// SPDX-License-Identifier: AGPL-3.0-or-later' ;; *) h='// SPDX-License-Identifier: Apache-2.0' ;; esac
+            [[ "$(head -n1 "$f")" == "$h"* ]] || { echo "::error file=$f::missing SPDX header"; fail=1; }
+          done
+          exit $fail
+  tool:
+    needs: changes
+    if: needs.changes.outputs.tool == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
-    outputs:
-      client: ${{ steps.diff.outputs.client }}
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: {fetch-depth: 0, persist-credentials: false}
-      - id: diff
-        run: |
-          if [ "$EVENT" != pull_request ] || git diff --name-only "$BASE...$HEAD" | grep -qE '^(client|shared)/|^\.github/workflows/client\.yml$'; then
-            echo client=true >> "$GITHUB_OUTPUT"
-          else
-            echo client=false >> "$GITHUB_OUTPUT"
-          fi
-        env:
-          EVENT: ${{ github.event_name }}
-          BASE: ${{ github.event.pull_request.base.sha }}
-          HEAD: ${{ github.event.pull_request.head.sha }}
+        with: {persist-credentials: false}
+      - uses: dart-lang/setup-dart@6afc89df92d6eb3834022f73cd65adc8cdfcb92d # v1.8.1
+      - run: cd tool && dart pub get && dart format --output=none --set-exit-if-changed . && dart analyze --fatal-infos && dart test
   server:
+    needs: changes
+    if: needs.changes.outputs.server == 'true'
     uses: $/.github/workflows/server.yml
   client:
     needs: changes
@@ -74,11 +89,11 @@ jobs:
     uses: $/.github/workflows/client.yml
   ci-ok:
     if: always()
-    needs: [tool, title, zizmor, secrets, changes, server, client]
+    needs: [changes, title, zizmor, repo, tool, server, client]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
-      # passes when every needed job succeeded or was skipped (title on main, client without client changes)
+      # passes when every needed job succeeded or was skipped (title on main, parts a PR does not touch)
       - run: echo "$NEEDS" | jq -e '[.[].result] | all(. == "success" or . == "skipped")'
         env:
           NEEDS: ${{ toJSON(needs) }}

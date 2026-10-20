@@ -1,0 +1,29 @@
+name: release
+description: Publishes the tag's changelog section as a GitHub and a Gitea release, with the given assets attached.
+inputs:
+  assets: {description: "Files to attach, as a glob", default: ""}
+  github-token: {required: true}
+  gitea-token: {required: true}
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: awk -v h="## [${GITHUB_REF_NAME#*-v}] - " 'index($0,h)==1{f=1;next} /^## \[/{f=0} f' "${GITHUB_REF_NAME%-v*}/CHANGELOG.md" > notes.md
+    - shell: bash
+      run: gh release create "$GITHUB_REF_NAME" $ASSETS --verify-tag --title "$GITHUB_REF_NAME" --notes-file notes.md
+      env:
+        ASSETS: ${{ inputs.assets }}
+        GH_TOKEN: ${{ inputs.github-token }}
+    - shell: bash
+      run: |
+        api=https://git.killiandalcin.fr/api/v1/repos/unfeudal/unfeudal/releases
+        id=$(jq -n --arg t "$GITHUB_REF_NAME" --arg c "$GITHUB_SHA" --rawfile b notes.md \
+            '{tag_name: $t, target_commitish: $c, name: $t, body: $b}' |
+          curl --fail --retry 5 --retry-all-errors -H "Authorization: token $GITEA_TOKEN" -H 'Content-Type: application/json' -d @- "$api" |
+          jq -r .id)
+        for f in $ASSETS; do
+          curl --fail --retry 3 -H "Authorization: token $GITEA_TOKEN" -F "attachment=@$f" "$api/$id/assets?name=$(basename "$f")"
+        done
+      env:
+        ASSETS: ${{ inputs.assets }}
+        GITEA_TOKEN: ${{ inputs.gitea-token }}
