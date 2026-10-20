@@ -54,7 +54,7 @@ VaultHealth vaultHealthOf(
     if (e.state != EntryState.ok || v.isTrashed(e.id)) continue;
     final name = e.name ?? '';
     if (conflictSuffixes.any(name.endsWith)) conflicts++;
-    if (e.kind == ItemKind.host && v.trustedPin(e.id) == null) {
+    if (e.kind == ItemKind.host && v.hostKeys.pinOf(e.id) == null) {
       toVerify++;
       if (olderThan(e.item.createdAt, const Duration(days: 7))) verifyOld++;
     }

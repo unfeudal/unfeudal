@@ -1,15 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import 'migration.dart';
 import 'migrations/m0001_core.dart';
 import 'migrations/m0002_orgs.dart';
 import 'migrations/m0003_audit.dart';
 import 'migrations/m0004_locale.dart';
-
-class Migration {
-  const Migration(this.version, this.name, this.statements);
-  final int version;
-  final String name;
-  final List<String> statements;
-}
 
 /// Server schema, one file per migration under `migrations/`, one statement
 /// per string. A released migration is never edited: a change is a new file,

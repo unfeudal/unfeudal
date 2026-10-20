@@ -4,7 +4,9 @@ import 'dart:io';
 import 'package:test/test.dart';
 import 'package:unfeudal_server/src/db/db.dart';
 import 'package:unfeudal_server/src/db/migrate.dart';
+import 'package:unfeudal_server/src/db/migration.dart';
 import 'package:unfeudal_server/src/db/migrations.dart';
+import 'package:unfeudal_server/src/db/open_db.dart';
 
 import '../support/test_db.dart';
 
@@ -78,7 +80,7 @@ void main() {
   test('a failing migration rolls back entirely', () async {
     final broken = [
       ...migrations,
-      const Migration(5, 'broken', ['CREATE TABLE z (a TEXT)', 'NOT SQL']),
+      const Migration(5, ['CREATE TABLE z (a TEXT)', 'NOT SQL']),
     ];
     await expectLater(migrate(db, broken), throwsA(anything));
     expect(await version(db), '4');

@@ -2,10 +2,12 @@
 import 'dart:typed_data';
 
 import '../bytes.dart';
-import '../crypto/envelope.dart';
 import '../crypto/folder_keys.dart';
 import '../ids.dart';
+import '../permissions/resolver.dart';
 import '../util/json_reader.dart';
+
+part 'org_keys.dart';
 
 const _maxRows = 100000;
 
@@ -17,11 +19,6 @@ List<String> _uuids(JsonReader r, String key, {int max = _maxRows}) {
   final ids = r.list<String>(key, max: max);
   if (!ids.every(isUuid)) throw FormatException('${r.what}.$key: not UUIDs');
   return ids;
-}
-
-Envelope? _optEnvelope(JsonReader r, String key) {
-  final json = r.opt<Map<String, Object?>>(key);
-  return json == null ? null : Envelope.fromJson(json);
 }
 
 /// One org snapshot of `GET /sync`. Every list is required: a missing list
@@ -52,8 +49,16 @@ class OrgBlock {
       teams: _rows(r, 'teams', OrgTeam.fromJson),
       acl: _rows(r, 'acl', AclRow.fromJson),
       folderTree: _rows(r, 'folderTree', FolderNode.fromJson),
-      wrappedKeys: _rows(r, 'wrappedKeys', WrappedKeyRow.fromJson),
-      keyHistory: _rows(r, 'keyHistory', KeyHistoryRow.fromJson),
+      wrappedKeys: _rows(
+        r,
+        'wrappedKeys',
+        (j) => WrappedKeyRow.fromJson(j, 'wrappedKeys'),
+      ),
+      keyHistory: _rows(
+        r,
+        'keyHistory',
+        (j) => WrappedKeyRow.fromJson(j, 'keyHistory'),
+      ),
       keyRequests: _rows(r, 'keyRequests', KeyRequest.fromJson),
       pendingRotations: _rows(r, 'pendingRotations', PendingRotation.fromJson),
       itemIds: _uuids(r, 'itemIds'),
@@ -80,7 +85,7 @@ class OrgBlock {
   final List<AclRow> acl;
   final List<FolderNode> folderTree;
   final List<WrappedKeyRow> wrappedKeys;
-  final List<KeyHistoryRow> keyHistory;
+  final List<WrappedKeyRow> keyHistory;
   final List<KeyRequest> keyRequests;
   final List<PendingRotation> pendingRotations;
   final List<String> itemIds;
@@ -138,6 +143,8 @@ class OrgSummary {
   final Map<String, Object?> extra;
 
   bool get mascot => settings['mascot'] != false;
+
+  bool get isConfirmed => status == MemberStatus.confirmed.name;
 
   Map<String, Object?> toJson() => {
     ...extra,
@@ -281,6 +288,22 @@ class AclRow {
   final List<String> deny;
   final Map<String, Object?> extra;
 
+  bool get isTeam => principalType == PrincipalType.team.name;
+
+  /// Typed for the resolver; unknown permission names are skipped and any
+  /// principal type other than team reads as user.
+  AclEntry get entry => AclEntry(
+    folderId,
+    isTeam ? PrincipalType.team : PrincipalType.user,
+    principalId,
+    _permissions(allow),
+    _permissions(deny),
+  );
+
+  static Set<Permission> _permissions(List<String> names) => {
+    for (final name in names) ?Permission.values.asNameMap()[name],
+  };
+
   Map<String, Object?> toJson() => {
     ...extra,
     'orgId': orgId,
@@ -320,173 +343,5 @@ class FolderNode {
     'orgId': orgId,
     'folderId': folderId,
     'parentId': parentId,
-  };
-}
-
-/// The caller's own wrapped keys for one folder version.
-class WrappedKeyRow {
-  WrappedKeyRow({
-    required this.folderId,
-    required this.version,
-    required this.meta,
-    this.secret,
-    this.extra = const {},
-  });
-
-  factory WrappedKeyRow.fromJson(Object? json) {
-    final r = JsonReader(json, 'wrappedKeys');
-    return WrappedKeyRow(
-      folderId: r.uuid('folderId'),
-      version: r.integer('version', min: 1),
-      meta: Envelope.fromJson(r.object('meta')),
-      secret: _optEnvelope(r, 'secret'),
-      extra: r.extra(const {'folderId', 'version', 'meta', 'secret'}),
-    );
-  }
-
-  final String folderId;
-  final int version;
-  final Envelope meta;
-  final Envelope? secret;
-  final Map<String, Object?> extra;
-
-  WrappedFolderKeys get keys =>
-      WrappedFolderKeys(version: version, meta: meta, secret: secret);
-
-  Map<String, Object?> toJson() => {
-    ...extra,
-    'folderId': folderId,
-    'version': version,
-    'meta': meta.toJson(),
-    'secret': secret?.toJson(),
-  };
-}
-
-class KeyHistoryRow {
-  KeyHistoryRow({
-    required this.folderId,
-    required this.version,
-    required this.meta,
-    this.secret,
-    this.extra = const {},
-  });
-
-  factory KeyHistoryRow.fromJson(Object? json) {
-    final r = JsonReader(json, 'keyHistory');
-    return KeyHistoryRow(
-      folderId: r.uuid('folderId'),
-      version: r.integer('version', min: 1),
-      meta: Envelope.fromJson(r.object('meta')),
-      secret: _optEnvelope(r, 'secret'),
-      extra: r.extra(const {'folderId', 'version', 'meta', 'secret'}),
-    );
-  }
-
-  final String folderId;
-  final int version;
-  final Envelope meta;
-  final Envelope? secret;
-  final Map<String, Object?> extra;
-
-  FolderKeyHistory get history =>
-      FolderKeyHistory(version: version, meta: meta, secret: secret);
-
-  Map<String, Object?> toJson() => {
-    ...extra,
-    'folderId': folderId,
-    'version': version,
-    'meta': meta.toJson(),
-    'secret': secret?.toJson(),
-  };
-}
-
-/// A member waiting for folder keys; [secret] means they need the secret key.
-class KeyRequest {
-  KeyRequest({
-    required this.orgId,
-    required this.folderId,
-    required this.userId,
-    required this.version,
-    required this.secret,
-    this.extra = const {},
-  });
-
-  factory KeyRequest.fromJson(Object? json) {
-    final r = JsonReader(json, 'keyRequest');
-    return KeyRequest(
-      orgId: r.uuid('orgId'),
-      folderId: r.uuid('folderId'),
-      userId: r.uuid('userId'),
-      version: r.integer('version'),
-      secret: r.flag('secret'),
-      extra: r.extra(const {
-        'orgId',
-        'folderId',
-        'userId',
-        'version',
-        'secret',
-      }),
-    );
-  }
-
-  final String orgId;
-  final String folderId;
-  final String userId;
-  final int version;
-  final bool secret;
-  final Map<String, Object?> extra;
-
-  Map<String, Object?> toJson() => {
-    ...extra,
-    'orgId': orgId,
-    'folderId': folderId,
-    'userId': userId,
-    'version': version,
-    'secret': secret,
-  };
-}
-
-class PendingRotation {
-  PendingRotation({
-    required this.orgId,
-    required this.folderId,
-    required this.reason,
-    required this.removedUserIds,
-    this.rotatedVersion,
-    this.extra = const {},
-  });
-
-  factory PendingRotation.fromJson(Object? json) {
-    final r = JsonReader(json, 'pendingRotation');
-    return PendingRotation(
-      orgId: r.uuid('orgId'),
-      folderId: r.uuid('folderId'),
-      reason: r.text('reason', max: 64),
-      removedUserIds: _uuids(r, 'removedUserIds'),
-      rotatedVersion: r.optInteger('rotatedVersion', min: 1),
-      extra: r.extra(const {
-        'orgId',
-        'folderId',
-        'reason',
-        'removedUserIds',
-        'rotatedVersion',
-      }),
-    );
-  }
-
-  final String orgId;
-  final String folderId;
-  final String reason;
-  final List<String> removedUserIds;
-  final int? rotatedVersion;
-  final Map<String, Object?> extra;
-
-  Map<String, Object?> toJson() => {
-    ...extra,
-    'orgId': orgId,
-    'folderId': folderId,
-    'reason': reason,
-    'removedUserIds': removedUserIds,
-    'rotatedVersion': rotatedVersion,
   };
 }

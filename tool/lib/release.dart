@@ -4,9 +4,9 @@ import 'dart:io';
 final _semver = RegExp(r'^\d+\.\d+\.\d+$');
 final _pubspecVersion = RegExp(r'^version: (\S+)$', multiLine: true);
 
-/// Releases [package] (`server` or `client`) at [level] (`patch`, `minor`, `major` or `X.Y.Z`); returns the
-/// released `(package, version)` pairs. A client release also releases a server patch announcing it.
-List<(String, String)> bump(
+/// Releases [package] (`server` or `client`) at [level] (`patch`, `minor`, `major` or `X.Y.Z`); returns its
+/// released version. A client release also releases a server patch announcing it.
+String bump(
   Directory root,
   String package,
   String level, {
@@ -16,17 +16,17 @@ List<(String, String)> bump(
     throw ArgumentError.value(package, 'package', 'server or client');
   }
   final version = _resolve(_current(root, package), level);
-  _release(root, package, version, date);
-  if (package == 'server') return [('server', version)];
+  _release(root, package, version, date: date);
+  if (package == 'server') return version;
   final serverPatch = _resolve(_current(root, 'server'), 'patch');
   _release(
     root,
     'server',
     serverPatch,
-    date,
+    date: date,
     note: '### Changed\n- Announces client $version.\n',
   );
-  return [('client', version), ('server', serverPatch)];
+  return version;
 }
 
 /// What stops [tag] from being released: versions, constants, changelog section and fixtures must all match it.
@@ -67,7 +67,7 @@ List<String> checkTag(Directory root, String tag) {
   return problems;
 }
 
-/// The pubspec version without its `+build` part.
+// The pubspec version without its `+build` part.
 String _current(Directory root, String package) => _pubspecVersion
     .firstMatch(
       File('${root.path}/$package/pubspec.yaml').readAsStringSync(),
@@ -93,8 +93,8 @@ String _resolve(String current, String level) {
 void _release(
   Directory root,
   String package,
-  String version,
-  DateTime date, {
+  String version, {
+  required DateTime date,
   String? note,
 }) {
   final day = date.toIso8601String().substring(0, 10);
@@ -144,24 +144,18 @@ void _release(
   _copyFixtures(root, version);
 }
 
-/// The newest `shared/test/fixtures/v*` becomes `v<version>`: the formats this release reads.
+// The newest `shared/test/fixtures/v*` becomes `v<version>`: the formats this release reads.
 void _copyFixtures(Directory root, String version) {
   final fixtures = Directory('${root.path}/shared/test/fixtures');
   final target = Directory('${fixtures.path}/v$version');
   if (target.existsSync()) return;
-  List<int> parts(Directory d) => d.path
+  String sortKey(Directory d) => d.path
       .split(RegExp(r'[/\\]'))
       .last
       .substring(1)
       .split('.')
-      .map(int.parse)
-      .toList();
-  int compare(List<int> a, List<int> b) {
-    for (var i = 0; i < a.length && i < b.length; i++) {
-      if (a[i] != b[i]) return a[i] - b[i];
-    }
-    return a.length - b.length;
-  }
+      .map((n) => n.padLeft(6, '0'))
+      .join('.');
 
   final versions =
       fixtures
@@ -169,7 +163,7 @@ void _copyFixtures(Directory root, String version) {
           .whereType<Directory>()
           .where((d) => RegExp(r'[/\\]v[\d.]+$').hasMatch(d.path))
           .toList()
-        ..sort((a, b) => compare(parts(a), parts(b)));
+        ..sort((a, b) => sortKey(a).compareTo(sortKey(b)));
   if (versions.isEmpty) return;
   for (final f in versions.last.listSync(recursive: true).whereType<File>()) {
     final relative = f.path.substring(versions.last.path.length + 1);

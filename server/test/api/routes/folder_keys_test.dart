@@ -53,6 +53,12 @@ void main() {
     ))
       (r['user_id'], r['version'], r['secret_wrapped'] != null),
   ];
+  List<Map<String, Object?>> prodWrapsAt2() => [
+    w.wrap('olivia', 'prod', 2),
+    w.wrap('adam', 'prod', 2),
+    w.wrap('mia', 'prod', 2),
+    w.wrap('vic', 'prod', 2, secret: false),
+  ];
 
   test(
     'first upload: the creator with edit, folder at revision 1, version 1 only',
@@ -153,7 +159,33 @@ void main() {
     );
   });
 
-  test('a rotation must cover every confirmed enabled reader and wipes the old wraps', () async {
+  test('a malformed body is 400 before any folder lookup', () async {
+    Future<Object?> message(Map<String, Object?> body) async => (await s.put(
+      '/api/v1/folders/${w.folder('prod')}/keys',
+      token: w['adam'].accessToken,
+      body: body,
+    )).body['message'];
+    final noUser = {...w.wrap('mia', 'prod', 1)}..remove('userId');
+    expect(await message({'version': 1}), 'version and wrapped are required.');
+    expect(
+      await message({
+        'version': 1,
+        'wrapped': [
+          {'version': 1},
+        ],
+      }),
+      startsWith('invalid wrap: '),
+    );
+    expect(
+      await message({
+        'version': 1,
+        'wrapped': [noUser],
+      }),
+      'one wrap per user, userId required.',
+    );
+  });
+
+  Future<void> queueKimRemoval() async {
     await w.keys('prod', 1, ['olivia', 'adam', 'mia', 'vic', 'kim']);
     await s.db.execute(
       "INSERT INTO pending_rotations (org_id, folder_id, reason, removed_user_ids) VALUES (@o, @f, 'member_removed', @ids)",
@@ -163,12 +195,11 @@ void main() {
         'ids': jsonEncode([w.id('kim')]),
       },
     );
-    final all = [
-      w.wrap('olivia', 'prod', 2),
-      w.wrap('adam', 'prod', 2),
-      w.wrap('mia', 'prod', 2),
-      w.wrap('vic', 'prod', 2, secret: false),
-    ];
+  }
+
+  test('a rotation must cover every confirmed enabled reader with the new history, by a manager', () async {
+    await queueKimRemoval();
+    final all = prodWrapsAt2();
     expect(
       (await keys(
         'adam',
@@ -200,12 +231,16 @@ void main() {
       (await keys('mia', 'prod', 2, all, history: w.history('prod', 2))).status,
       403,
     );
+  });
+
+  test('a rotation wipes the old wraps and records its version', () async {
+    await queueKimRemoval();
     expect(
       (await keys(
         'adam',
         'prod',
         2,
-        all,
+        prodWrapsAt2(),
         history: w.history('prod', 2),
       )).status,
       204,
@@ -240,10 +275,15 @@ void main() {
     },
   );
 
-  test('rotation/done: idempotent without a row; 409 until every item uses the rotated keys', () async {
-    final done = '/api/v1/folders/${w.folder('prod')}/rotation/done';
+  String rotationDone() => '/api/v1/folders/${w.folder('prod')}/rotation/done';
+
+  test('rotation/done: idempotent without a row, 403 without manage', () async {
+    final done = rotationDone();
     expect((await s.post(done, token: w['adam'].accessToken)).status, 204);
     expect((await s.post(done, token: w['mia'].accessToken)).status, 403);
+  });
+
+  Future<Map<String, Object?>> queueRotationWithHost() async {
     await w.keys('prod', 1, ['olivia', 'mia']);
     final host = await w.item(w['olivia'], folder: 'prod', secret: true);
     expect((await w.put(w['olivia'], host, 0)).status, 200);
@@ -251,63 +291,76 @@ void main() {
       "INSERT INTO pending_rotations (org_id, folder_id, reason, removed_user_ids) VALUES (@o, @f, 'acl_change', '[]')",
       {'o': w.orgId, 'f': w.folder('prod')},
     );
+    return host;
+  }
+
+  Future<TestResponse> rotateProdTo2() =>
+      keys('adam', 'prod', 2, prodWrapsAt2(), history: w.history('prod', 2));
+
+  Future<TestResponse> resealProdFolderAt2() async => w.put(
+    w['olivia'],
+    await w.item(
+      w['olivia'],
+      id: w.folder('prod'),
+      type: 'folder',
+      keyVersion: 2,
+    ),
+    1,
+  );
+
+  Future<void> trash(Map<String, Object?> item) => s.db.execute(
+    'UPDATE items SET deleted = 1 WHERE id = @i',
+    {'i': item['id']},
+  );
+
+  test('rotation/done: 409 until every item, trashed ones too, uses the rotated keys', () async {
+    final done = rotationDone();
+    final host = await queueRotationWithHost();
     expect(
       (await s.post(done, token: w['adam'].accessToken)).status,
       409,
       reason: 'not rotated yet',
     );
-    final all = [
-      w.wrap('olivia', 'prod', 2),
-      w.wrap('adam', 'prod', 2),
-      w.wrap('mia', 'prod', 2),
-      w.wrap('vic', 'prod', 2, secret: false),
-    ];
-    expect(
-      (await keys(
-        'adam',
-        'prod',
-        2,
-        all,
-        history: w.history('prod', 2),
-      )).status,
-      204,
-    );
+    expect((await rotateProdTo2()).status, 204);
     expect(
       (await s.post(done, token: w['adam'].accessToken)).status,
       409,
       reason: 'folder and host still at v1',
     );
-    final folderV2 = await w.item(
-      w['olivia'],
-      id: w.folder('prod'),
-      type: 'folder',
-      keyVersion: 2,
-    );
-    expect((await w.put(w['olivia'], folderV2, 1)).status, 200);
-    await s.db.execute('UPDATE items SET deleted = 1 WHERE id = @i', {
-      'i': host['id'],
-    });
+    expect((await resealProdFolderAt2()).status, 200);
+    await trash(host);
     expect(
       (await s.post(done, token: w['adam'].accessToken)).status,
       409,
       reason: 'trashed items count',
     );
-    final seq = await w.orgSeq();
-    final resealed = await w.item(
-      w['olivia'],
-      id: host['id']! as String,
-      folder: 'prod',
-      keyVersion: 2,
-      secret: true,
-      deleted: true,
-    );
-    expect(
-      (await w.put(w['olivia'], resealed, 1)).status,
-      200,
-      reason: 'a trashed item accepts a re-seal',
-    );
-    expect((await s.post(done, token: w['adam'].accessToken)).status, 204);
-    expect(await w.count('pending_rotations'), 0);
-    expect(await w.orgSeq(), seq + 1);
   });
+
+  test(
+    'rotation/done: a re-sealed trashed item completes the rotation',
+    () async {
+      final done = rotationDone();
+      final host = await queueRotationWithHost();
+      await rotateProdTo2();
+      await resealProdFolderAt2();
+      await trash(host);
+      final seq = await w.orgSeq();
+      final resealed = await w.item(
+        w['olivia'],
+        id: host['id']! as String,
+        folder: 'prod',
+        keyVersion: 2,
+        secret: true,
+        deleted: true,
+      );
+      expect(
+        (await w.put(w['olivia'], resealed, 1)).status,
+        200,
+        reason: 'a trashed item accepts a re-seal',
+      );
+      expect((await s.post(done, token: w['adam'].accessToken)).status, 204);
+      expect(await w.count('pending_rotations'), 0);
+      expect(await w.orgSeq(), seq + 1);
+    },
+  );
 }

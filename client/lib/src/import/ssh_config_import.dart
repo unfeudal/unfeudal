@@ -6,7 +6,12 @@ import '../keys/key_tools.dart';
 import '../vault/vault.dart';
 
 class PlannedHost {
-  const PlannedHost(this.source, this.duplicate, this.keyPath, this.jumpAlias);
+  const PlannedHost({
+    required this.source,
+    required this.duplicate,
+    required this.keyPath,
+    required this.jumpAlias,
+  });
 
   final SshConfigHost source;
 
@@ -19,14 +24,14 @@ class PlannedHost {
 }
 
 class PlannedKey {
-  const PlannedKey(this.path, this.pem, this.publicKey, this.needsPassphrase);
+  const PlannedKey(this.path, this.pem, this.publicKey);
 
   final String path;
   final String pem;
 
   /// Null until the passphrase is known.
   final String? publicKey;
-  final bool needsPassphrase;
+  bool get needsPassphrase => publicKey == null;
 }
 
 class ImportPlan {
@@ -81,10 +86,10 @@ class SshConfigImporter {
       [
         for (final h in valid)
           PlannedHost(
-            h,
-            existing.contains(h.alias.toLowerCase()),
-            keys[_expand(h.identityFile)]?.path,
-            jumps[h.alias],
+            source: h,
+            duplicate: existing.contains(h.alias.toLowerCase()),
+            keyPath: keys[_expand(h.identityFile)]?.path,
+            jumpAlias: jumps[h.alias],
           ),
       ],
       [...keys.values.nonNulls],
@@ -157,13 +162,13 @@ class SshConfigImporter {
     final pem = await readFile(path);
     if (pem == null) return null;
     try {
-      return PlannedKey(path, pem, publicKeyOf(pem), false);
+      return PlannedKey(path, pem, publicKeyOf(pem));
     } on InvalidKey {
-      return PlannedKey(path, pem, null, true);
+      return PlannedKey(path, pem, null);
     }
   }
 
-  /// The identity's id; null when the key does not open with [passphrase].
+  // The identity's id; null when the key does not open with passphrase.
   Future<String?> _writeIdentity(PlannedKey key, String? passphrase) async {
     final String publicKey;
     try {

@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: Apache-2.0
-import 'dart:async';
 
 import '../api/api_client.dart';
 import '../events/app_events.dart';
@@ -17,17 +16,11 @@ class EventReporter {
   final ApiClient? Function() _api;
   final bool Function() _enabled;
 
-  /// hostId → jump hosts of the connection being opened.
+  // Maps a hostId to the jump hosts of the connection being opened.
   final _hops = <String, List<String>>{};
-  StreamSubscription<AppEvent>? _subscription;
   Future<void> _tail = Future.value();
 
-  void start() => _subscription ??= _events.listen(_on);
-
-  Future<void> stop() async {
-    await _subscription?.cancel();
-    _subscription = null;
-  }
+  void start() => _events.listen(_on);
 
   void _on(AppEvent event) {
     switch (event) {

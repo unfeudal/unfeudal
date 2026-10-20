@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: Apache-2.0
-import 'package:animations/animations.dart';
 import 'package:flutter/material.dart';
 
 import '../l10n/app_localizations.dart';
@@ -7,17 +6,17 @@ import 'app_scope.dart';
 import 'app_state.dart';
 import 'debug_trace.dart';
 import 'design/dialog.dart';
-import 'design/icons.dart';
 import 'design/motion.dart';
 import 'design/tokens.dart';
 import 'settings/settings.dart';
 import 'ui/lock/lock_frame.dart';
 import 'ui/lock/login_screen.dart';
+import 'ui/lock/unlock_screen.dart';
 import 'ui/onboarding/join_screen.dart';
 import 'ui/onboarding/setup_screen.dart';
 import 'ui/shell/home_shell.dart';
+import 'ui/shell/shell_chrome.dart';
 import 'ui/title_bar.dart';
-import 'ui/lock/unlock_screen.dart';
 import 'window/window_chrome.dart';
 
 /// Theme, language and motion from the cached settings (usable before unlock), then the screen of the stage.
@@ -47,6 +46,7 @@ class UnfeudalApp extends StatefulWidget {
 
 class _UnfeudalAppState extends State<UnfeudalApp> {
   final _navigator = GlobalKey<NavigatorState>();
+  final _shellChrome = ShellChrome();
   late AppStage _stage = widget.state.stage;
 
   @override
@@ -60,10 +60,11 @@ class _UnfeudalAppState extends State<UnfeudalApp> {
   @override
   void dispose() {
     widget.state.removeListener(_onState);
+    _shellChrome.dispose();
     super.dispose();
   }
 
-  /// Leaving home closes every dialog and pushed screen (lock, sign-out, revoked device).
+  // Leaving home closes every dialog and pushed screen (lock, sign-out, revoked device).
   void _onState() {
     final stage = widget.state.stage;
     if (stage != _stage) {
@@ -79,47 +80,30 @@ class _UnfeudalAppState extends State<UnfeudalApp> {
     final context = _navigator.currentContext;
     if (context == null) return false;
     final l = AppLocalizations.of(context);
-    return await showUfDialog<bool>(context, alert: true, (dialog) {
-          void answer(bool value) => Navigator.pop(dialog, value);
-          final colors = UfColors.of(dialog);
-          return UfDialog(
-            leading: Icon(
-              UfIcons.warningOctagon,
-              size: 28,
-              color: colors.danger,
-            ),
-            title: l.plainHttpTitle,
-            message: l.plainHttpBody('$server'),
-            actions: [
-              CancelButton(onPressed: () => answer(false)),
-              FilledButton(
-                key: const Key('plain-http-continue'),
-                style: dangerButtonStyle(colors),
-                onPressed: () => answer(true),
-                child: Text(l.plainHttpContinue),
-              ),
-            ],
-          );
-        }) ??
-        false;
+    return confirmDanger(
+      context,
+      question: l.plainHttpTitle,
+      message: l.plainHttpBody('$server'),
+      action: l.plainHttpContinue,
+    );
   }
 
-  /// Puts the custom title bar over the screens: `rail` over the vault, `bg` over the access screens.
+  // The custom title bar follows the home shell's sidebar, else the access screens.
   Widget _framed(BuildContext context, Widget screen) {
     final chrome = widget.chrome;
-    if (chrome == null) return screen;
-    final colors = UfColors.of(context);
+    final scoped = ShellChromeScope(chrome: _shellChrome, child: screen);
+    if (chrome == null) return scoped;
     final l = AppLocalizations.of(context);
-    final home = widget.state.stage == AppStage.home;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         UfTitleBar(
           chrome: chrome,
-          title: home ? '${l.appName} — ${l.vaultPersonal}' : l.appName,
-          background: home ? colors.rail : LockFrame.background(context),
+          shell: _shellChrome,
+          title: l.appName,
+          background: LockFrame.background(context),
         ),
-        Expanded(child: screen),
+        Expanded(child: scoped),
       ],
     );
   }
@@ -165,7 +149,7 @@ class _UnfeudalAppState extends State<UnfeudalApp> {
   );
 }
 
-/// Performance mode also drops Material's ink ripples.
+// Performance mode also drops Material's ink ripples.
 ThemeData _theme(Brightness brightness, Settings settings) {
   final theme = ufTheme(brightness);
   return settings.performanceMode
@@ -180,13 +164,8 @@ class _StageScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
     final l = AppLocalizations.of(context);
-    return PageTransitionSwitcher(
+    return AnimatedSwitcher(
       duration: UfMotion.of(context).slow,
-      transitionBuilder: (child, animation, secondary) => FadeThroughTransition(
-        animation: animation,
-        secondaryAnimation: secondary,
-        child: child,
-      ),
       child: KeyedSubtree(
         key: ValueKey(state.stage),
         child: switch (state.stage) {

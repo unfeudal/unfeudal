@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: Apache-2.0
-import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
@@ -7,7 +6,8 @@ import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
 import '../../app_state.dart';
 import '../../design/icons.dart';
-import '../describe_error.dart';
+import '../busy_action.dart';
+import '../enrollment_input.dart';
 import '../fields.dart';
 import '../lock/lock_frame.dart';
 import 'setup_screen.dart';
@@ -23,43 +23,30 @@ class JoinScreen extends StatefulWidget {
   State<JoinScreen> createState() => _JoinScreenState();
 }
 
-class _JoinScreenState extends State<JoinScreen> {
-  final _link = TextEditingController();
+class _JoinScreenState extends State<JoinScreen>
+    with BusyAction, EnrollmentInput {
   final _passphrase = TextEditingController();
   final _email = TextEditingController();
   final _password = TextEditingController();
   final _confirm = TextEditingController();
-  String? _file;
   Enrollment? _invite;
-  bool _busy = false;
-  String? _problem;
 
   @override
   void dispose() {
-    for (final c in [_link, _passphrase, _email, _password, _confirm]) {
+    for (final c in [_passphrase, _email, _password, _confirm]) {
       c.dispose();
     }
     super.dispose();
   }
 
-  Future<void> _pickFile() async {
-    final text = await (widget.openFile ?? _openFileDialog)();
-    if (text != null && mounted) setState(() => _file = text);
-  }
+  @override
+  Future<String?> Function()? get openFile => widget.openFile;
 
-  static Future<String?> _openFileDialog() async =>
-      (await openFile())?.readAsString();
-
-  Future<void> _submit() => _run(() async {
+  Future<void> _submit() => run(() async {
     final state = AppScope.read(context);
-    final file = _file;
-    final enrollment = file == null
-        ? Enrollment.parseLink(_link.text.trim())
-        : await Enrollment.parseFile(
-            file,
-            passphrase: _passphrase.text.isEmpty ? null : _passphrase.text,
-            allowTestingKdf: state.allowTestingKdf,
-          );
+    final enrollment = await readEnrollment(
+      passphrase: _passphrase.text.isEmpty ? null : _passphrase.text,
+    );
     await state.checkServer(enrollment.server);
     if (enrollment.kind == EnrollKind.setup) {
       state
@@ -73,31 +60,16 @@ class _JoinScreenState extends State<JoinScreen> {
   Future<void> _accept() async {
     final l = AppLocalizations.of(context);
     final local = checkNewPassword(l, _password.text, _confirm.text);
-    if (local != null) return setState(() => _problem = local);
-    await _run(() async {
+    if (local != null) return setState(() => problem = local);
+    await run(() async {
       final state = AppScope.read(context);
       await state.acceptInvite(
         enrollment: _invite!,
         email: _email.text.trim(),
         password: _password.text,
       );
-      if (!state.serverHas('recovery_kit')) state.finishOnboarding();
+      if (!state.serverInfo.has(Flag.recoveryKit)) state.finishOnboarding();
     });
-  }
-
-  Future<void> _run(Future<void> Function() action) async {
-    final l = AppLocalizations.of(context);
-    setState(() {
-      _busy = true;
-      _problem = null;
-    });
-    try {
-      await action();
-    } on Exception catch (e) {
-      if (mounted) setState(() => _problem = describeError(l, e));
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
   }
 
   @override
@@ -112,58 +84,56 @@ class _JoinScreenState extends State<JoinScreen> {
             ? l.joinSubtitle
             : l.joinInviteSubtitle(invite.server.host),
         children: [
-          if (invite == null) ...[
-            keyedField(
-              'join-link',
-              _link,
-              l.joinLink,
-              mono: true,
-              hint: 'unfeudal://enroll?…',
-            ),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: OutlinedButton.icon(
-                key: const Key('join-open-file'),
-                onPressed: _pickFile,
-                icon: const Icon(UfIcons.fileArrowUp, size: 16),
-                label: Text(l.joinOpenFile),
-              ),
-            ),
-            keyedField(
-              'join-passphrase',
-              _passphrase,
-              l.joinPassphrase,
-              secret: true,
-            ),
-          ] else ...[
-            keyedField(
-              'join-email',
-              _email,
-              l.setupEmail,
-              keyboard: TextInputType.emailAddress,
-            ),
-            keyedField(
-              'join-password',
-              _password,
-              l.setupPassword,
-              secret: true,
-            ),
-            keyedField('join-confirm', _confirm, l.setupConfirm, secret: true),
-            LockNotice(l.setupWarning),
-          ],
-          if (_problem case final problem?) LockError(problem),
+          if (invite == null) ..._enrollmentFields(l) else ..._accountFields(l),
+          if (problem case final problem?) UfErrorLine(problem),
           LockActions(
-            primary: FilledButton(
+            primary: BusyButton(
               key: Key(invite == null ? 'join-submit' : 'join-accept'),
-              onPressed: _busy ? null : (invite == null ? _submit : _accept),
-              child: BusyLabel(
-                busy: _busy,
-                label: invite == null ? l.joinSubmit : l.setupSubmit,
-              ),
+              busy: busy,
+              onPressed: invite == null ? _submit : _accept,
+              label: invite == null ? l.joinSubmit : l.setupSubmit,
             ),
           ),
         ],
       ),
     );
   }
+
+  List<Widget> _enrollmentFields(AppLocalizations l) => [
+    keyedField(
+      'join-link',
+      link,
+      l.joinLink,
+      mono: true,
+      hint: 'unfeudal://enroll?\u2026',
+    ),
+    Align(
+      alignment: Alignment.centerLeft,
+      child: OutlinedButton.icon(
+        key: const Key('join-open-file'),
+        onPressed: pickFile,
+        icon: const Icon(UfIcons.fileArrowUp, size: 16),
+        label: Text(l.joinOpenFile),
+      ),
+    ),
+    keyedField('join-passphrase', _passphrase, l.joinPassphrase, secret: true),
+  ];
+
+  List<Widget> _accountFields(AppLocalizations l) => [
+    keyedField(
+      'join-email',
+      _email,
+      l.setupEmail,
+      keyboard: TextInputType.emailAddress,
+    ),
+    keyedField(
+      'join-password',
+      _password,
+      l.setupPassword,
+      secret: true,
+      strength: true,
+    ),
+    keyedField('join-confirm', _confirm, l.setupConfirm, secret: true),
+    LockNotice(l.setupWarning),
+  ];
 }

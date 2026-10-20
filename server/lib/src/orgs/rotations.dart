@@ -12,11 +12,11 @@ import 'org_access.dart';
 /// is skipped: nobody holds a key to rotate.
 Future<void> recordRotations(
   Tx tx,
-  String orgId,
-  OrgSnapshot before,
-  OrgSnapshot after,
-  String reason,
-) async {
+  String orgId, {
+  required OrgSnapshot before,
+  required OrgSnapshot after,
+  required String reason,
+}) async {
   for (final folderId in before.folders.keys.where(after.folders.containsKey)) {
     final lost = {
       for (final userId in before.members.keys)
@@ -53,13 +53,32 @@ Future<void> recordRotations(
   }
 }
 
-bool _lost(Set<Permission> before, Set<Permission> after) =>
-    (before.contains(Permission.view) && !after.contains(Permission.view)) ||
-    (before.contains(Permission.connect) &&
-        !after.contains(Permission.connect));
+/// Runs [change] against the org as loaded before it, queues the rotations it causes as [reason], bumps org_seq.
+Future<void> changeOrg(
+  Tx tx,
+  String orgId,
+  Future<void> Function(OrgSnapshot before) change, {
+  required String reason,
+}) async {
+  final before = (await loadOrg(tx, orgId))!;
+  await change(before);
+  await recordRotations(
+    tx,
+    orgId,
+    before: before,
+    after: (await loadOrg(tx, orgId))!,
+    reason: reason,
+  );
+  await bumpOrgSeq(tx);
+}
+
+bool _lost(Set<Permission> before, Set<Permission> after) {
+  final (had, has) = (FolderKeyAccess.of(before), FolderKeyAccess.of(after));
+  return (had.hasMeta && !has.hasMeta) || (had.hasSecret && !has.hasSecret);
+}
 
 /// Non-admin callers: every permission any member gains on any folder must be held by [callerId] on that
-/// folder before the change → else 403. Folders outside the changed subtree gain nothing, so checking
+/// folder before the change, otherwise 403. Folders outside the changed subtree gain nothing, so checking
 /// them all covers "the folder and each of its descendants".
 void checkNoEscalation(OrgSnapshot before, OrgSnapshot after, String callerId) {
   for (final folderId in after.folders.keys) {

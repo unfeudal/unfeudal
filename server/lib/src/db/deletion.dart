@@ -4,7 +4,9 @@ import 'dart:convert';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../api/errors.dart';
+import '../api/request_audit.dart';
 import '../audit/audit_log.dart';
+import '../auth/rate_limit.dart';
 import '../orgs/org_access.dart';
 import '../orgs/rotations.dart';
 import 'db.dart';
@@ -14,8 +16,8 @@ import 'db.dart';
 Future<void> removeMember(
   Tx tx,
   String orgId,
-  String userId,
-  String reason, {
+  String userId, {
+  required String reason,
   OrgSnapshot? before,
 }) async {
   final org = before ?? (await loadOrg(tx, orgId))!;
@@ -32,7 +34,13 @@ Future<void> removeMember(
     'DELETE FROM folder_keys WHERE org_id = @o AND user_id = @u',
     p,
   );
-  await recordRotations(tx, orgId, org, org.without(userId), reason);
+  await recordRotations(
+    tx,
+    orgId,
+    before: org,
+    after: org.without(userId),
+    reason: reason,
+  );
   await tx.execute(
     'DELETE FROM org_members WHERE org_id = @o AND user_id = @u',
     p,
@@ -40,27 +48,19 @@ Future<void> removeMember(
   await bumpOrgSeq(tx);
 }
 
-Future<void> deleteTeam(Tx tx, String orgId, String teamId) async {
-  final before = (await loadOrg(tx, orgId))!;
-  final p = {'o': orgId, 't': teamId};
-  await tx.execute(
-    "DELETE FROM acl_entries WHERE org_id = @o AND principal_type = 'team' AND principal_id = @t",
-    p,
-  );
-  await tx.execute(
-    'DELETE FROM team_members WHERE org_id = @o AND team_id = @t',
-    p,
-  );
-  await tx.execute('DELETE FROM teams WHERE org_id = @o AND id = @t', p);
-  await recordRotations(
-    tx,
-    orgId,
-    before,
-    (await loadOrg(tx, orgId))!,
-    'team_deleted',
-  );
-  await bumpOrgSeq(tx);
-}
+Future<void> deleteTeam(Tx tx, String orgId, String teamId) =>
+    changeOrg(tx, orgId, reason: 'team_deleted', (_) async {
+      final p = {'o': orgId, 't': teamId};
+      await tx.execute(
+        "DELETE FROM acl_entries WHERE org_id = @o AND principal_type = 'team' AND principal_id = @t",
+        p,
+      );
+      await tx.execute(
+        'DELETE FROM team_members WHERE org_id = @o AND team_id = @t',
+        p,
+      );
+      await tx.execute('DELETE FROM teams WHERE org_id = @o AND id = @t', p);
+    });
 
 Future<void> deleteOrg(Tx tx, String orgId) async {
   final p = {'o': orgId};
@@ -86,17 +86,12 @@ Future<void> deleteOrg(Tx tx, String orgId) async {
 }
 
 /// Deletes an account: refusals, every org loaded before any delete, member removal per org, personal data.
-Future<void> deleteUser(
-  Tx tx,
-  String userId, {
-  required String actor,
-  AuditWrite? audit,
-}) async {
+Future<void> deleteUser(Tx tx, String userId, {AuditWrite? audit}) async {
   final user = (await tx.query(
     'SELECT email, is_instance_owner FROM users WHERE id = @u',
     {'u': userId},
   )).firstOrNull;
-  if (user == null) throw ApiError(ApiErrorCode.notFound, 'Not found.');
+  if (user == null) throw ApiError.notFound();
   if (user['is_instance_owner'] == 1) {
     throw ApiError(
       ApiErrorCode.forbidden,
@@ -112,12 +107,11 @@ Future<void> deleteUser(
     ))
       r['org_id']! as String,
   ];
-  final snapshots = {
-    for (final o in orgIds) o: (await loadOrg(tx, o))!,
-  }; // all loaded before any delete
+  // Every org is loaded before any delete, so each removal sees the org as it was.
+  final snapshots = {for (final o in orgIds) o: (await loadOrg(tx, o))!};
   for (final MapEntry(key: orgId, value: org) in snapshots.entries) {
     await audit?.call(AuditScope.org(orgId), 'member.removed', [userId]);
-    await removeMember(tx, orgId, userId, 'user_deleted', before: org);
+    await removeMember(tx, orgId, userId, reason: 'user_deleted', before: org);
   }
   final p = {'u': userId};
   await tx.execute(
@@ -134,18 +128,23 @@ Future<void> deleteUser(
   await tx.execute(
     'DELETE FROM audit_ips WHERE scope = @s OR EXISTS (SELECT 1 FROM audit_events e '
     'WHERE e.scope = audit_ips.scope AND e.seq = audit_ips.seq AND e.actor_user = @u)',
-    {'s': 'user:$userId', 'u': userId},
+    {'s': AuditScope.user(userId).wire, 'u': userId},
   );
   final email = user['email']! as String;
   await tx.execute(
     "DELETE FROM login_attempts WHERE key IN (@a, @e, @ic, @m) OR key LIKE @ai ESCAPE '\\'",
     {
-      'a': 'acct:$email',
-      'e': 'events:$userId',
-      'ic': 'invite-create:$userId',
-      'm': 'mail:$userId',
-      'ai':
-          'acct:${email.replaceAll(r'\', r'\\').replaceAll('%', r'\%').replaceAll('_', r'\_')}|%',
+      'a': acctKey(email),
+      'e': eventsKey(userId),
+      'ic': inviteCreateKey(userId),
+      'm': mailKey(userId),
+      'ai': acctIpKey(
+        email
+            .replaceAll(r'\', r'\\')
+            .replaceAll('%', r'\%')
+            .replaceAll('_', r'\_'),
+        '%',
+      ),
     },
   );
   await tx.execute('DELETE FROM users WHERE id = @u', p);
@@ -155,12 +154,7 @@ Future<void> deleteUser(
 /// Turns [itemId] and, for a folder, its whole subtree into tombstones in the caller's transaction; an org
 /// folder also loses its ACL, keys, key history and pending rotation (a personal folder has none).
 Future<void> purgeItem(Tx tx, String itemId, AuditLog audit) async {
-  Future<int> nextSeq() async =>
-      (await tx.query(
-            "UPDATE counters SET value = value + 1 WHERE name = 'items_seq' RETURNING value",
-          )).single['value']!
-          as int;
-  var seq = await nextSeq(); // first statement: sync invariant
+  var seq = await nextItemSeq(tx); // first statement: sync invariant
   final root = (await tx.query(
     'SELECT org_id, owner_user_id, type, purged FROM items WHERE id = @i',
     {'i': itemId},
@@ -179,7 +173,7 @@ Future<void> purgeItem(Tx tx, String itemId, AuditLog audit) async {
     }
   }
   for (final (n, id) in ids.indexed) {
-    if (n > 0) seq = await nextSeq();
+    if (n > 0) seq = await nextItemSeq(tx);
     final row = (await tx.query(
       'SELECT type, folder_id, body FROM items WHERE id = @i',
       {'i': id},

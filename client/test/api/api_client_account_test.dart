@@ -7,10 +7,8 @@ import '../support/sync_harness.dart';
 
 Future<(SyncHarness, ApiClient, HarnessLogin)> signedIn() async {
   final h = SyncHarness();
-  await h.createAccount(
-    'owner@example.org',
-    'password-000',
-  ); // the Instance Owner
+  // The first account is the Instance Owner.
+  await h.createAccount('owner@example.org', 'password-000');
   final login = await h.signIn();
   final api = ApiClient(h.baseUrl, h.client)
     ..accessToken = login.accessToken
@@ -25,7 +23,7 @@ void main() {
     final a = login.account;
     final changed = await AccountCrypto(
       kdf: KdfParams.testing,
-      allowTestingKdf: true,
+      kdfFloor: KdfParams.testing,
     ).changePassword(a.account!.unlocked, a.bundle, 'new-password-1');
     await api.changePassword(
       currentAuthKey: unb64(a.authKey),
@@ -71,7 +69,7 @@ void main() {
       await api.setLocale('fr');
       expect(login.account.locale, 'fr');
       await expectLater(api.setLocale('de'), throwsA(isA<ApiException>()));
-      api.readOnly = true;
+      api.isReadOnly = () => true;
       await expectLater(api.setLocale('en'), throwsA(isA<ReadOnlyException>()));
       await expectLater(
         api.deleteAccount(currentAuthKey: List.filled(32, 0)),

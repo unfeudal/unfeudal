@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:test/test.dart';
 import 'package:unfeudal_server/src/config/config.dart';
-import 'package:unfeudal_server/src/config/features.dart';
+import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 void main() {
   final text = File('../config.example.yaml').readAsStringSync();

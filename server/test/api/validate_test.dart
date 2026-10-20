@@ -47,13 +47,10 @@ void main() {
   test('parseBundle checks the model and the KDF bounds', () async {
     final acc = await AccountCrypto(
       kdf: KdfParams.testing,
-      allowTestingKdf: true,
+      kdfFloor: KdfParams.testing,
     ).create('correct horse');
     final raw = acc.bundle.toJson();
-    expect(
-      parseBundle(raw, allowTestingKdf: true).publicKey,
-      acc.bundle.publicKey,
-    );
+    expect(parseBundle(raw, kdfFloor: KdfParams.testing), same(raw));
     expect(
       () => parseBundle(raw),
       bad,
@@ -63,15 +60,15 @@ void main() {
       ...raw,
       'kdf': {'alg': 'argon2id', 'm': 1 << 20, 't': 3, 'p': 4},
     };
-    expect(() => parseBundle(huge, allowTestingKdf: true), bad);
+    expect(() => parseBundle(huge, kdfFloor: KdfParams.testing), bad);
     expect(
-      () => parseBundle({...raw, 'salt': 'AAAA'}, allowTestingKdf: true),
+      () => parseBundle({...raw, 'salt': 'AAAA'}, kdfFloor: KdfParams.testing),
       bad,
     );
-    expect(() => parseBundle('x', allowTestingKdf: true), bad);
+    expect(() => parseBundle('x', kdfFloor: KdfParams.testing), bad);
   });
 
-  test('parseDevice trims, then 1–100 code points, no control char, known platform', () {
+  test('parseDevice trims, then 1 to 100 code points, no control char, known platform', () {
     final d = parseDevice({'name': '  Laptop  ', 'platform': 'linux'});
     expect((d.name, d.platform), ('Laptop', 'linux'));
     expect(

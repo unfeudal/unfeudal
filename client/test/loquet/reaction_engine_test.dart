@@ -7,8 +7,8 @@ import 'package:unfeudal_client/src/loquet/loquet_pose.dart';
 import 'package:unfeudal_client/src/loquet/reaction_engine.dart';
 import 'package:unfeudal_client/src/settings/settings.dart';
 
-const ok = ConnectSucceeded(hostId: 'h', user: 'deploy', tags: []);
-const asRoot = ConnectSucceeded(hostId: 'h', user: 'root', tags: []);
+const ok = ConnectSucceeded(hostId: 'h', user: 'deploy');
+const asRoot = ConnectSucceeded(hostId: 'h', user: 'root');
 
 void main() {
   late DateTime now;
@@ -74,23 +74,20 @@ void main() {
     'while typing, even a direct answer keeps its face and loses its bubble',
     () {
       e.terminalInput();
-      final r = e.handle(const HostKeyChanged(hostId: 'h'))!;
+      final r = e.handle(const HostKeyChanged())!;
       expect((r.mood, r.line), (LoquetMood.alert, null));
       now = now.add(const Duration(seconds: 4));
-      expect(
-        e.handle(const HostKeyChanged(hostId: 'h'))!.line,
-        LineKey.keyChanged,
-      );
+      expect(e.handle(const HostKeyChanged())!.line, LineKey.keyChanged);
     },
   );
 
-  test('serious moods never wear an accessory', () {
+  test('a host key change alerts with its line, important', () {
     now = DateTime(2026, 4, 1, 12);
     e.handle(asRoot);
-    final r = e.handle(const HostKeyChanged(hostId: 'h'))!;
+    final r = e.handle(const HostKeyChanged())!;
     expect(
-      (r.mood, r.accessory, r.line, r.important),
-      (LoquetMood.alert, null, LineKey.keyChanged, true),
+      (r.mood, r.line, r.important),
+      (LoquetMood.alert, LineKey.keyChanged, true),
     );
   });
 
@@ -107,8 +104,7 @@ void main() {
     expect(e.wake(), isNull);
   });
 
-  test('snippet and forward events get no reaction', () {
-    expect(e.handle(const SnippetInserted(snippetId: 's')), isNull);
+  test('forward events get no reaction', () {
     expect(
       e.handle(const ForwardStopped(hostId: 'h', localPort: 8080)),
       isNull,

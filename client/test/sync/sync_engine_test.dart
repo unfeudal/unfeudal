@@ -33,6 +33,17 @@ void main() {
     expect(h.requests.where((r) => r == 'GET /api/v1/sync'), hasLength(3));
   });
 
+  test('the vault reloads after a round that changed the mirror, not after an idle one', () async {
+    final h = SyncHarness();
+    final (e, _, _) = await h.engine();
+    var reloads = 0;
+    e.onChanged = () async => reloads++;
+    h.serverPut(wireItem(newId(), revision: 0));
+    await e.syncNow();
+    await e.syncNow();
+    expect(reloads, 1);
+  });
+
   test('an edit made during the push is rebased and pushed next, without a conflict', () async {
     final h = SyncHarness();
     final copies = <Item>[];
@@ -40,10 +51,8 @@ void main() {
     final id = newId();
     h.onPut = (_) {
       h.onPut = null;
-      m.enqueue(
-        wireItem(id, revision: 0, deleted: true),
-        baseRevision: 0,
-      ); // user edits while the PUT flies
+      // The user edits while the PUT is in flight.
+      m.enqueue(wireItem(id, revision: 0, deleted: true), baseRevision: 0);
     };
     await e.write(wireItem(id, revision: 0));
     await e.syncNow();
@@ -62,10 +71,8 @@ void main() {
     await e.syncNow();
     expect(m.item(id)!.updatedDevice, isNot(e.deviceId));
     expect(copies, hasLength(1));
-    expect(
-      h.serverItem(copies.single.id),
-      isNotNull,
-    ); // pushed by the follow-up round of this syncNow
+    // Pushed by the follow-up round of this syncNow.
+    expect(h.serverItem(copies.single.id), isNotNull);
     expect(m.outbox(), isEmpty);
   });
 
@@ -79,15 +86,32 @@ void main() {
       final mine = wireItem(id, revision: 0);
       h.offline = true;
       await e.write(mine);
+      // Stored as this device; the answer never arrived.
       h
         ..offline = false
-        ..serverPut(
-          mine,
-          deviceId: login.deviceId,
-        ); // stored as this device; the answer never arrived
+        ..serverPut(mine, deviceId: login.deviceId);
       await e.syncNow();
       expect(copies, isEmpty);
       expect(m.outbox(), isEmpty);
+    },
+  );
+
+  test(
+    'a secret-only edit queued after a lost response still reaches the server',
+    () async {
+      final h = SyncHarness();
+      final (e, m, login) = await h.engine();
+      final id = newId();
+      Item withSecret(String keyId) => Item.fromJson({
+        ...wireItem(id, revision: 0).toJson(),
+        'secret': fakeEnvelope(keyId).toJson(),
+      });
+      h.serverPut(withSecret('first'), deviceId: login.deviceId);
+      m.enqueue(withSecret('second'), baseRevision: 0);
+      // The first round meets the 409 and rebases; the second sends the edit on top.
+      await e.syncNow();
+      await e.syncNow();
+      expect(h.serverItem(id)!.secret!.keyId, 'second');
     },
   );
 
@@ -100,7 +124,7 @@ void main() {
       h.serverPut(wireItem(id, revision: 0));
       await e.syncNow();
       purge ? h.purge(id) : h.serverPut(wireItem(id, deleted: true));
-      await e.write(wireItem(id, revision: 1));
+      await e.write(wireItem(id));
       await e.syncNow();
       expect(m.item(id)!.deleted, isTrue, reason: 'purge: $purge');
       expect(copies, hasLength(1), reason: 'purge: $purge');
@@ -144,16 +168,16 @@ void main() {
     final h = SyncHarness()
       ..orgBlock = OrgBlock.fromJson({
         'orgCursor': 4,
-        'orgs': [],
-        'members': [],
-        'teams': [],
-        'acl': [],
-        'folderTree': [],
-        'wrappedKeys': [],
-        'keyHistory': [],
-        'keyRequests': [],
-        'pendingRotations': [],
-        'itemIds': [],
+        'orgs': <Object?>[],
+        'members': <Object?>[],
+        'teams': <Object?>[],
+        'acl': <Object?>[],
+        'folderTree': <Object?>[],
+        'wrappedKeys': <Object?>[],
+        'keyHistory': <Object?>[],
+        'keyRequests': <Object?>[],
+        'pendingRotations': <Object?>[],
+        'itemIds': <Object?>[],
       });
     final (e, m, _) = await h.engine();
     await e.syncNow();
@@ -188,6 +212,39 @@ void main() {
     expect(m.getKv(KvKey.orgBlock), isNull);
     expect(e.lastError, isA<FormatException>());
   });
+
+  test('an unexpected failure in a round is reported, not thrown', () async {
+    final h = SyncHarness();
+    final (e, m, _) = await h.engine();
+    final id = newId();
+    h.serverPut(wireItem(id, revision: 0));
+    m.enqueue(wireItem(id, revision: 0), baseRevision: 0);
+    e.copyOf = (mine, {required personal}) async => throw StateError('copy');
+    var notified = 0;
+    e.addListener(() => notified++);
+
+    await e.syncNow();
+
+    expect(e.lastError, isA<StateError>());
+    expect(notified, greaterThan(0));
+  });
+
+  test(
+    'a failing reload hook is reported and listeners are still told',
+    () async {
+      final h = SyncHarness();
+      final (e, _, _) = await h.engine();
+      h.serverPut(wireItem(newId(), revision: 0));
+      e.onChanged = () async => throw StateError('reload');
+      var notified = 0;
+      e.addListener(() => notified++);
+
+      await e.syncNow();
+
+      expect(e.lastError, isA<StateError>());
+      expect(notified, 1);
+    },
+  );
 
   test('offline: outbox kept, online false; back online it pushes', () async {
     final h = SyncHarness();

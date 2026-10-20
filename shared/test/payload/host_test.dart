@@ -76,8 +76,8 @@ void main() {
   test('required strings are trimmed; schemaVersion is kept', () {
     final h = HostMeta.fromJson(host({'name': '  web  ', 'schemaVersion': 2}));
     expect(
-      (h.name, h.schemaVersion, h.isNewer, Payload.knownSchemaVersion),
-      ('web', 2, true, 1),
+      (h.name, h.schemaVersion, Payload.knownSchemaVersion),
+      ('web', 2, 1),
     );
     expect(
       (

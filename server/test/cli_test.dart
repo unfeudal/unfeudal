@@ -10,8 +10,8 @@ library;
 import 'dart:io';
 
 import 'package:test/test.dart';
-import 'package:unfeudal_server/src/db/db.dart';
 import 'package:unfeudal_server/src/db/migrate.dart';
+import 'package:unfeudal_server/src/db/open_db.dart';
 
 /// The parent environment without any UNFEUDAL_* variable, plus [env].
 Future<ProcessResult> cli(List<String> args, Map<String, String> env) =>
@@ -97,7 +97,7 @@ void main() {
       );
     }
     await db.close();
-    final ok = await cli(['transfer-owner', 'b@vault.test'], env);
+    final ok = await cli(['transfer-owner', ' B@Vault.test '], env);
     expect(ok.exitCode, 0);
     expect('${ok.stdout}', contains('b@vault.test'));
   });

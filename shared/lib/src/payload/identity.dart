@@ -32,7 +32,7 @@ class IdentityMeta extends Payload {
     );
   }
 
-  /// `type base64 [comment]` on a single line.
+  // `type base64 [comment]` on a single line.
   static final _openSshLine = RegExp(r'^\S+ \S+( [^\r\n]*)?$');
 
   final String name;

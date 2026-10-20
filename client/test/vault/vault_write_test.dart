@@ -79,9 +79,11 @@ void main() {
       );
       m.upsertItems([ident]);
       final v = await testVault(key, m);
-      await v.updateIdentity(
-        ident.id,
-        IdentityMeta.fromJson(idMeta('renamed')),
+      await v.upsertItem(
+        id: ident.id,
+        type: 'identity',
+        folderId: a,
+        meta: idMeta('renamed'),
       );
       expect(m.outbox().single.item.secret, isNull);
       await v.upsertItem(
@@ -98,10 +100,8 @@ void main() {
         key,
       );
       expect(secret.json['privateKeyPem'], pem);
-      expect(
-        secret.seq,
-        5,
-      ); // above the mark of 3 and the in-place edit (4) of this session
+      // Above the mark of 3 and the in-place edit (4) of this session.
+      expect(secret.seq, 5);
     },
   );
 
@@ -168,7 +168,7 @@ void main() {
         ),
         throwsArgumentError,
       );
-      await v.deleteFolder(top);
+      await v.trashItem(top);
       expect(
         (v.isTrashed(top), v.isTrashed(sub), v.isTrashed(host)),
         (true, true, true),
@@ -184,7 +184,7 @@ void main() {
     },
   );
 
-  test('identity kinds must match; the secret opens back', () async {
+  test('an identity secret opens back', () async {
     final m = LocalMirror.inMemory();
     final v = await testVault(key, m);
     final id = await v.upsertItem(
@@ -193,17 +193,6 @@ void main() {
       secret: idSecret,
     );
     expect((await v.identitySecret(id))!.privateKeyPem, pem);
-    final pw = IdentitySecret.fromJson({
-      'schemaVersion': 1,
-      'kind': 'password',
-      'privateKeyPem': null,
-      'passphrase': null,
-      'password': 'p',
-    });
-    await expectLater(
-      v.updateIdentity(id, IdentityMeta.fromJson(idMeta('k')), secret: pw),
-      throwsArgumentError,
-    );
   });
 
   test(
@@ -236,10 +225,10 @@ void main() {
       ]);
       final v = await testVault(key, m);
       expect(
-        (v.profile.displayName, v.profile.prefs['themeMode']),
+        (v.profile.meta.displayName, v.profile.meta.prefs['themeMode']),
         ('Camille', 'dark'),
       );
-      await v.setPrefs({'themeMode': null, 'locale': 'fr'});
+      await v.profile.setPrefs({'themeMode': null, 'locale': 'fr'});
       final sent = m.outbox().single.item;
       expect(sent.id, low);
       expect(
@@ -299,7 +288,7 @@ void main() {
       folderId: sub,
       meta: hostJson('web'),
     );
-    final r = v.resolve(host);
+    final r = v.hostLookup(host)!.resolved;
     expect((r.port, r.user, r.identityId), (2222, 'deploy', null));
     expect(r.sources, {
       'port': top,
@@ -320,10 +309,8 @@ void main() {
         meta: idMeta('deploy'),
         secret: idSecret,
       );
-      await v.updateIdentity(
-        id,
-        IdentityMeta.fromJson(idMeta('renamed')),
-      ); // before the create reached the server
+      // Renamed before the create reached the server.
+      await v.upsertItem(id: id, type: 'identity', meta: idMeta('renamed'));
       final queued = m.outbox().single.item;
       expect(queued.secret, isNotNull);
       final secret = await PayloadCrypto.open(

@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../../../l10n/app_localizations.dart';
+import '../../design/choices.dart';
+import '../../design/field.dart';
 import '../../design/icons.dart';
 import '../../design/tokens.dart';
 
@@ -77,7 +79,7 @@ class _ForwardsEditorState extends State<ForwardsEditor> {
     super.dispose();
   }
 
-  /// One problem per row, null when the row is fine.
+  // One problem per row, null when the row is fine.
   List<String?> _problems(AppLocalizations l) {
     final parsed = [for (final r in _rows) r.parse()];
     final problems = [
@@ -112,15 +114,6 @@ class _ForwardsEditorState extends State<ForwardsEditor> {
     final colors = UfColors.of(context);
     final small = Theme.of(context).textTheme.labelSmall!;
     final problems = _problems(l);
-    final mono = monoStyle.copyWith(fontSize: 13);
-    Widget input(String key, TextEditingController c, String hint) => TextField(
-      key: Key(key),
-      controller: c,
-      enabled: widget.enabled,
-      style: mono,
-      onChanged: (_) => _changed(),
-      decoration: InputDecoration(hintText: hint, isDense: true),
-    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       spacing: 6,
@@ -131,80 +124,23 @@ class _ForwardsEditorState extends State<ForwardsEditor> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             spacing: 4,
             children: [
-              Row(
-                spacing: 6,
-                children: [
-                  SizedBox(
-                    width: 80,
-                    child: input(
-                      'forward-local-$i',
-                      _rows[i].local,
-                      l.forwardLocalPort,
-                    ),
-                  ),
-                  Text('→', style: mono.copyWith(color: colors.muted)),
-                  Expanded(
-                    child: input(
-                      'forward-host-$i',
-                      _rows[i].host,
-                      l.forwardRemoteHost,
-                    ),
-                  ),
-                  SizedBox(
-                    width: 80,
-                    child: input(
-                      'forward-remote-$i',
-                      _rows[i].remote,
-                      l.forwardRemotePort,
-                    ),
-                  ),
-                  IconButton(
-                    key: Key('forward-remove-$i'),
-                    tooltip: l.forwardRemove,
-                    iconSize: 14,
-                    onPressed: widget.enabled
-                        ? () {
-                            _rows.removeAt(i).dispose();
-                            _changed();
-                          }
-                        : null,
-                    icon: const Icon(UfIcons.x),
-                  ),
-                ],
+              _ForwardEndpoints(
+                index: i,
+                row: _rows[i],
+                enabled: widget.enabled,
+                onChanged: _changed,
+                onRemove: () {
+                  _rows.removeAt(i).dispose();
+                  _changed();
+                },
               ),
-              Row(
-                spacing: 6,
-                children: [
-                  Switch(
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    key: Key('forward-auto-$i'),
-                    value: _rows[i].autoStart,
-                    onChanged: widget.enabled
-                        ? (v) {
-                            _rows[i].autoStart = v;
-                            _changed();
-                          }
-                        : null,
-                  ),
-                  Flexible(child: Text(l.forwardAutoStart, style: small)),
-                  if ((_rows[i].localPort ?? 1024) < 1024) ...[
-                    Checkbox(
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      key: Key('forward-low-$i'),
-                      value: _rows[i].allowLow,
-                      onChanged: widget.enabled
-                          ? (v) {
-                              _rows[i].allowLow = v ?? false;
-                              _changed();
-                            }
-                          : null,
-                    ),
-                    Flexible(child: Text(l.forwardAllowLow, style: small)),
-                  ],
-                ],
+              _ForwardOptions(
+                index: i,
+                row: _rows[i],
+                enabled: widget.enabled,
+                onChanged: _changed,
               ),
-              if (problems[i] case final problem?)
-                Text(problem, style: small.copyWith(color: colors.danger)),
+              if (problems[i] case final problem?) UfErrorLine(problem),
             ],
           ),
         Align(
@@ -220,6 +156,125 @@ class _ForwardsEditorState extends State<ForwardsEditor> {
             child: Text(l.forwardAdd),
           ),
         ),
+      ],
+    );
+  }
+}
+
+class _ForwardEndpoints extends StatelessWidget {
+  const _ForwardEndpoints({
+    required this.index,
+    required this.row,
+    required this.enabled,
+    required this.onChanged,
+    required this.onRemove,
+  });
+
+  final int index;
+  final _Row row;
+  final bool enabled;
+  final VoidCallback onChanged;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    final colors = UfColors.of(context);
+    Widget input(String key, TextEditingController c, String hint) => TextField(
+      key: Key(key),
+      controller: c,
+      enabled: enabled,
+      style: monoField,
+      onChanged: (_) => onChanged(),
+      decoration: InputDecoration(hintText: hint),
+    );
+    return Row(
+      spacing: 6,
+      children: [
+        SizedBox(
+          width: 80,
+          child: input('forward-local-$index', row.local, l.forwardLocalPort),
+        ),
+        Text('→', style: monoField.copyWith(color: colors.muted)),
+        Expanded(
+          child: input('forward-host-$index', row.host, l.forwardRemoteHost),
+        ),
+        SizedBox(
+          width: 80,
+          child: input(
+            'forward-remote-$index',
+            row.remote,
+            l.forwardRemotePort,
+          ),
+        ),
+        IconButton(
+          key: Key('forward-remove-$index'),
+          tooltip: l.forwardRemove,
+          onPressed: enabled ? onRemove : null,
+          icon: const Icon(UfIcons.x),
+        ),
+      ],
+    );
+  }
+}
+
+class _ForwardOptions extends StatelessWidget {
+  const _ForwardOptions({
+    required this.index,
+    required this.row,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  final int index;
+  final _Row row;
+  final bool enabled;
+  final VoidCallback onChanged;
+
+  void _setAutoStart(bool value) {
+    row.autoStart = value;
+    onChanged();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    final small = Theme.of(context).textTheme.labelSmall!;
+    return Row(
+      spacing: 6,
+      children: [
+        Flexible(
+          // the label toggles too
+          child: GestureDetector(
+            onTap: enabled ? () => _setAutoStart(!row.autoStart) : null,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              spacing: 6,
+              children: [
+                UfSwitch(
+                  key: Key('forward-auto-$index'),
+                  value: row.autoStart,
+                  onChanged: enabled ? _setAutoStart : null,
+                ),
+                Flexible(child: Text(l.forwardAutoStart, style: small)),
+              ],
+            ),
+          ),
+        ),
+        if ((row.localPort ?? 1024) < 1024)
+          Flexible(
+            child: UfCheckboxRow(
+              key: Key('forward-low-$index'),
+              value: row.allowLow,
+              label: l.forwardAllowLow,
+              onChanged: enabled
+                  ? (v) {
+                      row.allowLow = v;
+                      onChanged();
+                    }
+                  : null,
+            ),
+          ),
       ],
     );
   }

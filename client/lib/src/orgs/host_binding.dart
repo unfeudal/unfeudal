@@ -33,12 +33,9 @@ Future<void> bindHost(Vault vault, String hostId, String identityId) =>
     );
 
 (VaultEntry, HostBindingMeta)? _bindingOf(Vault vault, String hostId) {
-  final bindings =
-      [
-          for (final e in vault.ofKind(ItemKind.hostBinding))
-            if (e.state == EntryState.ok && e.orgId == null)
-              (e, HostBindingMeta.fromJson(e.meta)),
-        ].where((b) => b.$2.hostItemId == hostId).toList()
-        ..sort((a, b) => a.$1.id.compareTo(b.$1.id));
-  return bindings.firstOrNull;
+  final e = winner(
+    vault.ofKind(ItemKind.hostBinding),
+    (e) => HostBindingMeta.fromJson(e.meta).hostItemId == hostId,
+  );
+  return e == null ? null : (e, HostBindingMeta.fromJson(e.meta));
 }

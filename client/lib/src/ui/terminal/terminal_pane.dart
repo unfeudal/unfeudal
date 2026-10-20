@@ -22,8 +22,10 @@ import '../describe_error.dart';
 import '../shell/shortcuts.dart';
 import 'multiline_dialog.dart';
 
+part 'error_card.dart';
+
 /// One tab's terminal: copy, paste, scrollback search, a context menu and reconnect after a hang-up.
-/// Plain Ctrl keys reach the shell; the terminal shortcuts need Ctrl+Shift (⌘ on macOS).
+/// Plain Ctrl keys reach the shell; the terminal shortcuts need Ctrl+Shift (Cmd on macOS).
 class TerminalPane extends StatefulWidget {
   const TerminalPane({super.key, required this.session, this.onEditHost});
 
@@ -36,8 +38,10 @@ class TerminalPane extends StatefulWidget {
 
 class _TerminalPaneState extends State<TerminalPane> {
   final _scroll = ScrollController();
+  final _view = GlobalKey<TerminalViewState>();
   final _query = TextEditingController();
   final _searchFocus = FocusNode();
+  final _contextMenu = MenuController();
   bool _searching = false;
   List<TerminalMatch> _hits = const [];
   int _current = 0;
@@ -101,36 +105,55 @@ class _TerminalPaneState extends State<TerminalPane> {
     );
   }
 
-  Future<void> _reconnect() => AppScope.read(context).reconnect(_session);
+  Future<void> _reconnect() =>
+      AppScope.read(context).connections.reconnect(_session);
 
   void _menu(TapDownDetails details, CellOffset _) {
-    final l = AppLocalizations.of(context);
-    final at = details.globalPosition;
-    unawaited(
-      showMenu<void>(
-        context: context,
-        position: RelativeRect.fromLTRB(at.dx, at.dy, at.dx, at.dy),
-        items: [
-          PopupMenuItem(
-            key: const Key('term-menu-copy'),
-            enabled: _session.controller.selection != null,
-            onTap: _copy,
-            child: Text(l.termCopy),
-          ),
-          PopupMenuItem(
-            key: const Key('term-menu-paste'),
-            enabled: _session.state == SealState.connected,
-            onTap: () => unawaited(_paste()),
-            child: Text(l.termPaste),
-          ),
-          PopupMenuItem(
-            key: const Key('term-menu-search'),
-            onTap: _openSearch,
-            child: Text(l.termSearch),
-          ),
-        ],
+    setState(() {}); // the items' enabled state follows the selection
+    _contextMenu.open(position: details.localPosition);
+  }
+
+  List<Widget> _menuItems(AppLocalizations l) {
+    final colors = UfColors.of(context);
+    Widget item({
+      required String key,
+      required String label,
+      required UfShortcut shortcut,
+      required VoidCallback? onPressed,
+    }) => MenuItemButton(
+      key: Key(key),
+      onPressed: onPressed,
+      trailingIcon: Text(
+        UfShortcuts.label(shortcut),
+        style: monoStyle.copyWith(fontSize: 11, color: colors.muted),
+      ),
+      child: Padding(
+        padding: const EdgeInsetsDirectional.only(end: 12),
+        child: Text(label),
       ),
     );
+    return [
+      item(
+        key: 'term-menu-copy',
+        label: l.termCopy,
+        shortcut: UfShortcut.copy,
+        onPressed: _session.controller.selection == null ? null : _copy,
+      ),
+      item(
+        key: 'term-menu-paste',
+        label: l.termPaste,
+        shortcut: UfShortcut.paste,
+        onPressed: _session.state == SealState.connected
+            ? () => unawaited(_paste())
+            : null,
+      ),
+      item(
+        key: 'term-menu-search',
+        label: l.termSearch,
+        shortcut: UfShortcut.find,
+        onPressed: _openSearch,
+      ),
+    ];
   }
 
   void _openSearch() {
@@ -180,9 +203,7 @@ class _TerminalPaneState extends State<TerminalPane> {
       );
     }
     if (_hits.isNotEmpty && _scroll.hasClients) {
-      // ponytail: line height from TerminalStyle, read the painter's cell size if xterm2 exposes it
-      final settings = AppScope.read(context).settings;
-      final line = settings.terminalFontSize * const TerminalStyle().height;
+      final line = _view.currentState!.renderTerminal.lineHeight;
       final position = _scroll.position;
       _scroll.jumpTo(
         (_hits[_current].y * line - position.viewportDimension / 2).clamp(
@@ -224,21 +245,27 @@ class _TerminalPaneState extends State<TerminalPane> {
             Expanded(
               child: Stack(
                 children: [
-                  TerminalView(
-                    _session.terminal,
-                    controller: _session.controller,
-                    scrollController: _scroll,
-                    autofocus: true,
-                    shortcuts: const {}, // drops xterm2's own Ctrl+C/V
-                    onKeyEvent: _onKey,
-                    onSecondaryTapDown: _menu,
-                    theme: terminalThemeFor(
-                      settings.terminalTheme,
-                      Theme.of(context).brightness,
-                    ),
-                    textStyle: TerminalStyle(
-                      fontFamily: settings.terminalFont,
-                      fontSize: settings.terminalFontSize.toDouble(),
+                  MenuAnchor(
+                    controller: _contextMenu,
+                    menuChildren: _menuItems(l),
+                    child: TerminalView(
+                      _session.terminal,
+                      key: _view,
+                      controller: _session.controller,
+                      scrollController: _scroll,
+                      autofocus: true,
+                      // Empty, to drop xterm2's own Ctrl+C/V.
+                      shortcuts: const {},
+                      onKeyEvent: _onKey,
+                      onSecondaryTapDown: _menu,
+                      theme: terminalThemeFor(
+                        settings.terminalTheme,
+                        Theme.of(context).brightness,
+                      ),
+                      textStyle: TerminalStyle(
+                        fontFamily: settings.terminalFont,
+                        fontSize: settings.terminalFontSize.toDouble(),
+                      ),
                     ),
                   ),
                   if (_searching)
@@ -265,8 +292,10 @@ class _TerminalPaneState extends State<TerminalPane> {
       },
       child: Material(
         color: colors.panel,
-        elevation: 4,
-        borderRadius: BorderRadius.circular(10),
+        shape: RoundedRectangleBorder(
+          borderRadius: UfRadius.card,
+          side: BorderSide(color: colors.line),
+        ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           child: Row(
@@ -284,120 +313,27 @@ class _TerminalPaneState extends State<TerminalPane> {
                     _step(1);
                     _searchFocus.requestFocus();
                   },
-                  decoration: InputDecoration(
-                    hintText: l.termSearch,
-                    isDense: true,
-                  ),
+                  decoration: InputDecoration(hintText: l.termSearch),
                 ),
               ),
               Text(status, style: TextStyle(color: colors.muted)),
               IconButton(
                 key: const Key('term-search-prev'),
                 tooltip: l.termSearchPrev,
-                iconSize: 14,
                 onPressed: () => _step(-1),
                 icon: const Icon(UfIcons.caretLeft),
               ),
               IconButton(
                 key: const Key('term-search-next'),
                 tooltip: l.termSearchNext,
-                iconSize: 14,
                 onPressed: () => _step(1),
                 icon: const Icon(UfIcons.caretRight),
               ),
               IconButton(
                 key: const Key('term-search-close'),
                 tooltip: l.termSearchClose,
-                iconSize: 14,
                 onPressed: _closeSearch,
                 icon: const Icon(UfIcons.x),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// A failed session stays in its tab: what happened, then retry or edit. Never the exception text.
-class _ErrorCard extends StatelessWidget {
-  const _ErrorCard({
-    required this.session,
-    required this.error,
-    this.onEditHost,
-  });
-
-  final TerminalSession session;
-  final Object error;
-  final void Function(String hostId)? onEditHost;
-
-  @override
-  Widget build(BuildContext context) {
-    final l = AppLocalizations.of(context);
-    final state = AppScope.of(context);
-    final colors = UfColors.of(context);
-    final text = Theme.of(context).textTheme;
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 560),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            spacing: 16,
-            children: [
-              Row(
-                spacing: 20,
-                children: [
-                  LoquetSpot(
-                    key: const Key('tab-error-card'),
-                    placement: LoquetPlacement.empty,
-                    mood: switch (error) {
-                      HostKeyRejected(decision: HostKeyDecision.changed) =>
-                        LoquetMood.alert,
-                      _ => LoquetMood.sad,
-                    },
-                  ),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      spacing: 6,
-                      children: [
-                        Text(
-                          l.tabErrorTitle(session.title),
-                          style: text.titleLarge,
-                        ),
-                        Text(
-                          describeError(l, error),
-                          key: const Key('tab-error'),
-                          style: text.bodyLarge!.copyWith(color: colors.muted),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  FilledButton(
-                    key: const Key('tab-retry'),
-                    onPressed: () async {
-                      await state.closeTab(session);
-                      await state.connect(session.hostId);
-                    },
-                    child: Text(l.tabRetry),
-                  ),
-                  if (onEditHost case final edit?)
-                    OutlinedButton(
-                      key: const Key('tab-edit-host'),
-                      onPressed: () => edit(session.hostId),
-                      child: Text(l.tabEditHost),
-                    ),
-                ],
               ),
             ],
           ),

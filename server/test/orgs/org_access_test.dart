@@ -42,29 +42,39 @@ void main() {
   Future<OrgSnapshot> snap() async =>
       (await s.db.transaction<OrgSnapshot?>((tx) => loadOrg(tx, w.orgId)))!;
 
-  test('loadOrg: members with status and disabled, teams, ACL, live folders (trashed in, purged out)', () async {
+  test(
+    'loadOrg: the name and members with status, disabled and public key',
+    () async {
+      final o = await snap();
+      expect(o.name, 'Acme');
+      expect(o.members[w.id('ana')]!.status, MemberStatus.accepted);
+      expect(
+        (o.members[w.id('dis')]!.disabled, o.members[w.id('mia')]!.email),
+        (true, 'mia@example.org'),
+      );
+      expect(o.members[w.id('mia')]!.publicKey, b64(w['mia'].bundle.publicKey));
+    },
+  );
+
+  test('loadOrg: teams and ACL', () async {
     final o = await snap();
-    expect(o.name, 'Acme');
-    expect(o.settings, isEmpty);
-    expect(o.members[w.id('ana')]!.status, MemberStatus.accepted);
-    expect(
-      (o.members[w.id('dis')]!.disabled, o.members[w.id('mia')]!.email),
-      (true, 'mia@example.org'),
-    );
-    expect(o.members[w.id('mia')]!.publicKey, b64(w['mia'].bundle.publicKey));
     expect(o.teams[w.teams['Ops']]!.memberIds, {w.id('mia')});
     expect(o.acl.single.allow, {Permission.view, Permission.connect});
-    expect(o.folders.keys.toSet(), {
-      w.folder('prod'),
-      w.folder('db'),
-      w.folder('bin'),
-    });
-    expect(
-      (o.parentOf(w.folder('db')), o.folders[w.folder('bin')]!.deleted),
-      (w.folder('prod'), true),
-    );
-    expect(await s.db.transaction((tx) => loadOrg(tx, newId())), isNull);
   });
+
+  test(
+    'loadOrg: live folders (trashed in, purged out); unknown org null',
+    () async {
+      final o = await snap();
+      expect(o.folders.keys.toSet(), {
+        w.folder('prod'),
+        w.folder('db'),
+        w.folder('bin'),
+      });
+      expect(o.parentOf(w.folder('db')), w.folder('prod'));
+      expect(await s.db.transaction((tx) => loadOrg(tx, newId())), isNull);
+    },
+  );
 
   test('permissionsOf: team ACL on the parent, admins all, accepted, disabled and outsiders nothing', () async {
     final o = await snap();

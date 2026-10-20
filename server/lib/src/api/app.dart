@@ -1,27 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import 'dart:io';
-import 'dart:typed_data';
-
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
-import '../audit/audit_log.dart';
-import '../auth/rate_limit.dart';
 import '../auth/secret_hash.dart';
-import '../auth/tokens.dart';
-import '../config/config.dart';
-import '../config/features.dart';
-import '../db/db.dart';
-import '../db/maintenance.dart';
-import '../log/logger.dart';
-import '../mail/mailer.dart';
-import '../mail/notifier.dart';
-import '../util/clock.dart';
+import 'credentials.dart';
+import 'deps.dart';
 import 'errors.dart';
 import 'middleware.dart';
 import 'routes/account.dart';
-import 'routes/revisions.dart';
 import 'routes/admin.dart';
 import 'routes/audit.dart';
 import 'routes/auth.dart';
@@ -34,220 +21,81 @@ import 'routes/invites.dart';
 import 'routes/items.dart';
 import 'routes/orgs.dart';
 import 'routes/retention.dart';
+import 'routes/revisions.dart';
 import 'routes/setup.dart';
 import 'routes/sync.dart';
 import 'routes/teams.dart';
 
-/// Everything a request handler needs, built once at start.
-class AppDeps {
-  AppDeps._({
-    required this.config,
-    required this.db,
-    required this.clock,
-    required this.log,
-    required this.serverSecret,
-    required this.instanceEpoch,
-    required this.audit,
-    required this.access,
-    required this.refresh,
-    required this.limiter,
-    required this.secretHash,
-    required this.allowTestingKdf,
-    required this.mailer,
-  });
+export 'deps.dart';
 
-  static Future<AppDeps> create(
-    Config config,
-    Db db, {
-    Clock clock = const SystemClock(),
-    Logger? log,
-    SecretHashParams secretHash = SecretHashParams.server,
-    bool allowTestingKdf = false,
-    Mailer mailer = const NoMailer(),
-  }) async {
-    final serverSecret = await loadServerSecret(config.secretFile);
-    final audit = AuditLog(clock, config.features, serverSecret);
-    final deps = AppDeps._(
-      config: config,
-      db: db,
-      clock: clock,
-      log: log ?? Logger(config.logLevel, stdout.writeln),
-      serverSecret: serverSecret,
-      instanceEpoch: await ensureInstanceEpoch(db),
-      audit: audit,
-      access: AccessTokens(serverSecret, clock, config.accessTokenTtl),
-      refresh: RefreshTokens(
-        db,
-        clock,
-        config.refreshTokenTtl,
-        serverSecret,
-        audit: audit,
-      ),
-      limiter: RateLimiter(db, clock, config),
-      secretHash: secretHash,
-      allowTestingKdf: allowTestingKdf,
-      mailer: mailer,
-    );
-    deps.limiter.onLockout = deps.notifier.lockout;
-    return deps;
-  }
+Never _notFound(Request _) => throw ApiError.notFound();
 
-  final Config config;
-  final Db db;
-  final Clock clock;
-  final Logger log;
-  final Uint8List serverSecret;
-
-  /// Cached for `/api/info`.
-  final String instanceEpoch;
-  final AuditLog audit;
-  final AccessTokens access;
-  final RefreshTokens refresh;
-  final RateLimiter limiter;
-  final SecretHashParams secretHash;
-  final Mailer mailer;
-  late final SecurityNotifier notifier = SecurityNotifier(this);
-
-  /// Tests only.
-  final bool allowTestingKdf;
-
-  /// One trusted_proxies warning per process.
-  bool proxyWarned = false;
-
-  Features get features => config.features;
-}
-
-const _depsKey = 'unfeudal.deps';
-
-Middleware withDeps(AppDeps deps) =>
-    (inner) =>
-        (request) => inner(request.change(context: {_depsKey: deps}));
-
-AppDeps depsOf(Request request) => request.context[_depsKey]! as AppDeps;
-
-Never _notFound(Request _) =>
-    throw ApiError(ApiErrorCode.notFound, 'Not found.');
-
-/// An org route: signed in, then the `orgs` flag.
 Handler _org(Handler inner) => requireAuth(requireFeature(Flag.orgs)(inner));
 
-/// A team route: an org route, then the `teams` flag.
 Handler _team(Handler inner) => _org(requireFeature(Flag.teams)(inner));
 
-/// withDeps → requestLog → securityHeaders → errorMapper → routes.
-Handler buildHandler(AppDeps deps) {
-  final api = Router(notFoundHandler: _notFound)
+Handler _credentials(Handler inner) =>
+    credentialCheck(HashPriority.other)(inner);
+
+void _addAccountRoutes(Router api) {
+  api
     ..post('/setup', setup)
     ..post('/prelogin', prelogin)
-    ..post('/login', login)
+    ..post('/login', credentialCheck(HashPriority.signIn)(login))
     ..post('/token/refresh', refreshToken)
-    ..post('/account/password', requireAuth(changePassword))
+    ..post('/account/password', requireAuth(_credentials(changePassword)))
     ..post(
       '/account/recover/start',
-      requireFeature(Flag.recoveryKit)(recoverStart),
+      requireFeature(Flag.recoveryKit)(_credentials(recoverStart)),
     )
-    ..post('/account/recover', requireFeature(Flag.recoveryKit)(recover))
+    ..post(
+      '/account/recover',
+      requireFeature(Flag.recoveryKit)(_credentials(recover)),
+    )
     ..post(
       '/account/recovery-kit',
-      requireAuth(requireFeature(Flag.recoveryKit)(recoveryKit)),
+      requireAuth(requireFeature(Flag.recoveryKit)(_credentials(recoveryKit))),
     )
     ..put('/account/locale', requireAuth(setLocale))
-    ..delete('/account', requireAuth(deleteAccount))
+    ..delete('/account', requireAuth(_credentials(deleteAccount)))
     ..get('/devices', requireAuth(listDevices))
-    ..delete(
-      '/devices/<id>',
-      (Request r, String id) => requireAuth((r) => deleteDevice(r, id))(r),
-    )
-    ..put(
-      '/items/<id>',
-      (Request r, String id) => requireAuth((r) => putItem(r, id))(r),
-    )
+    ..delete('/devices/<id>', requireAuth(deleteDevice));
+}
+
+void _addItemAndOrgRoutes(Router api) {
+  api
+    ..put('/items/<id>', requireAuth(putItem))
     ..get('/sync', requireAuth(sync))
     ..post('/orgs', _org(createOrg))
-    ..put(
-      '/orgs/<org>',
-      (Request r, String org) => _org((r) => updateOrg(r, org))(r),
-    )
-    ..delete(
-      '/orgs/<org>',
-      (Request r, String org) => _org((r) => deleteOrgRoute(r, org))(r),
-    )
-    ..put(
-      '/orgs/<org>/members/<user>',
-      (Request r, String org, String user) =>
-          _org((r) => setRole(r, org, user))(r),
-    )
-    ..delete(
-      '/orgs/<org>/members/<user>',
-      (Request r, String org, String user) =>
-          _org((r) => removeMemberRoute(r, org, user))(r),
-    )
-    ..post(
-      '/orgs/<org>/members/<user>/confirm',
-      (Request r, String org, String user) =>
-          _org((r) => confirmMember(r, org, user))(r),
-    )
-    ..post(
-      '/orgs/<org>/invites',
-      (Request r, String org) => _org((r) => createOrgInvite(r, org))(r),
-    )
-    ..get(
-      '/orgs/<org>/invites',
-      (Request r, String org) => _org((r) => listOrgInvites(r, org))(r),
-    )
-    ..delete(
-      '/invites/<id>',
-      (Request r, String id) => requireAuth((r) => revokeInvite(r, id))(r),
-    )
+    ..put('/orgs/<org>', _org(updateOrg))
+    ..delete('/orgs/<org>', _org(deleteOrgRoute))
+    ..put('/orgs/<org>/members/<user>', _org(setRole))
+    ..delete('/orgs/<org>/members/<user>', _org(removeMemberRoute))
+    ..post('/orgs/<org>/members/<user>/confirm', _org(confirmMember))
+    ..post('/orgs/<org>/invites', _org(createOrgInvite))
+    ..get('/orgs/<org>/invites', _org(listOrgInvites))
+    ..delete('/invites/<id>', requireAuth(revokeInvite))
     ..post('/invites/accept', acceptInvite)
     ..post('/invites/join', requireAuth(joinInvite))
-    ..post(
-      '/orgs/<org>/teams',
-      (Request r, String org) => _team((r) => createTeam(r, org))(r),
-    )
-    ..put(
-      '/orgs/<org>/teams/<team>',
-      (Request r, String org, String team) =>
-          _team((r) => updateTeam(r, org, team))(r),
-    )
-    ..delete(
-      '/orgs/<org>/teams/<team>',
-      (Request r, String org, String team) =>
-          _team((r) => deleteTeamRoute(r, org, team))(r),
-    )
-    ..put(
-      '/folders/<folder>/acl',
-      (Request r, String folder) => _org((r) => putAcl(r, folder))(r),
-    )
-    ..put(
-      '/folders/<folder>/keys',
-      (Request r, String folder) => _org((r) => putFolderKeys(r, folder))(r),
-    )
-    ..post(
-      '/folders/<folder>/rotation/done',
-      (Request r, String folder) => _org((r) => rotationDone(r, folder))(r),
-    )
+    ..post('/orgs/<org>/teams', _team(createTeam))
+    ..put('/orgs/<org>/teams/<team>', _team(updateTeam))
+    ..delete('/orgs/<org>/teams/<team>', _team(deleteTeamRoute))
+    ..put('/folders/<folder>/acl', _org(putAcl))
+    ..put('/folders/<folder>/keys', _org(putFolderKeys))
+    ..post('/folders/<folder>/rotation/done', _org(rotationDone));
+}
+
+void _addAdminAndEventRoutes(Router api) {
+  api
     ..get('/admin/users', requireAuth(listUsers))
-    ..put(
-      '/admin/users/<id>',
-      (Request r, String id) => requireAuth((r) => setDisabled(r, id))(r),
-    )
-    ..delete(
-      '/admin/users/<id>',
-      (Request r, String id) => requireAuth((r) => deleteUserRoute(r, id))(r),
-    )
+    ..put('/admin/users/<id>', requireAuth(setDisabled))
+    ..delete('/admin/users/<id>', requireAuth(deleteUserRoute))
     ..get('/admin/orgs', requireAuth(listOrgs))
-    ..delete(
-      '/admin/orgs/<id>',
-      (Request r, String id) => requireAuth((r) => adminDeleteOrg(r, id))(r),
-    )
+    ..delete('/admin/orgs/<id>', requireAuth(adminDeleteOrg))
     ..post('/admin/invites', requireAuth(createInstanceInvite))
     ..get('/admin/invites', requireAuth(listInstanceInvites))
     ..get('/audit', requireAuth(requireFeature(Flag.audit)(getAudit)))
-    ..get(
-      '/orgs/<id>/settings/retention',
-      (Request r, String id) => _org((r) => getRetention(r, id))(r),
-    )
+    ..get('/orgs/<id>/settings/retention', _org(getRetention))
     ..post(
       '/events/ssh',
       requireAuth(requireFeature(Flag.clientEvents)(sshEvent)),
@@ -258,10 +106,17 @@ Handler buildHandler(AppDeps deps) {
     )
     ..get(
       '/items/<id>/revisions',
-      (Request r, String id) => requireAuth(
-        requireFeature(Flag.itemHistory)((r) => listRevisions(r, id)),
-      )(r),
+      requireAuth(requireFeature(Flag.itemHistory)(listRevisions)),
     );
+}
+
+/// Middleware order, outermost first: withDeps, requestLog, securityHeaders,
+/// errorMapper, then the routes.
+Handler buildHandler(AppDeps deps) {
+  final api = Router(notFoundHandler: _notFound);
+  _addAccountRoutes(api);
+  _addItemAndOrgRoutes(api);
+  _addAdminAndEventRoutes(api);
   final root = Router(notFoundHandler: _notFound)
     ..get('/healthz', healthz)
     ..get('/api/info', info)

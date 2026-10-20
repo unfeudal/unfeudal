@@ -24,15 +24,11 @@ void main() {
       await t.runAsync(() => s.sync!.syncNow());
       await pumpApp(t, state: s, child: const LicensesScreen());
       await pumpReal(t, rounds: 5);
-      expect(
-        find.text('https://example.org/src'),
-        findsOneWidget,
-      ); // the harness's /api/info.source
+      // The harness's /api/info source.
+      expect(find.text('https://example.org/src'), findsOneWidget);
       await t.tap(find.byKey(const Key('licenses-all')));
-      await pumpReal(
-        t,
-        rounds: 5,
-      ); // pumpAndSettle times out on the licence page
+      // pumpAndSettle times out on the licence page.
+      await pumpReal(t, rounds: 5);
       expect(find.byType(LicensePage), findsOneWidget);
     },
   );

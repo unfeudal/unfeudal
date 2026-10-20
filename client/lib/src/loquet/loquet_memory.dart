@@ -75,6 +75,5 @@ class LoquetMemory {
   }
 
   /// `yyyy-mm-dd` of [t] as given (local time).
-  static String day(DateTime t) =>
-      '${t.year.toString().padLeft(4, '0')}-${t.month.toString().padLeft(2, '0')}-${t.day.toString().padLeft(2, '0')}';
+  static String day(DateTime t) => t.toIso8601String().substring(0, 10);
 }

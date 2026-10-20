@@ -61,7 +61,7 @@ void main() {
       await t.tap(find.byKey(const Key('hostkey-trust')));
       await pumpReal(t, rounds: 10);
       expect(
-        (s.tabs.single.state, ssh.targets.single.user),
+        (s.connections.tabs.single.state, ssh.targets.single.user),
         (SealState.connected, 'deploy'),
       );
 

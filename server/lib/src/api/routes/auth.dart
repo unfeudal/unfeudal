@@ -4,15 +4,16 @@ import 'dart:convert';
 import 'package:shelf/shelf.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
-import '../../auth/secret_hash.dart';
 import '../../audit/audit_log.dart';
+import '../../auth/secret_hash.dart';
 import '../../auth/tokens.dart';
+import '../../db/db.dart';
 import '../../mail/mailer.dart';
-import '../../net/client_ip.dart';
-import '../app.dart';
 import '../credentials.dart';
+import '../deps.dart';
 import '../errors.dart';
 import '../json.dart';
+import '../request_audit.dart';
 import '../session.dart';
 import '../validate.dart';
 
@@ -76,23 +77,9 @@ Future<Response> login(Request request) async {
   // The key is right, whatever follows.
   await clearCredentials(request, email);
   final session = await deps.db.transaction((tx) async {
-    final max = deps.config.maxDevicesPerUser;
-    if (max > 0) {
-      final active =
-          (await tx.query(
-                'SELECT count(*) AS n FROM devices WHERE user_id = @u AND revoked_at IS NULL',
-                {'u': userId},
-              )).single['n']!
-              as int;
-      if (active >= max) {
-        throw ApiError(
-          ApiErrorCode.forbidden,
-          'Device limit reached. Revoke a device first.',
-        );
-      }
-    }
-    final session = await createSession(
-      deps,
+    await _requireDeviceSlot(tx, userId, deps.config.maxDevicesPerUser);
+    return createSession(
+      request,
       tx,
       userId: userId,
       isInstanceOwner: user['is_instance_owner'] == 1,
@@ -100,12 +87,6 @@ Future<Response> login(Request request) async {
       bundleVersion: user['bundle_version']! as int,
       device: device,
     );
-    await auditWriter(
-      request,
-      tx,
-      actor: (user: userId, device: session.deviceId),
-    )(AuditScope.user(userId), 'device.added', [session.deviceId]);
-    return session;
   });
   deps.notifier.notify(userId, MailKind.newDevice, {
     'device': device.name,
@@ -114,13 +95,29 @@ Future<Response> login(Request request) async {
   return jsonResponse(session.toJson());
 }
 
+Future<void> _requireDeviceSlot(Tx tx, String userId, int max) async {
+  if (max <= 0) return;
+  final active =
+      (await tx.query(
+            'SELECT count(*) AS n FROM devices WHERE user_id = @u AND revoked_at IS NULL',
+            {'u': userId},
+          )).single['n']!
+          as int;
+  if (active >= max) {
+    throw ApiError(
+      ApiErrorCode.forbidden,
+      'Device limit reached. Revoke a device first.',
+    );
+  }
+}
+
 /// A fresh access token and the refresh successor; a replay revokes the device.
 Future<Response> refreshToken(Request request) async {
   final deps = depsOf(request);
   final body = await readJson(request);
   final rotated = await deps.refresh.rotate(
     reqString(body, 'refreshToken', max: 200),
-    ip: clientIp(request, deps.config.trustedProxies).address,
+    ip: clientIpOf(request).address,
   );
   return jsonResponse(
     TokenPair(

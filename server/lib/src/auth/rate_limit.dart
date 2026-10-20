@@ -16,14 +16,8 @@ String eventsKey(String userId) => 'events:$userId';
 String inviteCreateKey(String userId) => 'invite-create:$userId';
 String mailKey(String userId) => 'mail:$userId';
 
-class _Limit {
-  const _Limit(this.max, this.window, this.lock);
-
-  /// Null for `acct:`, barred after each attempt by its delay instead.
-  final int? max;
-  final Duration window;
-  final Duration lock;
-}
+// max is null for `acct:`, barred after each attempt by its delay instead.
+typedef _Limit = ({int? max, Duration window, Duration lock});
 
 class RateLimiter {
   RateLimiter(this.db, this.clock, this.config);
@@ -36,10 +30,10 @@ class RateLimiter {
   void Function(String email)? onLockout;
 
   _Limit _limitOf(String key) {
-    final login = _Limit(
-      config.loginMaxAttempts,
-      config.loginLockout,
-      config.loginLockout,
+    final login = (
+      max: config.loginMaxAttempts,
+      window: config.loginLockout,
+      lock: config.loginLockout,
     );
     if (key.startsWith('ip:') ||
         key.startsWith('invite-ip:') ||
@@ -47,16 +41,28 @@ class RateLimiter {
       return login;
     }
     if (key.startsWith('acct:')) {
-      return _Limit(null, config.loginLockout, Duration.zero);
+      return (max: null, window: config.loginLockout, lock: Duration.zero);
     }
     if (key.startsWith('events:')) {
-      return const _Limit(120, Duration(minutes: 1), Duration(minutes: 1));
+      return const (
+        max: 120,
+        window: Duration(minutes: 1),
+        lock: Duration(minutes: 1),
+      );
     }
     if (key.startsWith('invite-create:')) {
-      return const _Limit(50, Duration(hours: 24), Duration(hours: 24));
+      return const (
+        max: 50,
+        window: Duration(hours: 24),
+        lock: Duration(hours: 24),
+      );
     }
     if (key.startsWith('mail:')) {
-      return const _Limit(1, Duration(hours: 1), Duration(hours: 1));
+      return const (
+        max: 1,
+        window: Duration(hours: 1),
+        lock: Duration(hours: 1),
+      );
     }
     throw ArgumentError.value(key, 'key');
   }
@@ -74,37 +80,54 @@ class RateLimiter {
     retryAfter: max(1, (until.difference(now).inMilliseconds / 1000).ceil()),
   );
 
+  static Future<void> _refuseLockedIpKeys(
+    Tx tx,
+    List<String> keys,
+    DateTime now,
+  ) async {
+    for (final k in keys.where(
+      (k) => k.startsWith('ip:') || k.startsWith('invite-ip:'),
+    )) {
+      final r = (await tx.query(
+        'SELECT locked_until FROM login_attempts WHERE key = @k',
+        {'k': k},
+      )).firstOrNull;
+      final until = _lockedUntil(r, now);
+      if (until != null) _limited(until, now);
+    }
+  }
+
+  static Future<Map<String, Map<String, Object?>>> _lockRows(
+    Tx tx,
+    List<String> keys,
+    DateTime now,
+  ) async {
+    final rows = <String, Map<String, Object?>>{};
+    for (final k in keys) {
+      // The no-op upsert takes the row lock.
+      await tx.execute(
+        'INSERT INTO login_attempts (key, count, window_start) VALUES (@k, 0, @now) '
+        'ON CONFLICT (key) DO UPDATE SET count = login_attempts.count',
+        {'k': k, 'now': iso(now)},
+      );
+      rows[k] = (await tx.query(
+        'SELECT count, window_start, locked_until FROM login_attempts WHERE key = @k',
+        {'k': k},
+      )).single;
+    }
+    return rows;
+  }
+
   /// One transaction: a locked ip key is refused before any insert; rows locked in sorted key order;
-  /// any locked key → 429 and the transaction rolls back (nothing counted); else each count + 1,
+  /// any locked key throws 429 and the transaction rolls back (nothing counted); else each count + 1,
   /// the count reaching the max locks the key for its lock time, and an acct: key is locked for its delay.
   Future<void> hit(List<String> keys) async {
     final now = clock.now();
     final sorted = {...keys}.toList()..sort();
     final lockedKeys = <String>[];
     await db.transaction((tx) async {
-      for (final k in sorted.where(
-        (k) => k.startsWith('ip:') || k.startsWith('invite-ip:'),
-      )) {
-        final r = (await tx.query(
-          'SELECT locked_until FROM login_attempts WHERE key = @k',
-          {'k': k},
-        )).firstOrNull;
-        final until = _lockedUntil(r, now);
-        if (until != null) _limited(until, now);
-      }
-      final rows = <String, Map<String, Object?>>{};
-      for (final k in sorted) {
-        // The no-op upsert takes the row lock.
-        await tx.execute(
-          'INSERT INTO login_attempts (key, count, window_start) VALUES (@k, 0, @now) '
-          'ON CONFLICT (key) DO UPDATE SET count = login_attempts.count',
-          {'k': k, 'now': iso(now)},
-        );
-        rows[k] = (await tx.query(
-          'SELECT count, window_start, locked_until FROM login_attempts WHERE key = @k',
-          {'k': k},
-        )).single;
-      }
+      await _refuseLockedIpKeys(tx, sorted, now);
+      final rows = await _lockRows(tx, sorted, now);
       final locked = rows.values
           .map((r) => _lockedUntil(r, now))
           .whereType<DateTime>()
@@ -120,7 +143,7 @@ class RateLimiter {
             .isAfter(now);
         final count = fresh ? 1 : (r['count']! as int) + 1;
         final lock = limit.max == null
-            // acct: the next attempt not before 1 s, 2 s, 4 s… 30 s.
+            // acct: the next attempt waits 1, 2, 4 and so on, up to 30 seconds.
             ? iso(now.add(Duration(seconds: min(30, 1 << min(count - 1, 5)))))
             : count >= limit.max!
             ? iso(now.add(limit.lock))

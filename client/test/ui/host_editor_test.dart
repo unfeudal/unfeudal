@@ -4,13 +4,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:unfeudal_client/l10n/app_localizations.dart';
 import 'package:unfeudal_client/src/design/field.dart';
 import 'package:unfeudal_client/src/events/app_events.dart';
-import 'package:unfeudal_client/src/ui/hosts/folder_editor_panel.dart';
 import 'package:unfeudal_client/src/ui/hosts/editor_frame.dart';
+import 'package:unfeudal_client/src/ui/hosts/folder_editor_panel.dart';
 import 'package:unfeudal_client/src/ui/hosts/host_editor_panel.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../support/fakes.dart';
+import '../support/org_fixtures.dart';
 import '../support/pump_app.dart';
+import '../support/sync_harness.dart';
 
 AppLocalizations l10n(WidgetTester t) =>
     AppLocalizations.of(t.element(find.byType(EditorFrame).first));
@@ -23,7 +25,7 @@ Finder underField(String key, String text) => find.descendant(
 
 void main() {
   testWidgets(
-    'new host: required fields, invalid port refused, saved with HostCreated',
+    'new host: required fields, an emptied port inherits, saved with HostCreated',
     (t) async {
       final s = await signedInState(t);
       final events = <AppEvent>[];
@@ -34,14 +36,15 @@ void main() {
       expect(find.text(l10n(t).fieldRequired), findsNWidgets(2));
       await t.enterText(find.byKey(const Key('host-name')), 'web');
       await t.enterText(find.byKey(const Key('host-address')), '10.0.0.5');
-      await t.enterText(find.byKey(const Key('host-port')), '70000');
-      await t.tap(find.byKey(const Key('host-save')));
-      await t.pump();
-      expect(find.text(l10n(t).fieldInvalid), findsOneWidget);
+      await t.enterText(find.byKey(const Key('host-port')), '2222');
       await t.enterText(find.byKey(const Key('host-port')), '');
       await t.tap(find.byKey(const Key('host-save')));
       await pumpReal(t, rounds: 10);
       expect(s.vault!.ofKind(ItemKind.host).single.name, 'web');
+      expect(
+        s.vault!.ofKind(ItemKind.host).single.meta,
+        isNot(contains('port')),
+      );
       expect(events.whereType<HostCreated>().single.name, 'web');
     },
   );
@@ -64,7 +67,12 @@ void main() {
       state: s,
       child: HostEditorPanel(hostId: host),
     );
-    final port = t.widget<TextField>(find.byKey(const Key('host-port')));
+    final port = t.widget<TextField>(
+      find.descendant(
+        of: find.byKey(const Key('host-port')),
+        matching: find.byType(TextField),
+      ),
+    );
     expect(port.decoration!.hintText, '2222');
     expect(
       underField('host-port', l10n(t).hostInherited('top')),
@@ -113,11 +121,12 @@ void main() {
   });
 
   testWidgets('newer payload and trashed host are read-only', (t) async {
-    final s = await signedInState(t);
+    final h = SyncHarness();
+    final s = await signedInState(t, harness: h);
     late String newer, trashed;
     await t.runAsync(() async {
       final item = await sealItem(
-        s.vault!.debugKey,
+        h.accounts[testEmail]!.account!.unlocked.userKey,
         meta: {...hostJson('n'), 'schemaVersion': 2},
       );
       s.mirror!.upsertItems([item]);
@@ -172,4 +181,87 @@ void main() {
       expect((s.vault!.isTrashed(top), s.vault!.isTrashed(sub)), (true, true));
     },
   );
+
+  testWidgets(
+    'Accès: an org host lists its folder rights, no edit without manage; a personal host has no Accès',
+    (t) async {
+      final h = SyncHarness(capabilities: ['orgs', 'sync']);
+      final s = await signedInState(t, harness: h);
+      final me = s.stored!.userId;
+      final keys = FolderKeys.generate(1), f = newId();
+      h.orgMembers[testOrgId] = {me};
+      late Item host;
+      late String personal;
+      await t.runAsync(() async {
+        final pub = h.accounts.values.first.bundle.publicKey;
+        host = h.serverPutOrg(
+          await sealOrgItem(keys, folderId: f, meta: hostJson('org-db')),
+        );
+        final folder = h.serverPutOrg(
+          await sealOrgItem(
+            keys,
+            id: f,
+            type: 'folder',
+            meta: folderJson('Prod'),
+          ),
+        );
+        h.orgBlock = orgBlock(
+          members: [memberRow(me)],
+          folderTree: [node(f)],
+          acl: [
+            aclRow(f, me, allow: ['edit']),
+          ],
+          wrappedKeys: [await wrappedRow(keys, f, pub)],
+          itemIds: [host.id, folder.id],
+        );
+        await s.sync!.syncNow();
+        personal = await s.vault!.upsertItem(
+          type: 'host',
+          meta: hostJson('nas'),
+        );
+      });
+      await pumpApp(
+        t,
+        state: s,
+        child: HostEditorPanel(hostId: host.id),
+      );
+      await t.tap(find.text(l10n(t).inspectorTabAccess));
+      await t.pump();
+      expect(find.byKey(Key('access-$me')), findsOneWidget);
+      expect(find.byKey(const Key('access-why')), findsOneWidget);
+      expect(find.byKey(const Key('access-edit')), findsNothing);
+
+      await pumpApp(
+        t,
+        state: s,
+        child: HostEditorPanel(hostId: personal),
+      );
+      expect(find.text(l10n(t).inspectorTabAccess), findsNothing);
+    },
+  );
+
+  testWidgets('Historique: the versions listed inside the inspector', (
+    t,
+  ) async {
+    final h = SyncHarness(capabilities: ['item_history', 'sync']);
+    final s = await signedInState(t, harness: h);
+    late String id;
+    await t.runAsync(() async {
+      id = await s.vault!.upsertItem(type: 'host', meta: hostJson('web'));
+      await s.sync!.syncNow();
+      await s.vault!.upsertItem(id: id, type: 'host', meta: hostJson('web-2'));
+      await s.sync!.syncNow();
+    });
+    await pumpApp(
+      t,
+      state: s,
+      child: HostEditorPanel(hostId: id),
+    );
+    await t.tap(find.text(l10n(t).itemHistory));
+    await pumpReal(t);
+    expect([
+      find.byKey(const Key('history-rev-2')),
+      find.byKey(const Key('history-rev-1')),
+    ], everyElement(findsOneWidget));
+  });
 }

@@ -48,13 +48,10 @@ void main() {
   });
 
   test('RSA with e = 65537', () async {
-    final k = await generateRsa4096(
-      bits: 1024,
-    ); // 4096 in production; small here for speed
-    expect(
-      k.publicKey,
-      startsWith('ssh-rsa AAAAB3NzaC1yc2EAAAADAQAB'),
-    ); // exponent 65537
+    // 4096 bits in production; small here for speed.
+    final k = await generateRsa4096(bits: 1024);
+    // AAAAB3NzaC1yc2EAAAADAQAB encodes the exponent 65537.
+    expect(k.publicKey, startsWith('ssh-rsa AAAAB3NzaC1yc2EAAAADAQAB'));
     expect(
       publicKeyOf(k.privateKeyPem).split(' ')[1],
       k.publicKey.split(' ')[1],

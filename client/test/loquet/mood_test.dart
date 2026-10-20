@@ -45,16 +45,17 @@ void main() {
     final key = SymmetricCipher.newKey();
     final mirror = LocalMirror.inMemory()
       ..upsertItems([
+        // Updated 2026-10-14, no pin.
         await sealItem(
           key,
           meta: hostJson('web'),
-          createdAt: DateTime.utc(2026, 10, 1),
-        ), // updated 2026-10-14, no pin
+          createdAt: DateTime.utc(2026, 10),
+        ),
         await sealItem(key, meta: hostJson('db (conflict copy)')),
         await sealItem(
           key,
           type: 'identity',
-          createdAt: DateTime.utc(2021, 10, 1),
+          createdAt: DateTime.utc(2021, 10),
           meta: {
             'schemaVersion': 1,
             'name': 'deploy',
@@ -83,7 +84,7 @@ void main() {
     );
     final late = vaultHealthOf(
       v,
-      now: DateTime.utc(2031, 11, 1),
+      now: DateTime.utc(2031, 11),
       lastSyncAt: null,
       rejected: 2,
       conflictSuffixes: {' (conflict copy)'},

@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
@@ -27,7 +29,7 @@ class HostBindingField extends StatelessWidget {
       ],
       value: bindingFor(vault, hostId),
       onChanged: (id) {
-        if (id != null) bindHost(vault, hostId, id);
+        if (id != null) unawaited(bindHost(vault, hostId, id));
       },
     );
   }

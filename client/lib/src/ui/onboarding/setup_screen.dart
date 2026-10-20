@@ -4,8 +4,7 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
-import '../../design/motion.dart';
-import '../describe_error.dart';
+import '../busy_action.dart';
 import '../fields.dart';
 import '../lock/lock_frame.dart';
 import 'recovery_kit_view.dart';
@@ -18,18 +17,15 @@ class SetupScreen extends StatefulWidget {
   State<SetupScreen> createState() => _SetupScreenState();
 }
 
-class _SetupScreenState extends State<SetupScreen> {
+class _SetupScreenState extends State<SetupScreen> with BusyAction {
   late final TextEditingController _server;
   late final TextEditingController _token;
   final _email = TextEditingController();
   final _password = TextEditingController();
   final _confirm = TextEditingController();
   final _name = TextEditingController();
-  bool _busy = false;
-  String? _problem;
-  int _failures = 0;
 
-  /// 1: server and token; 2: the owner account. A setup link fills step 1 and opens on step 2.
+  // 1: server and token; 2: the owner account. A setup link fills step 1 and opens on step 2.
   late int _step = _token.text.isEmpty ? 1 : 2;
 
   @override
@@ -48,7 +44,7 @@ class _SetupScreenState extends State<SetupScreen> {
     super.dispose();
   }
 
-  /// Checked here, the server is only reached by the final submit (one plain-http prompt, not two).
+  // Checked here, the server is only reached by the final submit (one plain-http prompt, not two).
   void _next() {
     final l = AppLocalizations.of(context);
     final server = Uri.tryParse(_server.text.trim());
@@ -57,7 +53,7 @@ class _SetupScreenState extends State<SetupScreen> {
     }
     if (_token.text.trim().isEmpty) return _fail(l.fieldRequired);
     setState(() {
-      _problem = null;
+      problem = null;
       _step = 2;
     });
   }
@@ -67,8 +63,7 @@ class _SetupScreenState extends State<SetupScreen> {
     final state = AppScope.read(context);
     final local = checkNewPassword(l, _password.text, _confirm.text);
     if (local != null) return _fail(local);
-    setState(() => _busy = true);
-    try {
+    await run(() async {
       await state.setup(
         server: Uri.parse(_server.text.trim()),
         token: _token.text,
@@ -76,18 +71,11 @@ class _SetupScreenState extends State<SetupScreen> {
         password: _password.text,
         displayName: _name.text.trim().isEmpty ? null : _name.text.trim(),
       );
-      if (!state.serverHas('recovery_kit')) state.finishOnboarding();
-    } on Exception catch (e) {
-      if (mounted) _fail(describeError(l, e));
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
+      if (!state.serverInfo.has(Flag.recoveryKit)) state.finishOnboarding();
+    });
   }
 
-  void _fail(String problem) => setState(() {
-    _problem = problem;
-    _failures++;
-  });
+  void _fail(String text) => setState(() => problem = text);
 
   @override
   Widget build(BuildContext context) {
@@ -106,87 +94,79 @@ class _SetupScreenState extends State<SetupScreen> {
             : l.setupAccountSubtitle(
                 Uri.tryParse(_server.text.trim())?.host ?? '',
               ),
-        children: [
-          if (first) ...[
-            keyedField(
-              'setup-server',
-              _server,
-              l.setupServer,
-              keyboard: TextInputType.url,
-            ),
-            ShakeOnError(
-              trigger: _failures,
-              child: keyedField(
-                'setup-token',
-                _token,
-                l.setupToken,
-                mono: true,
-                hint: 'ABCD-EFGH-IJKL-MNOP-QRST-UVWX-YZ',
-                onSubmitted: (_) => _next(),
-              ),
-            ),
-          ] else ...[
-            keyedField(
-              'setup-email',
-              _email,
-              l.setupEmail,
-              keyboard: TextInputType.emailAddress,
-            ),
-            ShakeOnError(
-              trigger: _failures,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                spacing: 14,
-                children: [
-                  keyedField(
-                    'setup-password',
-                    _password,
-                    l.setupPassword,
-                    secret: true,
-                  ),
-                  keyedField(
-                    'setup-confirm',
-                    _confirm,
-                    l.setupConfirm,
-                    secret: true,
-                  ),
-                ],
-              ),
-            ),
-            keyedField('setup-name', _name, l.setupDisplayName),
-            LockNotice(l.setupWarning),
-          ],
-          if (_problem case final problem?) LockError(problem),
-          if (first)
-            LockActions(
-              primary: FilledButton(
-                key: const Key('setup-next'),
-                onPressed: _next,
-                child: Text(l.stepNext),
-              ),
-            )
-          else
-            LockActions(
-              primary: FilledButton(
-                key: const Key('setup-submit'),
-                onPressed: _busy ? null : _submit,
-                child: BusyLabel(busy: _busy, label: l.setupSubmit),
-              ),
-              links: [
-                TextButton(
-                  key: const Key('setup-back'),
-                  onPressed: () => setState(() {
-                    _problem = null;
-                    _step = 1;
-                  }),
-                  child: Text(l.setupBack),
-                ),
-              ],
-            ),
-        ],
+        children: first ? _serverStep(l) : _accountStep(l),
       ),
     );
   }
+
+  List<Widget> _serverStep(AppLocalizations l) => [
+    keyedField(
+      'setup-server',
+      _server,
+      l.setupServer,
+      keyboard: TextInputType.url,
+    ),
+    keyedField(
+      'setup-token',
+      _token,
+      l.setupToken,
+      mono: true,
+      hint: 'ABCD-EFGH-IJKL-MNOP-QRST-UVWX-YZ',
+      onSubmitted: (_) => _next(),
+    ),
+    if (problem case final problem?) UfErrorLine(problem),
+    LockActions(
+      primary: FilledButton(
+        key: const Key('setup-next'),
+        onPressed: _next,
+        child: Text(l.stepNext),
+      ),
+    ),
+  ];
+
+  List<Widget> _accountStep(AppLocalizations l) => [
+    keyedField(
+      'setup-email',
+      _email,
+      l.setupEmail,
+      keyboard: TextInputType.emailAddress,
+    ),
+    Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: 14,
+      children: [
+        keyedField(
+          'setup-password',
+          _password,
+          l.setupPassword,
+          secret: true,
+          strength: true,
+        ),
+        keyedField('setup-confirm', _confirm, l.setupConfirm, secret: true),
+      ],
+    ),
+    keyedField('setup-name', _name, l.setupDisplayName),
+    LockNotice(l.setupWarning),
+    if (problem case final problem?) UfErrorLine(problem),
+    LockActions(
+      primary: BusyButton(
+        key: const Key('setup-submit'),
+        busy: busy,
+        onPressed: _submit,
+        label: l.setupSubmit,
+      ),
+      links: [
+        TextButton(
+          key: const Key('setup-back'),
+          onPressed: () => setState(() {
+            problem = null;
+            _step = 1;
+          }),
+          child: Text(l.setupBack),
+        ),
+      ],
+    ),
+  ];
 }
 
 String? checkNewPassword(
@@ -194,7 +174,7 @@ String? checkNewPassword(
   String password,
   String confirmation,
 ) {
-  if (password.runes.length < AccountCrypto.minPasswordLength) {
+  if (passwordLength(password) < AccountCrypto.minPasswordLength) {
     return l.errorWeakPassword(AccountCrypto.minPasswordLength);
   }
   return password == confirmation ? null : l.passwordsDiffer;

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/services.dart';
@@ -16,10 +17,8 @@ abstract interface class BiometricBackend {
 }
 
 class ChannelBiometricBackend implements BiometricBackend {
-  const ChannelBiometricBackend([
-    this._channel = const MethodChannel('fr.unfeudal/biometric'),
-  ]);
-  final MethodChannel _channel;
+  const ChannelBiometricBackend();
+  static const _channel = MethodChannel('fr.unfeudal/biometric');
   @override
   Future<bool> available() async {
     try {
@@ -104,5 +103,46 @@ class BiometricUnlock {
   Future<void> disable() async {
     await kv.delete(storageKey);
     await backend.delete();
+  }
+}
+
+/// The biometric unlock as the server allows it: offered only under its `biometric_unlock` flag, and a
+/// stored wrap is wiped once the flag goes off.
+class BiometricGate {
+  BiometricGate(this._unlock, {required this._allowed, required this._reason});
+
+  final BiometricUnlock _unlock;
+  final bool Function() _allowed;
+  // The OS prompt's text, in the current language.
+  final String Function() _reason;
+  bool _wasAllowed = true;
+
+  Future<bool> isEnabled() => _unlock.isEnabled();
+
+  /// Hardware present, the server allows it, and the OS offers it.
+  Future<bool> isAvailable() async =>
+      _allowed() && await _unlock.backend.available();
+
+  /// A stored wrap the server still allows; a wrap it no longer allows is wiped.
+  Future<bool> isOffered() async {
+    if (!await _unlock.isEnabled()) return false;
+    if (_allowed()) return true;
+    await _unlock.disable();
+    return false;
+  }
+
+  Future<bool> enable(Uint8List userKey) async =>
+      await isAvailable() && await _unlock.enable(userKey, reason: _reason());
+
+  /// The stored userKey once the OS prompt is passed; null when cancelled.
+  Future<Uint8List?> userKey() => _unlock.unlock(reason: _reason());
+
+  Future<void> disable() => _unlock.disable();
+
+  /// Wipes a stored wrap when the server turned the flag off, once per change of the flag.
+  void checkFlag() {
+    final allowed = _allowed();
+    if (_wasAllowed && !allowed) unawaited(_unlock.disable());
+    _wasAllowed = allowed;
   }
 }

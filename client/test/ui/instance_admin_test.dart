@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:unfeudal_client/src/app_state.dart';
 import 'package:unfeudal_client/src/ui/admin/instance_admin_screen.dart';
+import 'package:unfeudal_client/src/ui/settings/settings_screen.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../support/pump_app.dart';
@@ -46,18 +47,20 @@ void main() {
     });
     h.orgReplies['GET /admin/invites'] = (_) =>
         SyncHarness.reply({'invites': <Object?>[]});
-    await pumpApp(t, state: s, child: const InstanceAdminScreen());
+    await pumpApp(
+      t,
+      state: s,
+      child: const Scaffold(body: InstanceAdminPanel()),
+    );
     await pumpReal(t);
     return s;
   }
 
-  testWidgets('the rail shows administration to the Instance Owner only', (
-    t,
-  ) async {
+  testWidgets('Réglages shows Serveur to the Instance Owner only', (t) async {
     final s = await signedInState(t);
-    await pumpApp(t, state: s);
+    await pumpApp(t, state: s, child: const SettingsScreen());
     expect(
-      find.byKey(const Key('rail-admin')),
+      find.byKey(const Key('group-server')),
       findsOneWidget,
       reason: 'the first account is the Instance Owner',
     );
@@ -87,7 +90,7 @@ void main() {
     await open(t);
     await t.tap(find.byKey(const Key('admin-tab-orgs')));
     await t.pumpAndSettle();
-    expect(find.text('bob@example.org'), findsOneWidget);
+    expect(find.textContaining('bob@example.org'), findsOneWidget);
     expect(find.text('2 MB'), findsOneWidget);
     await t.tap(find.byKey(Key('admin-org-delete-$org')));
     await t.pump();

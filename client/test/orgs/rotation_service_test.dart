@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import 'dart:typed_data';
 
-import 'package:cryptography/cryptography.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:unfeudal_client/src/events/app_events.dart';
 import 'package:unfeudal_client/src/orgs/rotation_service.dart';
@@ -74,7 +73,6 @@ void main() {
       block: () => block,
       userId: c.userId,
       publicKey: c.publicKey,
-      write: c.write,
       online: () => true,
       emit: c.events.add,
     );
@@ -90,39 +88,55 @@ void main() {
     );
   });
 
-  test('rotates: new keys for every reader but the removed one, history, re-sealed items, then done', () async {
-    final report = await rotation.run(block);
-    expect(report.done, {f});
-    final keysCall = c.h.orgCalls
-        .singleWhere((x) => x.route == 'PUT /folders/$f/keys')
-        .body;
-    final wraps = [
-      for (final w in keysCall['wrapped']! as List)
-        WrappedFolderKeys.fromJson(w),
-    ];
-    expect(keysCall['version'], 2);
-    expect(wraps.map((w) => w.userId).toSet(), {c.userId, miaId});
-    expect(
-      wraps.firstWhere((w) => w.userId == miaId).secret,
-      isNull,
-      reason: 'mia has view only',
-    );
-    final v2 = c.keyring.current(f)!;
-    final history = FolderKeyHistory.fromJson(keysCall['history']);
-    expect(
-      b64((await history.open(v2, folderId: f)).single.metaKey),
-      b64(v1.metaKey),
-    );
-    expect(
-      c.h.serverItem(host.id)!.meta!.keyId,
-      KeyIds.folder(f, 2, PayloadPart.meta),
-    );
-    expect(
-      c.h.serverItem(f)!.meta!.keyId,
-      KeyIds.folder(f, 2, PayloadPart.meta),
-    );
-    expect(c.h.orgCalls.last.route, 'POST /folders/$f/rotation/done');
-    expect(c.events.whereType<KeyRotated>().single.folderId, f);
+  group('a rotation after a removal', () {
+    late Set<String> done;
+    late Map<String, Object?> keysCall;
+    setUp(() async {
+      done = (await rotation.run(block)).done;
+      keysCall = c.h.orgCalls
+          .singleWhere((x) => x.route == 'PUT /folders/$f/keys')
+          .body;
+    });
+
+    test('wraps version 2 keys for every reader but the removed one', () {
+      final wraps = [
+        for (final w in keysCall['wrapped']! as List)
+          WrappedFolderKeys.fromJson(w),
+      ];
+      expect(keysCall['version'], 2);
+      expect(wraps.map((w) => w.userId).toSet(), {c.userId, miaId});
+      expect(
+        wraps.firstWhere((w) => w.userId == miaId).secret,
+        isNull,
+        reason: 'mia has view only',
+      );
+    });
+
+    test('seals the previous keys into the history', () async {
+      final v2 = c.keyring.current(f)!;
+      final history = FolderKeyHistory.fromJson(keysCall['history']);
+      expect(
+        b64((await history.open(v2, folderId: f)).single.metaKey),
+        b64(v1.metaKey),
+      );
+    });
+
+    test('re-seals the folder and its items under the new keys', () {
+      expect(
+        c.h.serverItem(host.id)!.meta!.keyId,
+        KeyIds.folder(f, 2, PayloadPart.meta),
+      );
+      expect(
+        c.h.serverItem(f)!.meta!.keyId,
+        KeyIds.folder(f, 2, PayloadPart.meta),
+      );
+    });
+
+    test('then reports the folder done and emits KeyRotated', () {
+      expect(done, {f});
+      expect(c.h.orgCalls.last.route, 'POST /folders/$f/rotation/done');
+      expect(c.events.whereType<KeyRotated>(), hasLength(1));
+    });
   });
 
   test(

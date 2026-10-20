@@ -94,8 +94,8 @@ void main() {
     final l = LedgerStore(m);
     await l.load(key);
     final u = newId();
-    final approved =
-        '${'h' * 43}='; // SHA-256 in base64, as the ledger requires
+    // A SHA-256 in base64, as the ledger requires.
+    final approved = '${'h' * 43}=';
     await l.setMemberPin(u, (fingerprint: 'a' * 40, verified: true));
     await l.setHostPin(h, pin('A'));
     await l.approveStartup(h, approved);

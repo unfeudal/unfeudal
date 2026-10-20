@@ -11,8 +11,6 @@ abstract class Payload {
   final int schemaVersion;
   final Map<String, Object?> extra;
 
-  bool get isNewer => schemaVersion > knownSchemaVersion;
-
   Map<String, Object?> toJson();
 }
 
@@ -33,6 +31,5 @@ abstract final class PayloadLimits {
   static const keyType = 64;
   static const displayName = 64;
   static const prefs = 64;
-  static const prefText = 64;
   static const command = 16384;
 }

@@ -7,7 +7,6 @@ import 'package:unfeudal_server/src/api/app.dart';
 import 'package:unfeudal_server/src/api/errors.dart';
 import 'package:unfeudal_server/src/api/json.dart';
 import 'package:unfeudal_server/src/api/middleware.dart';
-import 'package:unfeudal_server/src/config/features.dart';
 import 'package:unfeudal_server/src/net/client_ip.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 

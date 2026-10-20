@@ -55,7 +55,11 @@ void main() {
       t,
       harness: SyncHarness(capabilities: const ['sync']),
     );
-    await pumpApp(t, state: s, child: const SettingsScreen());
+    await pumpApp(
+      t,
+      state: s,
+      child: const SettingsScreen(initialGroup: 'data'),
+    );
     await pumpReal(t, rounds: 5);
     expect(find.byKey(const Key('settings-import-ssh-config')), findsNothing);
   });

@@ -1,8 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
+import 'dart:convert';
+
+import '../crypto/envelope.dart';
 import '../crypto/payload_crypto.dart';
+import '../crypto/safety_code.dart';
 import '../ids.dart';
 import '../protocol/item.dart';
 import '../util/json_reader.dart';
+import '../util/secure.dart';
 import 'known_host.dart';
 
 /// Per-device rollback defence: replay marks, host and member pins and
@@ -76,7 +81,6 @@ class Ledger {
   };
 
   static final _seqPattern = RegExp(r'^([^/]+)/(meta|secret)$');
-  static final _fingerprint = RegExp(r'^[0-9a-f]{40}$');
   static final _sha256 = RegExp(r'^[A-Za-z0-9+/]{43}=$');
 
   static String _seqKey(String key) {
@@ -102,7 +106,7 @@ class Ledger {
   static ({String fingerprint, bool verified}) _memberPin(Object? json) {
     final r = JsonReader(json, 'ledger.memberPins');
     final fingerprint = r.req<String>('fingerprint');
-    if (!_fingerprint.hasMatch(fingerprint)) {
+    if (!isKeyFingerprint(fingerprint)) {
       throw const FormatException('ledger.memberPins.fingerprint: invalid');
     }
     return (fingerprint: fingerprint, verified: r.flag('verified'));
@@ -116,17 +120,16 @@ class Ledger {
   }
 }
 
-const ledgerAad = PayloadAad(
-  itemId: 'local:ledger',
-  part: PayloadPart.meta,
-  type: 'ledger',
-  scope: ItemScope.personal,
-  orgId: null,
-  folderId: null,
-);
+/// The [Ledger.startupApprovals] value for [command]: standard, padded base64 of SHA-256(UTF-8).
+Future<String> startupCommandHash(String command) async =>
+    base64Encode(await sha256Digest(utf8.encode(command)));
 
-const keyringAad = PayloadAad(
-  itemId: 'local:keyring',
+final ledgerAad = _localAad('local:ledger');
+
+final keyringAad = _localAad('local:keyring');
+
+PayloadAad _localAad(String itemId) => PayloadAad(
+  itemId: itemId,
   part: PayloadPart.meta,
   type: 'ledger',
   scope: ItemScope.personal,

@@ -105,7 +105,7 @@ class _SealPainter extends CustomPainter {
     };
     final stroke = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.6;
+      ..strokeWidth = 1.3;
     final ringRect = Rect.fromCircle(center: _center, radius: _ring);
     stroke.color = ringColor;
     for (var i = 0; i < _dashes; i++) {

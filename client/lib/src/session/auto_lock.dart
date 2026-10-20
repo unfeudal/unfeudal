@@ -16,8 +16,6 @@ class AutoLock {
   Timer? _idle;
   bool _running = false;
 
-  bool get running => _running;
-
   void start() {
     _running = true;
     _arm();

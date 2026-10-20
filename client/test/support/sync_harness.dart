@@ -71,6 +71,9 @@ class SyncHarness {
   String? instanceEpoch = 'q83vEjRWeJCrze8SNFZ4kA';
   String setupToken = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
   bool offline = false;
+
+  /// While set, GET /api/info waits for it.
+  Future<void>? holdInfo;
   DateTime now = DateTime.utc(2026, 10, 15, 12);
   final failPuts = <String, int>{};
 
@@ -80,37 +83,45 @@ class SyncHarness {
   final hosts = <String>{};
   final accounts = <String, HarnessAccount>{};
   final devices = <String, HarnessDevice>{};
-  final invites = <String, String>{}; // token → email
-  void Function(String itemId)?
-  onPut; // runs when a PUT arrives, before it is applied
+
+  /// Invite token to email.
+  final invites = <String, String>{};
+
+  /// Runs when a PUT arrives, before it is applied.
+  void Function(String itemId)? onPut;
   OrgBlock? orgBlock;
-  final orgCalls =
-      <
-        ({String route, Map<String, Object?> body})
-      >[]; // every org, invite-join, folder and admin call
+
+  /// Every org, invite-join, folder and admin call.
+  final orgCalls = <({String route, Map<String, Object?> body})>[];
+
+  /// Route such as `PUT /folders/<id>/keys` to its answer.
   final orgReplies =
-      <
-        String,
-        http.Response Function(Map<String, Object?> body)
-      >{}; // 'PUT /folders/<id>/keys' → answer
-  final orgMembers =
-      <
-        String,
-        Set<String>
-      >{}; // orgId → userIds who read (sync) and write that org's items
-  final auditLog =
-      <AuditEvent>[]; // every scope; GET /audit filters it like the server
+      <String, http.Response Function(Map<String, Object?> body)>{};
+
+  /// Org id to the user ids who read (sync) and write that org's items.
+  final orgMembers = <String, Set<String>>{};
+
+  /// Every scope; GET /audit filters it like the server.
+  final auditLog = <AuditEvent>[];
   final _auditHeads = <String, (int, String)>{};
-  final reported =
-      <({String route, Map<String, Object?> body})>[]; // accepted events
-  int? eventStatus; // answer events with this error status instead
-  final revisionsOf =
-      <String, List<Item>>{}; // older versions, newest first (filled by _store)
-  final retention =
-      <String, Map<String, Object?>>{}; // orgId → GET …/settings/retention body
-  String? syncBodyOverride; // raw 200 body for malformed answers
+
+  /// Accepted events.
+  final reported = <({String route, Map<String, Object?> body})>[];
+
+  /// Answers events with this error status instead.
+  int? eventStatus;
+
+  /// Older versions, newest first, filled by _store.
+  final revisionsOf = <String, List<Item>>{};
+
+  /// Org id to its GET .../settings/retention body.
+  final retention = <String, Map<String, Object?>>{};
+
+  /// Raw 200 body for malformed answers.
+  String? syncBodyOverride;
   int itemsSeq = 0;
-  final _items = <String, (Item, String, int)>{}; // id → (item, owner, seq)
+  // Item id to (item, owner, seq).
+  final _items = <String, (Item, String, int)>{};
   int _n = 0;
 
   late final http.Client client = MockClient(_handle);
@@ -122,7 +133,7 @@ class SyncHarness {
   }) async {
     final acc = await AccountCrypto(
       kdf: KdfParams.testing,
-      allowTestingKdf: true,
+      kdfFloor: KdfParams.testing,
     ).create(password);
     return accounts[email] = HarnessAccount(
       newId(),
@@ -320,13 +331,11 @@ class SyncHarness {
     String? by,
     Envelope? keepSecret,
   }) {
+    // createdAt is set on insert and kept on update.
     final j = body.toJson()
       ..remove('purged')
       ..['revision'] = revision
-      ..['createdAt'] =
-          iso(
-            _items[body.id]?.$1.createdAt ?? now,
-          ) // set on insert, kept on update
+      ..['createdAt'] = iso(_items[body.id]?.$1.createdAt ?? now)
       ..['updatedAt'] = iso(now)
       ..['updatedBy'] = by ?? owner
       ..['updatedDevice'] = deviceId;
@@ -388,7 +397,10 @@ class SyncHarness {
         dropPuts.any((id) => path == '/api/v1/items/$id')) {
       throw http.ClientException('dropped', r.url);
     }
-    if (path == '/api/info') return _json(_info(_caller(r)));
+    if (path == '/api/info') {
+      await holdInfo;
+      return _json(_info(_caller(r)));
+    }
     if (!path.startsWith('/api/v1/')) return _error(404, 'not_found');
     final v = r.headers['x-unfeudal-client'];
     if (v == null || !RegExp(r'^\d+\.\d+\.\d+$').hasMatch(v)) {
@@ -735,7 +747,7 @@ class SyncHarness {
       if (current == null) return _error(404, 'not_found');
       return _json({
         'revisions': current.$1.purged
-            ? []
+            ? <Object?>[]
             : [
                 current.$1.toJson(),
                 for (final i in revisionsOf[id] ?? <Item>[]) i.toJson(),

@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
@@ -34,7 +33,6 @@ class FlutterSecureKv implements SecureKv {
   Future<void> delete(String key) => _storage.delete(key: key);
 }
 
-@immutable
 class StoredSession {
   const StoredSession({
     required this.serverUrl,
@@ -92,21 +90,6 @@ class StoredSession {
     'isInstanceOwner': isInstanceOwner,
     'displayName': displayName,
   };
-
-  @override
-  bool operator ==(Object other) =>
-      other is StoredSession && mapEquals(other.toJson(), toJson());
-
-  @override
-  int get hashCode => Object.hash(
-    serverUrl,
-    userId,
-    deviceId,
-    email,
-    refreshToken,
-    isInstanceOwner,
-    displayName,
-  );
 }
 
 /// The signed-in session of this machine. Missing or unreadable means logged out.
@@ -139,9 +122,6 @@ class SessionStore {
   /// The server ended the session: the token is dead, replaying it would only fail again.
   Future<void> forgetRefreshToken() =>
       _update((s) => {...s, 'refreshToken': null});
-
-  Future<void> saveDisplayName(String? displayName) =>
-      _update((s) => {...s, 'displayName': displayName});
 
   Future<void> clear() => kv.delete(key);
 

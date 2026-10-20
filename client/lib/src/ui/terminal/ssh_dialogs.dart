@@ -3,11 +3,11 @@ import 'package:flutter/material.dart';
 
 import '../../../l10n/app_localizations.dart';
 import '../../design/dialog.dart';
-import '../../design/field.dart';
 import '../../design/tokens.dart';
 import '../../loquet/loquet_pose.dart';
 import '../../loquet/loquet_spot.dart';
 import '../../ssh/ssh_connector.dart';
+import '../fields.dart';
 
 /// An org host's startup command, shown in full before it runs.
 class StartupCommandDialog extends StatelessWidget {
@@ -32,9 +32,8 @@ class StartupCommandDialog extends StatelessWidget {
       title: l.startupCommandTitle(hostName),
       message: l.startupCommandBody,
       actions: [
-        TextButton(
+        OutlinedButton(
           key: const Key('startup-skip'),
-          style: quietButtonStyle(colors),
           onPressed: () => Navigator.pop(context, false),
           child: Text(l.startupCommandSkip),
         ),
@@ -49,13 +48,14 @@ class StartupCommandDialog extends StatelessWidget {
           constraints: const BoxConstraints(maxHeight: 240),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
-            color: colors.field,
-            borderRadius: const BorderRadius.all(Radius.circular(10)),
+            color: colors.term,
+            borderRadius: UfRadius.control,
+            border: Border.all(color: colors.line),
           ),
           child: SingleChildScrollView(
             child: SelectableText(
               command,
-              style: monoStyle.copyWith(fontSize: 13),
+              style: monoStyle.copyWith(fontSize: 12, height: 1.5),
             ),
           ),
         ),
@@ -87,7 +87,6 @@ class _PasswordPromptDialogState extends State<PasswordPromptDialog> {
     final l = AppLocalizations.of(context);
     void submit() => Navigator.pop(context, _password.text);
     return UfDialog(
-      width: 440,
       title: l.sshPasswordTitle(widget.target),
       actions: [
         CancelButton(onPressed: () => Navigator.pop(context)),
@@ -97,10 +96,11 @@ class _PasswordPromptDialogState extends State<PasswordPromptDialog> {
         ),
       ],
       children: [
-        TextField(
-          key: const Key('password-prompt'),
-          controller: _password,
-          obscureText: true,
+        keyedField(
+          'password-prompt',
+          _password,
+          null,
+          secret: true,
           autofocus: true,
           onSubmitted: (_) => submit(),
         ),
@@ -144,7 +144,6 @@ class _KeyboardInteractiveDialogState extends State<KeyboardInteractiveDialog> {
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
     return UfDialog(
-      width: 440,
       title: widget.name.isEmpty ? l.sshPromptsTitle : widget.name,
       message: widget.instruction.isEmpty ? null : widget.instruction,
       actions: [
@@ -158,13 +157,12 @@ class _KeyboardInteractiveDialogState extends State<KeyboardInteractiveDialog> {
       ],
       children: [
         for (var i = 0; i < widget.prompts.length; i++)
-          UfField(
-            label: widget.prompts[i].text.trim(),
-            child: TextField(
-              controller: _answers[i],
-              obscureText: !widget.prompts[i].echo,
-              autofocus: i == 0,
-            ),
+          keyedField(
+            'prompt-answer-$i',
+            _answers[i],
+            widget.prompts[i].text.trim(),
+            secret: !widget.prompts[i].echo,
+            autofocus: i == 0,
           ),
       ],
     );

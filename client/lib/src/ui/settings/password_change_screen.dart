@@ -4,9 +4,12 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
-import '../../design/motion.dart';
-import '../../design/tokens.dart';
-import '../describe_error.dart';
+import '../../app_state.dart';
+import '../../design/buttons.dart';
+import '../../design/field.dart';
+import '../../design/toast.dart';
+import '../busy_action.dart';
+import '../fields.dart';
 import '../manage_frame.dart';
 import '../onboarding/recovery_kit_view.dart';
 import '../onboarding/setup_screen.dart' show checkNewPassword;
@@ -21,15 +24,13 @@ class PasswordChangeScreen extends StatefulWidget {
   State<PasswordChangeScreen> createState() => _PasswordChangeScreenState();
 }
 
-class _PasswordChangeScreenState extends State<PasswordChangeScreen> {
+class _PasswordChangeScreenState extends State<PasswordChangeScreen>
+    with BusyAction {
   final _current = TextEditingController();
   final _next = TextEditingController();
   final _confirm = TextEditingController();
-  bool _busy = false;
-  String? _problem;
-  int _wrongCurrent = 0;
 
-  /// Reset mode, after the change: the new kit, or null when the server allows none.
+  // Reset mode, after the change: the new kit, or null when the server allows none.
   String? _kit;
   bool _done = false;
 
@@ -45,51 +46,42 @@ class _PasswordChangeScreenState extends State<PasswordChangeScreen> {
     final l = AppLocalizations.of(context);
     final state = AppScope.read(context);
     final local = checkNewPassword(l, _next.text, _confirm.text);
-    if (local != null) return setState(() => _problem = local);
-    setState(() {
-      _busy = true;
-      _problem = null;
-    });
-    try {
-      if (widget.securityReset) {
-        final kit = await state.securityReset(_current.text, _next.text);
-        if (mounted) {
-          setState(() {
-            _kit = kit;
-            _done = true;
-          });
+    if (local != null) return setState(() => problem = local);
+    await run(() async {
+      try {
+        if (widget.securityReset) {
+          await _resetAndShowKit(state);
+        } else {
+          await _changeAndClose(state, l);
         }
-      } else {
-        await state.changeMasterPassword(_current.text, _next.text);
-        if (!mounted) return;
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(l.passwordChanged)));
-        Navigator.of(context).maybePop();
+      } on WrongPassword {
+        if (mounted) setState(() => problem = l.passwordCurrentWrong);
       }
-    } on WrongPassword {
-      if (mounted) {
-        setState(() {
-          _problem = l.passwordCurrentWrong;
-          _wrongCurrent++;
-        });
-      }
-    } on WeakPassword {
-      if (mounted) {
-        setState(
-          () => _problem = l.errorWeakPassword(AccountCrypto.minPasswordLength),
-        );
-      }
-    } on Exception catch (e) {
-      if (mounted) setState(() => _problem = describeError(l, e));
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
+    });
+  }
+
+  Future<void> _resetAndShowKit(AppState state) async {
+    final kit = await state.credentials.securityReset(
+      _current.text,
+      _next.text,
+    );
+    if (!mounted) return;
+    setState(() {
+      _kit = kit;
+      _done = true;
+    });
+  }
+
+  Future<void> _changeAndClose(AppState state, AppLocalizations l) async {
+    await state.credentials.changePassword(_current.text, _next.text);
+    if (!mounted) return;
+    showUfToast(context, l.passwordChanged);
+    Navigator.of(context).maybePop();
   }
 
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
-    final colors = UfColors.of(context);
     final kit = _kit;
     if (kit != null) {
       return RecoveryKitView(
@@ -97,50 +89,47 @@ class _PasswordChangeScreenState extends State<PasswordChangeScreen> {
         onDone: () => Navigator.of(context).maybePop(),
       );
     }
-    Widget field(String key, TextEditingController c, String label) =>
-        TextField(
-          key: Key(key),
-          controller: c,
-          obscureText: true,
-          enabled: !_done,
-          decoration: InputDecoration(labelText: label),
-        );
+    Widget field(
+      String key,
+      TextEditingController c,
+      String label, {
+      bool strength = false,
+    }) => keyedField(
+      key,
+      c,
+      label,
+      secret: true,
+      strength: strength,
+      enabled: !_done,
+    );
     // a Scaffold of its own: pushed alone, the confirmation still has somewhere to show
     return Scaffold(
       body: ManageFrame(
         title: widget.securityReset
             ? l.securityResetTitle
             : l.settingsChangePassword,
-        child: Align(
-          alignment: Alignment.topLeft,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 480),
-            child: ListView(
-              shrinkWrap: true,
-              children: [
-                if (widget.securityReset) Text(l.securityResetBody),
-                ShakeOnError(
-                  trigger: _wrongCurrent,
-                  child: field('pw-current', _current, l.pwCurrent),
+        maxWidth: 480,
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            if (widget.securityReset) Text(l.securityResetBody),
+            field('pw-current', _current, l.pwCurrent),
+            field('pw-next', _next, l.pwNext, strength: true),
+            field('pw-confirm', _confirm, l.pwConfirm),
+            if (problem case final problem?) UfErrorLine(problem),
+            if (_done)
+              Text(l.securityResetNoKit)
+            else
+              Align(
+                alignment: Alignment.centerRight,
+                child: BusyButton(
+                  key: const Key('pw-submit'),
+                  busy: busy,
+                  onPressed: _submit,
+                  label: l.pwSubmit,
                 ),
-                field('pw-next', _next, l.pwNext),
-                field('pw-confirm', _confirm, l.pwConfirm),
-                if (_problem case final problem?)
-                  Text(problem, style: TextStyle(color: colors.danger)),
-                if (_done)
-                  Text(l.securityResetNoKit)
-                else
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: FilledButton(
-                      key: const Key('pw-submit'),
-                      onPressed: _busy ? null : _submit,
-                      child: Text(l.pwSubmit),
-                    ),
-                  ),
-              ],
-            ),
-          ),
+              ),
+          ],
         ),
       ),
     );

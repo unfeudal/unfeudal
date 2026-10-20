@@ -35,49 +35,43 @@ class LicensesScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
-    final source = AppScope.of(context).serverSource;
+    final source = AppScope.of(context).serverInfo.source;
     return ManageFrame(
       title: l.settingsLicenses,
-      child: Align(
-        alignment: Alignment.topLeft,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 520),
-          child: ListView(
-            shrinkWrap: true,
-            children: [
-              Text(l.licenseClient),
-              const SizedBox(height: 12),
-              Text(l.licenseServer),
-              if (source != null)
-                Row(
-                  children: [
-                    Expanded(child: SelectableText(source, style: monoStyle)),
-                    IconButton(
-                      key: const Key('licenses-copy-source'),
-                      tooltip: MaterialLocalizations.of(context)
-                          .copyButtonLabel,
-                      icon: const Icon(UfIcons.copy, size: 18),
-                      onPressed: () =>
-                          Clipboard.setData(ClipboardData(text: source)),
-                    ),
-                  ],
+      maxWidth: 520,
+      child: ListView(
+        shrinkWrap: true,
+        children: [
+          Text(l.licenseClient),
+          const SizedBox(height: 12),
+          Text(l.licenseServer),
+          if (source != null)
+            Row(
+              children: [
+                Expanded(child: SelectableText(source, style: monoStyle)),
+                IconButton(
+                  key: const Key('licenses-copy-source'),
+                  tooltip: MaterialLocalizations.of(context).copyButtonLabel,
+                  icon: const Icon(UfIcons.copy),
+                  onPressed: () =>
+                      Clipboard.setData(ClipboardData(text: source)),
                 ),
-              const SizedBox(height: 12),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: OutlinedButton(
-                  key: const Key('licenses-all'),
-                  onPressed: () => showLicensePage(
-                    context: context,
-                    applicationName: 'Unfeudal',
-                    applicationVersion: clientVersion,
-                  ),
-                  child: Text(l.licensesAll),
-                ),
+              ],
+            ),
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton(
+              key: const Key('licenses-all'),
+              onPressed: () => showLicensePage(
+                context: context,
+                applicationName: 'Unfeudal',
+                applicationVersion: clientVersion,
               ),
-            ],
+              child: Text(l.licensesAll),
+            ),
           ),
-        ),
+        ],
       ),
     );
   }

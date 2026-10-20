@@ -50,10 +50,8 @@ void main() {
   test(
     'api/info full form with a valid access token (MAC and expiry only)',
     () async {
-      final r = await s.get(
-        '/api/info',
-        token: s.deps.access.issue(u, d),
-      ); // no such device: still full, nothing secret
+      // No such device: still the full form, which holds nothing secret.
+      final r = await s.get('/api/info', token: s.deps.access.issue(u, d));
       final info = ApiInfo.fromJson(r.json);
       expect(
         (info.server, info.instanceEpoch, info.source, info.trashDays),

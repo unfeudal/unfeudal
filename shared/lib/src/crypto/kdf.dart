@@ -40,14 +40,13 @@ class KdfParams {
   static const ceiling = KdfParams(alg: 'argon2id', m: 262144, t: 8, p: 16);
   static const testing = KdfParams(alg: 'argon2id', m: 1024, t: 1, p: 1);
 
-  /// UnsupportedKdf for another alg, FormatException above the ceiling, WeakKdf below the floor
-  /// (below [testing] when [allowTesting], which only tests pass).
-  void ensureAcceptable({bool allowTesting = false}) {
+  /// UnsupportedKdf for another alg, FormatException above the ceiling, WeakKdf below [floor]
+  /// (only tests pass a floor under [defaults]).
+  void ensureAcceptable({KdfParams floor = defaults}) {
     if (alg != 'argon2id') throw UnsupportedKdf(alg);
     if (m > ceiling.m || t > ceiling.t || p > ceiling.p) {
       throw const FormatException('kdf above the ceiling');
     }
-    final floor = allowTesting ? testing : defaults;
     if (m < floor.m || t < floor.t || p < floor.p) throw const WeakKdf();
   }
 
@@ -60,25 +59,19 @@ class KdfParams {
   };
 }
 
-class MasterKeys {
-  const MasterKeys(this.authKey, this.encKey);
-
-  final Uint8List authKey; // sent as the login proof
-  final Uint8List encKey; // never leaves the device
-}
-
-String normalizePassword(String password) => unorm.nfc(password);
+/// Length in code points as the minimum-length rules count it: after NFC normalization.
+int passwordLength(String password) => unorm.nfc(password).runes.length;
 
 /// Raw Argon2id v1.3 of NFC(password). Always enforces alg, ceiling and the testing floor;
-/// callers holding params from outside also call `ensureAcceptable()` with their own `allowTesting`.
+/// callers holding params from outside also call `ensureAcceptable()` with their own floor.
 Future<Uint8List> argon2id(
   String password,
   List<int> salt,
   KdfParams kdf,
 ) async {
-  kdf.ensureAcceptable(allowTesting: true);
+  kdf.ensureAcceptable(floor: KdfParams.testing);
   if (salt.length != 16) throw const FormatException('salt must be 16 bytes');
-  final secret = utf8.encode(normalizePassword(password));
+  final secret = utf8.encode(unorm.nfc(password));
   // seconds of CPU and up to the memory ceiling: off the caller's isolate, so a UI thread keeps painting
   return Isolate.run(() async {
     final key = await Argon2id(
@@ -92,22 +85,22 @@ Future<Uint8List> argon2id(
 }
 
 Future<Uint8List> hkdf32(List<int> ikm, String info) async {
-  final key = await Hkdf(hmac: Hmac.sha256(), outputLength: 32).deriveKey(
-    secretKey: SecretKey(ikm),
-    nonce: const <int>[],
-    info: utf8.encode(info),
-  );
+  final key = await Hkdf(
+    hmac: Hmac.sha256(),
+    outputLength: 32,
+  ).deriveKey(secretKey: SecretKey(ikm), info: utf8.encode(info));
   return Uint8List.fromList(await key.extractBytes());
 }
 
-Future<MasterKeys> deriveMasterKeys(
+/// `authKey` is sent as the login proof; `encKey` never leaves the device.
+Future<({Uint8List authKey, Uint8List encKey})> deriveMasterKeys(
   String password,
   List<int> salt,
   KdfParams kdf,
 ) async {
   final argon = await argon2id(password, salt, kdf);
-  return MasterKeys(
-    await hkdf32(argon, 'unfeudal/auth/v1'),
-    await hkdf32(argon, 'unfeudal/enc/v1'),
+  return (
+    authKey: await hkdf32(argon, 'unfeudal/auth/v1'),
+    encKey: await hkdf32(argon, 'unfeudal/enc/v1'),
   );
 }

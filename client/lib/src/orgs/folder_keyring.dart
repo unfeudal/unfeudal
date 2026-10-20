@@ -1,50 +1,29 @@
 // SPDX-License-Identifier: Apache-2.0
-import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:cryptography/cryptography.dart';
-import 'package:cryptography/helpers.dart' show constantTimeBytesEquality;
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../storage/local_mirror.dart';
+import '../storage/sealed_kv.dart';
 
 /// Folder keys this device holds, sealed under the user key in `kv.keyring`.
 class FolderKeyring {
-  FolderKeyring(this.mirror);
-  final LocalMirror mirror;
-  Uint8List? _userKey;
-  int _writes = 0;
-  final _keys = <String, Map<int, FolderKeys>>{}; // folderId → version → keys
+  FolderKeyring(LocalMirror mirror)
+    : _store = SealedKv(mirror, KvKey.keyring, keyringAad);
+  final SealedKv _store;
+  // Keyed by folderId, then by key version.
+  final _keys = <String, Map<int, FolderKeys>>{};
 
-  /// false: kv.keyring did not open (reported by the caller); the keyring restarts empty.
+  /// false: kv.keyring did not open; the keyring restarts empty.
   Future<bool> load(Uint8List userKey) async {
-    _userKey = userKey;
     _keys.clear();
-    _writes = 0;
-    final stored = mirror.getKv(KvKey.keyring);
-    if (stored == null) return true;
-    try {
-      final opened = await PayloadCrypto.open(
-        keyringAad,
-        Envelope.fromJson(jsonDecode(stored)),
-        userKey,
-      );
-      _readFolders(opened.json);
-      _writes = opened.seq ?? 0;
-      return true;
-    } on DecryptionFailed {
-      _keys.clear();
-    } on UnsupportedEnvelope {
-      _keys.clear();
-    } on FormatException {
-      _keys.clear();
-    }
-    return false;
+    final opened = await _store.load(userKey, _readFolders);
+    // a body that failed halfway leaves no keys behind
+    if (!opened) _keys.clear();
+    return opened;
   }
 
-  Future<void> save() async {
-    final key = _userKey;
-    if (key == null) throw StateError('keyring is not loaded');
+  Future<void> save() {
     final json = {
       'folders': {
         for (final MapEntry(key: folderId, value: versions) in _keys.entries)
@@ -58,14 +37,7 @@ class FolderKeyring {
           ],
       },
     };
-    final sealed = await PayloadCrypto.seal(
-      keyringAad,
-      json,
-      key,
-      KeyIds.user,
-      seq: ++_writes,
-    );
-    mirror.setKv(KvKey.keyring, jsonEncode(sealed.toJson()));
+    return _store.save(json);
   }
 
   /// The highest version held.
@@ -85,9 +57,8 @@ class FolderKeyring {
 
   /// On lock: forgets the user key and the keys.
   void close() {
-    _userKey = null;
+    _store.close();
     _keys.clear();
-    _writes = 0;
   }
 
   /// Unwraps every served row; keeps a key only if it equals, or continues through its history, the key held.
@@ -97,12 +68,10 @@ class FolderKeyring {
     final histories = {for (final h in block.keyHistory) h.folderId: h};
     for (final row in block.wrappedKeys) {
       try {
-        final served = await row.keys.unwrap(
-          row.folderId,
-          keyPair,
-        ); // labels: KeyLabelMismatch
+        // Throws KeyLabelMismatch when the labels do not match.
+        final served = await row.keys.unwrap(row.folderId, keyPair);
         final h = histories[row.folderId];
-        final older = h != null && h.version == served.version
+        final older = h != null && h.keys.version == served.version
             ? await h.history.open(served, folderId: row.folderId)
             : const <FolderKeys>[];
         final held = current(row.folderId);
@@ -123,15 +92,12 @@ class FolderKeyring {
           if (had == null ||
               (had.secretKey == null &&
                   k.secretKey != null &&
-                  constantTimeBytesEquality.equals(had.metaKey, k.metaKey))) {
+                  constantTimeEquals(had.metaKey, k.metaKey))) {
             versions[k.version] = k;
           }
         }
       } on Exception catch (e) {
-        if (e is KeyLabelMismatch ||
-            e is DecryptionFailed ||
-            e is UnsupportedEnvelope ||
-            e is FormatException) {
+        if (e is KeyLabelMismatch || isUnreadable(e)) {
           refused.add(row.folderId);
         } else {
           rethrow;

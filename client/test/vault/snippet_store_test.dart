@@ -90,7 +90,6 @@ void main() {
     final f = newId();
     await c.keyring.put(f, FolderKeys.generate(1));
     final block = orgBlock(
-      role: 'member',
       members: [c.me(role: 'member')],
       folderTree: [node(f)],
       acl: [
@@ -105,7 +104,6 @@ void main() {
       block: () => block,
       userId: c.userId,
       publicKey: c.publicKey,
-      write: c.write,
       online: () => true,
       emit: c.events.add,
     );

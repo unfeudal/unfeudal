@@ -8,11 +8,16 @@ import 'package:dartssh2/dartssh2.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../debug_trace.dart';
-import 'jump_connector.dart';
+
+abstract interface class HopClient {
+  Future<SSHSocket> forwardLocal(String host, int port);
+  Future<SshShell> shell();
+  Future<void> close();
+}
 
 enum HostKeyDecision { trusted, unknown, changed }
 
-/// No pin → unknown; same type and fingerprint → trusted; anything else → changed.
+/// No pin is unknown; the same type and fingerprint is trusted; anything else is changed.
 HostKeyDecision decideHostKey(
   KnownHostMeta? pinned,
   String keyType,
@@ -56,7 +61,7 @@ class HostKeyRejected implements Exception {
 }
 
 class SshPrompt {
-  const SshPrompt(this.text, this.echo);
+  const SshPrompt(this.text, {required this.echo});
   final String text;
   final bool echo;
 }
@@ -123,7 +128,7 @@ class SshConnector {
   final Future<SSHSocket> Function(String host, int port) _openSocket;
 
   /// Never accepts a key on its own: an unknown or changed key needs the user's yes, then it is pinned.
-  static Future<bool> verifyHostKey({
+  static Future<({bool accepted, HostKeyDecision decision})> verifyHostKey({
     required String hostId,
     required String hostName,
     required String keyType,
@@ -132,7 +137,9 @@ class SshConnector {
   }) async {
     final pinned = callbacks.pinnedKey(hostId);
     final decision = decideHostKey(pinned, keyType, fingerprint);
-    if (decision == HostKeyDecision.trusted) return true;
+    if (decision == HostKeyDecision.trusted) {
+      return (accepted: true, decision: decision);
+    }
     final ok = await callbacks.confirmHostKey(
       HostKeyCheck(
         hostId: hostId,
@@ -143,16 +150,11 @@ class SshConnector {
         pinned: pinned,
       ),
     );
-    if (!ok) return false; // no UI, a closed dialog or "no": refused
+    // No UI, a closed dialog or "no" all refuse the key.
+    if (!ok) return (accepted: false, decision: decision);
     await callbacks.pinHostKey(hostId, keyType, fingerprint);
-    return true;
+    return (accepted: true, decision: decision);
   }
-
-  /// A shell with an 80×24 PTY over a direct connection.
-  Future<SshShell> connect(
-    ConnectTarget target,
-    SshCallbacks callbacks,
-  ) async => (await connectHop(target, callbacks)).shell();
 
   /// An authenticated connection, over [over] (the previous hop's forwarded channel) or direct TCP. A refused
   /// host key throws [HostKeyRejected]; dartssh2 errors, which are not [Exception]s, become [SshAuthFailed]
@@ -180,25 +182,11 @@ class SshConnector {
             ? identity!.password
             : callbacks.askPassword('${target.user}@${target.hostName}');
       },
-      onUserInfoRequest: (request) {
-        trace(
-          TraceArea.ssh,
-          'keyboard-interactive: ${request.prompts.length} prompts',
-        );
-        return callbacks.answerPrompts(request.name, request.instruction, [
-          for (final p in request.prompts) SshPrompt(p.promptText, p.echo),
-        ]);
-      },
+      onUserInfoRequest: (request) => _answerPrompts(request, callbacks),
       onVerifyHostKey: (type, fingerprintBytes) async {
-        final fingerprint = utf8.decode(
-          fingerprintBytes,
-        ); // dartssh2 passes `SHA256:<base64>` as UTF-8
-        final decision = decideHostKey(
-          callbacks.pinnedKey(target.hostId),
-          type,
-          fingerprint,
-        );
-        final ok = await verifyHostKey(
+        // dartssh2 passes `SHA256:<base64>` as UTF-8 bytes.
+        final fingerprint = utf8.decode(fingerprintBytes);
+        final (:accepted, :decision) = await verifyHostKey(
           hostId: target.hostId,
           hostName: target.hostName,
           keyType: type,
@@ -207,16 +195,17 @@ class SshConnector {
         );
         trace(
           TraceArea.ssh,
-          'host key $type: ${decision.name}${ok ? '' : ', refused'}',
+          'host key $type: ${decision.name}${accepted ? '' : ', refused'}',
         );
-        if (!ok) refused = decision;
-        return ok;
+        if (!accepted) refused = decision;
+        return accepted;
       },
     );
     try {
       await client.authenticated;
       return _DartSshHop(target.hostId, client);
     } catch (e) {
+      // Any failure closes the client; known dartssh2 errors are translated, the rest rethrown.
       trace(
         TraceArea.ssh,
         'connect ${shortId(target.hostId)} failed: ${e.runtimeType}',
@@ -229,6 +218,19 @@ class SshConnector {
       if (e is SSHError) throw const SshConnectionFailed();
       rethrow;
     }
+  }
+
+  Future<List<String>?> _answerPrompts(
+    SSHUserInfoRequest request,
+    SshCallbacks callbacks,
+  ) {
+    trace(
+      TraceArea.ssh,
+      'keyboard-interactive: ${request.prompts.length} prompts',
+    );
+    return callbacks.answerPrompts(request.name, request.instruction, [
+      for (final p in request.prompts) SshPrompt(p.promptText, echo: p.echo),
+    ]);
   }
 }
 
@@ -245,10 +247,7 @@ class _DartSshHop implements HopClient {
   @override
   Future<SshShell> shell() async {
     try {
-      final shell = _DartSshShell(
-        _client,
-        await _client.shell(pty: const SSHPtyConfig(width: 80, height: 24)),
-      );
+      final shell = _DartSshShell(_client, await _client.shell());
       trace(TraceArea.ssh, 'shell open ${shortId(_hostId)}');
       return shell;
     } on SSHError {

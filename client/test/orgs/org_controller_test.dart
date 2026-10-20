@@ -99,11 +99,8 @@ void main() {
 
   test('an admin device hands off keys when a block asks', () async {
     final mia = newId(), k = await memberKeys();
-    await s.orgs!.pins.pin(
-      mia,
-      k.publicKey,
-      verified: false,
-    ); // confirmed by the admin first
+    // Confirmed by the admin first.
+    await s.orgs!.pins.pin(mia, k.publicKey, verified: false);
     h.orgBlock = await block(
       role: 'admin',
       extraMembers: [

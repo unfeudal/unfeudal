@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
@@ -10,35 +11,41 @@ import '../../../l10n/app_localizations.dart';
 import '../../api/api_client.dart';
 import '../../app_scope.dart';
 import '../../app_state.dart';
-import '../../design/banner.dart';
 import '../../debug_trace.dart';
+import '../../design/banner.dart';
 import '../../design/motion.dart';
+import '../../ssh/connections.dart';
+import '../../ssh/ssh_connector.dart';
 import '../../storage/local_mirror.dart';
 import '../../sync/sync_engine.dart';
 import '../../version.dart';
 import '../activity/activity_screen.dart';
-import '../admin/instance_admin_screen.dart';
 import '../describe_error.dart';
+import '../history/trash_screen.dart';
 import '../hosts/folder_editor_panel.dart';
 import '../hosts/host_editor_panel.dart';
-import '../../ssh/ssh_connector.dart';
-import '../history/trash_screen.dart';
 import '../hosts/host_key_dialog.dart';
-import '../devices/devices_screen.dart';
 import '../keychain/keychain_screen.dart';
+import '../orgs/members_section.dart';
 import '../orgs/rotation_banner.dart';
 import '../settings/settings_screen.dart';
+import '../snippets/snippets_screen.dart';
 import '../terminal/ssh_dialogs.dart';
 import '../terminal/terminal_tabs.dart';
+import 'shell_chrome.dart';
 import 'shortcuts.dart';
+import 'sidebar.dart';
 import 'tree_panel.dart';
-import 'vault_rail.dart';
+
+part 'shell_keys.dart';
+part 'shell_sessions.dart';
+part 'sidebar_resizer.dart';
 
 /// Opens a link in the system browser; replaced in tests.
 @visibleForTesting
 Future<bool> Function(Uri url) openExternalUrl = launchUrl;
 
-/// Rail, resizable tree and terminal area, under the status banners.
+/// The sidebar (resizable, Ctrl+B hides it) beside the sessions under the status banners, or a section.
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
 
@@ -53,43 +60,50 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
   late double _treeWidth = _state.settings.treeWidth;
   bool _treeVisible = true;
 
-  /// Rail and tree only: the terminal's keys never reach Loquet.
+  // The sidebar only: the terminal's keys never reach Loquet.
   final _loquetKeys = FocusNode(debugLabel: 'loquet-keys');
   bool _ledgerDismissed = false;
 
-  /// The floating host or folder editor over the terminal, if open.
+  // The host or folder inspector docked right of the sessions, if open.
   Widget? _editor;
 
-  /// Where the open editor grows from (the control that opened it), in global coordinates.
-  Rect? _editorFrom;
-
-  /// The management screen in place of the tree and terminals, if open.
+  // The section in place of the sessions, if open.
   ShellPage? _page;
 
-  static const _minTree = 220.0, _maxTree = 400.0, _resizeStep = 16.0;
+  // Kept to clear the title bar on dispose, when the context can no longer look it up.
+  ShellChrome? _chrome;
 
   @override
   void initState() {
     super.initState();
-    _state
-      ..dialogs = this
-      ..onHomeMounted();
+    _state.connections.dialogs = this;
+    _state.onHomeMounted();
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _chrome = mounted ? ShellChromeScope.maybeOf(context) : null,
+    );
     HardwareKeyboard.instance.addHandler(_onKey);
   }
 
   @override
   void dispose() {
     HardwareKeyboard.instance.removeHandler(_onKey);
-    if (identical(_state.dialogs, this)) _state.dialogs = null;
+    if (identical(_state.connections.dialogs, this)) {
+      _state.connections.dialogs = null;
+    }
     _state.onHomeUnmounted();
     _searchFocus.dispose();
     _terminalFocus.dispose();
     _loquetKeys.dispose();
+    // unmounting locks the tree: the title bar may rebuild only once this frame is done
+    if (_chrome case final chrome?) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => chrome.clear(this));
+    }
     super.dispose();
   }
 
   bool _onKey(KeyEvent event) {
     final keyboard = HardwareKeyboard.instance;
+    if (_vaultShortcut(event, keyboard)) return true;
     final shortcut = UfShortcuts.resolve(
       event,
       ctrl: keyboard.isControlPressed,
@@ -104,8 +118,8 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
       case UfShortcut.focusSearch || UfShortcut.newTab:
         _focusSearch();
       case UfShortcut.closeTab:
-        if (_state.tabs.isNotEmpty) {
-          unawaited(_state.closeTab(_state.tabs[_state.activeTab]));
+        if (_state.connections.activeSession case final tab?) {
+          unawaited(_state.connections.closeTab(tab));
         }
       // handled by the focused terminal
       case UfShortcut.copy ||
@@ -182,144 +196,113 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
     setState(() => _page = page);
   }
 
-  void _editHost(String hostId, {Rect? from}) => _openEditor(
+  void _editHost(String hostId) => _openEditor(
     (close) =>
         HostEditorPanel(key: ValueKey(hostId), hostId: hostId, onClose: close),
-    from: from,
   );
 
-  void _openEditor(Widget Function(VoidCallback close) build, {Rect? from}) {
+  void _openEditor(Widget Function(VoidCallback close) build) {
     final editor = build(() {
       trace(TraceArea.ui, 'editor closed');
       setState(() => _editor = null);
     });
     trace(TraceArea.ui, 'editor open: ${editor.runtimeType}');
-    setState(() {
-      _editor = editor;
-      _editorFrom = from;
-    });
+    setState(() => _editor = editor);
   }
 
   void _resize(double delta) => setState(
     () => _treeWidth = (_treeWidth + delta).clamp(_minTree, _maxTree),
   );
 
-  void _saveWidth() => unawaited(
-    _state.updateSettings(_state.settings.copyWith(treeWidth: _treeWidth)),
-  );
-
   @override
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
     final banners = _banners(context, state);
+    final page = _page == ShellPage.members && selectedOrg(state) == null
+        ? null
+        : _page;
     void back() => _show(null);
+    _publishChrome(context, state, page);
     return Scaffold(
       body: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Focus(
-            key: const Key('loquet-keys'),
-            focusNode: _loquetKeys,
-            onKeyEvent: (_, e) {
-              if (e is KeyDownEvent) {
-                state.loquet.show(state.loquet.engine.key(e.logicalKey));
-              }
-              // focused itself (a tap on the background), it keeps the arrows from moving the focus
-              // away; a focused field or row inside still gets every key
-              return _loquetKeys.hasPrimaryFocus
-                  ? KeyEventResult.handled
-                  : KeyEventResult.ignored;
-            },
-            child: GestureDetector(
-              behavior: HitTestBehavior.translucent,
-              onTap: _loquetKeys.requestFocus,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  VaultRail(
-                    page: _page,
-                    onLock: state.lock,
+          if (_treeVisible) ...[
+            Focus(
+              key: const Key('loquet-keys'),
+              focusNode: _loquetKeys,
+              onKeyEvent: (_, e) => _onLoquetKey(state, e),
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onTap: _loquetKeys.requestFocus,
+                child: AnimatedContainer(
+                  key: const Key('tree-panel'),
+                  duration: UfMotion.of(context).base,
+                  curve: UfMotion.standard,
+                  width: _treeWidth,
+                  child: Sidebar(
+                    tree: _treePanel(),
+                    page: page,
                     onShow: _show,
-                    showLoquet: _page != null || !_treeVisible,
+                    onLock: state.lock,
                   ),
-                  if (_page == null && _treeVisible) ...[
-                    AnimatedContainer(
-                      key: const Key('tree-panel'),
-                      duration: UfMotion.of(context).base,
-                      curve: UfMotion.curve,
-                      width: _treeWidth,
-                      child: _treePanel(),
-                    ),
-                    _resizer(),
-                  ],
-                ],
+                ),
               ),
             ),
-          ),
-          if (_page case final page?)
-            Expanded(
-              child: switch (page) {
-                ShellPage.keychain => KeychainScreen(onBack: back),
-                ShellPage.activity => ActivityScreen(onBack: back),
-                ShellPage.trash => TrashScreen(onBack: back),
-                ShellPage.devices => DevicesScreen(onBack: back),
-                ShellPage.admin => InstanceAdminScreen(onBack: back),
-                ShellPage.settings => SettingsScreen(onBack: back),
-              },
-            )
-          else ...[
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (banners.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(10, 8, 10, 0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        spacing: 6,
-                        children: banners,
-                      ),
-                    ),
-                  Expanded(
-                    child: Stack(
-                      children: [
-                        Focus(
-                          focusNode: _terminalFocus,
-                          child: TerminalTabs(
-                            onNewTab: _focusSearch,
-                            onShowTree: _treeVisible
-                                ? null
-                                : () => setState(() => _treeVisible = true),
-                            onEditHost: _editHost,
-                          ),
-                        ),
-                        if (_editor case final editor?)
-                          Positioned(
-                            top: 10,
-                            right: 10,
-                            bottom: 10,
-                            child: GrowFrom(
-                              key: ObjectKey(editor),
-                              from: _editorFrom?.center,
-                              child: editor,
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            _resizer(),
           ],
+          Expanded(
+            child: switch (page) {
+              ShellPage.snippets => SnippetsScreen(onBack: back),
+              ShellPage.keychain => KeychainScreen(onBack: back),
+              ShellPage.members => MembersSection(
+                orgId: state.orgs!.selected!,
+                onBack: back,
+              ),
+              ShellPage.activity => ActivityScreen(onBack: back),
+              ShellPage.trash => TrashScreen(onBack: back),
+              ShellPage.settings => SettingsScreen(onBack: back),
+              null => _Sessions(
+                banners: banners,
+                terminalFocus: _terminalFocus,
+                onNewTab: _focusSearch,
+                onEditHost: _editHost,
+                editor: _editor,
+              ),
+            },
+          ),
         ],
       ),
     );
   }
 
-  Widget _treePanel() => TreePanel(
+  // The title bar reads the sidebar width and the window title: the vault, then the section or session.
+  void _publishChrome(BuildContext context, AppState state, ShellPage? page) {
+    final chrome = ShellChromeScope.maybeOf(context);
+    if (chrome == null) return;
+    final l = AppLocalizations.of(context);
+    final vault = selectedOrg(state)?.name ?? l.vaultPersonal;
+    final tab = state.connections.activeSession?.title ?? l.statusNoSession;
+    final title = switch (page) {
+      ShellPage.settings => l.railSettings,
+      final page? => '$vault \u2014 ${pageTitle(l, page)}',
+      null => '$vault \u2014 $tab',
+    };
+    final width = _treeVisible ? _treeWidth : null;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      chrome.show(
+        owner: this,
+        sidebarWidth: width,
+        title: title,
+        toggleSidebar: () => setState(() => _treeVisible = !_treeVisible),
+      );
+    });
+  }
+
+  TreePanel _treePanel() => TreePanel(
     searchFocus: _searchFocus,
-    onHide: () => setState(() => _treeVisible = false),
+    onSettings: () => _show(ShellPage.settings),
     onNewHost: () => _openEditor(
       (close) => HostEditorPanel(orgId: _state.orgs?.selected, onClose: close),
     ),
@@ -327,47 +310,19 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
       (close) =>
           FolderEditorPanel(orgId: _state.orgs?.selected, onClose: close),
     ),
-    onEdit: (e, from) => e.kind == ItemKind.folder
+    onEdit: (e) => e.kind == ItemKind.folder
         ? _openEditor(
             (close) => FolderEditorPanel(
               key: ValueKey(e.id),
               folderId: e.id,
               onClose: close,
             ),
-            from: from,
           )
-        : _editHost(e.id, from: from),
+        : _editHost(e.id),
   );
 
-  Widget _resizer() => Focus(
-    onKeyEvent: (_, event) {
-      if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
-        return KeyEventResult.ignored;
-      }
-      final step = switch (event.logicalKey) {
-        LogicalKeyboardKey.arrowLeft => -_resizeStep,
-        LogicalKeyboardKey.arrowRight => _resizeStep,
-        _ => null,
-      };
-      if (step == null) return KeyEventResult.ignored;
-      _resize(step);
-      _saveWidth();
-      return KeyEventResult.handled;
-    },
-    child: MouseRegion(
-      cursor: SystemMouseCursors.resizeColumn,
-      child: GestureDetector(
-        key: const Key('tree-resizer'),
-        behavior: HitTestBehavior.opaque,
-        onHorizontalDragUpdate: (d) => _resize(d.delta.dx),
-        onHorizontalDragEnd: (_) => _saveWidth(),
-        child: const SizedBox(width: 6, height: double.infinity),
-      ),
-    ),
-  );
-
-  /// Top to bottom: plain http, restore, read-only, update, rejected writes, offline, protocol, key rotations,
-  /// ledger reset.
+  // Top to bottom: plain http, restore, read-only, update, rejected writes, offline, protocol, key rotations,
+  // ledger reset.
   List<Widget> _banners(BuildContext context, AppState state) {
     final l = AppLocalizations.of(context);
     final sync = state.sync;
@@ -410,27 +365,8 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
           action: download,
           actionKey: const Key('update-download'),
         ),
-      for (final entry in sync?.rejected ?? const <OutboxEntry>[])
-        StatusBanner(
-          tone: BannerTone.danger,
-          message: l.bannerRejected(
-            state.vault?.entry(entry.item.id)?.name ?? entry.item.type,
-            describeError(l, ApiException(entry.lastError ?? 'internal', 0)),
-          ),
-          action: (
-            l.rejectedRetry,
-            () => unawaited(sync!.retry(entry.item.id)),
-          ),
-          secondAction: (
-            l.rejectedKeep,
-            () => unawaited(sync!.keepPersonalCopy(entry.item.id)),
-          ),
-          onDismiss: () => unawaited(sync!.discard(entry.item.id)),
-          dismissTooltip: l.rejectedDiscard,
-          actionKey: Key('unsynced-retry-${entry.item.id}'),
-          secondActionKey: Key('unsynced-keep-${entry.item.id}'),
-          dismissKey: Key('unsynced-discard-${entry.item.id}'),
-        ),
+      if (sync != null)
+        for (final entry in sync.rejected) _rejectedBanner(l, state, entry),
       if (sync != null && !sync.online)
         StatusBanner(tone: BannerTone.warn, message: l.bannerOffline),
       if (sync?.lastError is FormatException)
@@ -444,11 +380,4 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
         ),
     ];
   }
-
-  static String _readOnlyReason(AppLocalizations l, SyncEngine sync) =>
-      switch (sync.compat?.reason) {
-        'no-common-api' => l.readOnlyNoCommonApi,
-        'client-too-old' => l.readOnlyClientTooOld,
-        _ => l.bannerRestoreRefused,
-      };
 }

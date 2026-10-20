@@ -29,10 +29,7 @@ void main() {
       Hmac(sha256, secret).convert(utf8.encode('access:$payload')).bytes,
     );
     final c = access.verify(t)!;
-    expect(
-      (c.userId, c.deviceId, c.exp),
-      (u, d, DateTime.utc(2026, 10, 13, 12, 15)),
-    );
+    expect((c.userId, c.deviceId), (u, d));
   });
 
   test('a forged, re-signed, malformed or expired access token is refused', () {

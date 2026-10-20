@@ -8,14 +8,14 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:sqlite3/sqlite3.dart' hide Version;
+import 'package:sqlite3/sqlite3.dart';
 import 'package:unfeudal_client/src/version.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 import 'package:xterm2/xterm.dart';
 
 void main() {
   test('version constants', () {
-    expect(Version.parse(clientVersion).toString(), clientVersion);
+    expect(canonicalVersion(clientVersion), clientVersion);
     expect(clientApis, [1]);
     expect(Uri.parse(officialReleasesUrl).scheme, 'https');
   });
@@ -30,7 +30,7 @@ void main() {
         ],
       ],
     ], hasLength(3));
-    expect(const SSHPtyConfig(width: 80, height: 24).width, 80);
+    expect(const SSHPtyConfig().width, 80);
     expect(SSHAuthFailError('denied'), isA<SSHAuthError>());
   });
 
@@ -55,7 +55,7 @@ void main() {
   );
 
   test('xterm2 terminal surface', () {
-    final t = Terminal(maxLines: 1000);
+    final t = Terminal();
     String? sent;
     t.onOutput = (data) => sent = data;
     t.write('hello');
@@ -111,10 +111,8 @@ void main() {
     term.write('\x1b[?2004h');
     expect(term.bracketedPasteMode, isTrue);
     term.paste('c');
-    expect(out, [
-      'a\rb',
-      '\x1b[200~c\x1b[201~',
-    ]); // paste sends a line break as \r
+    // Paste sends a line break as \r.
+    expect(out, ['a\rb', '\x1b[200~c\x1b[201~']);
   });
 
   test('xterm2: selection, highlights and buffer text', () {
@@ -153,10 +151,7 @@ void main() {
             scrollController: ScrollController(),
             autofocus: true,
             shortcuts: const {},
-            textStyle: const TerminalStyle(
-              fontFamily: 'JetBrainsMono',
-              fontSize: 13,
-            ),
+            textStyle: const TerminalStyle(fontFamily: 'JetBrainsMono'),
             onSecondaryTapDown: (details, offset) {},
             onKeyEvent: (node, e) {
               if (e is KeyDownEvent &&

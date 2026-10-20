@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:test/test.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
@@ -9,6 +10,9 @@ void main() {
   const setup = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
   final invite = b64(List.filled(32, 7));
   final server = Uri.parse('https://vault.example.org');
+  // That invite, sealed with 'file pass' under KdfParams.testing.
+  final sealed = File('test/fixtures/v0/enrollment_encrypted.json')
+      .readAsStringSync();
 
   test('normalizeSetupToken uppercases and drops spaces and dashes', () {
     expect(normalizeSetupToken(setupGrouped), setup);
@@ -74,9 +78,8 @@ void main() {
     }
   });
 
-  test('plain and encrypted files round-trip', () async {
-    final e = Enrollment(server, invite, EnrollKind.invite);
-    final plain = await e.toFile();
+  test('plain files round-trip; the encrypted fixture opens', () async {
+    final plain = Enrollment(server, invite, EnrollKind.invite).toFile();
     expect(jsonDecode(plain), {
       'unfeudal-enroll': 1,
       'server': '$server',
@@ -84,19 +87,11 @@ void main() {
       'kind': 'invite',
     });
     expect((await Enrollment.parseFile(plain)).token, invite);
-    final sealed = await e.toFile(
-      passphrase: 'file pass',
-      kdf: KdfParams.testing,
-    );
-    expect(
-      (jsonDecode(sealed) as Map)['encrypted'],
-      isA<Map<String, Object?>>(),
-    );
     expect(sealed.contains(invite), isFalse);
     final back = await Enrollment.parseFile(
       sealed,
       passphrase: 'file pass',
-      allowTestingKdf: true,
+      kdfFloor: KdfParams.testing,
     );
     expect(
       (back.server, back.token, back.kind),
@@ -105,27 +100,21 @@ void main() {
   });
 
   test('wrong or missing passphrase throws WrongPassword', () async {
-    final sealed = await Enrollment(
-      server,
-      invite,
-      EnrollKind.invite,
-    ).toFile(passphrase: 'file pass', kdf: KdfParams.testing);
     await expectLater(
-      Enrollment.parseFile(sealed, passphrase: 'nope', allowTestingKdf: true),
+      Enrollment.parseFile(
+        sealed,
+        passphrase: 'nope',
+        kdfFloor: KdfParams.testing,
+      ),
       throwsA(isA<WrongPassword>()),
     );
     await expectLater(
-      Enrollment.parseFile(sealed, allowTestingKdf: true),
+      Enrollment.parseFile(sealed, kdfFloor: KdfParams.testing),
       throwsA(isA<WrongPassword>()),
     );
   });
 
   test('weak KDF in an encrypted file is refused before deriving', () async {
-    final sealed = await Enrollment(
-      server,
-      invite,
-      EnrollKind.invite,
-    ).toFile(passphrase: 'file pass', kdf: KdfParams.testing);
     await expectLater(
       Enrollment.parseFile(sealed, passphrase: 'file pass'),
       throwsA(isA<WeakKdf>()),

@@ -10,18 +10,22 @@ import '../design/tokens.dart';
 import '../events/app_events.dart';
 import '../settings/settings.dart';
 import 'line_bank.dart';
-import 'mood.dart';
 import 'loquet.dart';
+import 'loquet_controller.dart';
 import 'loquet_pose.dart';
+import 'mood.dart';
 
 /// Where Loquet sits, and his size there.
 enum LoquetPlacement {
   lock(260),
-  tree(56),
-  rail(36),
-  dialog(64),
-  empty(88),
-  banner(40);
+
+  /// The sidebar footer: his face, the account name and his reason line.
+  sidebar(28),
+
+  /// The title bar while the sidebar is hidden.
+  titleBar(24),
+  dialog(40),
+  empty(88);
 
   const LoquetPlacement(this.size);
   final double size;
@@ -37,6 +41,7 @@ class LoquetSpot extends StatefulWidget {
     this.line,
     this.params = const {},
     this.eyeX,
+    this.name,
   });
 
   final LoquetPlacement placement;
@@ -44,6 +49,9 @@ class LoquetSpot extends StatefulWidget {
   final LineKey? line;
   final Map<String, String> params;
   final double? eyeX;
+
+  /// The account name above his line, in the sidebar footer.
+  final String? name;
 
   @override
   State<LoquetSpot> createState() => _LoquetSpotState();
@@ -77,7 +85,7 @@ class _LoquetSpotState extends State<LoquetSpot> {
     super.dispose();
   }
 
-  /// The text is chosen once per fixed line, else once per reaction, so rebuilds never swap variants.
+  // The text is chosen once per fixed line, else once per reaction, so rebuilds never swap variants.
   String? _line(AppLocalizations l, AppState state) {
     final loquet = state.loquet;
     final key = widget.line ?? loquet.line;
@@ -107,87 +115,24 @@ class _LoquetSpotState extends State<LoquetSpot> {
       builder: (context, _) {
         if (!loquet.visible) return UfLogo(size: size);
         final mood = widget.mood ?? loquet.mood;
-        final bubbles =
-            loquet.mode == LoquetMode.on &&
-            widget.placement != LoquetPlacement.rail &&
-            widget.placement !=
-                LoquetPlacement.tree; // the status card prints the line itself
         final text =
-            bubbles ||
-                (widget.placement == LoquetPlacement.tree &&
-                    loquet.mode == LoquetMode.on)
+            loquet.mode == LoquetMode.on &&
+                widget.placement != LoquetPlacement.titleBar
             ? _line(l, state)
             : null;
         final lively = loquet.mode == LoquetMode.on && !still;
-        Widget face = GestureDetector(
-          onTap: () => state.emit(const LoquetClicked()),
-          onPanUpdate: lively && widget.placement == LoquetPlacement.tree
-              ? (d) => setState(() => _drag += d.delta)
-              : null,
-          onPanEnd: lively && widget.placement == LoquetPlacement.tree
-              ? (_) {
-                  setState(() {
-                    _drag = Offset.zero;
-                    _landing = LoquetFx.hop;
-                  });
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    if (mounted) setState(() => _landing = null);
-                  });
-                }
-              : null,
-          child: Transform.translate(
-            offset: _drag,
-            child: Transform.rotate(
-              // dangles with the finger, ±15°
-              angle: (_drag.dx / 120).clamp(-0.26, 0.26),
-              child: Loquet(
-                mood: mood,
-                accessory: loquet.accessory,
-                size: size,
-                eyeX: widget.eyeX ?? loquet.eyeX,
-                still: still,
-                life: loquet.life,
-                fx: _landing ?? loquet.fx,
-                semanticLabel: loquetLabel(l, mood),
-              ),
-            ),
-          ),
-        );
-        if (lively) {
-          // a long hover: the eyes follow the cursor
-          face = MouseRegion(
-            onEnter: (_) => _hoverSince = DateTime.now(),
-            onExit: (_) => _hoverSince = null,
-            onHover: (e) {
-              final since = _hoverSince;
-              if (since != null &&
-                  DateTime.now().difference(since) >=
-                      const Duration(seconds: 1)) {
-                loquet.watch((e.localPosition.dx / size).clamp(0, 1));
-              }
-            },
-            child: face,
-          );
-        }
-        if (widget.placement == LoquetPlacement.tree) {
-          // the status card is the tree's bubble
-          final caption =
-              // reasons asked by a click win over a fixed line (an empty vault)
-              (loquet.reasons ? _reasons(l, loquet.engine.health) : null) ??
-              text ??
-              loquetLabel(l, mood);
-          return Row(
-            spacing: 12,
-            children: [
-              face,
-              Expanded(
-                child: Text(
-                  caption,
-                  style: Theme.of(context).textTheme.bodySmall!
-                      .copyWith(color: UfColors.of(context).muted),
-                ),
-              ),
-            ],
+        final drawn = _face(state, mood, lively: lively, still: still);
+        final face = lively ? _followingCursor(loquet, drawn) : drawn;
+        if (widget.placement == LoquetPlacement.sidebar) {
+          // the footer is the sidebar's bubble: the account name over his line
+          return _SidebarFooter(
+            face: face,
+            name: widget.name,
+            caption:
+                // reasons asked by a click win over a fixed line (an empty vault)
+                (loquet.reasons ? _reasons(l, loquet.engine.health) : null) ??
+                text ??
+                loquetLabel(l, mood),
           );
         }
         return Stack(
@@ -196,13 +141,116 @@ class _LoquetSpotState extends State<LoquetSpot> {
           children: [
             face,
             if (text != null)
+              // Above his head, so the layout never shifts.
               Positioned(
-                bottom: size + 6, // above his head: the layout never shifts
+                bottom: size + 6,
                 child: LoquetBubble(text: text),
               ),
           ],
         );
       },
+    );
+  }
+
+  Widget _face(
+    AppState state,
+    LoquetMood mood, {
+    required bool lively,
+    required bool still,
+  }) {
+    final loquet = state.loquet;
+    final draggable = lively && widget.placement == LoquetPlacement.sidebar;
+    return GestureDetector(
+      onTap: () => state.emit(const LoquetClicked()),
+      onPanUpdate: draggable ? (d) => setState(() => _drag += d.delta) : null,
+      onPanEnd: draggable ? (_) => _land() : null,
+      child: Transform.translate(
+        offset: _drag,
+        child: Transform.rotate(
+          // Dangles with the finger, up to 15 degrees either way.
+          angle: (_drag.dx / 120).clamp(-0.26, 0.26),
+          child: Loquet(
+            mood: mood,
+            accessory: loquet.accessory,
+            size: widget.placement.size,
+            eyeX: widget.eyeX ?? loquet.eyeX,
+            still: still,
+            life: loquet.life,
+            fx: _landing ?? loquet.fx,
+            semanticLabel: loquetLabel(AppLocalizations.of(context), mood),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _land() {
+    setState(() {
+      _drag = Offset.zero;
+      _landing = LoquetFx.hop;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() => _landing = null);
+    });
+  }
+
+  // a long hover: the eyes follow the cursor
+  Widget _followingCursor(LoquetController loquet, Widget face) => MouseRegion(
+    onEnter: (_) => _hoverSince = DateTime.now(),
+    onExit: (_) => _hoverSince = null,
+    onHover: (e) {
+      final since = _hoverSince;
+      if (since != null &&
+          DateTime.now().difference(since) >= const Duration(seconds: 1)) {
+        loquet.watch((e.localPosition.dx / widget.placement.size).clamp(0, 1));
+      }
+    },
+    child: face,
+  );
+}
+
+class _SidebarFooter extends StatelessWidget {
+  const _SidebarFooter({
+    required this.face,
+    required this.name,
+    required this.caption,
+  });
+
+  final Widget face;
+  final String? name;
+  final String caption;
+
+  @override
+  Widget build(BuildContext context) {
+    final small = Theme.of(context).textTheme.bodySmall!;
+    return Row(
+      spacing: 8,
+      children: [
+        face,
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (name case final name?)
+                Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: small.copyWith(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              Text(
+                caption,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: small.copyWith(color: UfColors.of(context).muted),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
@@ -235,7 +283,7 @@ class LoquetBubble extends StatelessWidget {
       child: TweenAnimationBuilder<double>(
         tween: Tween(begin: 0.8, end: 1),
         duration: UfMotion.of(context).fast,
-        curve: UfMotion.curve,
+        curve: UfMotion.standard,
         builder: (context, scale, child) =>
             Transform.scale(scale: scale, child: child),
         child: Container(
@@ -243,14 +291,8 @@ class LoquetBubble extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
             color: colors.panel,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x33000000),
-                blurRadius: 16,
-                offset: Offset(0, 6),
-              ),
-            ],
+            borderRadius: UfRadius.card,
+            boxShadow: UfElevation.floating(colors),
           ),
           child: Text(text, style: TextStyle(color: colors.text)),
         ),

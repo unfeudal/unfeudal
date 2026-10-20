@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 import 'util/secure.dart';
 
-/// Lowercase UUID v4.
-final uuidPattern = RegExp(
+final _uuidPattern = RegExp(
   r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
 );
 
-bool isUuid(String s) => uuidPattern.hasMatch(s);
+bool isUuid(String s) => _uuidPattern.hasMatch(s);
 
 String newId() {
   final b = secureBytes(16);

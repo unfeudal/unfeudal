@@ -62,25 +62,20 @@ class PortForward {
 
 enum ForwardIssueKind { lowPortNotAllowed, duplicateLocalPort }
 
-class ForwardIssue {
-  const ForwardIssue(this.index, this.kind);
-
-  final int index;
-  final ForwardIssueKind kind;
-}
-
 /// Issues per index, in order: a low port without `allowLowPorts`, then a
 /// `localPort` already used by an earlier forward.
-List<ForwardIssue> validateForwards(List<PortForward> forwards) {
-  final issues = <ForwardIssue>[];
+List<({int index, ForwardIssueKind kind})> validateForwards(
+  List<PortForward> forwards,
+) {
+  final issues = <({int index, ForwardIssueKind kind})>[];
   final seen = <int>{};
   for (var i = 0; i < forwards.length; i++) {
     final f = forwards[i];
     if (f.localPort < 1024 && !f.allowLowPorts) {
-      issues.add(ForwardIssue(i, ForwardIssueKind.lowPortNotAllowed));
+      issues.add((index: i, kind: ForwardIssueKind.lowPortNotAllowed));
     }
     if (!seen.add(f.localPort)) {
-      issues.add(ForwardIssue(i, ForwardIssueKind.duplicateLocalPort));
+      issues.add((index: i, kind: ForwardIssueKind.duplicateLocalPort));
     }
   }
   return issues;

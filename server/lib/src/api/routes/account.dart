@@ -4,17 +4,18 @@ import 'dart:convert';
 import 'package:shelf/shelf.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
-import '../../auth/secret_hash.dart';
 import '../../audit/audit_log.dart';
+import '../../auth/secret_hash.dart';
 import '../../auth/tokens.dart';
 import '../../db/db.dart';
 import '../../db/deletion.dart';
 import '../../mail/mailer.dart';
-import '../app.dart';
 import '../credentials.dart';
+import '../deps.dart';
 import '../errors.dart';
 import '../json.dart';
 import '../middleware.dart';
+import '../request_audit.dart';
 import '../validate.dart';
 
 typedef _User = ({
@@ -56,19 +57,13 @@ Future<_User?> _userByEmail(Db db, String email) async {
 int _bundleVersion(Map<String, Object?> body) {
   final v = body['bundleVersion'];
   if (v is! int || v < 0) {
-    throw ApiError(
-      ApiErrorCode.invalidRequest,
-      'bundleVersion: must be an integer >= 0',
-    );
+    throw ApiError.invalid('bundleVersion: must be an integer >= 0');
   }
   return v;
 }
 
-/// The request's bundle as a map, after its model and KDF checks.
-Map<String, Object?> _bundle(AppDeps deps, Map<String, Object?> body) {
-  parseBundle(body['bundle'], allowTestingKdf: deps.allowTestingKdf);
-  return body['bundle']! as Map<String, Object?>;
-}
+Map<String, Object?> _bundle(AppDeps deps, Map<String, Object?> body) =>
+    parseBundle(body['bundle'], kdfFloor: deps.kdfFloor);
 
 void _requireVersion(_User user, int version) {
   if (user.bundleVersion != version) throw _stale();
@@ -79,8 +74,8 @@ ApiError _stale() => ApiError(
   'Your account changed on another device. Try again.',
 );
 
-/// Proof by the current master password. The acct keys reset as soon as it
-/// is right, as on login: the credential check succeeded, whatever follows.
+// The rate-limit keys reset as soon as the password is right, as on login:
+// the credential check succeeded, whatever follows.
 Future<void> _requireCurrentAuthKey(
   Request request,
   _User user,
@@ -93,12 +88,12 @@ Future<void> _requireCurrentAuthKey(
   await clearCredentials(request, user.email);
 }
 
-/// Compare-and-swap on bundle_version: a concurrent change → 409, never a silent overwrite.
+// A concurrent change gives a 409, never a silent overwrite.
 Future<void> _casBundle(
   Tx tx,
-  String userId,
-  int version,
-  Map<String, Object?> bundle, {
+  String userId, {
+  required int version,
+  required Map<String, Object?> bundle,
   String? authHash,
   String? recoveryHash,
 }) async {
@@ -157,7 +152,13 @@ Future<Response> changePassword(Request request) async {
   _requireVersion(user, version);
   final authHash = await hashSecret(authKey, deps.secretHash);
   await deps.db.transaction((tx) async {
-    await _casBundle(tx, user.id, version, bundle, authHash: authHash);
+    await _casBundle(
+      tx,
+      user.id,
+      version: version,
+      bundle: bundle,
+      authHash: authHash,
+    );
     await _revokeAll(
       tx,
       user.id,
@@ -174,7 +175,8 @@ Future<Response> changePassword(Request request) async {
   return noContent();
 }
 
-/// Checks 1–4 of recover/start: one recovery proof, the same 401 for every failure.
+// The same 401 for every failure, and a hash is verified even for an unknown
+// email, so neither the response nor its timing tells which accounts exist.
 Future<_User> _proveRecovery(Request request, Map<String, Object?> body) async {
   final deps = depsOf(request);
   final email = normalizeEmail(body['email']);
@@ -224,8 +226,8 @@ Future<Response> recover(Request request) async {
     await _casBundle(
       tx,
       user.id,
-      user.bundleVersion,
-      bundle,
+      version: user.bundleVersion,
+      bundle: bundle,
       authHash: authHash,
       recoveryHash: recoveryHash,
     );
@@ -257,7 +259,13 @@ Future<Response> recoveryKit(Request request) async {
   _requireVersion(user, version);
   final recoveryHash = await hashSecret(recoveryAuthKey, deps.secretHash);
   await deps.db.transaction((tx) async {
-    await _casBundle(tx, user.id, version, bundle, recoveryHash: recoveryHash);
+    await _casBundle(
+      tx,
+      user.id,
+      version: version,
+      bundle: bundle,
+      recoveryHash: recoveryHash,
+    );
     await auditWriter(request, tx)(
       AuditScope.user(auth.userId),
       'account.recovery_kit_changed',
@@ -281,35 +289,21 @@ Future<Response> setLocale(Request request) async {
 
 Future<Response> deleteAccount(Request request) async {
   final deps = depsOf(request);
-  final auth = authOf(request); // 1. requireAuth wraps this handler
+  final auth = authOf(request);
   if (auth.isInstanceOwner) {
     throw ApiError(
       ApiErrorCode.forbidden,
       'The Instance Owner cannot be deleted.',
-    ); // 2.
+    );
   }
-  final body = await readJson(request); // 3.
-  final user = (await deps.db.query(
-    'SELECT email, auth_hash FROM users WHERE id = @u',
-    {'u': auth.userId},
-  )).single;
-  final email = user['email']! as String;
-  await limitCredentials(request, email); // 4. counted before the key is read
-  final current = reqKey32(body, 'currentAuthKey');
-  if (!await verifySecret(user['auth_hash']! as String, current)) {
-    throw ApiError(ApiErrorCode.forbidden, 'Current master password is wrong.');
-  }
-  await clearCredentials(
-    request,
-    email,
-  ); // the key was right, whatever refuses next
+  final body = await readJson(request);
+  final user = await _userById(deps.db, auth.userId);
+  // Counted before the key is checked, so wrong guesses are rate limited.
+  await limitCredentials(request, user.email);
+  await _requireCurrentAuthKey(request, user, body);
+  // deleteUser refuses the last owner of an organization with a 409.
   await deps.db.transaction(
-    (tx) => deleteUser(
-      tx,
-      auth.userId,
-      actor: auth.userId,
-      audit: auditWriter(request, tx),
-    ),
-  ); // 5. last owner → 409 inside
+    (tx) => deleteUser(tx, auth.userId, audit: auditWriter(request, tx)),
+  );
   return noContent();
 }

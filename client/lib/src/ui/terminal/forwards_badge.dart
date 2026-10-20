@@ -5,6 +5,9 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
 import '../../app_state.dart';
+import '../../design/field.dart';
+import '../../design/motion.dart';
+import '../../design/rows.dart';
 import '../../design/tokens.dart';
 import '../../terminal/terminal_session.dart';
 import '../describe_error.dart';
@@ -29,7 +32,6 @@ class ForwardsBadge extends StatelessWidget {
     if (forwarder == null) return const SizedBox.shrink();
     final l = AppLocalizations.of(context);
     final state = AppScope.of(context);
-    final colors = UfColors.of(context);
     return ListenableBuilder(
       listenable: forwarder,
       builder: (context, _) {
@@ -57,23 +59,19 @@ class ForwardsBadge extends StatelessWidget {
           ],
           builder: (context, controller, _) => Tooltip(
             message: l.forwardsActive(active.length),
-            child: InkWell(
-              key: Key('forwards-badge-$index'),
-              borderRadius: BorderRadius.circular(6),
-              onTap: () =>
-                  controller.isOpen ? controller.close() : controller.open(),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                decoration: BoxDecoration(
-                  color: active.isEmpty ? colors.field : colors.accentBg,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
+            child: UfFocusRing(
+              borderRadius: UfRadius.key,
+              child: InkWell(
+                key: Key('forwards-badge-$index'),
+                borderRadius: UfRadius.key,
+                hoverDuration: UfMotion.of(context).fast,
+                onTap: () =>
+                    controller.isOpen ? controller.close() : controller.open(),
+                child: UfBadge(
                   '${active.length}',
-                  style: monoStyle.copyWith(
-                    fontSize: 11,
-                    color: active.isEmpty ? colors.muted : colors.accent,
-                  ),
+                  tone: active.isEmpty
+                      ? UfBadgeTone.neutral
+                      : UfBadgeTone.accent,
                 ),
               ),
             ),
@@ -121,14 +119,14 @@ class _ForwardRow extends StatelessWidget {
               running
                   ? TextButton(
                       key: Key('forward-stop-$port'),
-                      onPressed: () => state.stopForward(tab, port),
+                      onPressed: () => state.connections.stopForward(tab, port),
                       child: Text(l.forwardStop),
                     )
                   : TextButton(
                       key: Key('forward-start-$port'),
                       onPressed: () async {
                         try {
-                          await state.startForward(tab, forward);
+                          await state.connections.startForward(tab, forward);
                         } on Exception {
                           // shown under the row from forwarder.failed
                         }
@@ -137,11 +135,7 @@ class _ForwardRow extends StatelessWidget {
                     ),
             ],
           ),
-          if (failure case final error?)
-            Text(
-              describeError(l, error),
-              style: TextStyle(color: colors.danger, fontSize: 12),
-            ),
+          if (failure case final error?) UfErrorLine(describeError(l, error)),
         ],
       ),
     );

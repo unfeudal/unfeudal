@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+import '../crypto/safety_code.dart';
 import '../util/json_reader.dart';
 import 'payload.dart';
 
@@ -14,7 +15,7 @@ class MemberPinMeta extends Payload {
   factory MemberPinMeta.fromJson(Object? json) {
     final r = JsonReader(json, 'memberPin');
     final fingerprint = r.req<String>('fingerprint');
-    if (!_fingerprint.hasMatch(fingerprint)) {
+    if (!isKeyFingerprint(fingerprint)) {
       throw const FormatException('memberPin.fingerprint: invalid');
     }
     return MemberPinMeta(
@@ -30,8 +31,6 @@ class MemberPinMeta extends Payload {
       }),
     );
   }
-
-  static final _fingerprint = RegExp(r'^[0-9a-f]{40}$');
 
   final String userId;
   final String fingerprint;

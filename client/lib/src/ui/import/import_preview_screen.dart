@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -8,10 +9,16 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
 import '../../design/banner.dart';
+import '../../design/buttons.dart';
+import '../../design/choices.dart';
 import '../../design/empty_state.dart';
-import '../../design/tokens.dart';
+import '../../design/feedback.dart';
+import '../../design/field.dart';
+import '../../design/rows.dart';
+import '../../design/toast.dart';
 import '../../import/ssh_config_import.dart';
-import '../describe_error.dart';
+import '../busy_action.dart';
+import '../fields.dart';
 import '../hosts/editor_frame.dart';
 import '../manage_frame.dart';
 
@@ -32,14 +39,13 @@ class ImportPreviewScreen extends StatefulWidget {
   State<ImportPreviewScreen> createState() => _ImportPreviewScreenState();
 }
 
-class _ImportPreviewScreenState extends State<ImportPreviewScreen> {
+class _ImportPreviewScreenState extends State<ImportPreviewScreen>
+    with BusyAction {
   late final SshConfigImporter _importer;
   ImportPlan? _plan;
   final _selected = <String>{};
   final _passphrases = <String, TextEditingController>{};
   String? _folderId;
-  bool _busy = false;
-  String? _problem;
 
   @override
   void initState() {
@@ -55,7 +61,7 @@ class _ImportPreviewScreenState extends State<ImportPreviewScreen> {
       readFile: readFile,
       home: home,
     );
-    _load(readFile, widget.configPath ?? '$home/.ssh/config');
+    unawaited(_load(readFile, widget.configPath ?? '$home/.ssh/config'));
   }
 
   @override
@@ -68,7 +74,7 @@ class _ImportPreviewScreenState extends State<ImportPreviewScreen> {
 
   static Future<String?> _readOrNull(String path) async {
     final file = File(path);
-    return await file.exists() ? file.readAsString() : null;
+    return file.existsSync() ? file.readAsString() : null;
   }
 
   Future<void> _load(
@@ -91,11 +97,7 @@ class _ImportPreviewScreenState extends State<ImportPreviewScreen> {
 
   Future<void> _submit() async {
     final l = AppLocalizations.of(context);
-    setState(() {
-      _busy = true;
-      _problem = null;
-    });
-    try {
+    await run(() async {
       final count = await _importer.apply(
         _plan!,
         aliases: _selected,
@@ -106,14 +108,9 @@ class _ImportPreviewScreenState extends State<ImportPreviewScreen> {
         folderId: _folderId,
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(l.importDone(count))));
+      showUfToast(context, l.importDone(count));
       Navigator.of(context).maybePop();
-    } on Exception catch (e) {
-      if (mounted) setState(() => _problem = describeError(l, e));
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
+    });
   }
 
   static String _problemLabel(AppLocalizations l, SshConfigWarningKind kind) =>
@@ -130,88 +127,103 @@ class _ImportPreviewScreenState extends State<ImportPreviewScreen> {
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
-    final state = AppScope.read(context);
-    final colors = UfColors.of(context);
     final plan = _plan;
     // a Scaffold of its own: pushed alone, the confirmation still has somewhere to show
     return Scaffold(
       body: ManageFrame(
         title: l.settingsImportSshConfig,
         child: plan == null
-            ? const Center(child: CircularProgressIndicator())
+            ? Center(child: UfLoading(l.loading))
             : plan.hosts.isEmpty && plan.warnings.isEmpty
             ? EmptyState(title: l.settingsImportSshConfig, body: l.importEmpty)
-            : ListView(
-                children: [
-                  if (plan.warnings.isNotEmpty)
-                    StatusBanner(
-                      tone: BannerTone.warn,
-                      message: [
-                        for (final w in plan.warnings)
-                          l.importWarning(w.line, _problemLabel(l, w.kind)),
-                      ].join('\n'),
-                    ),
-                  for (final h in plan.hosts)
-                    CheckboxListTile(
-                      key: Key('import-row-${h.source.alias}'),
-                      controlAffinity: ListTileControlAffinity.leading,
-                      value: _selected.contains(h.source.alias),
-                      onChanged: (on) => setState(
-                        () => on == true
-                            ? _selected.add(h.source.alias)
-                            : _selected.remove(h.source.alias),
-                      ),
-                      title: Text(h.source.alias),
-                      subtitle: Text(
-                        [
-                          [
-                            ?h.source.user,
-                            h.source.hostName ?? h.source.alias,
-                          ].join('@'),
-                          if (h.jumpAlias case final jump?) '→ $jump',
-                          if (h.duplicate) l.importDuplicate,
-                        ].join('  ·  '),
-                      ),
-                    ),
-                  for (final (i, k) in plan.keys.indexed)
-                    if (_passphrases[k.path] case final controller?)
-                      TextField(
-                        key: Key('import-passphrase-$i'),
-                        controller: controller,
-                        obscureText: true,
-                        decoration: InputDecoration(
-                          labelText: l.importPassphrase(p.basename(k.path)),
-                        ),
-                      ),
-                  entryPicker(
-                    key: 'import-folder',
-                    label: l.hostFolder,
-                    none: l.folderRoot,
-                    entries: [
-                      for (final e in state.vault!.ofKind(ItemKind.folder))
-                        if (e.orgId == null) e,
-                    ],
-                    value: _folderId,
-                    onChanged: (v) => setState(() => _folderId = v),
-                  ),
-                  if (_problem case final problem?)
-                    Text(problem, style: TextStyle(color: colors.danger)),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: FilledButton(
-                      key: const Key('import-submit'),
-                      onPressed:
-                          _busy ||
-                              _selected.isEmpty ||
-                              (state.sync?.readOnly ?? false)
-                          ? null
-                          : _submit,
-                      child: Text(l.importCount(_selected.length)),
-                    ),
-                  ),
-                ],
-              ),
+            : _preview(l, plan),
       ),
+    );
+  }
+
+  Widget _preview(AppLocalizations l, ImportPlan plan) {
+    final state = AppScope.read(context);
+    return ListView(
+      children: [
+        if (plan.warnings.isNotEmpty)
+          UfNotice(
+            tone: BannerTone.warn,
+            message: [
+              for (final w in plan.warnings)
+                l.importWarning(w.line, _problemLabel(l, w.kind)),
+            ].join('\n'),
+          ),
+        for (final h in plan.hosts)
+          _ImportHostRow(
+            host: h,
+            selected: _selected.contains(h.source.alias),
+            onChanged: (on) => setState(
+              () => on
+                  ? _selected.add(h.source.alias)
+                  : _selected.remove(h.source.alias),
+            ),
+          ),
+        for (final (i, k) in plan.keys.indexed)
+          if (_passphrases[k.path] case final controller?)
+            keyedField(
+              'import-passphrase-$i',
+              controller,
+              l.importPassphrase(p.basename(k.path)),
+              secret: true,
+            ),
+        entryPicker(
+          key: 'import-folder',
+          label: l.hostFolder,
+          none: l.folderRoot,
+          entries: [
+            for (final e in state.vault!.ofKind(ItemKind.folder))
+              if (e.orgId == null) e,
+          ],
+          value: _folderId,
+          onChanged: (v) => setState(() => _folderId = v),
+        ),
+        if (problem case final problem?) UfErrorLine(problem),
+        Align(
+          alignment: Alignment.centerRight,
+          child: BusyButton(
+            key: const Key('import-submit'),
+            busy: busy,
+            onPressed: _selected.isEmpty || (state.sync?.readOnly ?? false)
+                ? null
+                : _submit,
+            label: l.importCount(_selected.length),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ImportHostRow extends StatelessWidget {
+  const _ImportHostRow({
+    required this.host,
+    required this.selected,
+    required this.onChanged,
+  });
+
+  final PlannedHost host;
+  final bool selected;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    final source = host.source;
+    return UfCheckboxRow(
+      key: Key('import-row-${source.alias}'),
+      value: selected,
+      onChanged: onChanged,
+      label: source.alias,
+      subtitle: [
+        [?source.user, source.hostName ?? source.alias].join('@'),
+        if (host.jumpAlias case final jump?) '→ $jump',
+        if (host.duplicate) l.importDuplicate,
+      ].join('  ·  '),
     );
   }
 }

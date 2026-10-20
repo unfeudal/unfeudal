@@ -51,7 +51,7 @@ void main() {
       ),
       (EntryState.ok, testOrgId, 'db'),
     );
-    expect(v.resolve(host.id).port, 22);
+    expect(v.hostLookup(host.id)!.resolved.port, 22);
   });
 
   test(
@@ -110,7 +110,6 @@ void main() {
         id: id,
         folderId: f,
         meta: hostJson('v1'),
-        seq: 1,
         revision: 3,
       ),
     ]);

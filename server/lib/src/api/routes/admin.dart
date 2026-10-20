@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import 'package:shelf/shelf.dart';
+import 'package:shelf_router/shelf_router.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../../audit/audit_log.dart';
@@ -8,13 +9,14 @@ import '../../db/deletion.dart';
 import '../../orgs/invites.dart';
 import '../../orgs/org_access.dart';
 import '../../orgs/rotations.dart';
-import '../app.dart';
+import '../deps.dart';
 import '../errors.dart';
 import '../json.dart';
 import '../middleware.dart';
+import '../request_audit.dart';
 import '../validate.dart';
 
-/// First line of every admin handler: the Instance Owner only, before the body is read.
+// Must be the first line of every admin handler, before the body is read.
 void _requireIo(Request request) {
   if (!authOf(request).isInstanceOwner) {
     throw ApiError(ApiErrorCode.forbidden, 'Instance Owner only.');
@@ -40,16 +42,13 @@ Future<Response> listUsers(Request request) async {
   });
 }
 
-Future<Response> setDisabled(Request request, String id) async {
+Future<Response> setDisabled(Request request) async {
   _requireIo(request);
   final deps = depsOf(request);
-  parseUuid(id);
+  final id = parseUuid(request.params['id']!);
   final disabled = (await readJson(request))['disabled'];
   if (disabled is! bool) {
-    throw ApiError(
-      ApiErrorCode.invalidRequest,
-      'disabled must be a boolean.',
-    ); // 1.
+    throw ApiError.invalid('disabled must be a boolean.');
   }
   await deps.db.transaction((tx) async {
     final user = (await tx.query(
@@ -60,12 +59,13 @@ Future<Response> setDisabled(Request request, String id) async {
       throw ApiError(
         ApiErrorCode.forbidden,
         'The Instance Owner cannot be disabled.',
-      ); // 2.
+      );
     }
-    if (user == null) throw ApiError(ApiErrorCode.notFound, 'Not found.'); // 3.
+    if (user == null) throw ApiError.notFound();
+    // A disabled last owner would leave an organization nobody can manage.
     if (disabled) {
       final last = await lastOwnerOrgs(tx, id);
-      if (last.isNotEmpty) throw lastOwnerError(last); // 4.
+      if (last.isNotEmpty) throw lastOwnerError(last);
     }
     final orgIds = [
       for (final r in await tx.query(
@@ -83,9 +83,9 @@ Future<Response> setDisabled(Request request, String id) async {
       await recordRotations(
         tx,
         o,
-        before[o]!,
-        (await loadOrg(tx, o))!,
-        'user_disabled',
+        before: before[o]!,
+        after: (await loadOrg(tx, o))!,
+        reason: 'user_disabled',
       );
     }
     await bumpOrgSeq(tx);
@@ -99,14 +99,13 @@ Future<Response> setDisabled(Request request, String id) async {
   return noContent();
 }
 
-Future<Response> deleteUserRoute(Request request, String id) async {
+Future<Response> deleteUserRoute(Request request) async {
   _requireIo(request);
-  final deps = depsOf(request), auth = authOf(request);
-  parseUuid(id);
-  // deleteUser refuses the Instance Owner (1.), an unknown id (2.) and a last owner (409)
+  final deps = depsOf(request);
+  final id = parseUuid(request.params['id']!);
+  // deleteUser refuses the Instance Owner, an unknown id and a last owner.
   await deps.db.transaction(
-    (tx) =>
-        deleteUser(tx, id, actor: auth.userId, audit: auditWriter(request, tx)),
+    (tx) => deleteUser(tx, id, audit: auditWriter(request, tx)),
   );
   return noContent();
 }
@@ -115,73 +114,70 @@ Future<Response> deleteUserRoute(Request request, String id) async {
 Future<Response> listOrgs(Request request) async {
   _requireIo(request);
   final deps = depsOf(request);
-  // ponytail: a few queries per org; one grouped query if an instance with many orgs shows up in profiles
   final orgs = await deps.db.transaction(readOnly: true, (tx) async {
-    final out = <Map<String, Object?>>[];
-    for (final o in await tx.query(
-      'SELECT id, name FROM orgs ORDER BY name, id',
+    final owners = <Object?, List<String>>{};
+    for (final r in await tx.query(
+      'SELECT m.org_id, u.email FROM org_members m JOIN users u ON u.id = m.user_id '
+      "WHERE m.role = 'owner'",
     )) {
-      final p = {'o': o['id']};
-      final owners = [
-        for (final r in await tx.query(
-          'SELECT u.email FROM org_members m JOIN users u ON u.id = m.user_id '
-          "WHERE m.org_id = @o AND m.role = 'owner'",
-          p,
-        ))
-          r['email']! as String,
-      ]..sort();
-      final members = (await tx.query(
-        'SELECT count(*) AS n FROM org_members WHERE org_id = @o',
-        p,
-      )).single['n'];
-      final items = (await tx.query(
-        'SELECT CAST(COALESCE(SUM(size), 0) AS BIGINT) AS s, MAX(updated_at) AS at '
-        'FROM items WHERE org_id = @o',
-        p,
-      )).single;
-      final revisions =
-          (await tx.query(
-                'SELECT CAST(COALESCE(SUM(r.size), 0) AS BIGINT) AS s FROM item_revisions r '
-                'JOIN items i ON i.id = r.item_id WHERE i.org_id = @o',
-                p,
-              )).single['s']!
-              as int;
-      out.add({
-        'id': o['id'],
-        'name': o['name'],
-        'owners': owners,
-        'memberCount': members,
-        'storageBytes': (items['s']! as int) + revisions,
-        'lastActivityAt': items['at'],
-      });
+      owners.putIfAbsent(r['org_id'], () => []).add(r['email']! as String);
     }
-    return out;
+    final members = {
+      for (final r in await tx.query(
+        'SELECT org_id, count(*) AS n FROM org_members GROUP BY org_id',
+      ))
+        r['org_id']: r['n'],
+    };
+    final items = {
+      for (final r in await tx.query(
+        'SELECT org_id, CAST(COALESCE(SUM(size), 0) AS BIGINT) AS s, MAX(updated_at) AS at '
+        'FROM items WHERE org_id IS NOT NULL GROUP BY org_id',
+      ))
+        r['org_id']: r,
+    };
+    final revisions = {
+      for (final r in await tx.query(
+        'SELECT i.org_id, CAST(COALESCE(SUM(r.size), 0) AS BIGINT) AS s FROM item_revisions r '
+        'JOIN items i ON i.id = r.item_id WHERE i.org_id IS NOT NULL GROUP BY i.org_id',
+      ))
+        r['org_id']: r['s']! as int,
+    };
+    return [
+      for (final o in await tx.query(
+        'SELECT id, name FROM orgs ORDER BY name, id',
+      ))
+        {
+          'id': o['id'],
+          'name': o['name'],
+          'owners': (owners[o['id']] ?? [])..sort(),
+          'memberCount': members[o['id']] ?? 0,
+          'storageBytes':
+              ((items[o['id']]?['s'] as int?) ?? 0) + (revisions[o['id']] ?? 0),
+          'lastActivityAt': items[o['id']]?['at'],
+        },
+    ];
   });
   return jsonResponse({'orgs': orgs});
 }
 
 /// The exact name confirms a deletion the Instance Owner cannot see inside.
-Future<Response> adminDeleteOrg(Request request, String id) async {
+Future<Response> adminDeleteOrg(Request request) async {
   _requireIo(request);
   final deps = depsOf(request);
-  parseUuid(id);
+  final id = parseUuid(request.params['id']!);
   final confirmName = (await readJson(request))['confirmName'];
   if (confirmName is! String) {
-    throw ApiError(
-      ApiErrorCode.invalidRequest,
-      'confirmName must be a string.',
-    ); // 1.
+    throw ApiError.invalid('confirmName must be a string.');
   }
   await deps.db.transaction((tx) async {
     final org = (await tx.query('SELECT name FROM orgs WHERE id = @o', {
       'o': id,
     })).firstOrNull;
-    if (org == null) throw ApiError(ApiErrorCode.notFound, 'Not found.'); // 2.
+    if (org == null) throw ApiError.notFound();
     if (org['name'] != confirmName) {
-      throw ApiError(
-        ApiErrorCode.invalidRequest,
+      throw ApiError.invalid(
         'confirmName must be the exact organization name.',
-      ); // 3.
+      );
     }
     await deleteOrg(tx, id);
     await auditWriter(request, tx)(AuditScope.instance, 'org.deleted', [id]);
@@ -192,8 +188,8 @@ Future<Response> adminDeleteOrg(Request request, String id) async {
 Future<Response> createInstanceInvite(Request request) async {
   _requireIo(request);
   final deps = depsOf(request), auth = authOf(request);
-  final email = normalizeEmail((await readJson(request))['email']); // 1.
-  await deps.limiter.hit([inviteCreateKey(auth.userId)]); // 2.
+  final email = normalizeEmail((await readJson(request))['email']);
+  await deps.limiter.hit([inviteCreateKey(auth.userId)]);
   final (row, locale) = await deps.db.transaction((tx) async {
     final row = await createInviteRow(
       tx,
@@ -201,11 +197,7 @@ Future<Response> createInstanceInvite(Request request) async {
       email: email,
       createdBy: auth.userId,
     );
-    final locale =
-        (await tx.query('SELECT locale FROM users WHERE id = @u', {
-              'u': auth.userId,
-            })).single['locale']!
-            as String;
+    final locale = await localeOf(tx, auth.userId);
     await auditWriter(request, tx)(AuditScope.instance, 'invite.created', [
       row.id,
     ]);
@@ -225,22 +217,5 @@ Future<Response> createInstanceInvite(Request request) async {
 Future<Response> listInstanceInvites(Request request) async {
   _requireIo(request);
   final deps = depsOf(request);
-  final rows = await deps.db.query(
-    'SELECT id, email, created_by, created_at, expires_at FROM invites '
-    'WHERE org_id IS NULL AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at > @now '
-    'ORDER BY expires_at, id',
-    {'now': iso(deps.clock.now())},
-  );
-  return jsonResponse({
-    'invites': [
-      for (final r in rows)
-        {
-          'id': r['id'],
-          'email': r['email'],
-          'createdBy': r['created_by'],
-          'createdAt': r['created_at'],
-          'expiresAt': r['expires_at'],
-        },
-    ],
-  });
+  return jsonResponse({'invites': await pendingInvites(deps.db, deps, null)});
 }

@@ -10,7 +10,6 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../support/fakes.dart';
 
-/// Whatever the local client writes comes back.
 class _Echo implements SSHSocket {
   final _back = StreamController<Uint8List>();
   late final _in = StreamController<List<int>>()
@@ -110,6 +109,7 @@ void main() {
       );
       await f.start(fwd(port));
       final s = await Socket.connect(InternetAddress.loopbackIPv4, port);
+      addTearDown(s.destroy);
       await s.drain<void>().timeout(const Duration(seconds: 2));
       expect(f.active.keys, [port]);
       await f.stopAll();

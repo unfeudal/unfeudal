@@ -42,10 +42,13 @@ void main() {
   );
 
   testWidgets('the Instance Owner has no deletion entry', (t) async {
-    final s = await signedInState(
+    // The first account of the harness is the Instance Owner.
+    final s = await signedInState(t);
+    await pumpApp(
       t,
-    ); // first account of the harness: Instance Owner
-    await pumpApp(t, state: s, child: const SettingsScreen());
+      state: s,
+      child: const SettingsScreen(initialGroup: 'account'),
+    );
     await pumpReal(t, rounds: 5);
     expect(find.byKey(const Key('settings-delete-account')), findsNothing);
   });

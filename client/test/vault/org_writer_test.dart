@@ -18,7 +18,6 @@ void main() {
     await c.keyring.put(f, FolderKeys.generate(1));
     await c.keyring.put(g, FolderKeys.generate(1));
     block = orgBlock(
-      role: 'member',
       members: [c.me(role: 'member')],
       folderTree: [node(f), node(g)],
       acl: [
@@ -34,7 +33,6 @@ void main() {
       block: () => block,
       userId: c.userId,
       publicKey: c.publicKey,
-      write: c.write,
       online: () => !c.h.offline,
       emit: c.events.add,
     );
@@ -145,7 +143,6 @@ void main() {
       throwsA(isA<OrgWriteRefused>()),
     );
     block = orgBlock(
-      role: 'member',
       members: [c.me(role: 'member')],
       folderTree: [node(f), node(g)],
       acl: [
@@ -200,7 +197,6 @@ void main() {
     await expectLater(
       writer.createFolder(
         orgId: testOrgId,
-        parentId: null,
         meta: FolderMeta.fromJson(folderJson('root')),
       ),
       throwsA(
@@ -231,7 +227,7 @@ void main() {
       b64((await wrap.unwrap(id, c.keyPair)).metaKey),
       b64(c.keyring.current(id)!.metaKey),
     );
-    expect(c.events.whereType<SharedVaultCreated>().single.orgId, testOrgId);
+    expect(c.events.whereType<SharedVaultCreated>(), hasLength(1));
   });
 
   test('trash, restore and a conflict copy stay in the org folder', () async {
@@ -257,7 +253,12 @@ void main() {
       (ItemScope.org, f, false, 0),
     );
     expect(
-      explainFromBlock(block, testOrgId, c.userId, f).effective,
+      explainFromBlock(
+        block,
+        testOrgId,
+        userId: c.userId,
+        folderId: f,
+      ).effective,
       contains(Permission.edit),
     );
   });

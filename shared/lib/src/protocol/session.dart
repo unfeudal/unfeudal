@@ -103,15 +103,14 @@ class Device {
 
   factory Device.fromJson(Object? json) {
     final r = JsonReader(json, 'device');
-    final revokedAt = r.opt<String>('revokedAt');
     return Device(
       id: r.uuid('id'),
       name: r.text('name', max: 100, required: true),
       // Kept as sent; the server validates it against devicePlatforms.
       platform: r.text('platform', max: 32),
-      createdAt: _time(r, 'createdAt', r.req<String>('createdAt')),
-      lastSeenAt: _time(r, 'lastSeenAt', r.req<String>('lastSeenAt')),
-      revokedAt: revokedAt == null ? null : _time(r, 'revokedAt', revokedAt),
+      createdAt: r.time('createdAt'),
+      lastSeenAt: r.time('lastSeenAt'),
+      revokedAt: r.optTime('revokedAt'),
       current: r.flag('current'),
       extra: r.extra(const {
         'id',
@@ -144,12 +143,4 @@ class Device {
     'revokedAt': revokedAt == null ? null : iso(revokedAt!),
     'current': current,
   };
-
-  static DateTime _time(JsonReader r, String key, String text) {
-    try {
-      return parseIso(text);
-    } on FormatException {
-      throw FormatException('${r.what}.$key: invalid timestamp');
-    }
-  }
 }

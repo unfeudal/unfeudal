@@ -6,7 +6,6 @@ import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'package:cryptography/cryptography.dart';
-import 'package:cryptography/helpers.dart' show constantTimeBytesEquality;
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../api/errors.dart';
@@ -24,17 +23,29 @@ class SecretHashParams {
   static const testing = SecretHashParams(1024, 1, 1);
 }
 
-/// Bounds memory and CPU before authentication: [slots] hashes at once, 4 × [slots] waiting, the next → 429.
+/// Which waiting hash goes first: a sign-in never waits behind password changes, setups and invites.
+enum HashPriority { signIn, other }
+
+/// Bounds memory and CPU before authentication: [slots] hashes at once, 4 times [slots] waiting, the next gets
+/// 429. A credential check is admitted once, before the attempt is counted, and keeps its place until it
+/// ends: the queue filling meanwhile never refuses its hashes.
 class Argon2Gate {
   Argon2Gate(this.slots);
 
   final int slots;
   int _running = 0;
-  final _waiting = Queue<Completer<void>>();
+  final _waiting = {
+    for (final priority in HashPriority.values)
+      priority: Queue<Completer<void>>(),
+  };
+  // Admitted checks between their hashes: their places stay counted.
+  int _held = 0;
+  static final _admission = Object();
 
-  /// The 429 [run] would throw now; lets a caller refuse before it counts the attempt.
-  void refuseIfFull() {
-    if (_running >= slots && _waiting.length >= 4 * slots) {
+  int get _queued => _waiting.values.fold(0, (sum, q) => sum + q.length);
+
+  void _refuseIfFull() {
+    if (_running >= slots && _queued + _held >= 4 * slots) {
       throw ApiError(
         ApiErrorCode.rateLimited,
         'Server busy. Try again.',
@@ -43,47 +54,71 @@ class Argon2Gate {
     }
   }
 
-  Future<T> run<T>(Future<T> Function() work) async {
-    if (_running < slots) {
-      _running++;
-    } else {
-      refuseIfFull();
-      final turn = Completer<void>();
-      _waiting.add(turn);
-      // The finishing hash hands its slot over.
-      await turn.future;
-    }
+  /// Runs [check] with a place kept for its hashes, or throws the busy 429 before it starts.
+  Future<T> admit<T>(HashPriority priority, Future<T> Function() check) async {
+    _refuseIfFull();
+    _held++;
     try {
-      return await work();
+      return await runZoned(check, zoneValues: {_admission: priority});
     } finally {
-      if (_waiting.isNotEmpty) {
-        _waiting.removeFirst().complete();
+      _held--;
+    }
+  }
+
+  Future<T> run<T>(Future<T> Function() work) async {
+    final admitted = Zone.current[_admission] as HashPriority?;
+    // An admitted check's place moves from held to running or waiting, and back after.
+    if (admitted != null) _held--;
+    try {
+      if (_running < slots) {
+        _running++;
       } else {
-        _running--;
+        if (admitted == null) _refuseIfFull();
+        final turn = Completer<void>();
+        _waiting[admitted ?? HashPriority.other]!.add(turn);
+        // The finishing hash hands its slot over.
+        await turn.future;
+      }
+      try {
+        return await work();
+      } finally {
+        _handOver();
+      }
+    } finally {
+      if (admitted != null) _held++;
+    }
+  }
+
+  void _handOver() {
+    for (final priority in HashPriority.values) {
+      if (_waiting[priority]!.isNotEmpty) {
+        _waiting[priority]!.removeFirst().complete();
+        return;
       }
     }
+    _running--;
   }
 }
 
-// ponytail: one process-wide gate sized by cores; split it per route if sign-ins starve behind other hashes.
 final _gate = Argon2Gate(Platform.numberOfProcessors);
 
-/// A full Argon2 queue is a 429 that counts nothing: credential checks call this before the rate limiter.
-void refuseIfArgon2Busy() => _gate.refuseIfFull();
+/// Runs a credential check admitted by the process-wide gate; a full gate is a 429 that counts nothing.
+Future<T> admitCredentialCheck<T>(
+  HashPriority priority,
+  Future<T> Function() check,
+) => _gate.admit(priority, check);
 
-/// Argon2id in another isolate: the pure-Dart hash would otherwise block every request.
+// Argon2id runs in another isolate: the pure-Dart hash would otherwise block every request.
 Future<Uint8List> _argon2id(
   List<int> secret,
   List<int> salt,
-  int m,
-  int t,
-  int p,
+  SecretHashParams params,
 ) => _gate.run(
   () => Isolate.run(() async {
     final key = await Argon2id(
-      memory: m,
-      iterations: t,
-      parallelism: p,
+      memory: params.m,
+      iterations: params.t,
+      parallelism: params.p,
       hashLength: 32,
     ).deriveKey(secretKey: SecretKey(secret), nonce: salt);
     return Uint8List.fromList(await key.extractBytes());
@@ -93,7 +128,7 @@ Future<Uint8List> _argon2id(
 /// Stored as `argon2id$m$t$p$<b64 salt>$<b64 hash>`.
 Future<String> hashSecret(List<int> secret, SecretHashParams params) async {
   final salt = secureBytes(16);
-  final hash = await _argon2id(secret, salt, params.m, params.t, params.p);
+  final hash = await _argon2id(secret, salt, params);
   return 'argon2id\$${params.m}\$${params.t}\$${params.p}\$${b64(salt)}\$${b64(hash)}';
 }
 
@@ -125,8 +160,8 @@ Future<bool> verifySecret(String stored, List<int> secret) async {
     return false;
   }
   if (salt.length < 8 || expected.length != 32) return false;
-  return constantTimeBytesEquality.equals(
-    await _argon2id(secret, salt, m, t, p),
+  return constantTimeEquals(
+    await _argon2id(secret, salt, SecretHashParams(m, t, p)),
     expected,
   );
 }

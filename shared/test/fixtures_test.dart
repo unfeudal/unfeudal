@@ -17,7 +17,11 @@ const names = [
   'payload_snippet',
   'error_conflict',
   'account_bundle',
+  'enrollment_encrypted',
 ];
+
+/// Formats this side only reads: there is no writer to round-trip through.
+const readOnly = {'error_conflict', 'enrollment_encrypted'};
 
 Map<String, Object?> Function(Object?) parserFor(String name) => switch (name) {
   'api_info' => (j) => ApiInfo.fromJson(j).toJson(),
@@ -27,7 +31,6 @@ Map<String, Object?> Function(Object?) parserFor(String name) => switch (name) {
   'payload_identity' => (j) => IdentityMeta.fromJson(j).toJson(),
   'payload_profile' => (j) => ProfileMeta.fromJson(j).toJson(),
   'payload_snippet' => (j) => SnippetMeta.fromJson(j).toJson(),
-  'error_conflict' => (j) => ApiErrorBody.fromJson(j).toJson(),
   'account_bundle' => (j) => AccountBundle.fromJson(j).toJson(),
   _ => throw StateError('no parser for $name'),
 };
@@ -49,11 +52,22 @@ void main() {
           .whereType<File>()
           .where((f) => f.path.endsWith('.json'))) {
     final name = file.uri.pathSegments.last.replaceAll('.json', '');
+    if (readOnly.contains(name)) continue;
     test('${file.path} re-serialises byte for byte', () {
       final text = file.readAsStringSync().trim();
       expect(jsonEncode(parserFor(name)(jsonDecode(text))), text);
     });
   }
+
+  test('error_conflict parses', () {
+    final body = ApiErrorBody.fromJson(
+      jsonDecode(File('${dir.path}/v0/error_conflict.json').readAsStringSync()),
+    );
+    expect(
+      (body.error, body.message, body.item!.revision, body.extra.isEmpty),
+      ('conflict', 'Revision mismatch.', 4, true),
+    );
+  });
 
   test('only item_host carries a top-level unknown field', () {
     final host = jsonDecode(
@@ -78,7 +92,7 @@ void main() {
     );
     final u = await AccountCrypto(
       kdf: KdfParams.testing,
-      allowTestingKdf: true,
+      kdfFloor: KdfParams.testing,
     ).unlock(bundle, 'fixture-password');
     expect(u.userKey.length, 32);
   });

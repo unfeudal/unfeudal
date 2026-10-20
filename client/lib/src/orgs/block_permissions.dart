@@ -1,50 +1,73 @@
 // SPDX-License-Identifier: Apache-2.0
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
+extension OrgAdmin on OrgSummary {
+  /// A confirmed owner or admin: rotates, hands keys out and writes at the org root.
+  bool get isAdmin => isConfirmed && (role == 'owner' || role == 'admin');
+}
+
+extension OrgBlockAdmin on OrgBlock {
+  bool isAdminOf(String orgId) => orgs.any((o) => o.id == orgId && o.isAdmin);
+}
+
 /// Resolution of [userId] on [folderId] from a block. Role from `members`; status from the member row (admins
 /// see it) or, for the caller's own row, from `orgs`. Unknown permission names are skipped.
 Explanation explainFromBlock(
   OrgBlock block,
-  String orgId,
-  String userId,
-  String folderId,
-) {
-  final org = block.orgs.where((o) => o.id == orgId).firstOrNull;
-  final m = block.members
-      .where((x) => x.orgId == orgId && x.userId == userId)
-      .firstOrNull;
-  final parents = {
-    for (final n in block.folderTree.where((n) => n.orgId == orgId))
-      n.folderId: n.parentId,
-  };
-  if (org == null || m == null || !parents.containsKey(folderId)) {
+  String orgId, {
+  required String userId,
+  required String folderId,
+}) {
+  final index = (_indexes[block] ??= {}).putIfAbsent(
+    orgId,
+    () => _OrgIndex(block, orgId),
+  );
+  final org = index.org;
+  final m = index.members[userId];
+  if (org == null || m == null || !index.parents.containsKey(folderId)) {
     return const Explanation({}, []);
   }
-  Set<Permission> perms(List<String> names) => {
-    for (final n in names) ...Permission.values.where((p) => p.name == n),
-  };
   return resolvePermissions(
-    role: OrgRole.values.where((r) => r.name == m.role).firstOrNull,
-    status: MemberStatus.values
-        .where((s) => s.name == (m.status ?? org.status))
-        .firstOrNull,
-    disabled: m.disabled ?? false, // admins see it; a member's own row never says disabled (a disabled user gets 401)
+    role: OrgRole.values.asNameMap()[m.role],
+    status: MemberStatus.values.asNameMap()[m.status ?? org.status],
+    // Admins see the flag; a member's own row never says disabled, since a disabled user gets 401.
+    disabled: m.disabled ?? false,
     userId: userId,
     teamIds: {
-      for (final t in block.teams)
-        if (t.orgId == orgId && t.memberIds.contains(userId)) t.id,
+      for (final t in index.teams)
+        if (t.memberIds.contains(userId)) t.id,
     },
     folderId: folderId,
-    parentOf: (id) => parents[id],
-    entries: [
-      for (final a in block.acl.where((a) => a.orgId == orgId))
-        AclEntry(
-          a.folderId,
-          a.principalType == 'team' ? PrincipalType.team : PrincipalType.user,
-          a.principalId,
-          perms(a.allow),
-          perms(a.deny),
-        ),
-    ],
+    parentOf: (id) => index.parents[id],
+    acl: index.acl,
   );
+}
+
+// Per-org lookups of a block, built on first use: a block is replaced, never changed.
+final _indexes = Expando<Map<String, _OrgIndex>>();
+
+class _OrgIndex {
+  _OrgIndex(OrgBlock block, String orgId)
+    : org = block.orgs.where((o) => o.id == orgId).firstOrNull,
+      parents = {
+        for (final n in block.folderTree.where((n) => n.orgId == orgId))
+          n.folderId: n.parentId,
+      },
+      teams = [
+        for (final t in block.teams)
+          if (t.orgId == orgId) t,
+      ],
+      acl = AclIndex([
+        for (final a in block.acl.where((a) => a.orgId == orgId)) a.entry,
+      ]) {
+    for (final m in block.members.where((x) => x.orgId == orgId)) {
+      members.putIfAbsent(m.userId, () => m);
+    }
+  }
+
+  final OrgSummary? org;
+  final members = <String, OrgMember>{};
+  final Map<String, String?> parents;
+  final List<OrgTeam> teams;
+  final AclIndex acl;
 }

@@ -7,17 +7,15 @@ import 'mailer.dart';
 import 'templates.dart';
 
 class SmtpMailer implements Mailer {
-  SmtpMailer(
-    this.config, {
-    this.timezone = 'UTC',
-    this.timeout = const Duration(seconds: 20),
-  });
+  SmtpMailer(this.config, {required this.timezone});
+
+  static const _timeout = Duration(seconds: 20);
+
   final SmtpConfig config;
   final String timezone;
-  final Duration timeout;
 
-  /// `implicit`: TLS from the first byte. `starttls`: STARTTLS is required; a server that does not offer
-  /// it, or refuses it, fails the send before any credential or address is sent. `none`: clear text.
+  // `implicit`: TLS from the first byte. `starttls`: STARTTLS is required; a server that does not offer
+  // it, or refuses it, fails the send before any credential or address is sent. `none`: clear text.
   late final SmtpServer _server = SmtpServer(
     config.host,
     port: config.port,
@@ -38,7 +36,7 @@ class SmtpMailer implements Mailer {
         ..subject = m.subject
         ..text = m.text,
       _server,
-      timeout: timeout,
+      timeout: _timeout,
     );
     return true;
   }

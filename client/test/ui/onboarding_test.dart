@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:unfeudal_client/l10n/app_localizations.dart';
 import 'package:unfeudal_client/src/app_state.dart';
 import 'package:unfeudal_client/src/session/session_store.dart';
-import 'package:unfeudal_client/src/settings/settings.dart';
 import 'package:unfeudal_client/src/storage/local_mirror.dart';
 import 'package:unfeudal_client/src/ui/onboarding/join_screen.dart';
 import 'package:unfeudal_client/src/ui/onboarding/recovery_kit_view.dart';
@@ -133,17 +134,12 @@ void main() {
   });
 
   testWidgets('weak KDF in an enrollment file is refused', (t) async {
-    late String file;
-    await t.runAsync(
-      () async => file = await Enrollment(
-        Uri.parse('https://vault.test'),
-        'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
-        EnrollKind.setup,
-      ).toFile(passphrase: 'file pass', kdf: KdfParams.testing),
-    );
+    // Sealed with 'file pass' under KdfParams.testing.
+    final file = File('../shared/test/fixtures/v0/enrollment_encrypted.json')
+        .readAsStringSync();
     final s = AppState(
       sessions: SessionStore(FakeSecureKv()),
-      settingsStore: SettingsStore.memory(),
+      settingsStore: FakeSettingsStore(),
       openMirror: (_) async => LocalMirror.inMemory(),
     )..stage = AppStage.join;
     await pumpApp(

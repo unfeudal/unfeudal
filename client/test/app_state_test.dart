@@ -5,7 +5,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:unfeudal_client/src/app_state.dart';
 import 'package:unfeudal_client/src/events/app_events.dart';
 import 'package:unfeudal_client/src/session/session_store.dart';
-import 'package:unfeudal_client/src/settings/settings.dart';
 import 'package:unfeudal_client/src/storage/local_mirror.dart';
 import 'package:unfeudal_client/src/terminal/terminal_session.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
@@ -42,7 +41,7 @@ void main() {
       settingsStore: s.settingsStore,
       openMirror: (_) async => throw const MirrorTooNew(2),
       httpClient: h.client,
-      allowTestingKdf: true,
+      kdfFloor: KdfParams.testing,
       kdf: KdfParams.testing,
     );
     await tooNew.boot();
@@ -62,19 +61,20 @@ void main() {
       displayName: 'Camille',
     );
     expect(s.stage, AppStage.setup);
-    expect(
-      s.recoveryKey!.replaceAll('-', ''),
-      hasLength(53),
-    ); // 53 base32 characters in groups of 4
-    expect(jsonDecode(s.mirror!.getKv(KvKey.bundle)!)['bundleVersion'], 0);
+    // 53 base32 characters in groups of 4.
+    expect(s.recoveryKey!.replaceAll('-', ''), hasLength(53));
+    final bundle =
+        jsonDecode(s.mirror!.getKv(KvKey.bundle)!) as Map<String, Object?>;
+    expect(bundle['bundleVersion'], 0);
     s.finishOnboarding();
     expect((s.stage, s.recoveryKey), (AppStage.home, null));
     expect(s.stored!.isInstanceOwner, isTrue);
+    // The device is named after its OS, never the hostname.
     expect([
       'Windows',
       'macOS',
       'Linux',
-    ], contains(h.devices.values.single.name)); // never the hostname
+    ], contains(h.devices.values.single.name));
   });
 
   test(
@@ -100,7 +100,7 @@ void main() {
         return asked.length > 1;
       };
       await expectLater(s.checkServer(lan), throwsA(isA<PlainHttpRefused>()));
-      expect((await s.checkServer(lan)).has('plain_http_lan'), isTrue);
+      expect((await s.checkServer(lan)).has(Flag.plainHttpLan), isTrue);
       expect(asked, [lan, lan]);
       expect(
         await s.checkServer(Uri.parse('https://vault.example.org')),
@@ -112,13 +112,11 @@ void main() {
 
   test('weak prelogin KDF is refused before derivation', () async {
     final h = SyncHarness();
-    await h.createAccount(
-      email,
-      password,
-    ); // KdfParams.testing: below the floor in production
+    // The harness uses KdfParams.testing, below the floor in production.
+    await h.createAccount(email, password);
     final s = AppState(
       sessions: SessionStore(FakeSecureKv()),
-      settingsStore: SettingsStore.memory(),
+      settingsStore: FakeSettingsStore(),
       openMirror: (_) async => LocalMirror.inMemory(),
       httpClient: h.client,
     );
@@ -157,8 +155,8 @@ void main() {
     await s.unlock(password);
     await s.sync!.syncNow();
     expect(
-      (s.stage, s.deviceRevoked, h.devices.values.single.revokedAt),
-      (AppStage.home, false, null),
+      (s.stage, s.signedOutBecause, h.devices.values.single.revokedAt),
+      (AppStage.home, null, null),
     );
   });
 
@@ -169,11 +167,13 @@ void main() {
       meta: hostJson('web', user: 'root'),
     );
     final shell = FakeShell();
-    s.tabs.add(TerminalSession(hostId: 'x', title: 'x')..attach(shell));
+    s.connections.tabs.add(
+      TerminalSession(hostId: 'x', title: 'x')..attach(shell),
+    );
     await s.lock();
     expect(s.vault!.isUnlocked, false);
     expect(s.vault!.entries, isEmpty);
-    expect(s.tabs, isEmpty);
+    expect(s.connections.tabs, isEmpty);
     expect(s.stage, AppStage.unlock);
     expect(shell.closed, isTrue);
   });
@@ -195,12 +195,12 @@ void main() {
       h.offline = false;
       h.devices.values.first.revokedAt = h.now;
       await s.sync!.syncNow();
+      await pumpEventQueue(); // the session ends behind the sync round
       expect(
-        (s.stage, s.deviceRevoked, s.sessionExpired),
-        (AppStage.login, true, false),
+        (s.stage, s.signedOutBecause),
+        (AppStage.login, SignOutReason.deviceRevoked),
       );
       expect(mirrors.values.single.outbox(), hasLength(1));
-      await pumpEventQueue(); // the session ends behind the sync round
       final kept = (await s.sessions.load())!;
       expect((kept.refreshToken, kept.email), (null, s.stored!.email));
       await s.boot(); // a relaunch skips the unlock a dead token would fail
@@ -208,11 +208,11 @@ void main() {
       final (h2, s2, _, _) = await loggedIn();
       h2.expireSessions();
       await s2.sync!.syncNow();
-      expect(
-        (s2.stage, s2.deviceRevoked, s2.sessionExpired),
-        (AppStage.login, false, true),
-      );
       await pumpEventQueue();
+      expect(
+        (s2.stage, s2.signedOutBecause),
+        (AppStage.login, SignOutReason.sessionExpired),
+      );
       expect((await s2.sessions.load())!.refreshToken, isNull);
     },
   );
@@ -237,9 +237,11 @@ void main() {
 
   test('recovery kit regeneration and recovery with the key', () async {
     final (h, s, _, _) = await loggedIn();
-    final fresh = await s.regenerateRecoveryKit(password);
+    final fresh = await s.credentials.regenerateRecoveryKit(password);
     expect(h.accounts[email]!.bundleVersion, 1);
-    expect(jsonDecode(s.mirror!.getKv(KvKey.bundle)!)['bundleVersion'], 1);
+    final bundle =
+        jsonDecode(s.mirror!.getKv(KvKey.bundle)!) as Map<String, Object?>;
+    expect(bundle['bundleVersion'], 1);
     final other = testAppState(harness: h);
     await other.boot();
     final next = await other.recover(

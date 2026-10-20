@@ -1,46 +1,50 @@
 // SPDX-License-Identifier: Apache-2.0
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../l10n/app_localizations.dart';
 import '../../api/admin_models.dart';
 import '../../app_scope.dart';
+import '../../design/buttons.dart';
 import '../../design/dialog.dart';
+import '../../design/field.dart';
+import '../../design/icons.dart';
 import '../../design/motion.dart';
+import '../../design/rows.dart';
 import '../../design/tokens.dart';
-import '../describe_error.dart';
-import '../manage_frame.dart';
+import '../busy_action.dart';
+import '../fields.dart';
 import '../orgs/invite_dialog.dart';
 import '../orgs/org_settings_screen.dart';
 
-/// Binary units, rounded down: 2097152 → "2 MB".
+/// Binary units, rounded down: 2097152 is "2 MB".
 String sizeLabel(AppLocalizations l, int bytes) => switch (bytes) {
   >= 1 << 30 => l.sizeGb(bytes >> 30),
   >= 1 << 20 => l.sizeMb(bytes >> 20),
   _ => l.sizeKb(bytes >> 10),
 };
 
-/// The Instance Owner's screen: accounts, instance invitations, org metadata (never their content).
-class InstanceAdminScreen extends StatefulWidget {
-  const InstanceAdminScreen({super.key, this.onBack});
-
-  final VoidCallback? onBack;
+/// Accounts, invitations and organisations of the instance, for its owner; the Server group of Settings.
+class InstanceAdminPanel extends StatefulWidget {
+  const InstanceAdminPanel({super.key});
 
   @override
-  State<InstanceAdminScreen> createState() => _InstanceAdminScreenState();
+  State<InstanceAdminPanel> createState() => _InstanceAdminPanelState();
 }
 
-class _InstanceAdminScreenState extends State<InstanceAdminScreen> {
+class _InstanceAdminPanelState extends State<InstanceAdminPanel>
+    with BusyAction {
   List<AdminUser> _users = const [];
   List<AdminOrg> _orgs = const [];
   List<PendingInvite> _invites = const [];
   InviteCreated? _created;
   final _email = TextEditingController();
-  String? _error;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    unawaited(_load());
   }
 
   @override
@@ -49,12 +53,12 @@ class _InstanceAdminScreenState extends State<InstanceAdminScreen> {
     super.dispose();
   }
 
-  Future<void> _load() => _run(() async {
+  Future<void> _load() => run(() async {
     final api = AppScope.read(context).api!;
     final (users, orgs, invites) = await (
-      api.adminUsers(),
-      api.adminOrgs(),
-      api.adminInvites(),
+      api.admin.users(),
+      api.admin.orgs(),
+      api.admin.invites(),
     ).wait;
     if (mounted) {
       setState(() {
@@ -65,30 +69,19 @@ class _InstanceAdminScreenState extends State<InstanceAdminScreen> {
     }
   });
 
-  /// Errors land in the screen; lists are updated in place, never fetched again.
-  Future<void> _run(Future<void> Function() action) async {
-    try {
-      await action();
-      if (mounted) setState(() => _error = null);
-    } on Exception catch (e) {
-      if (mounted) {
-        setState(() => _error = describeError(AppLocalizations.of(context), e));
-      }
-    }
-  }
-
-  Future<void> _toggle(AdminUser u) => _run(() async {
-    await AppScope.read(context).api!.adminSetDisabled(u.id, !u.disabled);
+  Future<void> _toggle(AdminUser u) => run(() async {
+    await AppScope.read(context).api!.admin
+        .setDisabled(u.id, disabled: !u.disabled);
     setState(() {
       _users = [
         for (final x in _users)
           x.id == u.id
               ? AdminUser(
-                  x.id,
-                  x.email,
-                  !x.disabled,
-                  x.isInstanceOwner,
-                  x.createdAt,
+                  id: x.id,
+                  email: x.email,
+                  disabled: !x.disabled,
+                  isInstanceOwner: x.isInstanceOwner,
+                  createdAt: x.createdAt,
                 )
               : x,
       ];
@@ -105,8 +98,8 @@ class _InstanceAdminScreenState extends State<InstanceAdminScreen> {
     )) {
       return;
     }
-    await _run(() async {
-      await api.adminDeleteUser(u.id);
+    await run(() async {
+      await api.admin.deleteUser(u.id);
       setState(
         () => _users = [
           for (final x in _users)
@@ -130,8 +123,8 @@ class _InstanceAdminScreenState extends State<InstanceAdminScreen> {
       ),
     );
     if (yes != true) return;
-    await _run(() async {
-      await api.adminDeleteOrg(o.id, o.name);
+    await run(() async {
+      await api.admin.deleteOrg(o.id, o.name);
       setState(
         () => _orgs = [
           for (final x in _orgs)
@@ -145,10 +138,10 @@ class _InstanceAdminScreenState extends State<InstanceAdminScreen> {
     final l = AppLocalizations.of(context);
     final api = AppScope.read(context).api!;
     final email = _email.text.trim();
-    if (email.isEmpty) return setState(() => _error = l.fieldRequired);
-    await _run(() async {
-      final created = await api.adminInvite(email);
-      final invites = await api.adminInvites();
+    if (email.isEmpty) return setState(() => problem = l.fieldRequired);
+    await run(() async {
+      final created = await api.admin.invite(email);
+      final invites = await api.admin.invites();
       setState(() {
         _created = created;
         _invites = invites;
@@ -156,8 +149,8 @@ class _InstanceAdminScreenState extends State<InstanceAdminScreen> {
     });
   }
 
-  Future<void> _revoke(PendingInvite p) => _run(() async {
-    await AppScope.read(context).api!.revokeInvite(p.id);
+  Future<void> _revoke(PendingInvite p) => run(() async {
+    await AppScope.read(context).api!.orgs.revokeInvite(p.id);
     setState(
       () => _invites = [
         for (final x in _invites)
@@ -169,134 +162,172 @@ class _InstanceAdminScreenState extends State<InstanceAdminScreen> {
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
-    final colors = UfColors.of(context);
-    final muted = TextStyle(color: colors.muted, fontSize: 12);
-    final dates = MaterialLocalizations.of(context);
-    final created = _created;
-    return ManageFrame(
-      title: l.railAdmin,
-      onBack: widget.onBack,
-      child: DefaultTabController(
-        length: 3,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            TabBar(
-              isScrollable: true,
-              tabAlignment: TabAlignment.start,
-              tabs: [
-                Tab(
-                  key: const Key('admin-tab-accounts'),
-                  text: l.adminAccounts,
+    return DefaultTabController(
+      length: 3,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TabBar(
+            isScrollable: true,
+            tabAlignment: TabAlignment.start,
+            tabs: [
+              Tab(key: const Key('admin-tab-accounts'), text: l.adminAccounts),
+              Tab(key: const Key('admin-tab-invites'), text: l.adminInvites),
+              Tab(key: const Key('admin-tab-orgs'), text: l.adminOrgs),
+            ],
+          ),
+          if (problem case final error?) UfErrorLine(error),
+          Expanded(
+            child: TabBarView(
+              children: [
+                _AccountsTab(
+                  users: _users,
+                  onToggle: _toggle,
+                  onDelete: _deleteUser,
                 ),
-                Tab(key: const Key('admin-tab-invites'), text: l.adminInvites),
-                Tab(key: const Key('admin-tab-orgs'), text: l.adminOrgs),
+                _InvitesTab(
+                  email: _email,
+                  created: _created,
+                  invites: _invites,
+                  onInvite: _invite,
+                  onRevoke: _revoke,
+                ),
+                _OrgsTab(orgs: _orgs, onDelete: _deleteOrg),
               ],
             ),
-            if (_error case final error?)
-              Text(error, style: TextStyle(color: colors.danger)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AccountsTab extends StatelessWidget {
+  const _AccountsTab({
+    required this.users,
+    required this.onToggle,
+    required this.onDelete,
+  });
+
+  final List<AdminUser> users;
+  final ValueChanged<AdminUser> onToggle;
+  final ValueChanged<AdminUser> onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    final colors = UfColors.of(context);
+    return ListView(
+      children: [
+        for (final u in users)
+          ItemRow(
+            icon: UfIcons.user,
+            title: u.email,
+            trailing: [
+              if (!u.isInstanceOwner) ...[
+                TextButton(
+                  key: Key('admin-user-disable-${u.id}'),
+                  style: smallButton,
+                  onPressed: () => onToggle(u),
+                  child: Text(u.disabled ? l.adminEnable : l.adminDisable),
+                ),
+                TextButton(
+                  key: Key('admin-user-delete-${u.id}'),
+                  style: dangerQuietStyle(colors).merge(smallButton),
+                  onPressed: () => onDelete(u),
+                  child: Text(l.adminDelete),
+                ),
+              ],
+            ],
+          ),
+      ],
+    );
+  }
+}
+
+class _InvitesTab extends StatelessWidget {
+  const _InvitesTab({
+    required this.email,
+    required this.created,
+    required this.invites,
+    required this.onInvite,
+    required this.onRevoke,
+  });
+
+  final TextEditingController email;
+  final InviteCreated? created;
+  final List<PendingInvite> invites;
+  final VoidCallback onInvite;
+  final ValueChanged<PendingInvite> onRevoke;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    final created = this.created;
+    return ListView(
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          spacing: 8,
+          children: [
             Expanded(
-              child: TabBarView(
-                children: [
-                  ListView(
-                    children: [
-                      for (final u in _users)
-                        ListTile(
-                          title: Text(u.email),
-                          trailing: u.isInstanceOwner
-                              ? null
-                              : Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    TextButton(
-                                      key: Key('admin-user-disable-${u.id}'),
-                                      onPressed: () => _toggle(u),
-                                      child: Text(
-                                        u.disabled
-                                            ? l.adminEnable
-                                            : l.adminDisable,
-                                      ),
-                                    ),
-                                    TextButton(
-                                      key: Key('admin-user-delete-${u.id}'),
-                                      style: TextButton.styleFrom(
-                                        foregroundColor: colors.danger,
-                                      ),
-                                      onPressed: () => _deleteUser(u),
-                                      child: Text(l.adminDelete),
-                                    ),
-                                  ],
-                                ),
-                        ),
-                    ],
-                  ),
-                  ListView(
-                    children: [
-                      Row(
-                        spacing: 8,
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              key: const Key('admin-invite-email'),
-                              controller: _email,
-                              keyboardType: TextInputType.emailAddress,
-                              decoration: InputDecoration(
-                                labelText: l.inviteEmail,
-                              ),
-                            ),
-                          ),
-                          FilledButton(
-                            key: const Key('admin-invite-create'),
-                            onPressed: _invite,
-                            child: Text(l.inviteCreate),
-                          ),
-                        ],
-                      ),
-                      if (created != null) InviteResult(created: created),
-                      for (final p in _invites)
-                        PendingInviteRow(invite: p, onRevoke: () => _revoke(p)),
-                    ],
-                  ),
-                  ListView(
-                    children: [
-                      for (final o in _orgs)
-                        ListTile(
-                          title: Text(o.name),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(o.owners.join(', ')),
-                              Text(
-                                [
-                                  l.adminOrgMembers(o.memberCount),
-                                  o.lastActivityAt == null
-                                      ? '—'
-                                      : dates.formatMediumDate(
-                                          o.lastActivityAt!.toLocal(),
-                                        ),
-                                ].join(' · '),
-                                style: muted,
-                              ),
-                              Text(sizeLabel(l, o.storageBytes), style: muted),
-                            ],
-                          ),
-                          trailing: TextButton(
-                            key: Key('admin-org-delete-${o.id}'),
-                            style: TextButton.styleFrom(
-                              foregroundColor: colors.danger,
-                            ),
-                            onPressed: () => _deleteOrg(o),
-                            child: Text(l.adminOrgDelete),
-                          ),
-                        ),
-                    ],
-                  ),
-                ],
+              child: keyedField(
+                'admin-invite-email',
+                email,
+                l.inviteEmail,
+                keyboard: TextInputType.emailAddress,
               ),
+            ),
+            FilledButton(
+              key: const Key('admin-invite-create'),
+              onPressed: onInvite,
+              child: Text(l.inviteCreate),
             ),
           ],
         ),
-      ),
+        if (created != null) InviteResult(created: created),
+        for (final p in invites)
+          PendingInviteRow(invite: p, onRevoke: () => onRevoke(p)),
+      ],
+    );
+  }
+}
+
+class _OrgsTab extends StatelessWidget {
+  const _OrgsTab({required this.orgs, required this.onDelete});
+
+  final List<AdminOrg> orgs;
+  final ValueChanged<AdminOrg> onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    final colors = UfColors.of(context);
+    final dates = MaterialLocalizations.of(context);
+    return ListView(
+      children: [
+        for (final o in orgs)
+          ItemRow(
+            icon: UfIcons.usersThree,
+            title: o.name,
+            subtitle: [
+              o.owners.join(', '),
+              l.adminOrgMembers(o.memberCount),
+              o.lastActivityAt == null
+                  ? noValue
+                  : dates.formatMediumDate(o.lastActivityAt!.toLocal()),
+            ].join(' · '),
+            trailing: [
+              UfTag(sizeLabel(l, o.storageBytes)),
+              TextButton(
+                key: Key('admin-org-delete-${o.id}'),
+                style: dangerQuietStyle(colors).merge(smallButton),
+                onPressed: () => onDelete(o),
+                child: Text(l.adminOrgDelete),
+              ),
+            ],
+          ),
+      ],
     );
   }
 }

@@ -44,10 +44,7 @@ void main() {
           testEmail,
           testPassword,
         )).account!.recoveryKey;
-        oldDevice = (await h.signIn(
-          email: testEmail,
-          password: testPassword,
-        )).deviceId;
+        oldDevice = (await h.signIn()).deviceId;
       });
       final kit = recoveryKitText((
         server: h.baseUrl,

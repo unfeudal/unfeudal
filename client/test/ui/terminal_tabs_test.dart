@@ -38,7 +38,7 @@ void main() {
       expect(find.byType(HostKeyUnknownDialog), findsOneWidget);
       await t.tap(find.byKey(const Key('hostkey-trust')));
       await pumpReal(t, rounds: 10);
-      expect(s.tabs.single.state, SealState.connected);
+      expect(s.connections.tabs.single.state, SealState.connected);
       expect(find.byKey(const Key('tab-0')), findsOneWidget);
     },
   );
@@ -69,7 +69,7 @@ void main() {
     expect(find.textContaining('HostKeyRejected'), findsNothing);
     await t.tap(find.byKey(const Key('tab-close-0')));
     await t.pump();
-    expect(s.tabs, isEmpty);
+    expect(s.connections.tabs, isEmpty);
   });
 
   testWidgets('refused credentials: the tab shows why, retry reconnects', (
@@ -107,7 +107,42 @@ void main() {
     await t.tap(find.byKey(const Key('tab-retry')));
     await pumpReal(t, rounds: 5);
     expect(ssh.targets, hasLength(2));
-    expect(s.tabs, hasLength(1));
+    expect(s.connections.tabs, hasLength(1));
+  });
+
+  testWidgets('retry keeps the failed tab in its place', (t) async {
+    final ssh = FakeSshConnector()..failWith = const SshAuthFailed();
+    final s = await signedInState(t, ssh: ssh);
+    late String failed, other;
+    await t.runAsync(() async {
+      failed = await s.vault!.upsertItem(
+        type: 'host',
+        meta: hostJson('web', user: 'root'),
+      );
+      other = await s.vault!.upsertItem(
+        type: 'host',
+        meta: hostJson('db', user: 'root'),
+      );
+      await s.vault!.hostKeys.pin(other, 'ssh-ed25519', 'SHA256:${'A' * 43}');
+    });
+    await pumpApp(t, state: s);
+    await pumpReal(t, rounds: 5);
+    Future<void> open(String id) async {
+      await t.tap(find.byKey(Key('host-$id')));
+      await t.sendKeyEvent(LogicalKeyboardKey.enter);
+      await pumpReal(t, rounds: 5);
+    }
+
+    await open(failed);
+    ssh.failWith = null;
+    await open(other);
+    await t.tap(find.byKey(const Key('tab-0')));
+    await pumpReal(t, rounds: 5);
+
+    await t.tap(find.byKey(const Key('tab-retry')));
+    await pumpReal(t, rounds: 5);
+
+    expect([for (final tab in s.connections.tabs) tab.hostId], [failed, other]);
   });
 
   testWidgets('a refused changed host key shows Loquet alert, not sad', (

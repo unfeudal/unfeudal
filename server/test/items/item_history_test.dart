@@ -46,7 +46,8 @@ void main() {
           'SELECT body, size FROM item_revisions WHERE item_id = @i AND revision = 3',
           {'i': item['id']},
         )).single;
-        expect(jsonDecode(row['body']! as String)['revision'], 3);
+        final body = jsonDecode(row['body']! as String) as Map<String, Object?>;
+        expect(body['revision'], 3);
         expect(row['size'], utf8.encode(row['body']! as String).length);
       },
     );

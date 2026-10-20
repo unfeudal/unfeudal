@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
@@ -7,48 +9,34 @@ import '../api/api_client.dart';
 import '../debug_trace.dart';
 import '../orgs/folder_keyring.dart';
 import '../storage/local_mirror.dart';
+import '../storage/sealed_kv.dart';
 import '../sync/ledger_store.dart';
+import 'item_rewrite.dart';
 
-enum EntryState { ok, unreadable, unsupported, readOnly }
-
-/// One item as shown: [meta] is the opened payload, [pending] a local write not yet confirmed,
-/// [awaitingKey] an org item whose folder key version is not held.
-class VaultEntry {
-  const VaultEntry(
-    this.item,
-    this.state, {
-    this.meta,
-    this.pending = false,
-    this.awaitingKey = false,
-  });
-
-  final Item item;
-  final EntryState state;
-  final Map<String, Object?>? meta;
-  final bool pending;
-  final bool awaitingKey;
-
-  String get id => item.id;
-  String? get orgId => item.orgId;
-  String? get folderId => item.folderId;
-  ItemKind get kind => item.kind;
-  String? get name => switch (meta?['name']) {
-    final String name => name,
-    _ => null,
-  };
-}
+part 'entry_rules.dart';
+part 'host_key_pins.dart';
+part 'item_sealer.dart';
+part 'personal_scope.dart';
+part 'synced_profile.dart';
+part 'vault_entry.dart';
 
 /// The decrypted local view: server mirror rows overlaid by the outbox. Plaintext lives only in memory.
 class Vault extends ChangeNotifier {
   Vault({
     required this.mirror,
     required this.ledger,
-    required Future<void> Function(Item) write,
-  }) : _send = write;
+    required Future<void> Function(List<Item>) write,
+  }) : _send = write {
+    _personal = _PersonalScope(this);
+  }
 
   final LocalMirror mirror;
   final LedgerStore ledger;
-  final Future<void> Function(Item) _send;
+  final Future<void> Function(List<Item>) _send;
+  late final WriteScope _personal;
+  late final hostKeys = HostKeyPins._(this);
+  late final sealer = ItemSealer._(this);
+  late final profile = SyncedProfile._(this);
   void Function(String id)? onReplay;
 
   /// Set at unlock by the org controller, null at lock; without it org items stay hidden.
@@ -56,11 +44,13 @@ class Vault extends ChangeNotifier {
   Uint8List? _key;
   Map<String, VaultEntry> _entries = {};
 
-  bool get isUnlocked => _key != null;
+  // Ids whose server payload was a replay at the last reload: checked again at the next.
+  Set<String> _replayed = {};
 
-  /// The user key copy, for tests that seal items as another device would.
-  @visibleForTesting
-  Uint8List get debugKey => _requireKey();
+  // Counts the entries written in place, so a reload that read the mirror before one starts over.
+  int _writes = 0;
+
+  bool get isUnlocked => _key != null;
 
   /// Returns the ledger result: false when the sealed ledger could not be opened (the caller reports it).
   Future<bool> unlock(Uint8List userKey) async {
@@ -80,6 +70,8 @@ class Vault extends ChangeNotifier {
     _key = null;
     ledger.close();
     _entries = {};
+    _replayed = {};
+    hostKeys._rebuild(const []);
     notifyListeners();
   }
 
@@ -93,72 +85,48 @@ class Vault extends ChangeNotifier {
   ];
 
   /// Trashed: deleted, or a folder of its chain deleted (seen-set: a stored loop never hangs).
-  bool isTrashed(String id) {
+  bool isTrashed(String id) =>
+      _chainOf(id).any((up) => _entries[up]?.item.deleted ?? false);
+
+  // [start], then each folder above it; the seen-set stops at a stored loop.
+  Iterable<String> _chainOf(String? start) sync* {
     final seen = <String>{};
-    for (String? current = id; current != null && seen.add(current);) {
-      final e = _entries[current];
-      if (e == null) return false;
-      if (e.item.deleted) return true;
-      current = e.folderId;
+    for (
+      String? up = start;
+      up != null && seen.add(up);
+      up = _entries[up]?.folderId
+    ) {
+      yield up;
     }
-    return false;
   }
 
-  Future<void> trashItem(String id) => _setDeleted(id, true);
+  Future<void> trashItem(String id) async {
+    _requireKey();
+    await setDeleted(_personal, id, deleted: true);
+  }
 
-  Future<void> restoreItem(String id) => _setDeleted(id, false);
-
-  /// The subtree is trashed by definition: only the folder itself is written.
-  Future<void> deleteFolder(String id) => trashItem(id);
+  Future<void> restoreItem(String id) async {
+    _requireKey();
+    await setDeleted(_personal, id, deleted: false);
+  }
 
   Future<String> saveFolder(
     FolderMeta meta, {
     String? id,
     String? parentId,
   }) async {
-    final seen = <String>{};
-    for (
-      String? up = parentId;
-      up != null && seen.add(up);
-      up = _entries[up]?.folderId
-    ) {
-      if (up == id) {
-        throw ArgumentError.value(
-          parentId,
-          'parentId',
-          'is the folder itself or inside it',
-        );
-      }
+    if (_chainOf(parentId).contains(id)) {
+      throw ArgumentError.value(
+        parentId,
+        'parentId',
+        'is the folder itself or inside it',
+      );
     }
     return upsertItem(
       type: 'folder',
       id: id,
       folderId: parentId,
       meta: meta.toJson(),
-    );
-  }
-
-  /// A rename is never a move: the entry keeps its folder. The secret kind must match the meta kind.
-  Future<void> updateIdentity(
-    String id,
-    IdentityMeta meta, {
-    IdentitySecret? secret,
-  }) async {
-    final current =
-        _entries[id] ??
-        (throw ArgumentError.value(id, 'id', 'unknown identity'));
-    final kind = secret?.kind.name ?? current.meta?['kind'];
-    if (kind != meta.kind.name) {
-      throw ArgumentError(
-        'identity kind ${meta.kind.name} does not match its secret ($kind)',
-      );
-    }
-    await upsertItem(
-      type: 'identity',
-      id: id,
-      folderId: current.folderId,
-      meta: meta.toJson(),
-      secret: secret?.toJson(),
     );
   }
 
@@ -169,142 +137,27 @@ class Vault extends ChangeNotifier {
       return null;
     }
     try {
-      final json = await _secretJson(id);
+      final json = await _currentSecret(_personal, id);
       if (json == null) return null;
       final secret = IdentitySecret.fromJson(json);
       return secret.kind.name == e.meta?['kind'] ? secret : null;
     } on _ReplayedSecret {
       return null;
-    } on DecryptionFailed {
-      return null;
-    } on UnsupportedEnvelope {
-      return null;
-    } on FormatException {
+    } on Exception catch (e) {
+      if (!isUnreadable(e)) rethrow;
       return null;
     }
-  }
-
-  /// The `ok` profile with the smallest id wins on every device; none → an empty profile.
-  ProfileMeta get profile => switch (_profileEntry) {
-    final VaultEntry e => ProfileMeta.fromJson(e.meta),
-    null => ProfileMeta(),
-  };
-
-  /// Merges into the winning profile's prefs: null removes a key, unknown keys stay.
-  Future<void> setPrefs(Map<String, Object?> changes) {
-    final current = profile;
-    final prefs = {...current.prefs};
-    for (final MapEntry(:key, :value) in changes.entries) {
-      value == null ? prefs.remove(key) : prefs[key] = value;
-    }
-    return _writeProfile(
-      ProfileMeta(
-        schemaVersion: current.schemaVersion,
-        displayName: current.displayName,
-        prefs: prefs,
-        extra: current.extra,
-      ),
-    );
-  }
-
-  Future<void> setDisplayName(String? name) {
-    final current = profile;
-    return _writeProfile(
-      ProfileMeta(
-        schemaVersion: current.schemaVersion,
-        displayName: name,
-        prefs: current.prefs,
-        extra: current.extra,
-      ),
-    );
   }
 
   /// A personal copy of [mine] under a new id at revision 0, name suffixed, secret re-sealed; an org item's
   /// copy leaves its org folder. Null for an unknown type.
-  Future<Item?> conflictCopy(Item mine, {required String suffix}) async {
-    if (mine.kind == ItemKind.unknown) return null;
-    final meta = (await open(mine, PayloadPart.meta, fromServer: false))!.json;
-    final secret = mine.secret == null
-        ? null
-        : (await open(mine, PayloadPart.secret, fromServer: false))!.json;
-    if (meta['name'] case final String name) {
-      final max = mine.kind == ItemKind.snippet
-          ? PayloadLimits.snippetName
-          : PayloadLimits.name;
-      meta['name'] = String.fromCharCodes('$name$suffix'.runes.take(max));
-    }
-    return seal(
-      id: newId(),
-      type: mine.type,
-      folderId: mine.scope == ItemScope.personal ? mine.folderId : null,
-      meta: meta,
-      secret: secret,
-    );
-  }
-
-  /// The ledger pin wins over the synced item: a server cannot revert or delete a pin on this device.
-  KnownHostMeta? trustedPin(String hostId) =>
-      ledger.hostPin(hostId) ?? _knownHostMeta(_knownHostWinner(hostId));
-
-  /// Ledger first (saved), then the winning knownHost item; read-only only skips the sync.
-  Future<void> pinHostKey(
-    String hostId,
-    String keyType,
-    String fingerprint,
-  ) async {
-    trace(TraceArea.vault, 'pin host key of ${shortId(hostId)}');
-    final pin = KnownHostMeta(
-      hostItemId: hostId,
-      keyType: keyType,
-      sha256Fingerprint: fingerprint,
-    );
-    await ledger.setHostPin(hostId, pin);
-    try {
-      await upsertItem(
-        type: 'knownHost',
-        id: _knownHostWinner(hostId)?.id,
-        meta: pin.toJson(),
+  Future<Item?> conflictCopy(Item mine, {required String suffix}) =>
+      sealer.conflictCopyIn(
+        _personal,
+        mine,
+        suffix: suffix,
+        folderId: mine.scope == ItemScope.personal ? mine.folderId : null,
       );
-    } on ReadOnlyException {
-      // the local pin stands; the synced copy waits for a writable server
-    }
-  }
-
-  /// First sight of a synced pin seeds the ledger; an existing ledger pin is never replaced from the server.
-  Future<void> _seedPins() async {
-    final synced = _knownHostWinners(_entries.values.where((e) => !e.pending));
-    for (final MapEntry(key: host, value: winner) in synced.entries) {
-      if (ledger.hostPin(host) == null) {
-        await ledger.setHostPin(host, _knownHostMeta(winner)!);
-      }
-    }
-  }
-
-  VaultEntry? _knownHostWinner(String hostId) =>
-      _knownHostWinners(_entries.values)[hostId];
-
-  /// One knownHost per host: the `ok` entry with the smallest id wins.
-  static Map<String, VaultEntry> _knownHostWinners(
-    Iterable<VaultEntry> entries,
-  ) {
-    final winners = <String, VaultEntry>{};
-    for (final e in entries) {
-      if (e.kind != ItemKind.knownHost ||
-          e.state != EntryState.ok ||
-          e.orgId != null) {
-        continue;
-      }
-      final host = _knownHostMeta(e)!.hostItemId;
-      final best = winners[host];
-      if (best == null || e.id.compareTo(best.id) < 0) winners[host] = e;
-    }
-    return winners;
-  }
-
-  static KnownHostMeta? _knownHostMeta(VaultEntry? e) =>
-      e == null ? null : KnownHostMeta.fromJson(e.meta);
-
-  ResolvedHost resolve(String hostId) => hostLookup(hostId)!.resolved;
 
   /// An `ok` host with its inherited values; null for anything else.
   ({HostMeta meta, ResolvedHost resolved, bool org})? hostLookup(String id) {
@@ -333,46 +186,20 @@ class Vault extends ChangeNotifier {
         : null;
   }
 
-  VaultEntry? get _profileEntry {
-    final profiles = [
-      for (final e in _entries.values)
-        if (e.kind == ItemKind.profile &&
-            e.state == EntryState.ok &&
-            e.orgId == null)
-          e,
-    ]..sort((a, b) => a.id.compareTo(b.id));
-    return profiles.firstOrNull;
-  }
-
-  Future<void> _writeProfile(ProfileMeta meta) =>
-      upsertItem(type: 'profile', id: _profileEntry?.id, meta: meta.toJson());
-
-  /// Same envelopes with `deleted` flipped: `deleted` is not in the AAD, so nothing is re-sealed; `secret: null` keeps it.
-  Future<void> _setDeleted(String id, bool deleted) async {
-    _requireKey();
+  /// Flips `deleted` on [id] once [scope] allows it; nothing is re-sealed.
+  Future<void> setDeleted(
+    WriteScope scope,
+    String id, {
+    required bool deleted,
+  }) async {
     final current =
         _entries[id] ?? (throw ArgumentError.value(id, 'id', 'unknown item'));
-    _personalOnly(current);
-    if (current.state != EntryState.ok) {
-      throw StateError('${current.state.name} item is not rewritten');
-    }
-    final json = current.item.toJson()
-      ..removeWhere((k, _) => _serverSet.contains(k))
-      ..['deleted'] = deleted;
-    if (!_queuedSecret(id)) {
-      json['secret'] =
-          null; // a queued secret not stored yet is sent again as is
-    }
-    await _write(Item.fromJson(json));
+    scope.checkDelete(current);
+    await _write(
+      withDeleted(mirror, current.item, deleted: deleted),
+      current.meta!,
+    );
   }
-
-  static const _serverSet = {
-    'purged',
-    'createdAt',
-    'updatedAt',
-    'updatedBy',
-    'updatedDevice',
-  };
 
   /// Opens one part. A server payload ([fromServer]) older than its mark is a replay: [onReplay], null.
   Future<OpenedPayload?> open(
@@ -402,46 +229,56 @@ class Vault extends ChangeNotifier {
     return opened;
   }
 
-  /// The key for [envelope] of [item]: the user key for personal items; for org items the keyring's key of the
-  /// keyId's folder and version. Null = not held (the entry shows awaitingKey).
-  Uint8List? _keyFor(Item item, Envelope envelope, PayloadPart part) {
-    if (item.scope == ItemScope.personal) return _key;
-    final id = KeyIds.parseFolder(envelope.keyId);
-    if (id == null || id.part != part) return null;
-    final keys = keyring?.keyFor(id.folderId, id.version);
-    return part == PayloadPart.meta ? keys?.metaKey : keys?.secretKey;
-  }
+  // The user key for personal items, else the keyring's; null when not held (the entry shows awaitingKey).
+  Uint8List? _keyFor(Item item, Envelope envelope, PayloadPart part) =>
+      item.scope == ItemScope.personal
+      ? _key
+      : folderPartKey(keyring, envelope, part);
 
   Future<void> reload() async {
     final key = _key;
     if (key == null) {
       return; // locked: a late sync round finds nothing to rebuild
     }
+    final writes = _writes;
     final queued = {for (final e in mirror.outbox()) e.item.id: e.item};
-    final rows = {
-      for (final i in mirror.items()) i.id: i,
-      ...queued,
-    }; // the outbox overlays the server row
+    // The outbox overlays the server row.
+    final rows = {for (final i in mirror.items()) i.id: i, ...queued};
     final next = <String, VaultEntry>{};
+    final replayed = <String>{};
     for (final item in rows.values) {
       if (_key == null) return; // locked while this round ran
       if (item.purged || (item.scope == ItemScope.org && keyring == null)) {
         continue;
       }
       final fromServer = !queued.containsKey(item.id);
-      final built = await _build(item, fromServer: fromServer);
       final previous = _entries[item.id];
+      if (_reusable(previous, item, pending: !fromServer)) {
+        next[item.id] = VaultEntry(
+          item,
+          previous!.state,
+          meta: previous.meta,
+          pending: previous.pending,
+        );
+        continue;
+      }
+      final built = await _built(
+        item,
+        () => open(item, PayloadPart.meta, fromServer: fromServer),
+        pending: !fromServer,
+      );
+      if (built == null) replayed.add(item.id);
+      // A replay keeps what was shown and takes the new revision.
       next[item.id] =
           built ??
           (previous == null
               ? VaultEntry(item, EntryState.unreadable)
-              : VaultEntry(
-                  item,
-                  previous.state,
-                  meta: previous.meta,
-                )); // replay: keep what was shown, take the new revision
+              : VaultEntry(item, previous.state, meta: previous.meta));
     }
+    if (_writes != writes) return reload();
     _entries = next;
+    _replayed = replayed;
+    hostKeys._rebuild(next.values);
     if (tracing(TraceArea.vault)) {
       final odd = next.values.where((e) => e.state != EntryState.ok).length;
       trace(
@@ -449,58 +286,25 @@ class Vault extends ChangeNotifier {
         'reload: ${next.length} entries, $odd not ok, outbox ${queued.length}',
       );
     }
-    await _seedPins();
-    await ledger.save();
+    await hostKeys._seed(_entries.values);
+    await ledger.saveIfChanged();
     notifyListeners();
   }
 
-  /// One seq for both parts, keyId `user`, the AAD of the new placement.
-  Future<Item> seal({
-    required String id,
-    required String type,
-    String? folderId,
-    bool deleted = false,
-    int revision = 0,
-    required Map<String, Object?> meta,
-    Map<String, Object?>? secret,
-  }) async {
-    final key = _requireKey();
-    final seq = ledger.nextSeq(id);
-    Future<Map<String, Object?>> sealPart(
-      PayloadPart part,
-      Map<String, Object?> json,
-    ) async => (await PayloadCrypto.seal(
-      PayloadAad(
-        itemId: id,
-        part: part,
-        type: type,
-        scope: ItemScope.personal,
-        orgId: null,
-        folderId: folderId,
-      ),
-      json,
-      key,
-      KeyIds.user,
-      seq: seq,
-    )).toJson();
-    // a rewrite keeps the wire item's unknown fields and schemaVersion as read
-    final current = _entries[id]?.item;
-    return Item.fromJson({
-      ...?current?.extra,
-      'id': id,
-      'type': type,
-      'scope': 'personal',
-      'orgId': null,
-      'folderId': folderId,
-      'schemaVersion': current?.schemaVersion ?? 1,
-      'revision': revision,
-      'deleted': deleted,
-      'meta': await sealPart(PayloadPart.meta, meta),
-      'secret': secret == null
-          ? null
-          : await sealPart(PayloadPart.secret, secret),
-    });
-  }
+  // previous still shows item: same placement (the AAD) and meta envelope, same pending state, opened, not a
+  // replay; a server row only while its mark stands (a restore empties the marks, so every row is checked again).
+  bool _reusable(VaultEntry? previous, Item item, {required bool pending}) =>
+      previous != null &&
+      previous.pending == pending &&
+      previous.state != EntryState.unreadable &&
+      !_replayed.contains(item.id) &&
+      (pending || ledger.mark(item.id, PayloadPart.meta) > 0) &&
+      previous.item.type == item.type &&
+      previous.item.scope == item.scope &&
+      previous.item.orgId == item.orgId &&
+      previous.item.folderId == item.folderId &&
+      jsonEncode(previous.item.meta?.toJson()) ==
+          jsonEncode(item.meta?.toJson());
 
   Future<String> upsertItem({
     required String type,
@@ -508,131 +312,85 @@ class Vault extends ChangeNotifier {
     String? folderId,
     required Map<String, Object?> meta,
     Map<String, Object?>? secret,
+  }) => rewrite(
+    _personal,
+    type: type,
+    id: id,
+    folderId: folderId,
+    meta: meta,
+    secret: secret,
+  );
+
+  /// Writes [id] (null: a new item) once [scope] allows it; a move or an unsent secret re-seals the current secret.
+  Future<String> rewrite(
+    WriteScope scope, {
+    required String type,
+    String? id,
+    String? orgId,
+    String? folderId,
+    required Map<String, Object?> meta,
+    Map<String, Object?>? secret,
   }) async {
-    _requireKey();
     final current = id == null ? null : _entries[id];
-    if (current != null) _personalOnly(current);
-    if (current != null && current.state != EntryState.ok) {
-      throw StateError('${current.state.name} item is not rewritten');
-    }
+    scope.checkWrite(current, type: type, orgId: orgId, folderId: folderId);
     final itemId = id ?? newId();
-    // A move re-seals both parts (the server refuses a moved item without its secret), and so does an edit
-    // of an item whose queued write still carries a secret the server has not stored yet.
     if (current != null &&
         secret == null &&
-        (current.folderId != folderId || _queuedSecret(itemId))) {
-      secret = await _secretJson(itemId);
+        resealsSecret(mirror, current.item, folderId)) {
+      secret = await _currentSecret(scope, itemId);
     }
-    final item = await seal(
+    final item = await sealer.sealItem(
       id: itemId,
       type: type,
+      orgId: orgId,
       folderId: folderId,
       deleted: current?.item.deleted ?? false,
       revision: current?.item.revision ?? 0,
       meta: meta,
       secret: secret,
+      keyFor: scope.sealKeys(
+        type: type,
+        id: itemId,
+        folderId: folderId,
+        withSecret: secret != null,
+      ),
     );
-    await _write(item);
+    await _write(item, meta);
     return itemId;
   }
 
-  /// The current secret: the queued one if it carries a secret, else the server row's (each opened with its own AAD).
-  Future<Map<String, Object?>?> _secretJson(String id) async {
-    final queued = mirror
-        .outbox()
-        .where((e) => e.item.id == id)
-        .firstOrNull
-        ?.item;
-    final holder = queued?.secret != null ? queued! : mirror.item(id);
-    if (holder?.secret == null) return null;
-    final opened = await open(
-      holder!,
+  // The current secret: the queued one if it carries a secret, else the server row's (each opened with its own AAD).
+  Future<Map<String, Object?>?> _currentSecret(
+    WriteScope scope,
+    String id,
+  ) async {
+    final holder = secretHolder(mirror, id);
+    if (holder == null) return null;
+    return scope.openPart(
+      holder.item,
       PayloadPart.secret,
-      fromServer: holder != queued,
+      fromServer: !holder.queued,
     );
-    if (opened == null) throw const _ReplayedSecret();
-    return opened.json;
   }
 
-  bool _queuedSecret(String id) =>
-      mirror.outbox().any((e) => e.item.id == id && e.item.secret != null);
+  /// Hands [items] to the outbox at once, without touching the entries (rotation reloads once, after).
+  Future<void> sendAll(List<Item> items) => _send(items);
 
-  Future<void> _write(Item item) async {
+  // Sends item and shows it from meta, its plaintext in hand; the sync round reloads what else changed.
+  Future<void> _write(Item item, Map<String, Object?> meta) async {
     trace(
       TraceArea.vault,
       'write ${item.type} ${shortId(item.id)}${item.deleted ? ' (trash)' : ''}',
     );
-    await _send(item);
-    await reload();
+    await _send([item]);
+    if (_key == null) return; // locked while sending
+    if (item.scope == ItemScope.org && keyring == null) return;
+    _entries[item.id] = _written(item, meta);
+    _writes++;
+    hostKeys._rebuild(_entries.values);
+    await ledger.saveIfChanged();
+    notifyListeners();
   }
 
   Uint8List _requireKey() => _key ?? (throw StateError('locked'));
-
-  static void _personalOnly(VaultEntry e) {
-    if (e.orgId != null) throw StateError('org items go through OrgWriter');
-  }
-
-  /// null = replayed payload.
-  Future<VaultEntry?> _build(Item item, {required bool fromServer}) async {
-    if (item.kind == ItemKind.unknown) {
-      return VaultEntry(item, EntryState.unsupported, pending: !fromServer);
-    }
-    try {
-      final opened = await open(item, PayloadPart.meta, fromServer: fromServer);
-      if (opened == null) return null;
-      final schema = opened.json['schemaVersion'];
-      if (schema is int && schema > Payload.knownSchemaVersion) {
-        return VaultEntry(
-          item,
-          EntryState.readOnly,
-          meta: opened.json,
-          pending: !fromServer,
-        ); // never rewritten
-      }
-      _parse(
-        item.kind,
-        opened.json,
-      ); // typed model: FormatException on a bad payload
-      return VaultEntry(
-        item,
-        EntryState.ok,
-        meta: opened.json,
-        pending: !fromServer,
-      );
-    } on _MissingFolderKey {
-      return VaultEntry(
-        item,
-        EntryState.unreadable,
-        pending: !fromServer,
-        awaitingKey: true,
-      );
-    } on DecryptionFailed {
-      return VaultEntry(item, EntryState.unreadable, pending: !fromServer);
-    } on UnsupportedEnvelope {
-      return VaultEntry(item, EntryState.unreadable, pending: !fromServer);
-    } on FormatException {
-      return VaultEntry(item, EntryState.unreadable, pending: !fromServer);
-    }
-  }
-
-  static void _parse(ItemKind kind, Map<String, Object?> json) =>
-      switch (kind) {
-        ItemKind.host => HostMeta.fromJson(json),
-        ItemKind.identity => IdentityMeta.fromJson(json),
-        ItemKind.folder => FolderMeta.fromJson(json),
-        ItemKind.snippet => SnippetMeta.fromJson(json),
-        ItemKind.knownHost => KnownHostMeta.fromJson(json),
-        ItemKind.profile => ProfileMeta.fromJson(json),
-        ItemKind.hostBinding => HostBindingMeta.fromJson(json),
-        ItemKind.memberPin => MemberPinMeta.fromJson(json),
-        ItemKind.unknown => null,
-      };
-}
-
-class _ReplayedSecret implements Exception {
-  const _ReplayedSecret();
-}
-
-class _MissingFolderKey implements Exception {
-  const _MissingFolderKey();
 }

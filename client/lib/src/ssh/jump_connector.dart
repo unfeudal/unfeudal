@@ -3,12 +3,6 @@ import 'package:dartssh2/dartssh2.dart';
 
 import 'ssh_connector.dart';
 
-abstract interface class HopClient {
-  Future<SSHSocket> forwardLocal(String host, int port);
-  Future<SshShell> shell();
-  Future<void> close();
-}
-
 /// [over]: the previous hop's forwarded channel; null = direct TCP.
 typedef HopOpener = Future<HopClient> Function(
   ConnectTarget target, {
@@ -38,38 +32,32 @@ class JumpConnection {
   }
 }
 
-class JumpConnector {
-  JumpConnector(this._open);
-  final HopOpener _open;
-
-  /// [hops] outermost first. A failure closes what is open and never contacts the next hop.
-  Future<JumpConnection> connect(
-    List<ConnectTarget> hops,
-    ConnectTarget target,
-  ) async {
-    final chain = [...hops, target];
-    final opened = <HopClient>[];
-    SSHSocket? over;
-    for (var i = 0; i < chain.length; i++) {
-      try {
-        final client = await _open(chain[i], over: over);
-        opened.add(client);
-        if (i < chain.length - 1) {
-          over = await client.forwardLocal(
-            chain[i + 1].address,
-            chain[i + 1].port,
-          );
-        }
-      } catch (e) {
-        for (final c in opened.reversed) {
-          await c.close().catchError((Object _) {});
-        }
-        throw JumpChainFailed(chain[i].hostId, chain[i].hostName, i, e);
+/// [hops] outermost first. A failure closes what is open and never contacts the next hop.
+Future<JumpConnection> connectChain(
+  HopOpener open,
+  List<ConnectTarget> hops,
+  ConnectTarget target,
+) async {
+  final chain = [...hops, target];
+  final opened = <HopClient>[];
+  SSHSocket? over;
+  for (var i = 0; i < chain.length; i++) {
+    try {
+      final client = await open(chain[i], over: over);
+      opened.add(client);
+      if (i < chain.length - 1) {
+        over = await client.forwardLocal(
+          chain[i + 1].address,
+          chain[i + 1].port,
+        );
       }
+    } catch (e) {
+      // Any failure, whatever its type, closes the open hops and is wrapped with the failing hop.
+      for (final c in opened.reversed) {
+        await c.close().catchError((Object _) {});
+      }
+      throw JumpChainFailed(chain[i].hostId, chain[i].hostName, i, e);
     }
-    return JumpConnection(opened.last, opened.sublist(0, opened.length - 1));
   }
+  return JumpConnection(opened.last, opened.sublist(0, opened.length - 1));
 }
-
-HopOpener sshHopOpener(SshConnector connector, SshCallbacks callbacks) =>
-    (target, {over}) => connector.connectHop(target, callbacks, over: over);

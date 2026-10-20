@@ -1,12 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
-import '../api/app.dart';
+import '../api/deps.dart';
 import '../auth/tokens.dart';
-import '../config/features.dart';
 import '../db/db.dart';
 import '../mail/mailer.dart';
-import '../util/random.dart';
 
 typedef InviteRow = ({String id, String token, DateTime expiresAt});
 
@@ -57,7 +55,7 @@ Future<Map<String, Object?>> inviteBody(
     'role': role,
     'expiresAt': iso(row.expiresAt),
     'link': enrollment.toLink(),
-    'file': await enrollment.toFile(),
+    'file': enrollment.toFile(),
   };
 }
 
@@ -74,8 +72,42 @@ Future<bool> inviteMailSent(
   }
   try {
     return await deps.mailer.send(Mail(MailKind.invite, to, locale, vars));
-  } catch (e) {
+  } on Object catch (e) {
+    // Any mail failure is caught: the invite is already committed and stays.
     deps.log.warn('invite mail failed', {'type': '${e.runtimeType}'});
     return false;
   }
 }
+
+/// Pending invites (not accepted, revoked or expired) of [orgId], or the instance invites when null, by expiresAt.
+Future<List<Map<String, Object?>>> pendingInvites(
+  Tx tx,
+  AppDeps deps,
+  String? orgId,
+) async {
+  final rows = await tx.query(
+    'SELECT id, email, role, created_by, created_at, expires_at FROM invites '
+    'WHERE ${orgId == null ? 'org_id IS NULL' : 'org_id = @o'} '
+    'AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at > @now '
+    'ORDER BY expires_at, id',
+    {'o': ?orgId, 'now': iso(deps.clock.now())},
+  );
+  return [
+    for (final r in rows)
+      {
+        'id': r['id'],
+        'email': r['email'],
+        if (orgId != null) 'role': r['role'],
+        'createdBy': r['created_by'],
+        'createdAt': r['created_at'],
+        'expiresAt': r['expires_at'],
+      },
+  ];
+}
+
+/// The mail language of [userId].
+Future<String> localeOf(Tx tx, String userId) async =>
+    (await tx.query('SELECT locale FROM users WHERE id = @u', {
+          'u': userId,
+        })).single['locale']!
+        as String;

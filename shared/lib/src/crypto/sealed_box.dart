@@ -28,9 +28,9 @@ abstract final class SealedBox {
     final key = await _key(
       eph,
       recipientPublicKey,
-      ephPub,
-      recipientPublicKey,
-      purpose,
+      ephPub: ephPub,
+      recipientPub: recipientPublicKey,
+      purpose: purpose,
     );
     final inner = await SymmetricCipher.encrypt(
       key,
@@ -60,7 +60,13 @@ abstract final class SealedBox {
     if (envelope.ct.length < 48) throw const DecryptionFailed();
     final ephPub = envelope.ct.sublist(0, 32);
     final myPub = (await keyPair.extractPublicKey()).bytes;
-    final key = await _key(keyPair, ephPub, ephPub, myPub, purpose);
+    final key = await _key(
+      keyPair,
+      ephPub,
+      ephPub: ephPub,
+      recipientPub: myPub,
+      purpose: purpose,
+    );
     return SymmetricCipher.decrypt(
       key,
       Envelope(
@@ -73,14 +79,14 @@ abstract final class SealedBox {
     );
   }
 
-  /// key = hkdf32(X25519, `unfeudal/sealed/v1|<purpose>|<b64 ephPub>|<b64 recipientPub>`); all-zero X25519 refused.
+  // key = hkdf32(X25519, `unfeudal/sealed/v1|<purpose>|<b64 ephPub>|<b64 recipientPub>`); all-zero X25519 refused.
   static Future<Uint8List> _key(
     SimpleKeyPair mine,
-    List<int> theirs,
-    List<int> ephPub,
-    List<int> recipientPub,
-    String purpose,
-  ) async {
+    List<int> theirs, {
+    required List<int> ephPub,
+    required List<int> recipientPub,
+    required String purpose,
+  }) async {
     final shared = await (await _x25519.sharedSecretKey(
       keyPair: mine,
       remotePublicKey: SimplePublicKey(theirs, type: KeyPairType.x25519),

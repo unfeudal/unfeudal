@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 import 'package:flutter/material.dart';
+import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
 import '../../app_state.dart';
 import '../../design/banner.dart';
-import '../../design/motion.dart';
+import '../../design/feedback.dart';
 import '../../session/lock_machine.dart';
-import '../describe_error.dart';
+import '../busy_action.dart';
 import '../fields.dart';
 import '../onboarding/recovery_screen.dart';
 import 'lock_frame.dart';
@@ -19,14 +20,14 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends State<LoginScreen> with BusyAction {
   late final TextEditingController _server;
   late final TextEditingController _email;
   final _password = TextEditingController();
-  bool _busy = false;
-  Object? _error;
-  int _failures = 0;
   double _eyeX = 0.5;
+
+  // Bumped by a refused sign-in, to shake the password field.
+  int _shakes = 0;
 
   @override
   void initState() {
@@ -54,27 +55,20 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  Future<void> _submit() async {
-    setState(() => _busy = true);
+  Future<void> _submit() => run(() async {
     final machine = _machine..submit();
-    try {
-      await AppScope.read(context).login(
-        server: Uri.parse(_server.text.trim()),
-        email: _email.text.trim(),
-        password: _password.text,
-      );
-      machine.succeed();
-    } on Exception catch (e) {
-      machine.fail();
-      if (mounted) {
-        setState(() {
-          _error = e;
-          _failures++;
-        });
-      }
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
+    await AppScope.read(context).login(
+      server: Uri.parse(_server.text.trim()),
+      email: _email.text.trim(),
+      password: _password.text,
+    );
+    machine.succeed();
+  });
+
+  @override
+  void failed(Object error) {
+    _machine.fail();
+    setState(() => _shakes++);
   }
 
   @override
@@ -87,9 +81,9 @@ class _LoginScreenState extends State<LoginScreen> {
         subtitle: state.stored?.serverUrl.host,
         eyeX: _eyeX,
         children: [
-          if (state.deviceRevoked)
+          if (state.signedOutBecause == SignOutReason.deviceRevoked)
             StatusBanner(tone: BannerTone.danger, message: l.loginDeviceRevoked)
-          else if (state.sessionExpired)
+          else if (state.signedOutBecause == SignOutReason.sessionExpired)
             StatusBanner(tone: BannerTone.warn, message: l.loginSessionExpired),
           keyedField(
             'login-server',
@@ -108,8 +102,8 @@ class _LoginScreenState extends State<LoginScreen> {
               keyboard: TextInputType.emailAddress,
             ),
           ),
-          ShakeOnError(
-            trigger: _failures,
+          UfShake(
+            shakes: _shakes,
             child: Focus(
               onFocusChange: (on) {
                 if (on) _machine.focusPassword();
@@ -123,36 +117,32 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
           ),
-          if (_error case final error?) LockError(describeError(l, error)),
+          if (problem case final problem?) UfErrorLine(problem),
           LockActions(
-            primary: FilledButton(
+            primary: BusyButton(
               key: const Key('login-submit'),
-              onPressed: _busy ? null : _submit,
-              child: BusyLabel(busy: _busy, label: l.loginSubmit),
+              busy: busy,
+              onPressed: _submit,
+              label: l.loginSubmit,
             ),
-            links: [
-              TextButton(
-                onPressed: () => state.show(AppStage.setup),
-                child: Text(l.loginToSetup),
-              ),
-              TextButton(
-                onPressed: () => state.show(AppStage.join),
-                child: Text(l.loginToJoin),
-              ),
-              // shown unless the last known answer of this server says the recovery kit is off
-              if (state.stored == null || state.serverHas('recovery_kit'))
-                TextButton(
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => const RecoveryScreen(),
-                    ),
-                  ),
-                  child: Text(l.loginToRecover),
-                ),
-            ],
+            links: _otherWaysIn(state, l),
           ),
         ],
       ),
     );
   }
+
+  List<Widget> _otherWaysIn(AppState state, AppLocalizations l) => [
+    TextButton(
+      onPressed: () => state.show(AppStage.setup),
+      child: Text(l.loginToSetup),
+    ),
+    TextButton(
+      onPressed: () => state.show(AppStage.join),
+      child: Text(l.loginToJoin),
+    ),
+    // shown unless the last known answer of this server says the recovery kit is off
+    if (state.stored == null || state.serverInfo.has(Flag.recoveryKit))
+      const RecoverLink(),
+  ];
 }

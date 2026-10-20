@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
@@ -12,8 +11,12 @@ import 'package:printing/printing.dart';
 
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
+import '../../design/choices.dart';
+import '../../design/inputs.dart';
 import '../../design/tokens.dart';
 import '../lock/lock_frame.dart';
+import '../save_file.dart';
+import '../secret_clipboard.dart';
 
 /// What a recovery kit prints.
 typedef RecoveryKit = ({
@@ -132,7 +135,7 @@ class RecoveryKitView extends StatefulWidget {
 class _RecoveryKitViewState extends State<RecoveryKitView> {
   final _created = DateTime.now();
   bool _confirmed = false;
-  Timer? _clear;
+  final _clipboard = SecretClipboard();
 
   RecoveryKit _kit() {
     final stored = AppScope.read(context).stored;
@@ -153,16 +156,14 @@ class _RecoveryKitViewState extends State<RecoveryKitView> {
   }
 
   Future<void> _save() async {
-    final pick = widget.savePath ?? _pickSaveLocation;
-    final path = await pick('unfeudal-recovery-kit.pdf');
+    final path = await (widget.savePath ?? _pickSaveLocation)(
+      'unfeudal-recovery-kit.pdf',
+    );
     if (path == null) return;
     final bytes = path.toLowerCase().endsWith('.txt')
         ? utf8.encode(recoveryKitText(_kit()))
         : await _pdf();
-    await (widget.writeFile ?? (p, b) => File(p).writeAsBytes(b, flush: true))(
-      path,
-      bytes,
-    );
+    await (widget.writeFile ?? writeFileBytes)(path, bytes);
   }
 
   Future<void> _print() async {
@@ -171,34 +172,18 @@ class _RecoveryKitViewState extends State<RecoveryKitView> {
         (b) => Printing.layoutPdf(onLayout: (_) async => b))(bytes);
   }
 
-  static Future<String?> _pickSaveLocation(String suggestedName) async =>
-      (await getSaveLocation(
-        suggestedName: suggestedName,
-        acceptedTypeGroups: const [
+  static Future<String?> _pickSaveLocation(String suggestedName) =>
+      pickSaveLocation(
+        suggestedName,
+        types: const [
           XTypeGroup(label: 'PDF', extensions: ['pdf']),
           XTypeGroup(label: 'TXT', extensions: ['txt']),
         ],
-      ))?.path;
-
-  Future<void> _copy() async {
-    await Clipboard.setData(ClipboardData(text: widget.recoveryKey));
-    _clear?.cancel();
-    _clear = Timer(const Duration(seconds: 60), _wipe);
-  }
-
-  /// Clears the clipboard only if it still holds the key.
-  Future<void> _wipe() async {
-    _clear?.cancel();
-    _clear = null;
-    final now = await Clipboard.getData(Clipboard.kTextPlain);
-    if (now?.text == widget.recoveryKey) {
-      await Clipboard.setData(const ClipboardData(text: ''));
-    }
-  }
+      );
 
   @override
   void dispose() {
-    if (_clear != null) unawaited(_wipe());
+    _clipboard.dispose();
     super.dispose();
   }
 
@@ -212,29 +197,14 @@ class _RecoveryKitViewState extends State<RecoveryKitView> {
         title: l.kitTitle,
         subtitle: l.kitBody,
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-            decoration: BoxDecoration(
-              color: colors.field,
-              borderRadius: const BorderRadius.all(Radius.circular(10)),
-            ),
-            child: SelectableText(
-              widget.recoveryKey,
-              key: const Key('recovery-key'),
-              style: monoStyle.copyWith(
-                fontSize: 18,
-                height: 1.7,
-                letterSpacing: 0.4,
-              ),
-            ),
-          ),
+          _RecoveryKeyBox(widget.recoveryKey),
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: [
               OutlinedButton(
                 key: const Key('recovery-copy'),
-                onPressed: _copy,
+                onPressed: () => _clipboard.copy(widget.recoveryKey),
                 child: Text(l.kitCopy),
               ),
               OutlinedButton(
@@ -251,16 +221,16 @@ class _RecoveryKitViewState extends State<RecoveryKitView> {
           ),
           Text(
             l.kitInstructions,
-            style: theme.textTheme.bodyMedium!.copyWith(color: colors.muted),
+            style: theme.textTheme.bodyMedium!.copyWith(
+              color: colors.muted,
+              fontSize: 13,
+            ),
           ),
-          CheckboxListTile(
+          UfCheckboxRow(
             key: const Key('recovery-confirm'),
             value: _confirmed,
-            onChanged: (v) => setState(() => _confirmed = v ?? false),
-            controlAffinity: ListTileControlAffinity.leading,
-            contentPadding: EdgeInsets.zero,
-            dense: true,
-            title: Text(l.kitConfirm, style: theme.textTheme.bodyLarge),
+            onChanged: (v) => setState(() => _confirmed = v),
+            label: l.kitConfirm,
           ),
           LockActions(
             primary: FilledButton(
@@ -270,6 +240,27 @@ class _RecoveryKitViewState extends State<RecoveryKitView> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _RecoveryKeyBox extends StatelessWidget {
+  const _RecoveryKeyBox(this.recoveryKey);
+
+  final String recoveryKey;
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      painter: UfDashedEdge(UfColors.of(context).edge),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        child: SelectableText(
+          recoveryKey,
+          key: const Key('recovery-key'),
+          style: monoStyle.copyWith(fontSize: 17, height: 1.7),
+        ),
       ),
     );
   }

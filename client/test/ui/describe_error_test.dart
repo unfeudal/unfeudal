@@ -30,7 +30,7 @@ void main() {
     );
   });
 
-  test('reasons, seconds and unknown codes', () {
+  test('reasons pick their own sentence', () {
     expect(
       d(ApiException('unauthorized', 401, reason: 'device_revoked')),
       l.errorDeviceRevoked,
@@ -63,6 +63,9 @@ void main() {
       d(ApiException('conflict', 409, reason: 'account_exists')),
       l.errorAccountExists,
     );
+  });
+
+  test('retry seconds and unknown codes', () {
     expect(
       d(
         ApiException(
@@ -76,7 +79,8 @@ void main() {
     expect(d(ApiException('teapot', 418)), 'Unexpected error (teapot).');
   });
 
-  test('crypto, local and SSH errors', () {
+  test('crypto errors', () {
+    // The two "update the app" errors share a sentence.
     expect({
       d(const WrongPassword()),
       d(const DecryptionFailed()),
@@ -86,10 +90,21 @@ void main() {
       d(const WeakPassword()),
       d(const InvalidRecoveryKey()),
       d(const KeyLabelMismatch('x')),
-    }, hasLength(7)); // the two "update the app" errors share a sentence
+    }, hasLength(7));
+  });
+
+  test('local errors', () {
     expect(d(const ReadOnlyException()), l.errorReadOnly);
     expect(d(NetworkException(Exception('x'))), l.errorNetwork);
     expect(d(const FormatException('bad')), l.errorProtocol);
+    expect(d(const MirrorTooNew(2)), l.errorMirrorTooNew);
+    expect(d(const InsecureServer()), l.errorInsecureServer);
+    expect(d(const PlainHttpRefused()), l.errorPlainHttpRefused);
+    // Never toString(), which may carry a secret.
+    expect(d(StateError('secret detail')), 'Unexpected error (StateError).');
+  });
+
+  test('SSH errors', () {
     expect(
       d(const HostKeyRejected(HostKeyDecision.changed)),
       l.errorHostKeyChanged,
@@ -102,13 +117,6 @@ void main() {
     expect(d(const SshConnectionFailed()), l.errorSshConnection);
     expect(d(const MissingUser()), l.errorMissingUser);
     expect(d(const InvalidKey()), l.errorInvalidKey);
-    expect(d(const MirrorTooNew(2)), l.errorMirrorTooNew);
-    expect(d(const InsecureServer()), l.errorInsecureServer);
-    expect(d(const PlainHttpRefused()), l.errorPlainHttpRefused);
-    expect(
-      d(StateError('secret detail')),
-      'Unexpected error (StateError).',
-    ); // never toString()
   });
 
   test('jump errors', () {

@@ -4,34 +4,30 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
+import '../../app_state.dart';
+import '../../design/choices.dart';
+import '../../design/feedback.dart';
 import '../../design/field.dart';
-import '../../design/motion.dart';
+import '../../design/inputs.dart';
 import '../../design/tokens.dart';
 import '../../events/app_events.dart';
-import '../../vault/org_writer.dart';
 import '../../vault/vault.dart';
-import '../describe_error.dart';
+import '../busy_action.dart';
 import '../history/item_history_panel.dart';
+import 'access_tab.dart';
 import 'editor_frame.dart';
 import 'forwards_editor.dart';
 import 'host_binding_field.dart';
 import 'jump_host_picker.dart';
 
+part 'host_form_fields.dart';
+
 /// Edits a host; empty port, user and key show the inherited value and where it comes from.
 class HostEditorPanel extends StatefulWidget {
-  const HostEditorPanel({
-    super.key,
-    this.hostId,
-    this.folderId,
-    this.orgId,
-    this.onClose,
-  });
+  const HostEditorPanel({super.key, this.hostId, this.orgId, this.onClose});
 
   /// Null for a new host.
   final String? hostId;
-
-  /// Folder of a new host.
-  final String? folderId;
 
   /// Org of a new host; null for the personal vault.
   final String? orgId;
@@ -41,24 +37,13 @@ class HostEditorPanel extends StatefulWidget {
   State<HostEditorPanel> createState() => _HostEditorPanelState();
 }
 
-class _HostEditorPanelState extends State<HostEditorPanel> {
-  final _name = TextEditingController();
-  final _address = TextEditingController();
-  final _port = TextEditingController();
-  final _user = TextEditingController();
-  final _tags = TextEditingController();
-  final _notes = TextEditingController();
-  final _startup = TextEditingController();
-  String? _identityId;
-  String? _folderId;
-  String? _jumpHostId;
-  IdentityMode _identityMode = IdentityMode.shared;
-
-  /// Null while a forward row has a problem.
+class _HostEditorPanelState extends State<HostEditorPanel>
+    with BusyAction, _HostFormFields {
+  // Null while a forward row has a problem.
   List<PortForward>? _forwards = const [];
-  final _problems = <String, String>{};
-  String? _error;
-  int _failures = 0;
+
+  // Bumped by a refused save, to shake the panel.
+  int _shakes = 0;
 
   @override
   void initState() {
@@ -70,7 +55,10 @@ class _HostEditorPanelState extends State<HostEditorPanel> {
     };
     _name.text = text('name');
     _address.text = text('address');
-    _port.text = text('port');
+    _port = switch (meta['port']) {
+      final int port => port,
+      _ => null,
+    };
     _user.text = text('user');
     _tags.text = switch (meta['tags']) {
       final List<Object?> tags => tags.join(', '),
@@ -79,7 +67,7 @@ class _HostEditorPanelState extends State<HostEditorPanel> {
     _notes.text = text('notes');
     _startup.text = text('startupCommand');
     _identityId = meta['identityId'] as String?;
-    _folderId = _entry?.folderId ?? widget.folderId;
+    _folderId = _entry?.folderId;
     _jumpHostId = meta['jumpHostId'] as String?;
     if (meta['identityMode'] == IdentityMode.perMember.name) {
       _identityMode = IdentityMode.perMember;
@@ -93,37 +81,25 @@ class _HostEditorPanelState extends State<HostEditorPanel> {
 
   @override
   void dispose() {
-    for (final c in [_name, _address, _port, _user, _tags, _notes, _startup]) {
+    for (final c in [_name, _address, _user, _tags, _notes, _startup]) {
       c.dispose();
     }
     super.dispose();
   }
 
-  VaultEntry? get _entry => widget.hostId == null
-      ? null
-      : AppScope.read(context).vault!.entry(widget.hostId!);
-
-  String? get _orgId => _entry?.orgId ?? widget.orgId;
-
   Future<void> _save() async {
     final l = AppLocalizations.of(context);
     final state = AppScope.read(context);
-    final vault = state.vault!;
     _problems.clear();
     if (_name.text.trim().isEmpty) _problems['name'] = l.fieldRequired;
     if (_address.text.trim().isEmpty) _problems['address'] = l.fieldRequired;
-    final port = _port.text.trim().isEmpty
-        ? null
-        : int.tryParse(_port.text.trim());
-    if (_port.text.trim().isNotEmpty &&
-        (port == null || port < 1 || port > 65535)) {
-      _problems['port'] = l.fieldInvalid;
-    }
+    final port = _port;
     String? optional(TextEditingController c) =>
         c.text.trim().isEmpty ? null : c.text.trim();
+    // Spreading the stored meta keeps the fields this editor does not show (forwards, jump host, unknown keys).
     final meta = {
       'schemaVersion': 1,
-      ...?_entry?.meta, // fields this editor does not show (forwards, jump host, unknown keys) are kept
+      ...?_entry?.meta,
       'name': _name.text.trim(),
       'address': _address.text.trim(),
       'port': port,
@@ -155,47 +131,28 @@ class _HostEditorPanelState extends State<HostEditorPanel> {
         _problems[_fieldOf(e)] = l.fieldInvalid;
       }
     }
-    if (_problems.isNotEmpty) return setState(() => _failures++);
-    try {
+    if (_problems.isNotEmpty) return setState(() => _shakes++);
+    await run(() async {
       final isNew = widget.hostId == null;
-      final orgId = _orgId;
-      final id = orgId == null
-          ? await vault.upsertItem(
-              type: 'host',
-              id: widget.hostId,
-              folderId: _folderId,
-              meta: meta,
-            )
-          : await state.orgs!.writer.upsert(
-              type: 'host',
-              id: widget.hostId,
-              target: OrgTarget(orgId, _folderId),
-              meta: meta,
-            );
-      if (isNew) {
-        state.emit(
-          HostCreated(
-            hostId: id,
-            name: _name.text.trim(),
-            total: vault.ofKind(ItemKind.host).length,
-          ),
-        );
-      }
+      await state.orgs!.saveItem(
+        type: 'host',
+        id: widget.hostId,
+        orgId: _orgId,
+        folderId: _folderId,
+        meta: meta,
+      );
+      if (isNew) state.emit(HostCreated(name: _name.text.trim()));
       widget.onClose?.call();
-    } on Exception catch (e) {
-      if (mounted) setState(() => _error = describeError(l, e));
-    }
+    });
   }
 
-  /// `host.<field>: …` → the field to mark; anything else marks the name.
+  // A `host.<field>: ...` message marks that field; anything else marks the name.
   static String _fieldOf(FormatException e) =>
       RegExp(r'^host\.(\w+)').firstMatch(e.message)?.group(1) ?? 'name';
 
   Future<void> _trash() async {
     final state = AppScope.read(context);
-    _orgId == null
-        ? await state.vault!.trashItem(widget.hostId!)
-        : await state.orgs!.writer.trash(widget.hostId!);
+    await state.orgs!.trashItem(widget.hostId!);
     widget.onClose?.call();
   }
 
@@ -214,199 +171,65 @@ class _HostEditorPanelState extends State<HostEditorPanel> {
     final resolved = entry == null || entry.state != EntryState.ok
         ? null
         : vault.hostLookup(entry.id)?.resolved;
-    String? source(String field) => switch (resolved?.sources[field]) {
-      null => null,
-      'default' => l.hostDefault,
-      final String folder => l.hostInherited(vault.entry(folder)?.name ?? ''),
-    };
-
-    /// An empty inheritable field shows the resolved value as a hint and its source under it.
-    Widget field(
-      String key,
-      TextEditingController controller,
-      String label,
-      String problemKey, {
-      Object? resolvedValue,
-      bool inheritable = false,
-      int lines = 1,
-      bool mono = false,
-    }) {
-      final inherits = inheritable && controller.text.trim().isEmpty;
-      return UfField(
-        label: label,
-        source: inherits ? source(problemKey) : null,
-        error: _problems[problemKey],
-        child: TextField(
-          key: Key(key),
-          controller: controller,
-          readOnly: !editable,
-          maxLines: lines,
-          onChanged: inheritable ? (_) => setState(() {}) : null,
-          style: mono ? monoStyle.copyWith(fontSize: 13) : null,
-          decoration: InputDecoration(
-            hintText: inherits && resolvedValue != null
-                ? '$resolvedValue'
-                : null,
-          ),
-        ),
-      );
-    }
-
-    final orgId = _orgId;
-    final identities = vault
-        .ofKind(ItemKind.identity)
-        .where((e) => e.state == EntryState.ok && e.orgId == orgId)
-        .toList();
-    final folders = vault
-        .ofKind(ItemKind.folder)
-        .where((e) => e.state == EntryState.ok && e.orgId == orgId)
-        .toList();
     final folderName = vault.entry(_folderId ?? '')?.name;
     final readOnly = state.sync?.readOnly ?? true;
-    return EditorFrame(
-      title: entry?.name ?? l.treeNewHost,
-      crumb: [l.vaultPersonal, ?folderName].join(' / '),
-      notice: notice,
-      onClose: widget.onClose,
-      save: editable
-          ? FilledButton(
-              key: const Key('host-save'),
-              onPressed: readOnly || _forwards == null ? null : _save,
-              child: Text(l.hostSave),
-            )
-          : null,
-      trash: editable && entry != null && !readOnly
-          ? TextButton(
-              key: const Key('host-delete'),
-              onPressed: _trash,
-              child: Text(l.hostDelete),
-            )
-          : null,
-      children: [
-        ShakeOnError(
-          trigger: _failures,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            spacing: 12,
-            children: [
-              field('host-name', _name, l.hostName, 'name'),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                spacing: 10,
-                children: [
-                  Expanded(
-                    flex: 2,
-                    child: field(
-                      'host-address',
-                      _address,
-                      l.hostAddress,
-                      'address',
-                    ),
-                  ),
-                  Expanded(
-                    child: field(
-                      'host-port',
-                      _port,
-                      l.hostPort,
-                      'port',
-                      inheritable: true,
-                      resolvedValue: resolved?.port,
-                    ),
-                  ),
-                ],
-              ),
-              field(
-                'host-user',
-                _user,
-                l.hostUser,
-                'user',
-                inheritable: true,
-                resolvedValue: resolved?.user,
-              ),
-            ],
-          ),
-        ),
+    return UfShake(
+      shakes: _shakes,
+      child: EditorFrame(
+        title: entry?.name ?? l.treeNewHost,
+        crumb: [vaultNameOf(l, state, _orgId), ?folderName].join(' / '),
+        notice: notice,
+        onClose: widget.onClose,
+        onConnect: switch (widget.hostId) {
+          final id? when entry?.state == EntryState.ok =>
+            () => state.connections.connect(id),
+          _ => null,
+        },
+        tabs: _tabs(l, state, editable: editable),
+        save: editable
+            ? FilledButton(
+                key: const Key('host-save'),
+                onPressed: readOnly || _forwards == null ? null : _save,
+                child: Text(l.hostSave),
+              )
+            : null,
+        trash: editable && entry != null && !readOnly
+            ? TextButton(
+                key: const Key('host-delete'),
+                onPressed: _trash,
+                child: Text(l.hostDelete),
+              )
+            : null,
+        children: [
+          _addressFields(l, editable: editable, resolved: resolved),
+          ..._identityFields(l, editable: editable, resolved: resolved),
+          ..._placementFields(l, editable: editable, resolved: resolved),
+          ..._detailFields(l, editable: editable),
+          if (problem case final error?) UfErrorLine(error),
+        ],
+      ),
+    );
+  }
+
+  List<(String, List<Widget>)> _tabs(
+    AppLocalizations l,
+    AppState state, {
+    required bool editable,
+  }) => [
+    (
+      l.inspectorTabForwards,
+      [
         ForwardsEditor(
           forwards: _forwards ?? const [],
           enabled: editable,
           onChanged: (forwards) => setState(() => _forwards = forwards),
         ),
-        entryPicker(
-          key: 'host-identity',
-          label: l.hostIdentity,
-          none: l.hostDefault,
-          entries: identities,
-          value: _identityId,
-          source: _identityId == null ? source('identityId') : null,
-          onChanged: editable ? (v) => setState(() => _identityId = v) : null,
-        ),
-        if (orgId != null)
-          Wrap(
-            key: const Key('host-identity-mode'),
-            spacing: 8,
-            children: [
-              for (final (mode, label) in [
-                (IdentityMode.shared, l.hostIdentityShared),
-                (IdentityMode.perMember, l.hostIdentityPerMember),
-              ])
-                ChoiceChip(
-                  key: Key('identity-mode-${mode.name}'),
-                  label: Text(label),
-                  selected: _identityMode == mode,
-                  onSelected: editable
-                      ? (_) => setState(() => _identityMode = mode)
-                      : null,
-                ),
-            ],
-          ),
-        if (orgId != null &&
-            _identityMode == IdentityMode.perMember &&
-            widget.hostId != null)
-          HostBindingField(hostId: widget.hostId!),
-        JumpHostPicker(
-          key: const Key('jump-picker'),
-          hostId: widget.hostId,
-          folderId: _folderId,
-          value: _jumpHostId,
-          inheritedId: resolved?.jumpHostId,
-          inheritedFrom: switch (resolved?.sources['jumpHostId']) {
-            null || 'default' || 'host' => null,
-            final String folder => vault.entry(folder)?.name,
-          },
-          onChanged: editable ? (v) => setState(() => _jumpHostId = v) : null,
-        ),
-        entryPicker(
-          key: 'host-folder',
-          label: l.hostFolder,
-          none: l.folderRoot,
-          entries: folders,
-          value: _folderId,
-          onChanged: editable ? (v) => setState(() => _folderId = v) : null,
-        ),
-        field('host-tags', _tags, l.hostTags, 'tags'),
-        field('host-notes', _notes, l.hostNotes, 'notes', lines: 3),
-        field(
-          'host-startup',
-          _startup,
-          l.hostStartup,
-          'startupCommand',
-          mono: true,
-        ),
-        if (state.serverHas('item_history') && widget.hostId != null)
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton(
-              key: const Key('item-history'),
-              onPressed: () => showUfDialog<void>(
-                context,
-                (_) => ItemHistoryPanel(itemId: widget.hostId!),
-              ),
-              child: Text(l.itemHistory),
-            ),
-          ),
-        if (_error case final error?)
-          Text(error, style: TextStyle(color: UfColors.of(context).danger)),
       ],
-    );
-  }
+    ),
+    if ((_orgId, _folderId) case (final org?, final folder?)
+        when widget.hostId != null)
+      (l.inspectorTabAccess, [AccessTab(orgId: org, folderId: folder)]),
+    if (state.serverInfo.has(Flag.itemHistory) && widget.hostId != null)
+      (l.itemHistory, [ItemHistoryPanel.embedded(itemId: widget.hostId!)]),
+  ];
 }

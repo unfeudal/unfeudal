@@ -31,7 +31,7 @@ void main() {
         'isInstanceOwner': true,
         'displayName': 'Camille',
       });
-      expect(await SessionStore(kv).load(), s);
+      expect((await SessionStore(kv).load())!.toJson(), s.toJson());
     },
   );
 

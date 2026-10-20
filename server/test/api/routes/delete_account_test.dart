@@ -115,7 +115,7 @@ void main() {
     expect(await count('users', 'id', mia.userId), 1);
   });
 
-  test('the last owner of an org gets 409 with the org names; a member leaves every org', () async {
+  Future<OrgWorld> acmeWithMia() async {
     final w = await OrgWorld.build(
       s,
       roles: {'mia': 'member'},
@@ -123,6 +123,11 @@ void main() {
     );
     await w.acl('prod', 'user:mia', allow: ['view']);
     await w.keys('prod', 1, ['olivia', 'mia']);
+    return w;
+  }
+
+  test('the last owner of an org gets 409 with the org names', () async {
+    final w = await acmeWithMia();
     final r = await del(w['olivia']);
     expect(r.status, 409);
     expect(r.body['reason'], 'last_owner');
@@ -138,6 +143,10 @@ void main() {
       await w.count('org_members', 'user_id = @u', {'u': w.id('olivia')}),
       1,
     );
+  });
+
+  test('a deleted member leaves every org', () async {
+    final w = await acmeWithMia();
     expect((await del(w['mia'])).status, 204);
     expect(await w.count('org_members', 'user_id = @u', {'u': w.id('mia')}), 0);
     expect(await w.count('pending_rotations'), 1);

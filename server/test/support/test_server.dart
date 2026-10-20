@@ -68,7 +68,7 @@ class TestServer {
       clock: clock,
       log: Logger(LogLevel.debug, lines.add),
       secretHash: SecretHashParams.testing,
-      allowTestingKdf: true,
+      kdfFloor: KdfParams.testing,
       mailer: mailer ?? FakeMailer(),
     );
     await ensureSetupToken(db, config.setupToken);
@@ -165,11 +165,14 @@ class TestSession {
   final AccountBundle bundle;
   final int bundleVersion;
   final UnlockedAccount account;
-  final String?
-  recoveryKey; // recovery key text; set by setupOwner and createUser
+  // The recovery key text, set by setupOwner and createUser.
+  final String? recoveryKey;
 }
 
-final testCrypto = AccountCrypto(kdf: KdfParams.testing, allowTestingKdf: true);
+final testCrypto = AccountCrypto(
+  kdf: KdfParams.testing,
+  kdfFloor: KdfParams.testing,
+);
 
 Map<String, Object?> testDevice([String name = 'Test device']) => {
   'name': name,

@@ -67,8 +67,8 @@ void main() {
     );
     expect(find.text('SHA256:${'A' * 43}'), findsOneWidget);
     expect(find.text('SHA256:${'B' * 43}'), findsOneWidget);
-    TextButton accept() =>
-        t.widget<TextButton>(find.byKey(const Key('hostkey-accept')));
+    FilledButton accept() =>
+        t.widget<FilledButton>(find.byKey(const Key('hostkey-accept')));
     expect(accept().onPressed, isNull);
     await t.enterText(
       find.byKey(const Key('hostkey-confirm-input')),
@@ -128,7 +128,10 @@ void main() {
       const KeyboardInteractiveDialog(
         name: 'otp',
         instruction: '',
-        prompts: [SshPrompt('Code: ', true), SshPrompt('Password: ', false)],
+        prompts: [
+          SshPrompt('Code: ', echo: true),
+          SshPrompt('Password: ', echo: false),
+        ],
       ),
     );
     final fields = t.widgetList<TextField>(find.byType(TextField)).toList();

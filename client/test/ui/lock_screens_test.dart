@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:unfeudal_client/l10n/app_localizations.dart';
 import 'package:unfeudal_client/src/app_state.dart';
-import 'package:unfeudal_client/src/events/app_events.dart';
 import 'package:unfeudal_client/src/session/lock_machine.dart';
 import 'package:unfeudal_client/src/session/session_store.dart';
 import 'package:unfeudal_client/src/settings/settings.dart';
@@ -69,7 +68,7 @@ void main() {
       t,
       state: testAppState()
         ..stage = AppStage.login
-        ..deviceRevoked = true,
+        ..signedOutBecause = SignOutReason.deviceRevoked,
     );
     expect(find.text(l10n(t).loginDeviceRevoked), findsOneWidget);
     expect(s.stage, AppStage.login);
@@ -81,9 +80,9 @@ void main() {
     final s = await signedInState(t);
     await t.runAsync(s.lock);
     final checks = <LockScreenState>[];
-    s.events.listen((e) {
-      if (e is LockScreenStateChanged && e.state == LockScreenState.checking) {
-        checks.add(e.state);
+    s.lockMachine.addListener(() {
+      if (s.lockMachine.state == LockScreenState.checking) {
+        checks.add(s.lockMachine.state);
       }
     });
     await pumpApp(t, state: s);
@@ -107,14 +106,10 @@ void main() {
       final s = await signedInState(t);
       await t.runAsync(s.lock);
       final states = <LockScreenState>[];
-      s.events.listen((e) {
-        if (e is LockScreenStateChanged) states.add(e.state);
-      });
+      s.lockMachine.addListener(() => states.add(s.lockMachine.state));
       await pumpApp(t, state: s);
-      expect(
-        find.text(testEmail),
-        findsOneWidget,
-      ); // account chip on a known device
+      // The account chip on a known device.
+      expect(find.text(testEmail), findsOneWidget);
       await t.tap(find.byKey(const Key('unlock-password')));
       await t.pump();
       await t.tap(find.byKey(const Key('unlock-peek')));
@@ -161,7 +156,7 @@ void main() {
       t,
       state: AppState(
         sessions: SessionStore(FakeSecureKv()),
-        settingsStore: SettingsStore.memory(),
+        settingsStore: FakeSettingsStore(),
         openMirror: (_) async => throw const MirrorTooNew(2),
       )..stage = AppStage.mirrorTooNew,
     );

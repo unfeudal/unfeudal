@@ -1,16 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "biometric_vault.h"
 
-#include <bcrypt.h>
 #include <flutter/method_channel.h>
 #include <flutter/standard_method_codec.h>
 #include <winrt/Windows.Foundation.h>
 #include <winrt/Windows.Security.Credentials.h>
+#include <winrt/Windows.Security.Cryptography.Core.h>
 #include <winrt/Windows.Security.Cryptography.h>
 #include <winrt/Windows.Storage.Streams.h>
 
 #include <memory>
-#include <optional>
 #include <thread>
 #include <vector>
 
@@ -25,6 +24,8 @@ using winrt::Windows::Security::Credentials::KeyCredentialManager;
 using winrt::Windows::Security::Credentials::KeyCredentialStatus;
 using winrt::Windows::Security::Cryptography::BinaryStringEncoding;
 using winrt::Windows::Security::Cryptography::CryptographicBuffer;
+using winrt::Windows::Security::Cryptography::Core::HashAlgorithmNames;
+using winrt::Windows::Security::Cryptography::Core::HashAlgorithmProvider;
 
 constexpr UINT kResultMessage = WM_APP + 0x42;
 constexpr wchar_t kCredentialName[] = L"fr.unfeudal.biometric";
@@ -45,16 +46,6 @@ void Reply(std::unique_ptr<MethodResult<EncodableValue>> result,
                    reinterpret_cast<LPARAM>(pending))) {
     delete pending;  // the window is gone: nobody waits for the answer
   }
-}
-
-std::optional<std::vector<uint8_t>> Sha256(const uint8_t* data, ULONG size) {
-  std::vector<uint8_t> hash(32);
-  if (!BCRYPT_SUCCESS(BCryptHash(BCRYPT_SHA256_ALG_HANDLE, nullptr, 0,
-                                 const_cast<PUCHAR>(data), size, hash.data(),
-                                 static_cast<ULONG>(hash.size())))) {
-    return std::nullopt;
-  }
-  return hash;
 }
 
 EncodableValue Available() {
@@ -78,10 +69,11 @@ EncodableValue Secret(bool create) {
   if (signature.Status() != KeyCredentialStatus::Success) {
     return EncodableValue();
   }
+  auto hash = HashAlgorithmProvider::OpenAlgorithm(HashAlgorithmNames::Sha256())
+                  .HashData(signature.Result());
   winrt::com_array<uint8_t> bytes;
-  CryptographicBuffer::CopyToByteArray(signature.Result(), bytes);
-  auto hash = Sha256(bytes.data(), static_cast<ULONG>(bytes.size()));
-  return hash ? EncodableValue(*hash) : EncodableValue();
+  CryptographicBuffer::CopyToByteArray(hash, bytes);
+  return EncodableValue(std::vector<uint8_t>(bytes.begin(), bytes.end()));
 }
 
 EncodableValue Delete() {

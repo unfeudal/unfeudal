@@ -7,7 +7,6 @@ void main() {
   test('no toIso8601String( and no import of unfeudal_shared internals in lib/ or bin/', () {
     final files = [
       for (final d in ['lib', 'bin'])
-        // bin/ arrives with the CLI.
         if (Directory(d).existsSync())
           ...Directory(d).listSync(recursive: true),
     ].whereType<File>().where((f) => f.path.endsWith('.dart'));

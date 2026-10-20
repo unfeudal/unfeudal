@@ -21,7 +21,7 @@ Future<(AppState, FakeSshConnector, FakeDialogs)> home() async {
     ..keyType = 'ssh-ed25519'
     ..fingerprint = 'SHA256:${'A' * 43}';
   final dialogs = FakeDialogs()..accept = true;
-  final s = testAppState(harness: h, ssh: ssh)..dialogs = dialogs;
+  final s = testAppState(harness: h, ssh: ssh)..connections.dialogs = dialogs;
   await s.boot();
   await s.login(server: h.baseUrl, email: testEmail, password: testPassword);
   return (s, ssh, dialogs);
@@ -64,7 +64,7 @@ void main() {
       final web = await host(s, 'web', folderId: prod);
       final events = <AppEvent>[];
       s.events.listen(events.add);
-      final tab = await s.connect(web);
+      final tab = await s.connections.connect(web);
       expect(tab.state, SealState.connected);
       expect(ssh.targets.map((t) => (t.hostId, t.user)), [
         (bastion, 'jump'),
@@ -84,19 +84,17 @@ void main() {
       final (s, ssh, dialogs) = await home();
       final bastion = await host(s, 'bastion');
       final web = await host(s, 'web', jump: bastion);
-      await s.vault!.pinHostKey(bastion, 'ssh-ed25519', 'SHA256:${'B' * 43}');
+      await s.vault!.hostKeys.pin(bastion, 'ssh-ed25519', 'SHA256:${'B' * 43}');
       dialogs.accept = false;
-      final tab = await s.connect(web);
+      final tab = await s.connections.connect(web);
       expect(ssh.targets.map((t) => t.hostId), [bastion]);
       expect(dialogs.checks.single.decision, HostKeyDecision.changed);
       expect(
         tab.error,
         isA<JumpChainFailed>().having((e) => e.hostName, 'hostName', 'bastion'),
       );
-      expect(
-        tab.state,
-        SealState.offline,
-      ); // the target's own key is not in question
+      // The target's own key is not in question.
+      expect(tab.state, SealState.offline);
     });
 
     test(
@@ -113,20 +111,21 @@ void main() {
             'jumpHostId': b,
           },
         );
-        expect((await s.connect(a)).error, isA<JumpLoop>());
+        expect((await s.connections.connect(a)).error, isA<JumpLoop>());
         final gone = await host(s, 'gone');
         final c = await host(s, 'c', jump: gone);
         await s.vault!.trashItem(gone);
-        expect((await s.connect(c)).error, isA<JumpHostMissing>());
+        expect((await s.connections.connect(c)).error, isA<JumpHostMissing>());
         expect(
-          (await s.connect(await host(s, 'd', jump: newId()))).error,
+          (await s.connections.connect(await host(s, 'd', jump: newId())))
+              .error,
           isA<JumpHostMissing>(),
         );
         var prev = await host(s, 'h0');
         for (var i = 1; i <= 9; i++) {
           prev = await host(s, 'h$i', jump: prev);
         }
-        expect((await s.connect(prev)).error, isA<JumpTooDeep>());
+        expect((await s.connections.connect(prev)).error, isA<JumpTooDeep>());
         expect(ssh.targets, isEmpty);
       },
     );
@@ -134,7 +133,9 @@ void main() {
     test('a bastion without a user fails as that hop', () async {
       final (s, ssh, _) = await home();
       final bastion = await host(s, 'bastion', user: null);
-      final tab = await s.connect(await host(s, 'web', jump: bastion));
+      final tab = await s.connections.connect(
+        await host(s, 'web', jump: bastion),
+      );
       expect(
         tab.error,
         isA<JumpChainFailed>().having(
@@ -149,8 +150,10 @@ void main() {
     test('closing the tab closes every hop', () async {
       final (s, ssh, _) = await home();
       final bastion = await host(s, 'bastion');
-      final tab = await s.connect(await host(s, 'web', jump: bastion));
-      await s.closeTab(tab);
+      final tab = await s.connections.connect(
+        await host(s, 'web', jump: bastion),
+      );
+      await s.connections.closeTab(tab);
       expect(ssh.hops.map((h) => h.closed), [true, true]);
     });
   });
@@ -173,15 +176,18 @@ void main() {
       );
       final events = <AppEvent>[];
       s.events.listen(events.add);
-      final tab = await s.connect(web);
+      final tab = await s.connections.connect(web);
       expect(tab.forwarder!.active.keys, [port1]);
       final client = await Socket.connect(InternetAddress.loopbackIPv4, port1);
       await Future<void>.delayed(const Duration(milliseconds: 50));
       expect(ssh.hops.single.forwarded, ['db.internal:5432']);
       client.destroy();
-      await s.startForward(tab, s.vault!.hostLookup(web)!.meta.forwards[1]);
+      await s.connections.startForward(
+        tab,
+        s.vault!.hostLookup(web)!.meta.forwards[1],
+      );
       expect(tab.forwarder!.active.keys, unorderedEquals([port1, port2]));
-      await s.stopForward(tab, port1);
+      await s.connections.stopForward(tab, port1);
       await Future<void>.delayed(Duration.zero);
       expect(
         events.whereType<ForwardStarted>().map((e) => e.forward.localPort),
@@ -192,18 +198,18 @@ void main() {
       ]);
     });
 
-    test('a port in use: ForwardFailed, the session stays connected', () async {
+    test('a port in use: not started, the session stays connected', () async {
       final (s, _, _) = await home();
       final blocker = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
       final events = <AppEvent>[];
       s.events.listen(events.add);
-      final tab = await s.connect(
+      final tab = await s.connections.connect(
         await host(s, 'web', forwards: [f(blocker.port, 'db', auto: true)]),
       );
       expect(tab.state, SealState.connected);
       expect(tab.forwarder!.failed[blocker.port], isA<PortInUse>());
       await Future<void>.delayed(Duration.zero);
-      expect(events.whereType<ForwardFailed>().single.localPort, blocker.port);
+      expect(events.whereType<ForwardStarted>(), isEmpty);
       await blocker.close();
     });
 
@@ -215,14 +221,14 @@ void main() {
         final web = await host(s, 'web', forwards: [f(p, 'db', auto: true)]);
         final events = <AppEvent>[];
         s.events.listen(events.add);
-        await s.closeTab(await s.connect(web));
+        await s.connections.closeTab(await s.connections.connect(web));
         await Future<void>.delayed(Duration.zero);
         expect(events.whereType<ForwardStopped>().single.localPort, p);
         await (await ServerSocket.bind(
           InternetAddress.loopbackIPv4,
           p,
         )).close();
-        final again = await s.connect(web);
+        final again = await s.connections.connect(web);
         await s.lock();
         expect(again.forwarder!.active, isEmpty);
         await (await ServerSocket.bind(
@@ -237,13 +243,13 @@ void main() {
     'reconnect closes the previous session first and keeps the tab position',
     () async {
       final (s, ssh, _) = await home();
-      final a = await s.connect(await host(s, 'a'));
-      final b = await s.connect(await host(s, 'b'));
+      final a = await s.connections.connect(await host(s, 'a'));
+      final b = await s.connections.connect(await host(s, 'b'));
       ssh.shells.first.hangUp();
       await Future<void>.delayed(Duration.zero);
-      final again = await s.reconnect(a);
-      expect(s.tabs, [again, b]);
-      expect(s.activeTab, 0);
+      final again = await s.connections.reconnect(a);
+      expect(s.connections.tabs, [again, b]);
+      expect(s.connections.activeTab, 0);
       expect(again.state, SealState.connected);
       expect(ssh.hops.first.closed, isTrue);
     },

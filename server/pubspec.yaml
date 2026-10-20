@@ -1,12 +1,10 @@
 name: unfeudal_server
 description: Unfeudal self-hosted sync server.
 version: 0.1.0
-# repository: https://github.com/my_org/my_repo
 
 environment:
   sdk: ^3.13.5
 
-# Add regular dependencies here.
 dependencies:
   collection: ^1.19.1
   crypto: ^3.0.7
@@ -20,7 +18,6 @@ dependencies:
   unfeudal_shared:
     path: ../shared
   yaml: ^3.1.4
-  # path: ^1.9.0
 
 dev_dependencies:
   lints: ^6.1.0

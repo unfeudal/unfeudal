@@ -1,14 +1,17 @@
 // SPDX-License-Identifier: Apache-2.0
 import 'package:flutter/material.dart';
 
-import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
+import '../../design/buttons.dart';
 import '../../design/icons.dart';
 import '../../design/logo.dart';
 import '../../design/tokens.dart';
 import '../../loquet/lock_mapping.dart';
 import '../../loquet/loquet_pose.dart';
 import '../../loquet/loquet_spot.dart';
+
+export '../../design/buttons.dart' show BusyButton;
+export '../../design/field.dart' show UfErrorLine;
 
 /// Every screen before the vault: the form on the left (mark, step, title, fields, actions), the side panel on
 /// the right. The side panel holds Loquet, whose face follows the lock machine.
@@ -22,83 +25,54 @@ class LockFrame extends StatelessWidget {
     this.eyeX = 0.5,
   });
 
-  /// Where Loquet looks while an address is typed: 0 left … 1 right.
+  /// Where Loquet looks while an address is typed: from 0 (left) to 1 (right).
   final double eyeX;
 
   final String title;
 
-  /// "Étape 1 sur 2" on two-step screens.
+  /// The "Step 1 of 2" label on two-step screens.
   final String? step;
   final String? subtitle;
   final List<Widget> children;
 
-  /// The form's background: `side` when light so the `field` fills stay visible, `bg` when dark.
-  static Color background(BuildContext context) {
-    final colors = UfColors.of(context);
-    return Theme.of(context).brightness == Brightness.light
-        ? colors.side
-        : colors.bg;
-  }
+  /// The ground of the form, and of the title bar above it.
+  static Color background(BuildContext context) => UfColors.of(context).bg;
 
-  /// Below this width the side panel is dropped and the form takes the window.
+  // Below this width the side panel is dropped and the form takes the window.
   static const _sideBreakpoint = 880.0;
 
   @override
   Widget build(BuildContext context) {
     final colors = UfColors.of(context);
-    final text = Theme.of(context).textTheme;
-    final light = Theme.of(context).brightness == Brightness.light;
-    final form = SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 72, vertical: 40),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 456),
-        child: Column(
+    final content = Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: 24,
+      children: [
+        const _Wordmark(),
+        _LockHeading(step: step, title: title, subtitle: subtitle),
+        Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
-          spacing: 22,
-          children: [
-            Row(
-              spacing: 10,
-              children: [
-                UfLogo(size: 30, color: colors.accent),
-                Text(
-                  'unfeudal',
-                  style: text.titleMedium!.copyWith(
-                    fontSize: 22,
-                    letterSpacing: -0.55,
-                  ),
-                ),
-              ],
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              spacing: 8,
-              children: [
-                if (step case final step?)
-                  Text(
-                    step,
-                    style: text.labelMedium!.copyWith(color: colors.muted),
-                  ),
-                Text(title, style: text.headlineLarge!.copyWith(height: 1.05)),
-                if (subtitle case final subtitle?)
-                  Text(
-                    subtitle,
-                    style: text.bodyLarge!.copyWith(color: colors.muted),
-                  ),
-              ],
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              spacing: 14,
-              children: children,
-            ),
-          ],
+          spacing: 12,
+          children: children,
         ),
-      ),
+      ],
     );
     // a Material, not a coloured box: list tiles in the form paint on it
     final panel = Material(
       color: background(context),
-      child: Align(alignment: Alignment.centerLeft, child: form),
+      child: LayoutBuilder(
+        builder: (context, box) => SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 72, vertical: 40),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: 456,
+              minHeight: (box.maxHeight - 80).clamp(0, double.infinity),
+            ),
+            child: content,
+          ),
+        ),
+      ),
     );
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -108,14 +82,67 @@ class LockFrame extends StatelessWidget {
           children: [
             SizedBox(width: 600, child: panel),
             Expanded(
-              child: ColoredBox(
-                color: light ? colors.rail : colors.side,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: colors.side,
+                  border: Border(left: BorderSide(color: colors.line)),
+                ),
                 child: Center(child: _hero(context)),
               ),
             ),
           ],
         );
       },
+    );
+  }
+}
+
+class _Wordmark extends StatelessWidget {
+  const _Wordmark();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      spacing: 10,
+      children: [
+        UfLogo(size: 28, color: UfColors.of(context).text),
+        Text(
+          'unfeudal',
+          style: Theme.of(context).textTheme.titleMedium!
+              .copyWith(fontSize: 21, letterSpacing: -0.5),
+        ),
+      ],
+    );
+  }
+}
+
+class _LockHeading extends StatelessWidget {
+  const _LockHeading({required this.step, required this.title, this.subtitle});
+
+  final String? step;
+  final String title;
+  final String? subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = UfColors.of(context);
+    final text = Theme.of(context).textTheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      spacing: 6,
+      children: [
+        if (step case final step?)
+          Text(step, style: text.labelSmall!.copyWith(color: colors.muted)),
+        Text(title, style: text.displaySmall),
+        if (subtitle case final subtitle?)
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 440),
+            child: Text(
+              subtitle,
+              style: text.bodyMedium!.copyWith(color: colors.muted),
+            ),
+          ),
+      ],
     );
   }
 }
@@ -147,7 +174,7 @@ extension on LockFrame {
   }
 }
 
-/// The inline primary action and the left-aligned links under a lock form.
+/// The 40 px primary action, then the other ways in as links over a `line`.
 class LockActions extends StatelessWidget {
   const LockActions({super.key, required this.primary, this.links = const []});
 
@@ -155,44 +182,57 @@ class LockActions extends StatelessWidget {
   final List<Widget> links;
 
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    spacing: 4,
-    children: [
-      primary,
-      if (links.isNotEmpty) const SizedBox(height: 8),
-      for (final link in links)
-        TextButtonTheme(
-          data: TextButtonThemeData(
-            style: TextButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              minimumSize: Size.zero,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ).merge(Theme.of(context).textButtonTheme.style),
+  Widget build(BuildContext context) {
+    final colors = UfColors.of(context);
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      spacing: 16,
+      children: [
+        FilledButtonTheme(
+          data: FilledButtonThemeData(
+            style: largeButton(theme.textTheme)
+                .merge(theme.filledButtonTheme.style),
           ),
-          child: link,
+          child: primary,
         ),
-    ],
-  );
+        if (links.isNotEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.only(top: 16),
+            decoration: BoxDecoration(
+              border: Border(top: BorderSide(color: colors.line)),
+            ),
+            child: TextButtonTheme(
+              data: TextButtonThemeData(
+                style: ButtonStyle(
+                  foregroundColor: WidgetStatePropertyAll(colors.accentText),
+                  backgroundColor: const WidgetStatePropertyAll(
+                    Colors.transparent,
+                  ),
+                  textStyle: WidgetStatePropertyAll(
+                    theme.textTheme.labelLarge!.copyWith(fontSize: 13.5),
+                  ),
+                  padding: const WidgetStatePropertyAll(
+                    EdgeInsets.symmetric(vertical: 4),
+                  ),
+                  minimumSize: const WidgetStatePropertyAll(Size.zero),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ).merge(theme.textButtonTheme.style),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                spacing: 6,
+                children: links,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
 }
 
-/// A form error under the fields: `danger`, semibold.
-class LockError extends StatelessWidget {
-  const LockError(this.message, {super.key});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) => Text(
-    message,
-    style: TextStyle(
-      color: UfColors.of(context).danger,
-      fontWeight: FontWeight.w600,
-    ),
-  );
-}
-
-/// An ocre line with the warning shape: the master-password warning before an account is created.
+/// The warning shape in `warn` beside a note: the master-password warning before an account is created.
 class LockNotice extends StatelessWidget {
   const LockNotice(this.message, {super.key});
 
@@ -207,42 +247,15 @@ class LockNotice extends StatelessWidget {
       children: [
         Padding(
           padding: const EdgeInsets.only(top: 2),
-          child: Icon(UfIcons.warning, size: 16, color: colors.warnText),
+          child: Icon(UfIcons.warning, size: 16, color: colors.warn),
         ),
         Expanded(
           child: Text(
             message,
             style: Theme.of(context).textTheme.bodyMedium!
-                .copyWith(color: colors.warnText),
+                .copyWith(fontSize: 13),
           ),
         ),
-      ],
-    );
-  }
-}
-
-/// A primary button's label that turns into a spinner and "Vérification…" while the password key is derived.
-class BusyLabel extends StatelessWidget {
-  const BusyLabel({super.key, required this.busy, required this.label});
-
-  final bool busy;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    if (!busy) return Text(label);
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      spacing: 10,
-      children: [
-        SizedBox.square(
-          dimension: 14,
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
-            color: UfColors.of(context).accentFg,
-          ),
-        ),
-        Text(AppLocalizations.of(context).passwordChecking),
       ],
     );
   }

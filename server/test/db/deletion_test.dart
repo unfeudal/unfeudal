@@ -31,7 +31,7 @@ void main() {
 
   test('removeMember: seats, user ACL, keys, a pending rotation, then the membership', () async {
     await s.db.transaction(
-      (tx) => removeMember(tx, w.orgId, w.id('mia'), 'member_removed'),
+      (tx) => removeMember(tx, w.orgId, w.id('mia'), reason: 'member_removed'),
     );
     final mia = {'u': w.id('mia')};
     expect(await w.count('team_members', 'user_id = @u', mia), 0);
@@ -102,21 +102,26 @@ void main() {
     },
   );
 
-  test('deleteUser: Instance Owner 403, last owner 409, else personal data and each membership', () async {
+  test('deleteUser: the Instance Owner is 403', () async {
     await expectLater(
-      s.db.transaction((tx) => deleteUser(tx, w.io.userId, actor: w.io.userId)),
+      s.db.transaction((tx) => deleteUser(tx, w.io.userId)),
       throwsApi(ApiErrorCode.forbidden),
     );
+  });
+
+  test('deleteUser: the last confirmed owner is 409', () async {
     await s.db.execute(
       "UPDATE org_members SET status = 'accepted' WHERE user_id = @u",
       {'u': w.id('oscar')},
     );
     await expectLater(
-      s.db.transaction(
-        (tx) => deleteUser(tx, w.id('olivia'), actor: w.io.userId),
-      ),
+      s.db.transaction((tx) => deleteUser(tx, w.id('olivia'))),
       throwsApi(ApiErrorCode.conflict),
     );
+  });
+
+  // Gives mia an item, limiter keys and raw IPs in the instance chain, then deletes her.
+  Future<(TestSession, Map<String, Object?>)> deleteMiaWithData() async {
     final mia = w['mia'];
     final mine = await testItem(mia);
     await s.put(
@@ -152,15 +157,26 @@ void main() {
         {'q': seq},
       );
     }
-    await s.db.transaction(
-      (tx) => deleteUser(tx, mia.userId, actor: w.io.userId),
-    );
+    await s.db.transaction((tx) => deleteUser(tx, mia.userId));
+    return (mia, mine);
+  }
+
+  test('deleteUser: her raw IPs go; another actor\'s stay', () async {
+    final (mia, _) = await deleteMiaWithData();
     expect(
       (await s.db.query(
         "SELECT seq FROM audit_ips WHERE scope = 'instance' AND seq > 90000",
       )).map((r) => r['seq']),
       [90002],
     );
+    expect(
+      await w.count('audit_ips', 'scope = @s', {'s': 'user:${mia.userId}'}),
+      0,
+    );
+  });
+
+  test('deleteUser: personal data and each membership go', () async {
+    final (mia, mine) = await deleteMiaWithData();
     final p = {'u': mia.userId};
     expect(await w.count('users', 'id = @u', p), 0);
     expect(await w.count('devices', 'user_id = @u', p), 0);
@@ -171,16 +187,16 @@ void main() {
     );
     expect(await w.count('items', 'id = @i', {'i': mine['id']}), 0);
     expect(await w.count('org_members', 'user_id = @u', p), 0);
-    expect(
-      await w.count('audit_ips', 'scope = @s', {'s': 'user:${mia.userId}'}),
-      0,
-    );
+    expect(await w.count('pending_rotations'), 1);
+  });
+
+  test('deleteUser: her limiter keys go; shared and other keys stay', () async {
+    await deleteMiaWithData();
     expect(
       (await s.db.query(
         "SELECT key FROM login_attempts WHERE key <> 'ip:203.0.113.7' ORDER BY key",
       )).map((r) => r['key']),
       ['acct:mia_x@example.org', 'ip:1.2.3.4'],
     );
-    expect(await w.count('pending_rotations'), 1);
   });
 }

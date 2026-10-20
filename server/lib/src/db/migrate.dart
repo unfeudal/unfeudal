@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import 'db.dart';
 import 'maintenance.dart';
+import 'migration.dart';
 import 'migrations.dart';
 
 /// The database was migrated by a newer server: refuse to start rather than run against an unknown schema.

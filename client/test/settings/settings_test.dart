@@ -45,10 +45,8 @@ void main() {
       'terminalFont': 'JetBrainsMono',
       'terminalFontSize': 13,
     });
-    expect(
-      const Settings().toPrefs().containsKey('locale'),
-      isFalse,
-    ); // system locale
+    // The default locale follows the system and is not written.
+    expect(const Settings().toPrefs().containsKey('locale'), isFalse);
   });
 
   test('withPrefs applies valid synced values, ignores the rest, never touches device fields', () {
@@ -111,10 +109,6 @@ void main() {
     expect(File('${file.path}.tmp').existsSync(), isFalse);
     file.writeAsStringSync('not json');
     expect(await store.load(), const Settings());
-    final memory = SettingsStore.memory(const Settings(autoLockMinutes: 5));
-    expect((await memory.load()).autoLockMinutes, 5);
-    await memory.save(const Settings());
-    expect(await memory.load(), const Settings());
   });
 
   test('settings.json holds no profile item and no secret', () async {
@@ -130,5 +124,16 @@ void main() {
       'treeWidth',
       'autoLockMinutes',
     });
+  });
+
+  test('settings with the same nested unknown values are equal', () {
+    Settings read() => Settings.fromJson({
+      'future': {
+        'panels': [1, 2],
+      },
+    });
+
+    expect(read(), read());
+    expect(read().hashCode, read().hashCode);
   });
 }

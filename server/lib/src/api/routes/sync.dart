@@ -4,13 +4,12 @@ import 'dart:convert';
 import 'package:shelf/shelf.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
-import '../../config/features.dart';
+import '../../db/device_touch.dart';
 import '../../orgs/org_block.dart';
-import '../app.dart';
+import '../deps.dart';
 import '../errors.dart';
 import '../json.dart';
 import '../middleware.dart';
-import '../session.dart';
 
 final _cursor = RegExp(r'^\d{1,15}$');
 
@@ -18,10 +17,7 @@ int _cursorParam(Request request, String name) {
   final v = request.url.queryParameters[name];
   if (v == null) return 0;
   if (!_cursor.hasMatch(v)) {
-    throw ApiError(
-      ApiErrorCode.invalidRequest,
-      '$name must be an integer ≥ 0.',
-    );
+    throw ApiError.invalid('$name must be an integer ≥ 0.');
   }
   return int.parse(v);
 }
@@ -45,7 +41,7 @@ Future<Response> sync(Request request) async {
       throw ApiError(
         ApiErrorCode.conflict,
         'The server is behind this device.',
-        extra: {'reason': 'cursor_ahead'},
+        extra: {'reason': ConflictReason.cursorAhead.wire},
       );
     }
     final personal = [
@@ -56,31 +52,31 @@ Future<Response> sync(Request request) async {
         (seq: r['seq']! as int, body: r['body']! as String),
     ];
     if (!orgsOn) return (personal, null);
-    // the same rows as one UNION ALL … ORDER BY seq LIMIT 501
+    final views = await loadOrgViews(tx, auth.userId);
+    // Gives the same rows as one UNION ALL ... ORDER BY seq LIMIT 501.
     final merged = [
       ...personal,
-      for (final r in await visibleOrgItems(
-        tx,
-        auth.userId,
-        cursor,
-        limit: 501,
-      ))
+      for (final r in await visibleOrgItems(tx, views, cursor, limit: 501))
         (seq: r.seq, body: r.body!),
     ]..sort((a, b) => a.seq.compareTo(b.seq));
     final block = counters['org_seq']! > orgCursor
-        ? await buildOrgBlock(tx, auth.userId)
+        ? await buildOrgBlock(tx, auth.userId, views)
         : null;
     return (merged.take(501).toList(), block);
   });
   final page = rows.take(500).toList();
-  // A separate write: the snapshot above is read-only.
-  await deps.db.transaction(
-    (tx) => touchDevice(tx, auth.deviceId, deps.clock.now()),
-  );
-  return jsonResponse({
-    'items': [for (final r in page) jsonDecode(r.body)],
+  final now = deps.clock.now();
+  if (isTouchDue(auth.lastSeenAt, now)) {
+    // A separate write: the snapshot above is read-only.
+    await deps.db.transaction((tx) => touchDevice(tx, auth.deviceId, now));
+  }
+  final rest = jsonEncode({
     'cursor': page.isEmpty ? cursor : page.last.seq,
     'more': rows.length > 500,
     if (block != null) 'org': block.toJson(),
   });
+  // Stored bodies are already JSON (jsonEncode of an Item): spliced, not decoded and re-encoded.
+  return jsonTextResponse(
+    '{"items":[${page.map((r) => r.body).join(',')}],${rest.substring(1)}',
+  );
 }

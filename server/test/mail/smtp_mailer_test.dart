@@ -12,7 +12,7 @@ const mail = Mail(MailKind.passwordChanged, 'camille@example.org', 'fr', {
   'time': '2026-10-13T12:00:00.000Z',
 });
 
-SmtpConfig config(FakeSmtpServer f, SmtpTls tls) => SmtpConfig(
+SmtpConfig config(FakeSmtpServer f, SmtpTls tls) => (
   host: '127.0.0.1',
   port: f.port,
   tls: tls,
@@ -70,7 +70,7 @@ void main() {
     () async {
       smtp = await FakeSmtpServer.start();
       await expectLater(
-        SmtpMailer(config(smtp, SmtpTls.starttls)).send(mail),
+        SmtpMailer(config(smtp, SmtpTls.starttls), timezone: 'UTC').send(mail),
         throwsA(anything),
       );
       expect(smtp.commands.where(sensitive), isEmpty);
@@ -81,7 +81,7 @@ void main() {
   test('starttls: a refused STARTTLS is never followed by AUTH', () async {
     smtp = await FakeSmtpServer.start(advertiseStartTls: true);
     await expectLater(
-      SmtpMailer(config(smtp, SmtpTls.starttls)).send(mail),
+      SmtpMailer(config(smtp, SmtpTls.starttls), timezone: 'UTC').send(mail),
       throwsA(anything),
     );
     expect(smtp.commands.map((c) => c.toUpperCase()), contains('STARTTLS'));
@@ -93,7 +93,7 @@ void main() {
     () async {
       smtp = await FakeSmtpServer.start();
       await expectLater(
-        SmtpMailer(config(smtp, SmtpTls.implicit)).send(mail),
+        SmtpMailer(config(smtp, SmtpTls.implicit), timezone: 'UTC').send(mail),
         throwsA(anything),
       );
       expect(smtp.messages, isEmpty);

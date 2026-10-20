@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:unfeudal_client/src/design/choices.dart';
 import 'package:unfeudal_client/src/ui/activity/activity_screen.dart';
 import 'package:unfeudal_client/src/ui/shell/home_shell.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
@@ -14,10 +15,8 @@ void main() {
     'rows, load more, verify, export, raw IPs for the Instance Owner, the SSH note',
     (t) async {
       final h = SyncHarness(capabilities: ['audit', 'mascot', 'sync']);
-      final s = await signedInState(
-        t,
-        harness: h,
-      ); // the first account is the Instance Owner
+      // The first account is the Instance Owner.
+      final s = await signedInState(t, harness: h);
       final me = s.stored!.userId;
       for (var i = 0; i < 101; i++) {
         h.appendAudit(
@@ -38,7 +37,7 @@ void main() {
       );
       await pumpReal(t);
       expect(find.text('A device signed in'), findsWidgets);
-      expect(find.text('203.0.113.7'), findsWidgets);
+      expect(find.textContaining('203.0.113.7'), findsWidgets);
       await t.tap(find.byKey(const Key('activity-more')));
       await pumpReal(t);
       expect(find.byKey(const Key('activity-more')), findsNothing);
@@ -53,7 +52,7 @@ void main() {
   );
 
   testWidgets(
-    'scopes: org for admins, folders with manage, instance for the Instance Owner',
+    'vault scopes: my actions and the folders I manage; account and server stay in settings',
     (t) async {
       final h = SyncHarness(capabilities: ['audit', 'orgs', 'sync']);
       final s = await signedInState(t, harness: h);
@@ -61,7 +60,6 @@ void main() {
       final (f, g) = (newId(), newId());
       await t.runAsync(() async {
         h.orgBlock = orgBlock(
-          role: 'member',
           members: [memberRow(me, status: 'confirmed')],
           folderTree: [node(f), node(g)],
           acl: [
@@ -71,11 +69,15 @@ void main() {
         );
         await s.sync!.syncNow();
       });
+      s.orgs!.select(testOrgId);
       await pumpApp(t, state: s, child: const ActivityScreen());
       await pumpReal(t);
       await t.tap(find.byKey(const Key('activity-scope')));
       await t.pumpAndSettle();
-      for (final scope in ['me', 'user', 'instance', 'folder:$f']) {
+      for (final scope in ['user', 'instance']) {
+        expect(find.byKey(Key('activity-scope-$scope')), findsNothing);
+      }
+      for (final scope in ['me', 'folder:$f']) {
         expect(
           find.byKey(Key('activity-scope-$scope')),
           findsWidgets,
@@ -132,10 +134,11 @@ void main() {
       final i = h.auditLog.indexWhere(
         (e) => e.scope == 'user:$me' && e.seq == 2,
       );
+      // The hash is left as it was.
       h.auditLog[i] = AuditEvent.fromJson({
         ...h.auditLog[i].toJson(),
         'action': 'item.created',
-      }); // hash left as it was
+      });
       final saved = <String>[];
       await pumpApp(
         t,
@@ -158,10 +161,8 @@ void main() {
     'the Instance Owner opens a deleted org\'s chain from its deletion event',
     (t) async {
       final h = SyncHarness(capabilities: ['audit', 'sync']);
-      final s = await signedInState(
-        t,
-        harness: h,
-      ); // the first account is the Instance Owner
+      // The first account is the Instance Owner.
+      final s = await signedInState(t, harness: h);
       final gone = newId();
       h.appendAudit('org:$gone', 'org.created', actorUser: s.stored!.userId);
       h.appendAudit(
@@ -179,11 +180,16 @@ void main() {
       await t.tap(find.byKey(Key('activity-open-org-$gone')));
       await pumpReal(t);
       expect(h.requests.where((r) => r == 'GET /api/v1/audit'), hasLength(2));
-      expect(find.byKey(Key('activity-scope-org:$gone')), findsWidgets);
+      expect(
+        t
+            .widget<UfSelect<String?>>(find.byKey(const Key('activity-scope')))
+            .value,
+        'org:$gone',
+      );
     },
   );
 
-  testWidgets('the rail shows Activity only when the server has audit', (
+  testWidgets('the sidebar shows Activity only when the server has audit', (
     t,
   ) async {
     for (final (caps, shown) in [
@@ -197,7 +203,7 @@ void main() {
       await pumpApp(t, state: s, child: const HomeShell());
       await pumpReal(t);
       expect(
-        find.byKey(const Key('rail-activity')),
+        find.byKey(const Key('section-activity')),
         shown ? findsOneWidget : findsNothing,
       );
     }

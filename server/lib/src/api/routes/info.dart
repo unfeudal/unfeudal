@@ -3,17 +3,15 @@ import 'package:shelf/shelf.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../../version.dart';
-import '../app.dart';
+import '../deps.dart';
 import '../json.dart';
 
 /// Public form for anyone; the full form with a valid access token (MAC and
 /// expiry only: it reveals nothing secret). An invalid token is ignored.
 Response info(Request request) {
   final deps = depsOf(request);
-  final header = request.headers['authorization'] ?? '';
   final full =
-      header.startsWith('Bearer ') &&
-      deps.access.verify(header.substring(7)) != null;
+      deps.access.verifyHeader(request.headers['authorization']) != null;
   final config = deps.config;
   return jsonResponse(
     ApiInfo(

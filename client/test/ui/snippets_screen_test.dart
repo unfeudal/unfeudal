@@ -4,8 +4,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:unfeudal_client/l10n/app_localizations.dart';
-import 'package:unfeudal_client/src/events/app_events.dart';
-import 'package:unfeudal_client/src/ui/snippets/snippets_panel.dart';
+import 'package:unfeudal_client/src/ui/snippets/snippets_screen.dart';
 import 'package:unfeudal_client/src/vault/snippet_store.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
@@ -16,7 +15,7 @@ import '../support/sync_harness.dart';
 
 void main() {
   testWidgets(
-    'org snippets: read-only without edit; a new one can go to an editable org folder',
+    'org vault: its snippets, read-only without edit; a new one goes to an editable org folder',
     (t) async {
       final h = SyncHarness(capabilities: ['orgs', 'sync']);
       final s = await signedInState(t, harness: h);
@@ -72,17 +71,14 @@ void main() {
         );
         await s.sync!.syncNow();
       });
-      await pumpApp(t, state: s, child: const SnippetsPanel());
+      s.orgs!.select(testOrgId);
+      await pumpApp(t, state: s, child: const SnippetsScreen());
       await pumpReal(t);
       for (final k in [
         'snippet-edit-${snippet.id}',
         'snippet-delete-${snippet.id}',
       ]) {
-        expect(
-          t.widget<TextButton>(find.byKey(Key(k))).onPressed,
-          isNull,
-          reason: k,
-        );
+        expect(pressed(t, k), isNull, reason: k);
       }
       await t.tap(find.byKey(const Key('snippet-new')));
       await t.pumpAndSettle();
@@ -114,8 +110,8 @@ void main() {
     'create: name and command required, command kept as typed, tags split',
     (t) async {
       final s = await signedInState(t);
-      await pumpApp(t, state: s, child: const SnippetsPanel());
-      final l = AppLocalizations.of(t.element(find.byType(SnippetsPanel)));
+      await pumpApp(t, state: s, child: const SnippetsScreen());
+      final l = AppLocalizations.of(t.element(find.byType(SnippetsScreen)));
       expect(find.text(l.snippetsEmpty), findsOneWidget);
       await t.tap(find.byKey(const Key('snippet-new')));
       await t.pumpAndSettle();
@@ -136,70 +132,59 @@ void main() {
     },
   );
 
-  testWidgets(
-    'insert into the active tab without Enter; multi-line asks; SnippetInserted',
-    (t) async {
-      final ssh = FakeSshConnector()
-        ..keyType = 'ssh-ed25519'
-        ..fingerprint = 'SHA256:${'A' * 43}';
-      final s = await signedInState(t, ssh: ssh);
-      late String disk, deploy;
-      await t.runAsync(() async {
-        final web = await s.vault!.upsertItem(
-          type: 'host',
-          meta: hostJson('web', user: 'root'),
-        );
-        await s.vault!.pinHostKey(web, 'ssh-ed25519', 'SHA256:${'A' * 43}');
-        await s.connect(web);
-        final store = SnippetStore(s.vault!);
-        disk = await store.save(
-          SnippetMeta(name: 'Disk', command: 'df -h\n', tags: []),
-        );
-        deploy = await store.save(
-          SnippetMeta(name: 'Deploy', command: 'cd /srv\nmake', tags: ['ops']),
-        );
-      });
-      final events = <AppEvent>[];
-      s.events.listen(events.add);
-      await pumpApp(t, state: s);
-      await pumpReal(t, rounds: 5);
-      await t.tap(find.byKey(const Key('snippets-button')));
-      await t.pumpAndSettle();
-      await t.enterText(find.byKey(const Key('snippets-search')), 'ops');
-      await t.pump();
-      expect(find.byKey(Key('snippet-insert-$disk')), findsNothing);
-      await t.enterText(find.byKey(const Key('snippets-search')), '');
-      await t.pump();
-      final shell = ssh.shells.single;
-      await t.tap(find.byKey(Key('snippet-insert-$disk')));
-      await pumpReal(t, rounds: 3);
-      expect(utf8.decode(shell.written.last), 'df -h');
-      await t.tap(find.byKey(Key('snippet-insert-$deploy')));
-      await t.pumpAndSettle();
-      await t.tap(find.byKey(const Key('multiline-send')));
-      await pumpReal(t, rounds: 3);
-      expect(
-        utf8.decode(shell.written.last),
-        'cd /srv\rmake',
-      ); // paste sends a line break as \r
-      expect(events.whereType<SnippetInserted>().map((e) => e.snippetId), [
-        disk,
-        deploy,
-      ]);
-    },
-  );
+  testWidgets('insert into the active tab without Enter; multi-line asks', (
+    t,
+  ) async {
+    final ssh = FakeSshConnector()
+      ..keyType = 'ssh-ed25519'
+      ..fingerprint = 'SHA256:${'A' * 43}';
+    final s = await signedInState(t, ssh: ssh);
+    late String disk, deploy;
+    await t.runAsync(() async {
+      final web = await s.vault!.upsertItem(
+        type: 'host',
+        meta: hostJson('web', user: 'root'),
+      );
+      await s.vault!.hostKeys.pin(web, 'ssh-ed25519', 'SHA256:${'A' * 43}');
+      await s.connections.connect(web);
+      final store = SnippetStore(s.vault!);
+      disk = await store.save(
+        SnippetMeta(name: 'Disk', command: 'df -h\n', tags: []),
+      );
+      deploy = await store.save(
+        SnippetMeta(name: 'Deploy', command: 'cd /srv\nmake', tags: ['ops']),
+      );
+    });
+    await pumpApp(t, state: s);
+    await pumpReal(t, rounds: 5);
+    await t.tap(find.byKey(const Key('section-snippets')));
+    await t.pumpAndSettle();
+    await t.enterText(find.byKey(const Key('snippets-search')), 'ops');
+    await t.pump();
+    expect(find.byKey(Key('snippet-insert-$disk')), findsNothing);
+    await t.enterText(find.byKey(const Key('snippets-search')), '');
+    await t.pump();
+    final shell = ssh.shells.single;
+    await t.tap(find.byKey(Key('snippet-insert-$disk')));
+    await pumpReal(t, rounds: 3);
+    expect(utf8.decode(shell.written.last), 'df -h');
+    await t.tap(find.byKey(Key('snippet-insert-$deploy')));
+    await t.pumpAndSettle();
+    await t.tap(find.byKey(const Key('multiline-send')));
+    await pumpReal(t, rounds: 3);
+    // Paste sends a line break as \r.
+    expect(utf8.decode(shell.written.last), 'cd /srv\rmake');
+  });
 
   testWidgets(
     'no connected tab: insert disabled; read-only: new, edit and delete disabled',
     (t) async {
-      final s = await signedInState(
-        t,
-        harness: SyncHarness(minClient: '9.0.0'),
-      );
+      final h = SyncHarness(minClient: '9.0.0');
+      final s = await signedInState(t, harness: h);
       late String id;
       await t.runAsync(() async {
         final item = await sealItem(
-          s.vault!.debugKey,
+          h.accounts[testEmail]!.account!.unlocked.userKey,
           type: 'snippet',
           meta: {
             'schemaVersion': 1,
@@ -213,9 +198,9 @@ void main() {
         await s.vault!.reload();
         await s.sync!.syncNow();
       });
-      await pumpApp(t, state: s, child: const SnippetsPanel());
+      await pumpApp(t, state: s, child: const SnippetsScreen());
       await t.pump();
-      final l = AppLocalizations.of(t.element(find.byType(SnippetsPanel)));
+      final l = AppLocalizations.of(t.element(find.byType(SnippetsScreen)));
       expect(find.text(l.snippetNoTerminal), findsOneWidget);
       for (final key in [
         'snippet-insert-$id',
@@ -223,12 +208,16 @@ void main() {
         'snippet-edit-$id',
         'snippet-delete-$id',
       ]) {
-        expect(
-          t.widget<ButtonStyleButton>(find.byKey(Key(key))).onPressed,
-          isNull,
-          reason: key,
-        );
+        expect(pressed(t, key), isNull, reason: key);
       }
     },
   );
 }
+
+/// The callback of a text or icon button, null when disabled.
+VoidCallback? pressed(WidgetTester t, String key) =>
+    switch (t.widget(find.byKey(Key(key)))) {
+      final ButtonStyleButton b => b.onPressed,
+      final IconButton b => b.onPressed,
+      final other => throw StateError('not a button: $other'),
+    };

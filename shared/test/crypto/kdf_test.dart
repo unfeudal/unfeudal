@@ -9,7 +9,7 @@ import '../support/hex.dart';
 
 void main() {
   final salt = utf8.encode('somesaltsomesalt');
-  const t1 = KdfParams(alg: 'argon2id', m: 1024, t: 1, p: 1);
+  const t1 = KdfParams.testing;
   const t2p4 = KdfParams(alg: 'argon2id', m: 1024, t: 2, p: 4);
 
   test('Argon2id matches the reference vectors (1 and 4 lanes)', () async {
@@ -54,7 +54,7 @@ void main() {
 
   test('NFD and NFC passwords derive the same keys', () async {
     const nfc = 'café-secret', nfd = 'café-secret';
-    expect(normalizePassword(nfd), nfc);
+    expect(passwordLength(nfd), passwordLength(nfc));
     expect(
       (await deriveMasterKeys(nfd, salt, t1)).encKey,
       (await deriveMasterKeys(nfc, salt, t1)).encKey,
@@ -83,7 +83,7 @@ void main() {
     }
   });
 
-  test('ensureAcceptable checks alg, then ceiling, then floor', () {
+  test('defaults, ceiling and testing presets have the pinned values', () {
     KdfParams.defaults.ensureAcceptable();
     KdfParams.ceiling.ensureAcceptable();
     expect(
@@ -98,8 +98,11 @@ void main() {
       (KdfParams.testing.m, KdfParams.testing.t, KdfParams.testing.p),
       (1024, 1, 1),
     );
+  });
+
+  test('ensureAcceptable refuses params below the floor with WeakKdf', () {
     expect(() => KdfParams.testing.ensureAcceptable(), throwsA(isA<WeakKdf>()));
-    KdfParams.testing.ensureAcceptable(allowTesting: true);
+    KdfParams.testing.ensureAcceptable(floor: KdfParams.testing);
     expect(
       () => const KdfParams(
         alg: 'argon2id',
@@ -115,9 +118,12 @@ void main() {
         m: 512,
         t: 1,
         p: 1,
-      ).ensureAcceptable(allowTesting: true),
+      ).ensureAcceptable(floor: KdfParams.testing),
       throwsA(isA<WeakKdf>()),
     );
+  });
+
+  test('ensureAcceptable refuses params above the ceiling as malformed', () {
     expect(
       () => const KdfParams(
         alg: 'argon2id',
@@ -142,9 +148,12 @@ void main() {
         m: 65536,
         t: 3,
         p: 17,
-      ).ensureAcceptable(allowTesting: true),
+      ).ensureAcceptable(floor: KdfParams.testing),
       throwsFormatException,
     );
+  });
+
+  test('ensureAcceptable refuses an unknown alg with UnsupportedKdf', () {
     expect(
       () => const KdfParams(alg: 'scrypt', m: 1, t: 1, p: 1).ensureAcceptable(),
       throwsA(isA<UnsupportedKdf>()),

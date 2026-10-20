@@ -8,9 +8,9 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 import 'api/app.dart';
 import 'audit/retention.dart';
 import 'config/config.dart';
-import 'db/db.dart';
 import 'db/maintenance.dart';
 import 'db/migrate.dart';
+import 'db/open_db.dart';
 import 'db/postgres_db.dart';
 import 'log/logger.dart';
 import 'mail/mailer.dart';
@@ -45,7 +45,7 @@ Future<RunningServer> runServer(
     final deps = await AppDeps.create(config, db, log: log, mailer: mailer);
     final token = await ensureSetupToken(db, config.setupToken);
     // Printed once, raw: redaction would hide it.
-    if (token != null) log.sink('Setup token: ${groupSetupToken(token)}');
+    if (token != null) log.sink('Setup token: ${groupBy4(token)}');
     final handler = buildHandler(deps);
     final server = await HttpServer.bind(
       config.listen.host,
@@ -55,19 +55,20 @@ Future<RunningServer> runServer(
     Completer<void>? idle;
     server.listen((req) {
       inFlight++; // counted until the response is written, not only until the handler returns
-      shelf_io.handleRequest(req, handler).whenComplete(() {
-        if (--inFlight == 0 && idle != null && !idle!.isCompleted) {
-          idle!.complete();
-        }
-      });
+      unawaited(
+        shelf_io.handleRequest(req, handler).whenComplete(() {
+          if (--inFlight == 0 && idle != null && !idle!.isCompleted) {
+            idle!.complete();
+          }
+        }),
+      );
     });
     log.info('listening', {'host': config.listen.host, 'port': server.port});
     final retention = startRetentionTimer(deps);
     return RunningServer(server.port, (Duration drain) async {
       final deadline = DateTime.now().add(drain);
-      unawaited(
-        server.close(),
-      ); // stop accepting; open requests keep their connection
+      // Stops accepting; open requests keep their connection.
+      unawaited(server.close());
       if (inFlight > 0) {
         await (idle = Completer<void>()).future.timeout(
           drain,
@@ -80,7 +81,8 @@ Future<RunningServer> runServer(
       retention.cancel();
       await db.close();
     });
-  } catch (_) {
+    // Any startup failure closes the database before propagating.
+  } on Object catch (_) {
     await db.close();
     rethrow;
   }
@@ -101,7 +103,8 @@ Future<int> healthcheck(Config config) async {
     final response = await request.close().timeout(const Duration(seconds: 3));
     await response.drain<void>();
     return response.statusCode == 200 ? 0 : 1;
-  } catch (_) {
+    // Any failure to reach the server means unhealthy.
+  } on Object catch (_) {
     return 1;
   } finally {
     client.close(force: true);

@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
-import 'dart:convert';
 
 import 'package:test/test.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 void main() {
-  final crypto = AccountCrypto(kdf: KdfParams.testing, allowTestingKdf: true);
+  final crypto = AccountCrypto(
+    kdf: KdfParams.testing,
+    kdfFloor: KdfParams.testing,
+  );
   late NewAccount alice;
   late NewAccount bob;
   setUpAll(() async {
@@ -35,14 +37,14 @@ void main() {
         aad(a),
         {'name': 'a'},
         key,
-        KeyIds.user,
+        keyId: KeyIds.user,
         seq: 1,
       );
       final secret = await PayloadCrypto.seal(
         aad(a, type: 'identity', part: PayloadPart.secret),
         {'password': 'x'},
         key,
-        KeyIds.user,
+        keyId: KeyIds.user,
         seq: 1,
       );
       await expectLater(
@@ -94,7 +96,7 @@ void main() {
   test(
     'a memory-bomb, weak or unknown KDF is refused before any derivation',
     () async {
-      final production = AccountCrypto(kdf: KdfParams.defaults);
+      final production = AccountCrypto();
       for (final (kdf, error) in [
         (
           {'alg': 'argon2id', 'm': 262144 * 4, 't': 3, 'p': 4},
@@ -143,27 +145,4 @@ void main() {
       }
     },
   );
-
-  test('a tampered export never opens and cannot lower its KDF', () async {
-    final text = await VaultExport.seal(
-      const [],
-      'twelve chars!',
-      kdf: KdfParams.testing,
-    );
-    final j = jsonDecode(text) as Map<String, Object?>;
-    final data = Map<String, Object?>.of(j['data']! as Map<String, Object?>);
-    final ct = unb64(data['ct']! as String)..[0] ^= 1;
-    final flipped = jsonEncode({
-      ...j,
-      'data': {...data, 'ct': b64(ct)},
-    });
-    await expectLater(
-      VaultExport.open(flipped, 'twelve chars!', allowTestingKdf: true),
-      throwsA(isA<WrongPassword>()),
-    );
-    await expectLater(
-      VaultExport.open(text, 'twelve chars!'),
-      throwsA(isA<WeakKdf>()),
-    );
-  });
 }

@@ -44,7 +44,7 @@ Explanation run(
   teamIds: teamsOf[who]!,
   folderId: folder,
   parentOf: parents ?? parentOf,
-  entries: acl,
+  acl: AclIndex(acl),
 );
 
 void main() {
@@ -127,13 +127,19 @@ void main() {
   });
 
   test('implications: reveal ⇒ connect ⇒ view, edit ⇒ view, manage ⇒ view', () {
-    expect(expand({r}), {r, c, v});
-    expect(expand({e}), {e, v});
-    expect(expand({m}), {m, v});
-    expect(expand({}), isEmpty);
-    expect(denyClosure({c}), {c, r});
-    expect(denyClosure({v}), Permission.values.toSet());
-    expect(denyClosure({e}), {e});
+    Set<Permission> mine(
+      Set<Permission> allow, [
+      Set<Permission> deny = const {},
+    ]) =>
+        run(dave, prod, [user(dave, prod, allow: allow, deny: deny)]).effective;
+    final all = Permission.values.toSet();
+    expect(mine({r}), {r, c, v});
+    expect(mine({e}), {e, v});
+    expect(mine({m}), {m, v});
+    expect(mine({}), isEmpty);
+    expect(mine(all, {c}), {v, e, m});
+    expect(mine(all, {v}), isEmpty);
+    expect(mine(all, {e}), {v, c, r, m});
   });
 
   test('accepted, disabled or absent members get nothing', () {
@@ -158,7 +164,7 @@ void main() {
         teamIds: const {},
         folderId: prod,
         parentOf: parentOf,
-        entries: acl,
+        acl: AclIndex(acl),
       ).effective,
       isEmpty,
     );

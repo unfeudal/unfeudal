@@ -4,7 +4,8 @@ import 'dart:typed_data';
 import '../bytes.dart';
 import '../ids.dart';
 import '../util/json_reader.dart';
-import 'payload_crypto.dart';
+
+enum PayloadPart { meta, secret }
 
 /// An AEAD ciphertext with its version, algorithm and key label. A newer
 /// version or algorithm parses and keeps its bytes; it is refused only when

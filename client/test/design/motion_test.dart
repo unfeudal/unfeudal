@@ -7,20 +7,22 @@ void main() {
   test('tokens', () {
     const m = UfMotion.normal;
     expect(
-      (m.fast, m.base, m.slow, m.shake),
+      (m.instant, m.fast, m.base, m.slow),
       (
+        const Duration(milliseconds: 90),
+        const Duration(milliseconds: 120),
         const Duration(milliseconds: 160),
-        const Duration(milliseconds: 240),
-        const Duration(milliseconds: 420),
-        const Duration(milliseconds: 360),
+        const Duration(milliseconds: 280),
       ),
     );
-    expect(UfMotion.curve, const Cubic(0.2, 0.8, 0.2, 1));
+    expect(UfMotion.standard, const Cubic(0.2, 0, 0, 1));
+    expect(UfMotion.enter, const Cubic(0.05, 0.7, 0.1, 1));
+    expect(UfMotion.exit, const Cubic(0.3, 0, 1, 1));
     expect([
+      UfMotion.still.instant,
       UfMotion.still.fast,
       UfMotion.still.base,
       UfMotion.still.slow,
-      UfMotion.still.shake,
     ], everyElement(Duration.zero));
   });
 
@@ -47,29 +49,6 @@ void main() {
     expect(seen, UfMotion.still);
     await t.pumpWidget(probe(performance: false, osReduce: true));
     expect(seen, UfMotion.still);
-  });
-
-  testWidgets('ShakeOnError shakes once per trigger change, not when still', (
-    t,
-  ) async {
-    Widget shake(int trigger, {bool still = false}) => MaterialApp(
-      home: MotionScope(
-        performanceMode: still,
-        child: ShakeOnError(
-          trigger: trigger,
-          child: const SizedBox(key: Key('x')),
-        ),
-      ),
-    );
-    await t.pumpWidget(shake(0));
-    await t.pumpWidget(shake(1));
-    await t.pump(const Duration(milliseconds: 90));
-    expect(t.getTopLeft(find.byKey(const Key('x'))).dx, isNot(0));
-    await t.pumpAndSettle();
-    expect(t.getTopLeft(find.byKey(const Key('x'))).dx, 0);
-    await t.pumpWidget(shake(2, still: true));
-    await t.pump(const Duration(milliseconds: 90));
-    expect(t.getTopLeft(find.byKey(const Key('x'))).dx, 0);
   });
 
   testWidgets('showUfDialog returns the popped value', (t) async {

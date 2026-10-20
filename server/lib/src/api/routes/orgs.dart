@@ -2,17 +2,20 @@
 import 'dart:convert';
 
 import 'package:shelf/shelf.dart';
+import 'package:shelf_router/shelf_router.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../../audit/audit_log.dart';
+import '../../audit/retention_policy.dart';
 import '../../config/config.dart';
 import '../../db/deletion.dart';
 import '../../orgs/org_access.dart';
 import '../../orgs/rotations.dart';
-import '../app.dart';
+import '../deps.dart';
 import '../errors.dart';
 import '../json.dart';
 import '../middleware.dart';
+import '../request_audit.dart';
 import '../validate.dart';
 
 Future<Response> createOrg(Request request) async {
@@ -22,12 +25,12 @@ Future<Response> createOrg(Request request) async {
     throw ApiError(
       ApiErrorCode.forbidden,
       'Only the Instance Owner creates organizations.',
-    ); // 1.
+    );
   }
-  final name = parseName((await readJson(request))['name']); // 2.
+  final name = parseName((await readJson(request))['name']);
   final orgId = newId();
   await deps.db.transaction((tx) async {
-    await checkMembershipCap(tx, deps.config, auth.userId); // 3.
+    await checkMembershipCap(tx, deps.config, auth.userId);
     await tx.execute(
       "INSERT INTO orgs (id, name, settings, created_at) VALUES (@o, @n, '{}', @t)",
       {'o': orgId, 'n': name, 't': iso(deps.clock.now())},
@@ -46,40 +49,28 @@ Future<Response> createOrg(Request request) async {
   }, status: 201);
 }
 
-const _settingKeys = {'mascot', 'auditDays', 'maxVersions', 'trashDays'};
-
-Future<Response> updateOrg(Request request, String org) async {
+Future<Response> updateOrg(Request request) async {
   final deps = depsOf(request), auth = authOf(request);
-  parseUuid(org);
+  final org = parseUuid(request.params['org']!);
   final body = await readJson(request);
   final sent = body['settings'] ?? const <String, Object?>{};
-  if (sent is! Map<String, Object?> || !_settingKeys.containsAll(sent.keys)) {
-    throw ApiError(
-      ApiErrorCode.invalidRequest,
+  final server = serverRetention(deps.config);
+  if (sent is! Map<String, Object?> ||
+      !{'mascot', ...server.keys}.containsAll(sent.keys)) {
+    throw ApiError.invalid(
       'settings: mascot, auditDays, maxVersions or trashDays only.',
-    ); // 1.
+    );
   }
   await deps.db.transaction((tx) async {
-    await requireMember(tx, org, auth.userId, admin: true); // 2.
-    final name = body.containsKey('name')
-        ? parseName(body['name'])
-        : null; // 3.
-    final config = deps.config;
-    final server = {
-      'auditDays': config.auditRetentionDays,
-      'maxVersions': config.itemHistoryMaxVersions,
-      'trashDays': config.trashRetentionDays,
-    };
+    await requireMember(tx, org, auth.userId, admin: true);
+    final name = body.containsKey('name') ? parseName(body['name']) : null;
     for (final MapEntry(:key, :value) in sent.entries) {
       if (key == 'mascot') {
         if (value is! bool) {
-          throw ApiError(
-            ApiErrorCode.invalidRequest,
-            'mascot must be a boolean.',
-          ); // 4.
+          throw ApiError.invalid('mascot must be a boolean.');
         }
       } else if (value != null) {
-        _retention(key, value, server[key]!); // 5.
+        _retention(key, value, server[key]!);
       }
     }
     final row = (await tx.query(
@@ -105,80 +96,54 @@ Future<Response> updateOrg(Request request, String org) async {
   return noContent();
 }
 
-/// Org retention: int ≥ 1 and ≤ the server value (≤ 36500 when the server keeps forever);
-/// auditDays also ≥ 30, or ≥ the server value when that is below 30.
+// An org may only shorten the server retention (36500 days at most when the
+// server keeps forever); auditDays stays at 30 or more, unless the server is below 30.
 int _retention(String key, Object? value, int server) {
   if (value is! int) {
-    throw ApiError(
-      ApiErrorCode.invalidRequest,
-      '$key must be an integer or null.',
-    );
+    throw ApiError.invalid('$key must be an integer or null.');
   }
   final ceiling = server == 0 ? 36500 : server;
   final floor = key == 'auditDays'
       ? (server != 0 && server < 30 ? server : 30)
       : 1;
   if (value < floor || value > ceiling) {
-    throw ApiError(
-      ApiErrorCode.invalidRequest,
-      '$key must be between $floor and $ceiling.',
-    );
+    throw ApiError.invalid('$key must be between $floor and $ceiling.');
   }
   return value;
 }
 
-Future<Response> deleteOrgRoute(Request request, String org) async {
+Future<Response> deleteOrgRoute(Request request) async {
   final deps = depsOf(request), auth = authOf(request);
-  parseUuid(org);
+  final org = parseUuid(request.params['org']!);
   await deps.db.transaction((tx) async {
-    await requireMember(tx, org, auth.userId, owner: true); // 1. 404 · 2. 403
+    await requireMember(tx, org, auth.userId, owner: true);
     await deleteOrg(tx, org);
     await auditWriter(request, tx)(AuditScope.instance, 'org.deleted', [org]);
   });
   return noContent();
 }
 
-const _privileged = {OrgRole.owner, OrgRole.admin};
-
-Future<Response> setRole(Request request, String org, String user) async {
+Future<Response> setRole(Request request) async {
   final deps = depsOf(request), auth = authOf(request);
-  parseUuid(org);
-  parseUuid(user);
+  final (org, user) = _memberPath(request);
   final body = await readJson(request);
-  final newRole =
-      OrgRole.values.where((r) => r.name == body['role']).firstOrNull ??
-      (throw ApiError(
-        ApiErrorCode.invalidRequest,
-        'role must be owner, admin or member.',
-      )); // 1.
+  final newRole = parseRole(body['role']);
   await deps.db.transaction((tx) async {
-    final caller = await requireMember(tx, org, auth.userId, admin: true); // 2.
-    final before = (await loadOrg(tx, org))!;
-    final target =
-        before.members[user] ??
-        (throw ApiError(ApiErrorCode.notFound, 'Not found.')); // 3.
-    if ((_privileged.contains(target.role) || _privileged.contains(newRole)) &&
-        caller.role != OrgRole.owner) {
-      throw ApiError(
-        ApiErrorCode.forbidden,
-        'Only an owner manages admins and owners.',
-      ); // 4.
-    }
-    if (newRole != OrgRole.owner && isLastOwner(before, user)) {
-      throw lastOwnerError([before.name]); // 5.
-    }
-    await tx.execute(
-      'UPDATE org_members SET role = @r WHERE org_id = @o AND user_id = @u',
-      {'r': newRole.name, 'o': org, 'u': user},
-    );
-    await recordRotations(
-      tx,
-      org,
-      before,
-      (await loadOrg(tx, org))!,
-      'role_change',
-    );
-    await bumpOrgSeq(tx);
+    final caller = await requireMember(tx, org, auth.userId, admin: true);
+    await changeOrg(tx, org, reason: 'role_change', (before) async {
+      final target = before.members[user] ?? (throw ApiError.notFound());
+      requireRoleManager(caller, [
+        target.role,
+        newRole,
+      ], 'Only an owner manages admins and owners.');
+      if (newRole != OrgRole.owner && isLastOwner(before, user)) {
+        throw lastOwnerError([before.name]);
+      }
+      await tx.execute(
+        'UPDATE org_members SET role = @r WHERE org_id = @o AND user_id = @u',
+        {'r': newRole.name, 'o': org, 'u': user},
+      );
+    });
     await auditWriter(request, tx)(AuditScope.org(org), 'member.role_changed', [
       user,
     ]);
@@ -186,43 +151,29 @@ Future<Response> setRole(Request request, String org, String user) async {
   return noContent();
 }
 
-Future<Response> removeMemberRoute(
-  Request request,
-  String org,
-  String user,
-) async {
+Future<Response> removeMemberRoute(Request request) async {
   final deps = depsOf(request), auth = authOf(request);
-  parseUuid(org);
-  parseUuid(user);
+  final (org, user) = _memberPath(request);
   await deps.db.transaction((tx) async {
-    final caller = await requireMember(
-      tx,
-      org,
-      auth.userId,
-      confirmed: false,
-    ); // 1. any status
+    // Any status, so an unconfirmed member can still leave.
+    final caller = await requireMember(tx, org, auth.userId, confirmed: false);
     final self = user == auth.userId;
     if (!self && !caller.isAdmin) {
-      throw ApiError(ApiErrorCode.forbidden, 'Admins only.'); // 2.
+      throw ApiError(ApiErrorCode.forbidden, 'Admins only.');
     }
     final before = (await loadOrg(tx, org))!;
-    final target =
-        before.members[user] ??
-        (throw ApiError(ApiErrorCode.notFound, 'Not found.')); // 3.
-    if (!self &&
-        _privileged.contains(target.role) &&
-        caller.role != OrgRole.owner) {
-      throw ApiError(
-        ApiErrorCode.forbidden,
-        'Only an owner removes admins and owners.',
-      ); // 4.
+    final target = before.members[user] ?? (throw ApiError.notFound());
+    if (!self) {
+      requireRoleManager(caller, [
+        target.role,
+      ], 'Only an owner removes admins and owners.');
     }
-    if (isLastOwner(before, user)) throw lastOwnerError([before.name]); // 5.
+    if (isLastOwner(before, user)) throw lastOwnerError([before.name]);
     await removeMember(
       tx,
       org,
       user,
-      self ? 'member_left' : 'member_removed',
+      reason: self ? 'member_left' : 'member_removed',
       before: before,
     );
     // the caller is the actor, so the member when they leave
@@ -233,19 +184,18 @@ Future<Response> removeMemberRoute(
   return noContent();
 }
 
-Future<Response> confirmMember(Request request, String org, String user) async {
+Future<Response> confirmMember(Request request) async {
   final deps = depsOf(request), auth = authOf(request);
-  parseUuid(org);
-  parseUuid(user);
+  final (org, user) = _memberPath(request);
   await deps.db.transaction((tx) async {
-    await requireMember(tx, org, auth.userId, admin: true); // 1.
+    await requireMember(tx, org, auth.userId, admin: true);
     final rows = await tx.query(
       'SELECT status FROM org_members WHERE org_id = @o AND user_id = @u',
       {'o': org, 'u': user},
     );
-    if (rows.isEmpty) throw ApiError(ApiErrorCode.notFound, 'Not found.'); // 2.
+    if (rows.isEmpty) throw ApiError.notFound();
     if (rows.single['status'] != MemberStatus.accepted.name) {
-      throw ApiError(ApiErrorCode.invalidRequest, 'Already confirmed.'); // 3.
+      throw ApiError.invalid('Already confirmed.');
     }
     await tx.execute(
       "UPDATE org_members SET status = 'confirmed' WHERE org_id = @o AND user_id = @u",
@@ -258,3 +208,6 @@ Future<Response> confirmMember(Request request, String org, String user) async {
   });
   return noContent();
 }
+
+(String, String) _memberPath(Request request) =>
+    (parseUuid(request.params['org']!), parseUuid(request.params['user']!));

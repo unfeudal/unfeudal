@@ -7,8 +7,6 @@ import 'cipher.dart';
 import 'envelope.dart';
 import 'errors.dart';
 
-enum PayloadPart { meta, secret }
-
 /// Binds a payload to its item: a server that moves, re-types or re-scopes
 /// the item makes decryption fail.
 class PayloadAad {
@@ -53,8 +51,8 @@ abstract final class PayloadCrypto {
   static Future<Envelope> seal(
     PayloadAad aad,
     Map<String, Object?> json,
-    List<int> key,
-    String keyId, {
+    List<int> key, {
+    required String keyId,
     required int seq,
   }) {
     if (seq < 1) throw ArgumentError.value(seq, 'seq', 'must be >= 1');
@@ -91,12 +89,16 @@ abstract final class PayloadCrypto {
     return OpenedPayload(json, seq);
   }
 
-  /// Personal payloads use `user`; org payloads use a folder key of the folder itself (folder items)
-  /// or of the item's folderId, for the same part.
+  // Personal payloads use `user`; org payloads use a folder key of the folder itself (folder items)
+  // or of the item's folderId, for the same part.
   static bool _keyIdFits(PayloadAad aad, String keyId) {
     if (aad.scope == ItemScope.personal) return keyId == KeyIds.user;
     final f = KeyIds.parseFolder(keyId);
-    final expected = aad.type == 'folder' ? aad.itemId : aad.folderId;
+    final expected = keyFolderIdOf(
+      type: aad.type,
+      id: aad.itemId,
+      folderId: aad.folderId,
+    );
     return f != null && f.part == aad.part && f.folderId == expected;
   }
 }

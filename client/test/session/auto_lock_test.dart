@@ -18,7 +18,9 @@ void main() {
       expect((locks, idles), (0, 2));
       async.elapse(const Duration(minutes: 1));
       expect(locks, 1);
-      expect(a.running, isFalse);
+      a.activity(); // the lock stopped it: activity no longer re-arms it
+      async.elapse(const Duration(hours: 1));
+      expect(locks, 1);
     });
   });
 

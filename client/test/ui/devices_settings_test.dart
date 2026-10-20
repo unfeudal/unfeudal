@@ -18,7 +18,11 @@ void main() {
       final s = await signedInState(t, harness: h);
       late String other;
       await t.runAsync(() async => other = (await h.signIn()).deviceId);
-      await pumpApp(t, state: s, child: const DevicesScreen());
+      await pumpApp(
+        t,
+        state: s,
+        child: const Scaffold(body: DeviceList()),
+      );
       await pumpReal(t, rounds: 5);
       expect(
         find.byKey(Key('device-current-${s.stored!.deviceId}')),
@@ -42,15 +46,22 @@ void main() {
       await pumpApp(t, state: s, child: const SettingsScreen());
       await t.tap(find.byKey(const Key('theme-dark')));
       await pumpReal(t, rounds: 5);
-      await t.tap(find.byKey(const Key('autolock-5')));
+      await t.tap(find.byKey(const Key('group-security')));
+      await t.pump();
+      await t.tap(find.byKey(const Key('autolock')));
+      await t.pumpAndSettle();
+      await t.tap(find.byKey(const Key('autolock-5')).last);
       await pumpReal(t, rounds: 5);
       expect(
         (s.settings.themeMode, s.settings.autoLockMinutes),
         (ThemeMode.dark, 5),
       );
-      expect(s.vault!.profile.prefs['themeMode'], 'dark');
-      expect(s.vault!.profile.prefs.containsKey('autoLockMinutes'), isFalse);
-      expect(find.text(safetyCode(s.accountPublicKey)), findsOneWidget);
+      expect(s.vault!.profile.meta.prefs['themeMode'], 'dark');
+      expect(
+        s.vault!.profile.meta.prefs.containsKey('autoLockMinutes'),
+        isFalse,
+      );
+      expect(find.text(safetyCode(s.credentials.publicKey)), findsOneWidget);
     },
   );
 
@@ -59,7 +70,11 @@ void main() {
     (t) async {
       final h = SyncHarness();
       final s = await signedInState(t, harness: h);
-      await pumpApp(t, state: s, child: const SettingsScreen());
+      await pumpApp(
+        t,
+        state: s,
+        child: const SettingsScreen(initialGroup: 'security'),
+      );
       await t.tap(find.byKey(const Key('settings-recovery-kit')));
       await t.pumpAndSettle();
       await t.enterText(
@@ -80,7 +95,11 @@ void main() {
       t,
       harness: SyncHarness(capabilities: ['sync']),
     );
-    await pumpApp(t, state: s, child: const SettingsScreen());
+    await pumpApp(
+      t,
+      state: s,
+      child: const SettingsScreen(initialGroup: 'security'),
+    );
     await pumpReal(t, rounds: 5);
     expect(find.byKey(const Key('settings-recovery-kit')), findsNothing);
   });

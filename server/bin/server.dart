@@ -3,9 +3,9 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:unfeudal_server/src/config/config.dart';
-import 'package:unfeudal_server/src/db/db.dart';
 import 'package:unfeudal_server/src/db/maintenance.dart';
 import 'package:unfeudal_server/src/db/migrate.dart';
+import 'package:unfeudal_server/src/db/open_db.dart';
 import 'package:unfeudal_server/src/mail/mailer.dart';
 import 'package:unfeudal_server/src/mail/smtp_mailer.dart';
 import 'package:unfeudal_server/src/run_server.dart';
@@ -31,7 +31,8 @@ Future<void> main(List<String> args) async {
               ? const NoMailer()
               : SmtpMailer(config.smtp!, timezone: config.timezone),
         );
-      } catch (e) {
+      } on Object catch (e) {
+        // Any startup failure ends the process with a message instead of a stack trace.
         stderr.writeln('cannot start: $e');
         exit(1);
       }
@@ -62,14 +63,14 @@ Future<void> main(List<String> args) async {
       }
       exit(0);
     case ['transfer-owner', final email]:
-      exit(await _transferOwner(config, email));
+      exit(await _transferOwner(config, email.trim().toLowerCase()));
     default:
       stderr.writeln(_usage);
       exit(64);
   }
 }
 
-/// The YAML text of `UNFEUDAL_CONFIG_FILE`, or null when unset.
+// Returns the YAML text of `UNFEUDAL_CONFIG_FILE`, or null when unset.
 String? _configFile() {
   final path = Platform.environment['UNFEUDAL_CONFIG_FILE'];
   if (path == null) return null;
@@ -88,8 +89,8 @@ Future<int> _backup(Config config, String path) async {
       'Backup written to $path. Keep secret_file with it, and run new-epoch after a restore.',
     );
     return 0;
-  } on UnsupportedError {
-    stderr.writeln('use pg_dump');
+  } on MaintenanceError catch (e) {
+    stderr.writeln(e.message);
     return 1;
   } on FileSystemException catch (e) {
     stderr.writeln('backup failed: ${e.message}');
@@ -104,9 +105,9 @@ Future<int> _transferOwner(Config config, String email) async {
   try {
     await migrate(db);
     await transferOwner(db, email);
-    stdout.writeln('Instance Owner is now ${email.trim().toLowerCase()}.');
+    stdout.writeln('Instance Owner is now $email.');
     return 0;
-  } on StateError catch (e) {
+  } on MaintenanceError catch (e) {
     stderr.writeln(e.message);
     return 1;
   } finally {

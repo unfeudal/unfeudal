@@ -1,29 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-
-enum Flag {
-  orgs('orgs'),
-  teams('teams'),
-  userOverrides('user_overrides'),
-  invitesFromOrgs('invites_from_orgs'),
-  smtpInvites('smtp_invites'),
-  securityEmails('security_emails'),
-  audit('audit'),
-  clientEvents('client_events'),
-  itemHistory('item_history'),
-  recoveryKit('recovery_kit'),
-  plainHttpLan('plain_http_lan'),
-  reveal('reveal'),
-  biometricUnlock('biometric_unlock'),
-  sshConfigImport('ssh_config_import'),
-  mascot('mascot');
-
-  const Flag(this.wire);
-
-  final String wire;
-
-  static Flag? fromWire(String wire) =>
-      values.where((f) => f.wire == wire).firstOrNull;
-}
+import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 /// All flags on by default except [Flag.plainHttpLan].
 class Features {

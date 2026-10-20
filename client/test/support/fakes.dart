@@ -11,7 +11,7 @@ import 'package:unfeudal_client/src/loquet/loquet_memory.dart';
 import 'package:unfeudal_client/src/session/biometrics.dart';
 import 'package:unfeudal_client/src/session/session_store.dart';
 import 'package:unfeudal_client/src/settings/settings.dart';
-import 'package:unfeudal_client/src/ssh/jump_connector.dart';
+import 'package:unfeudal_client/src/ssh/connections.dart';
 import 'package:unfeudal_client/src/ssh/ssh_connector.dart';
 import 'package:unfeudal_client/src/storage/local_mirror.dart';
 import 'package:unfeudal_client/src/sync/ledger_store.dart';
@@ -52,7 +52,7 @@ Item wireItem(
   if (purged) 'purged': true,
   'meta': purged ? null : fakeEnvelope().toJson(),
   'secret': null,
-  'createdAt': iso(DateTime.utc(2026, 10, 1)),
+  'createdAt': iso(DateTime.utc(2026, 10)),
   'updatedAt': iso(DateTime.utc(2026, 10, 14)),
   'updatedBy': testUserId,
   'updatedDevice': updatedDevice ?? testDeviceId,
@@ -93,7 +93,7 @@ Future<Item> sealItem(
       aad(PayloadPart.meta),
       meta,
       key,
-      KeyIds.user,
+      keyId: KeyIds.user,
       seq: seq,
     )).toJson(),
     'secret': secret == null
@@ -102,7 +102,7 @@ Future<Item> sealItem(
             aad(PayloadPart.secret),
             secret,
             key,
-            KeyIds.user,
+            keyId: KeyIds.user,
             seq: seq,
           )).toJson(),
     'createdAt': iso(createdAt ?? DateTime.utc(2026, 10, 14)),
@@ -147,8 +147,7 @@ Future<Vault> testVault(Uint8List key, LocalMirror mirror) async {
   final v = Vault(
     mirror: mirror,
     ledger: LedgerStore(mirror),
-    write: (item) async =>
-        mirror.enqueue(item, baseRevision: item.revision ?? 0),
+    write: (items) async => mirror.enqueueAll(items),
   );
   await v.unlock(key);
   return v;
@@ -182,6 +181,18 @@ class FakeClock {
   void advance(Duration d) => value = value.add(d);
 }
 
+/// Settings in memory: [load] returns the last value saved.
+class FakeSettingsStore implements SettingsStore {
+  FakeSettingsStore([this.saved = const Settings()]);
+  Settings saved;
+
+  @override
+  Future<Settings> load() async => saved;
+
+  @override
+  Future<void> save(Settings settings) async => saved = settings;
+}
+
 class FakeSecureKv implements SecureKv {
   final values = <String, String>{};
 
@@ -199,7 +210,7 @@ class FakeSecureKv implements SecureKv {
 class FakeSshConnector extends SshConnector {
   String keyType = 'ssh-ed25519';
   String fingerprint = 'SHA256:${'A' * 43}';
-  Object? failWith;
+  Exception? failWith;
   final targets = <ConnectTarget>[];
   final shells = <FakeShell>[];
   final hops = <FakeHop>[];
@@ -212,22 +223,63 @@ class FakeSshConnector extends SshConnector {
   }) async {
     targets.add(target);
     if (failWith case final error?) throw error;
-    final decision = decideHostKey(
-      callbacks.pinnedKey(target.hostId),
-      keyType,
-      fingerprint,
-    );
-    final ok = await SshConnector.verifyHostKey(
+    final (:accepted, :decision) = await SshConnector.verifyHostKey(
       hostId: target.hostId,
       hostName: target.hostName,
       keyType: keyType,
       fingerprint: fingerprint,
       callbacks: callbacks,
     );
-    if (!ok) throw HostKeyRejected(decision, hostId: target.hostId);
+    if (!accepted) throw HostKeyRejected(decision, hostId: target.hostId);
     final hop = FakeHop(target.hostId, shells);
     hops.add(hop);
     return hop;
+  }
+}
+
+/// Host pins by host id; [answer] to every host-key question, [password] and [promptAnswer] to the server.
+class FakeSshCallbacks implements SshCallbacks {
+  FakeSshCallbacks({this.answer = false, this.password, this.promptAnswer});
+  bool answer;
+  final String? password;
+  final String? promptAnswer;
+  final pins = <String, KnownHostMeta>{};
+  final asked = <HostKeyCheck>[];
+  final prompts = <SshPrompt>[];
+
+  @override
+  KnownHostMeta? pinnedKey(String hostId) => pins[hostId];
+
+  @override
+  Future<bool> confirmHostKey(HostKeyCheck check) async {
+    asked.add(check);
+    return answer;
+  }
+
+  @override
+  Future<void> pinHostKey(
+    String hostId,
+    String keyType,
+    String fingerprint,
+  ) async => pins[hostId] = KnownHostMeta(
+    hostItemId: hostId,
+    keyType: keyType,
+    sha256Fingerprint: fingerprint,
+  );
+
+  @override
+  Future<String?> askPassword(String target) async => password;
+
+  @override
+  Future<List<String>?> answerPrompts(
+    String name,
+    String instruction,
+    List<SshPrompt> prompts,
+  ) async {
+    this.prompts.addAll(prompts);
+    return promptAnswer == null
+        ? null
+        : [for (final _ in prompts) promptAnswer!];
   }
 }
 
@@ -296,7 +348,6 @@ Future<int> freePort() async {
 
 class FakeShell implements SshShell {
   final _stdout = StreamController<Uint8List>.broadcast();
-  final _stderr = StreamController<Uint8List>.broadcast();
   final _done = Completer<void>();
   final written = <Uint8List>[];
   final sizes = <(int, int)>[];
@@ -312,7 +363,7 @@ class FakeShell implements SshShell {
   Stream<Uint8List> get stdout => _stdout.stream;
 
   @override
-  Stream<Uint8List> get stderr => _stderr.stream;
+  Stream<Uint8List> get stderr => const Stream.empty();
 
   @override
   void write(Uint8List data) => written.add(data);
@@ -346,12 +397,12 @@ AppState testAppState({
   final m = mirrors ?? <String, LocalMirror>{};
   return AppState(
     sessions: SessionStore(kv ?? FakeSecureKv()),
-    settingsStore: settingsStore ?? SettingsStore.memory(settings),
+    settingsStore: settingsStore ?? FakeSettingsStore(settings),
     openMirror: (userId) async => m[userId] ??= LocalMirror.inMemory(),
     httpClient: h.client,
     ssh: ssh ?? FakeSshConnector(),
 
-    allowTestingKdf: true,
+    kdfFloor: KdfParams.testing,
     kdf: KdfParams.testing,
     loquetMemory: loquetMemory,
     // a Thursday noon: no suite depends on the machine's hour, weekday or calendar

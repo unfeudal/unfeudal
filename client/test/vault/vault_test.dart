@@ -63,18 +63,17 @@ void main() {
       await sealItem(key, id: id, meta: hostJson('v5'), seq: 5, revision: 5),
     ]);
     final v = await testVault(key, m);
+    // An earlier payload under a new revision.
     m.upsertItems([
       await sealItem(key, id: id, meta: hostJson('v2'), seq: 2, revision: 6),
-    ]); // earlier payload, new revision
+    ]);
     var replays = 0;
     v.onReplay = (_) => replays++;
     await v.reload();
     expect((v.entry(id)!.name, v.entry(id)!.item.revision), ('v5', 6));
     expect(replays, 1);
-    final fresh = await testVault(
-      key,
-      m,
-    ); // after a restart: shown as unreadable, never dropped
+    // After a restart the entry shows as unreadable, never dropped.
+    final fresh = await testVault(key, m);
     expect(fresh.entry(id)!.state, EntryState.unreadable);
   });
 
@@ -91,6 +90,30 @@ void main() {
     confirmOutbox(m);
     await v.reload();
     expect(v.ledger.mark(id, PayloadPart.meta), 9);
+  });
+
+  test('a reload with nothing changed keeps the sealed ledger; after a restore every row is checked again', () async {
+    final m = LocalMirror.inMemory();
+    final id = newId();
+    m.upsertItems([await sealItem(key, id: id, meta: hostJson('web'), seq: 3)]);
+    final v = await testVault(key, m);
+    final sealed = m.getKv(KvKey.ledger);
+    await v.reload();
+    expect(m.getKv(KvKey.ledger), sealed);
+    await v.ledger.reset();
+    await v.reload();
+    expect(v.ledger.mark(id, PayloadPart.meta), 3);
+  });
+
+  test('a write shows at once from its plaintext; a second edit at the same revision too', () async {
+    final m = LocalMirror.inMemory();
+    final v = await testVault(key, m);
+    final id = await v.upsertItem(type: 'host', meta: hostJson('a'));
+    expect((v.entry(id)!.name, v.entry(id)!.pending), ('a', true));
+    await v.upsertItem(type: 'host', id: id, meta: hostJson('b'));
+    expect(v.entry(id)!.name, 'b');
+    await v.reload();
+    expect(v.entry(id)!.name, 'b');
   });
 
   test('no plaintext reaches the mirror file', () async {

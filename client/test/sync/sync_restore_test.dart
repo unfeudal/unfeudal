@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -117,18 +118,32 @@ void main() {
     );
   });
 
-  test(
-    'outside an accepted restore an older revision is ignored and counted',
-    () async {
-      final h = SyncHarness();
-      final (e, m, _) = await h.engine();
-      final id = newId();
-      final v1 = h.serverPut(wireItem(id, revision: 0));
-      h.serverPut(wireItem(id));
-      await e.syncNow();
-      h.serveOlder(v1);
-      await e.syncNow();
-      expect((m.item(id)!.revision, e.ignoredRollbacks), (2, 1));
-    },
-  );
+  test('accept: the API keeps refusing writes until the accepted round has negotiated', () async {
+    final h = SyncHarness();
+    final (e, m, _) = await h.engine();
+    await e.syncNow();
+    h.restore(h.snapshot(), epoch: newEpoch);
+    await e.syncNow();
+    await e.refuseRestore();
+    final info = Completer<void>();
+    h.holdInfo = info.future;
+    final accepted = e.acceptRestore();
+    await pumpEventQueue();
+    expect((e.readOnly, e.api.isReadOnly()), (false, true));
+    info.complete();
+    await accepted;
+    expect((e.readOnly, e.api.isReadOnly()), (false, false));
+  });
+
+  test('outside an accepted restore an older revision is ignored', () async {
+    final h = SyncHarness();
+    final (e, m, _) = await h.engine();
+    final id = newId();
+    final v1 = h.serverPut(wireItem(id, revision: 0));
+    h.serverPut(wireItem(id));
+    await e.syncNow();
+    h.serveOlder(v1);
+    await e.syncNow();
+    expect(m.item(id)!.revision, 2);
+  });
 }

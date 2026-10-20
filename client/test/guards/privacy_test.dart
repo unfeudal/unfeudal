@@ -38,8 +38,8 @@ void main() {
 
   test('no URL in lib/ but the compiled release link; no font fetching', () {
     final url = RegExp(r'''https?://[^\s'"]+''');
-    const svgNamespace =
-        'http://www.w3.org/2000/svg'; // an XML name, never fetched
+    // An XML name, never fetched.
+    const svgNamespace = 'http://www.w3.org/2000/svg';
     final offenders = <String>[];
     for (final f
         in Directory('lib')
@@ -72,7 +72,7 @@ void main() {
       meta: hostJson('web', user: 'root'),
     );
     await s.sync!.syncNow();
-    await s.loadDevices();
+    await s.api!.devices();
     await s.lock();
     await s.unlock(testPassword);
     await s.sync!.syncNow();

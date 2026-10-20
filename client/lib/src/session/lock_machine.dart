@@ -40,7 +40,13 @@ class LockMachine extends ChangeNotifier {
     LockScreenState.peek,
   }, LockScreenState.checking);
 
-  void fail() => _move({LockScreenState.checking}, LockScreenState.error);
+  /// Wrong passwords in a row; a right one sets it back to 0.
+  int failures = 0;
+
+  void fail() {
+    failures++;
+    _move({LockScreenState.checking}, LockScreenState.error);
+  }
 
   void succeed() => _move({
     LockScreenState.checking,
@@ -58,8 +64,7 @@ class LockMachine extends ChangeNotifier {
   void helloCancelled() =>
       _move({LockScreenState.hello}, LockScreenState.locked);
 
-  void reset([LockScreenState state = LockScreenState.locked]) =>
-      _move(LockScreenState.values.toSet(), state);
+  void reset() => _move(LockScreenState.values.toSet(), LockScreenState.locked);
 
   void startIdleWatch() {
     _idle?.cancel();
@@ -73,7 +78,7 @@ class LockMachine extends ChangeNotifier {
     _idle = null;
   }
 
-  /// Every call restarts a running idle watch, legal or not: it is user activity.
+  // Every call restarts a running idle watch, legal or not: it is user activity.
   bool _move(Set<LockScreenState> from, LockScreenState to) {
     if (_idle != null) startIdleWatch();
     if (!from.contains(_state)) return false;

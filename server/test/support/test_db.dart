@@ -2,6 +2,7 @@
 import 'dart:io';
 
 import 'package:unfeudal_server/src/db/db.dart';
+import 'package:unfeudal_server/src/db/open_db.dart';
 
 /// SQLite in memory; with UNFEUDAL_TEST_POSTGRES_URL a freshly recreated `public` schema
 /// (the suite then runs with --concurrency=1). Not migrated: callers run `migrate`.

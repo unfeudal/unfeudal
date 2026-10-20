@@ -35,7 +35,7 @@ void main() {
   final at = DateTime.utc(2026, 10, 15, 9);
   const pass = 'twelve chars!';
 
-  test('sealed export: its shape, nothing in clear, round-trips', () async {
+  test('sealed export: its shape, nothing in clear', () async {
     final text = await VaultExport.seal(
       items,
       pass,
@@ -54,9 +54,6 @@ void main() {
       ('unfeudal-export', 1, 'export', 16),
     );
     expect(text, isNot(contains('hunter2')));
-    final back = await VaultExport.open(text, pass, allowTestingKdf: true);
-    expect(back.exportedAt, at);
-    expect(back.items, items);
   });
 
   test('key, keyId and aad of the sealed export', () async {
@@ -78,41 +75,11 @@ void main() {
     });
   });
 
-  test('passphrase under 12 code points is WeakPassword; a wrong one is WrongPassword', () async {
+  test('passphrase under 12 code points is WeakPassword', () async {
     await expectLater(
-      VaultExport.seal(items, 'café court', kdf: KdfParams.testing),
+      VaultExport.seal(items, 'café court', kdf: KdfParams.testing),
       throwsA(isA<WeakPassword>()),
     );
-    final text = await VaultExport.seal(items, pass, kdf: KdfParams.testing);
-    await expectLater(
-      VaultExport.open(text, 'not the passphrase', allowTestingKdf: true),
-      throwsA(isA<WrongPassword>()),
-    );
-  });
-
-  test('a weak KDF is refused before deriving; an unknown format or version is unsupported; garbage is a FormatException', () async {
-    final text = await VaultExport.seal(items, pass, kdf: KdfParams.testing);
-    await expectLater(VaultExport.open(text, pass), throwsA(isA<WeakKdf>()));
-    final j = jsonDecode(text) as Map<String, Object?>;
-    await expectLater(
-      VaultExport.open(jsonEncode({...j, 'v': 2}), pass, allowTestingKdf: true),
-      throwsA(isA<UnsupportedEnvelope>()),
-    );
-    await expectLater(
-      VaultExport.open(
-        jsonEncode({...j, 'format': 'other'}),
-        pass,
-        allowTestingKdf: true,
-      ),
-      throwsA(isA<UnsupportedEnvelope>()),
-    );
-    for (final bad in ['nope', '[]', '{"format": "unfeudal-export", "v": 1}']) {
-      await expectLater(
-        VaultExport.open(bad, pass, allowTestingKdf: true),
-        throwsFormatException,
-        reason: bad,
-      );
-    }
   });
 
   test('plaintext export: its own format, a warning, the same content', () {

@@ -171,9 +171,9 @@ void main() {
       final (h, api, _) = await signedIn();
       final stale = api.refreshToken!;
       await api.refresh();
+      // Replays the refresh token that was already used.
       api
-        ..refreshToken =
-            stale // replay
+        ..refreshToken = stale
         ..accessToken = 'gone.x';
       await expectLater(
         api.devices(),
@@ -231,7 +231,7 @@ void main() {
 
   test('read-only blocks writes except device revocation', () async {
     final (h, api, _) = await signedIn();
-    api.readOnly = true;
+    api.isReadOnly = () => true;
     await expectLater(
       api.putItem(wireItem(newId(), revision: 0), ifMatch: 0),
       throwsA(isA<ReadOnlyException>()),
@@ -257,7 +257,7 @@ void main() {
     h.invites[token] = 'dom@example.org';
     final acc = await AccountCrypto(
       kdf: KdfParams.testing,
-      allowTestingKdf: true,
+      kdfFloor: KdfParams.testing,
     ).create('password-456');
     final api = ApiClient(h.baseUrl, h.client);
     final s = await api.enroll(

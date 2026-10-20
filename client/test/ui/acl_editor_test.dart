@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:unfeudal_client/src/app_state.dart';
+import 'package:unfeudal_client/src/design/acl_grid.dart';
 import 'package:unfeudal_client/src/ui/orgs/acl_editor.dart';
 import 'package:unfeudal_client/src/ui/orgs/teams_screen.dart';
 import 'package:unfeudal_client/src/ui/orgs/why_rights_view.dart';
@@ -61,23 +62,20 @@ void main() {
     (t) async {
       final s = await open(t, (_) => AclEditor(orgId: testOrgId, folderId: f));
       final me = s.stored!.userId;
+      UfTriToggle toggle(String id, String right) =>
+          t.widget<UfTriToggle>(find.byKey(Key('acl-$id-$right')));
+      await t.tap(find.byKey(Key('acl-$kim-reveal')));
+      await t.pump();
       expect(
-        t
-            .widget<FilterChip>(find.byKey(Key('acl-$kim-allow-reveal')))
-            .onSelected,
-        isNull,
-        reason: 'caller lacks reveal',
+        toggle(kim, 'reveal').state,
+        UfTriState.deny,
+        reason: 'caller lacks reveal: it can only be denied',
       );
+      await t.tap(find.byKey(Key('acl-$kim-connect')));
+      await t.pump();
+      expect(toggle(kim, 'connect').state, UfTriState.allow);
       expect(
-        t
-            .widget<FilterChip>(find.byKey(Key('acl-$kim-allow-connect')))
-            .onSelected,
-        isNotNull,
-      );
-      expect(
-        t
-            .widget<FilterChip>(find.byKey(Key('acl-$me-allow-manage')))
-            .onSelected,
+        toggle(me, 'manage').onChanged,
         isNull,
         reason: 'own manage stays',
       );
@@ -90,14 +88,17 @@ void main() {
     },
   );
 
-  testWidgets('teams never get deny chips; save sends every entry', (t) async {
+  testWidgets('teams never get deny; save sends every entry', (t) async {
     await open(
       t,
       (_) => AclEditor(orgId: testOrgId, folderId: f),
       role: 'admin',
     );
-    expect(find.byKey(Key('acl-$ops-deny-view')), findsNothing);
-    await t.tap(find.byKey(Key('acl-$ops-allow-edit')));
+    expect(
+      t.widget<UfTriToggle>(find.byKey(Key('acl-$ops-view'))).canDeny,
+      isFalse,
+    );
+    await t.tap(find.byKey(Key('acl-$ops-edit')));
     await t.tap(find.byKey(const Key('acl-save')));
     await pumpReal(t);
     final body = h.orgCalls.single;

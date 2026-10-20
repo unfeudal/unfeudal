@@ -11,60 +11,13 @@ import 'package:unfeudal_client/src/keys/key_tools.dart';
 import 'package:unfeudal_client/src/ssh/ssh_connector.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
+import '../support/fakes.dart';
+
 const image =
     'lscr.io/linuxserver/openssh-server:10.3_p1-r1-ls239@sha256:bef23ec7e4b6849f8c61b7e5fc1c67fc38bafe100539d5c34fc2d682c582bbf2';
 const port = 2222;
 const password = 'pw-123456';
 final hostId = newId();
-
-class Recorder implements SshCallbacks {
-  Recorder({
-    this.pinned,
-    this.answer = false,
-    this.password,
-    this.promptAnswer,
-  });
-  KnownHostMeta? pinned;
-  final bool answer;
-  final String? password;
-  final String? promptAnswer;
-  final pins = <KnownHostMeta>[];
-  final prompts = <SshPrompt>[];
-
-  @override
-  KnownHostMeta? pinnedKey(String hostId) => pinned;
-
-  @override
-  Future<bool> confirmHostKey(HostKeyCheck check) async => answer;
-
-  @override
-  Future<void> pinHostKey(
-    String hostId,
-    String keyType,
-    String fingerprint,
-  ) async => pins.add(
-    KnownHostMeta(
-      hostItemId: hostId,
-      keyType: keyType,
-      sha256Fingerprint: fingerprint,
-    ),
-  );
-
-  @override
-  Future<String?> askPassword(String target) async => password;
-
-  @override
-  Future<List<String>?> answerPrompts(
-    String name,
-    String instruction,
-    List<SshPrompt> prompts,
-  ) async {
-    this.prompts.addAll(prompts);
-    return promptAnswer == null
-        ? null
-        : [for (final _ in prompts) promptAnswer!];
-  }
-}
 
 ConnectTarget target({IdentitySecret? identity}) => ConnectTarget(
   hostId: hostId,
@@ -74,6 +27,10 @@ ConnectTarget target({IdentitySecret? identity}) => ConnectTarget(
   user: 'camille',
   identity: identity,
 );
+
+/// A shell with an 80x24 PTY over a direct connection.
+Future<SshShell> connect(ConnectTarget target, SshCallbacks callbacks) async =>
+    (await SshConnector().connectHop(target, callbacks)).shell();
 
 Future<String> runCommand(SshShell shell, String command) async {
   final out = StringBuffer();
@@ -98,13 +55,18 @@ Future<void> waitForSsh() async {
         port,
         timeout: const Duration(seconds: 2),
       );
-      final first = await socket.first.timeout(const Duration(seconds: 2));
+      // Empty when docker-proxy accepted and closed before sshd was up.
+      final chunks = await socket
+          .take(1)
+          .toList()
+          .timeout(const Duration(seconds: 2));
       socket.destroy();
-      if (utf8.decode(first, allowMalformed: true).startsWith('SSH-')) return;
+      final banner = chunks.isEmpty
+          ? ''
+          : utf8.decode(chunks.single, allowMalformed: true);
+      if (banner.startsWith('SSH-')) return;
     } on Exception {
       // not listening yet
-    } on StateError {
-      // docker-proxy accepted and closed before sshd was up: no banner yet
     }
     await Future<void>.delayed(const Duration(seconds: 1));
   }
@@ -138,9 +100,9 @@ void main() {
     if (run.exitCode != 0) fail('docker run: ${run.stderr}');
     container = (run.stdout as String).trim();
     await waitForSsh();
-    final first = Recorder(answer: true, password: password);
-    await (await SshConnector().connect(target(), first)).close();
-    serverPin = first.pins.single;
+    final first = FakeSshCallbacks(answer: true, password: password);
+    await (await connect(target(), first)).close();
+    serverPin = first.pins.values.single;
   });
 
   tearDownAll(() async {
@@ -151,9 +113,9 @@ void main() {
   test(
     'unknown key declined → HostKeyRejected(unknown), nothing pinned',
     () async {
-      final r = Recorder(password: password);
+      final r = FakeSshCallbacks(password: password);
       await expectLater(
-        SshConnector().connect(target(), r),
+        connect(target(), r),
         throwsA(
           isA<HostKeyRejected>().having(
             (e) => e.decision,
@@ -167,9 +129,9 @@ void main() {
   );
 
   test('accepted → pinned; password auth; shell echoes ok', () async {
-    final r = Recorder(answer: true, password: password);
-    final shell = await SshConnector().connect(target(), r);
-    expect(r.pins.single.sha256Fingerprint, serverPin.sha256Fingerprint);
+    final r = FakeSshCallbacks(answer: true, password: password);
+    final shell = await connect(target(), r);
+    expect(r.pins.values.single.sha256Fingerprint, serverPin.sha256Fingerprint);
     expect(await runCommand(shell, 'echo ok'), contains('ok\r\n'));
     await shell.close();
   });
@@ -181,9 +143,9 @@ void main() {
       sha256Fingerprint: 'SHA256:${'B' * 43}',
     );
     await expectLater(
-      SshConnector().connect(
+      connect(
         target(),
-        Recorder(pinned: tampered, password: password),
+        FakeSshCallbacks(password: password)..pins[hostId] = tampered,
       ),
       throwsA(
         isA<HostKeyRejected>().having(
@@ -197,9 +159,9 @@ void main() {
 
   test('wrong password → SshAuthFailed', () async {
     await expectLater(
-      SshConnector().connect(
+      connect(
         target(),
-        Recorder(pinned: serverPin, password: 'wrong-password'),
+        FakeSshCallbacks(password: 'wrong-password')..pins[hostId] = serverPin,
       ),
       throwsA(isA<SshAuthFailed>()),
     );
@@ -210,17 +172,18 @@ void main() {
       kind: IdentityKind.privateKey,
       privateKeyPem: key.privateKeyPem,
     );
-    final shell = await SshConnector().connect(
+    final shell = await connect(
       target(identity: identity),
-      Recorder(pinned: serverPin),
+      FakeSshCallbacks()..pins[hostId] = serverPin,
     );
     expect(await runCommand(shell, 'echo ok'), contains('ok\r\n'));
     await shell.close();
   });
 
   test('keyboard-interactive answers reach the server', () async {
-    final r = Recorder(pinned: serverPin, promptAnswer: password);
-    final shell = await SshConnector().connect(target(), r);
+    final r = FakeSshCallbacks(promptAnswer: password)
+      ..pins[hostId] = serverPin;
+    final shell = await connect(target(), r);
     expect(r.prompts, isNotEmpty);
     expect(await runCommand(shell, 'echo ok'), contains('ok\r\n'));
     await shell.close();

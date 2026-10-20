@@ -2,6 +2,31 @@
 import '../util/json_reader.dart';
 import 'version.dart';
 
+enum Flag {
+  orgs('orgs'),
+  teams('teams'),
+  userOverrides('user_overrides'),
+  invitesFromOrgs('invites_from_orgs'),
+  smtpInvites('smtp_invites'),
+  securityEmails('security_emails'),
+  audit('audit'),
+  clientEvents('client_events'),
+  itemHistory('item_history'),
+  recoveryKit('recovery_kit'),
+  plainHttpLan('plain_http_lan'),
+  reveal('reveal'),
+  biometricUnlock('biometric_unlock'),
+  sshConfigImport('ssh_config_import'),
+  mascot('mascot');
+
+  const Flag(this.wire);
+
+  final String wire;
+
+  static Flag? fromWire(String wire) =>
+      values.where((f) => f.wire == wire).firstOrNull;
+}
+
 /// `GET /api/info`. [server], [instanceEpoch], [source] and [trashDays] are
 /// sent only with a valid access token.
 class ApiInfo {
@@ -58,7 +83,7 @@ class ApiInfo {
   final int? trashDays;
   final Map<String, Object?> extra;
 
-  bool has(String capability) => capabilities.contains(capability);
+  bool has(Flag flag) => capabilities.contains(flag.wire);
 
   Map<String, Object?> toJson() => {
     ...extra,
@@ -72,9 +97,8 @@ class ApiInfo {
     if (trashDays != null) 'trashDays': trashDays,
   };
 
-  /// Validated, kept as text.
   static String _version(String text) {
-    Version.parse(text);
+    canonicalVersion(text);
     return text;
   }
 }

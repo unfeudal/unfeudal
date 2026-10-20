@@ -124,14 +124,17 @@ void main() {
     },
   );
 
+  test('remove: an unconfirmed member may leave', () async {
+    expect(
+      (await s.delete(member('ana'), token: w['ana'].accessToken)).status,
+      204,
+      reason: 'unconfirmed leave',
+    );
+  });
+
   test(
-    'remove: self (any status) or admin; admins and owners need an owner',
+    'remove: a member removes no one, an admin no admin, an outsider nothing',
     () async {
-      expect(
-        (await s.delete(member('ana'), token: w['ana'].accessToken)).status,
-        204,
-        reason: 'unconfirmed leave',
-      );
       expect(
         (await s.delete(member('adam'), token: w['mia'].accessToken)).status,
         403,
@@ -151,6 +154,12 @@ void main() {
         )).status,
         404,
       );
+    },
+  );
+
+  test(
+    'remove: an admin removes a member and its rotation is queued',
+    () async {
       expect(
         (await s.delete(member('mia'), token: w['adam'].accessToken)).status,
         204,
@@ -160,6 +169,12 @@ void main() {
       )).single;
       expect(row['reason'], 'member_removed');
       expect(jsonDecode(row['removed_user_ids']! as String), [w.id('mia')]);
+    },
+  );
+
+  test(
+    'remove: an admin may leave; admins and owners need an owner to be removed',
+    () async {
       expect(
         (await s.delete(member('adam'), token: w['adam'].accessToken)).status,
         204,

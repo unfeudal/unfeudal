@@ -18,7 +18,8 @@ void main() {
       env: {
         'UNFEUDAL_SMTP_HOST': 'smtp.test',
         'UNFEUDAL_SMTP_FROM': 'vault@example.org',
-        'UNFEUDAL_FEATURE_SECURITY_EMAILS': 'false', // invite mails only
+        // Invite mails only.
+        'UNFEUDAL_FEATURE_SECURITY_EMAILS': 'false',
       },
       mailer: mail,
     );
@@ -73,7 +74,7 @@ void main() {
     expect(users.last['isInstanceOwner'], isTrue);
   });
 
-  test('disable: IO 403, unknown 404, last owner 409, else sessions stop and keys rotate', () async {
+  test('disable: IO 403, unknown 404, non-boolean 400', () async {
     expect(
       (await s.put(
         '/api/v1/admin/users/${w.io.userId}',
@@ -94,6 +95,9 @@ void main() {
       (await s.put(user('mia'), token: io(), body: {'disabled': 'yes'})).status,
       400,
     );
+  });
+
+  test('disable: the last owner is 409 with the org names', () async {
     expect(
       (await s.put(
         user('oscar'),
@@ -110,6 +114,10 @@ void main() {
     expect(last.status, 409);
     expect(last.body['reason'], 'last_owner');
     expect(last.body['orgs'], ['Acme']);
+  });
+
+  test('disable: sessions stop, keys rotate and memberships stay', () async {
+    await s.put(user('oscar'), token: io(), body: {'disabled': true});
     final seq = await w.orgSeq();
     expect(
       (await s.put(user('mia'), token: io(), body: {'disabled': true})).status,
@@ -138,6 +146,10 @@ void main() {
       1,
       reason: 'memberships stay',
     );
+  });
+
+  test('enable: a re-enabled account syncs again', () async {
+    await s.put(user('mia'), token: io(), body: {'disabled': true});
     expect(
       (await s.put(user('mia'), token: io(), body: {'disabled': false})).status,
       204,

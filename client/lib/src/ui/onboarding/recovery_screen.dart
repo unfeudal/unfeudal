@@ -5,6 +5,9 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
+import '../../design/dialog.dart';
+import '../../design/toast.dart';
+import '../busy_action.dart';
 import '../describe_error.dart';
 import '../fields.dart';
 import '../lock/lock_frame.dart';
@@ -22,17 +25,15 @@ class RecoveryScreen extends StatefulWidget {
   State<RecoveryScreen> createState() => _RecoveryScreenState();
 }
 
-class _RecoveryScreenState extends State<RecoveryScreen> {
+class _RecoveryScreenState extends State<RecoveryScreen> with BusyAction {
   late final TextEditingController _server;
   late final TextEditingController _email;
   final _key = TextEditingController();
   final _password = TextEditingController();
   final _confirm = TextEditingController();
-  bool _busy = false;
-  String? _problem;
   ({String key, Uri server, String email})? _done;
 
-  /// 1: server, e-mail and key; 2: the new password.
+  // 1: server, e-mail and key; 2: the new password.
   int _step = 1;
 
   @override
@@ -68,16 +69,16 @@ class _RecoveryScreenState extends State<RecoveryScreen> {
     ],
   ))?.readAsString();
 
-  /// A mistyped key is refused here, before any request.
+  // A mistyped key is refused here, before any request.
   void _next() {
     final l = AppLocalizations.of(context);
     try {
       RecoveryKey.decode(_key.text);
     } on InvalidRecoveryKey catch (e) {
-      return setState(() => _problem = describeError(l, e));
+      return setState(() => problem = describeError(l, e));
     }
     setState(() {
-      _problem = null;
+      problem = null;
       _step = 2;
     });
   }
@@ -85,14 +86,10 @@ class _RecoveryScreenState extends State<RecoveryScreen> {
   Future<void> _submit() async {
     final l = AppLocalizations.of(context);
     final local = checkNewPassword(l, _password.text, _confirm.text);
-    if (local != null) return setState(() => _problem = local);
-    setState(() {
-      _busy = true;
-      _problem = null;
-    });
+    if (local != null) return setState(() => problem = local);
     final server = Uri.parse(_server.text.trim());
     final email = _email.text.trim();
-    try {
+    await run(() async {
       final key = await AppScope.read(context).recover(
         server: server,
         email: email,
@@ -102,19 +99,14 @@ class _RecoveryScreenState extends State<RecoveryScreen> {
       if (mounted) {
         setState(() => _done = (key: key, server: server, email: email));
       }
-    } on Exception catch (e) {
-      if (mounted) setState(() => _problem = describeError(l, e));
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
+    });
   }
 
-  /// Signs in on this device with the new password; a failure leaves the login screen to do it.
+  // Signs in on this device with the new password; a failure leaves the login screen to do it.
   Future<void> _finish(({String key, Uri server, String email}) done) async {
     final l = AppLocalizations.of(context);
     final state = AppScope.read(context);
     final navigator = Navigator.of(context);
-    final messenger = ScaffoldMessenger.of(context);
     try {
       await state.login(
         server: done.server,
@@ -124,7 +116,11 @@ class _RecoveryScreenState extends State<RecoveryScreen> {
       navigator.maybePop();
     } on Exception catch (e) {
       navigator.maybePop();
-      messenger.showSnackBar(SnackBar(content: Text(describeError(l, e))));
+      // this screen is gone once popped: the navigator's context outlives it
+      final host = navigator.context;
+      if (host.mounted) {
+        showUfToast(host, describeError(l, e), tone: UfToastTone.warn);
+      }
     }
   }
 
@@ -145,86 +141,91 @@ class _RecoveryScreenState extends State<RecoveryScreen> {
         step: l.stepOf(_step, 2),
         title: first ? l.recoverTitle : l.recoverPasswordTitle,
         subtitle: first ? l.recoverSubtitle : l.recoverPasswordSubtitle,
-        children: [
-          if (first) ...[
-            keyedField(
-              'recover-server',
-              _server,
-              l.loginServer,
-              keyboard: TextInputType.url,
-            ),
-            keyedField(
-              'recover-email',
-              _email,
-              l.loginEmail,
-              keyboard: TextInputType.emailAddress,
-            ),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton(
-                key: const Key('recover-open-kit'),
-                onPressed: _openKit,
-                child: Text(l.recoverOpenKit),
-              ),
-            ),
-            keyedField(
-              'recover-key',
-              _key,
-              l.recoverKey,
-              mono: true,
-              hint: 'XXXX-XXXX-XXXX-XXXX-…',
-              onSubmitted: (_) => _next(),
-            ),
-          ] else ...[
-            keyedField(
-              'recover-password',
-              _password,
-              l.recoverNewPassword,
-              secret: true,
-            ),
-            keyedField(
-              'recover-confirm',
-              _confirm,
-              l.setupConfirm,
-              secret: true,
-            ),
-            LockNotice(l.setupWarning),
-          ],
-          if (_problem case final problem?) LockError(problem),
-          if (first)
-            LockActions(
-              primary: FilledButton(
-                key: const Key('recover-next'),
-                onPressed: _next,
-                child: Text(l.stepNext),
-              ),
-              links: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).maybePop(),
-                  child: Text(l.cancel),
-                ),
-              ],
-            )
-          else
-            LockActions(
-              primary: FilledButton(
-                key: const Key('recover-submit'),
-                onPressed: _busy ? null : _submit,
-                child: BusyLabel(busy: _busy, label: l.recoverSubmit),
-              ),
-              links: [
-                TextButton(
-                  key: const Key('recover-back'),
-                  onPressed: () => setState(() {
-                    _problem = null;
-                    _step = 1;
-                  }),
-                  child: Text(l.recoverBack),
-                ),
-              ],
-            ),
-        ],
+        children: first ? _identifyStep(l) : _passwordStep(l),
       ),
     );
   }
+
+  List<Widget> _identifyStep(AppLocalizations l) => [
+    keyedField(
+      'recover-server',
+      _server,
+      l.loginServer,
+      keyboard: TextInputType.url,
+    ),
+    keyedField(
+      'recover-email',
+      _email,
+      l.loginEmail,
+      keyboard: TextInputType.emailAddress,
+    ),
+    Align(
+      alignment: Alignment.centerLeft,
+      child: TextButton(
+        key: const Key('recover-open-kit'),
+        onPressed: _openKit,
+        child: Text(l.recoverOpenKit),
+      ),
+    ),
+    keyedField(
+      'recover-key',
+      _key,
+      l.recoverKey,
+      mono: true,
+      hint: 'XXXX-XXXX-XXXX-XXXX-\u2026',
+      onSubmitted: (_) => _next(),
+    ),
+    if (problem case final problem?) UfErrorLine(problem),
+    LockActions(
+      primary: FilledButton(
+        key: const Key('recover-next'),
+        onPressed: _next,
+        child: Text(l.stepNext),
+      ),
+      links: [CancelButton(onPressed: () => Navigator.of(context).maybePop())],
+    ),
+  ];
+
+  List<Widget> _passwordStep(AppLocalizations l) => [
+    keyedField(
+      'recover-password',
+      _password,
+      l.recoverNewPassword,
+      secret: true,
+      strength: true,
+    ),
+    keyedField('recover-confirm', _confirm, l.setupConfirm, secret: true),
+    LockNotice(l.setupWarning),
+    if (problem case final problem?) UfErrorLine(problem),
+    LockActions(
+      primary: BusyButton(
+        key: const Key('recover-submit'),
+        busy: busy,
+        onPressed: _submit,
+        label: l.recoverSubmit,
+      ),
+      links: [
+        TextButton(
+          key: const Key('recover-back'),
+          onPressed: () => setState(() {
+            problem = null;
+            _step = 1;
+          }),
+          child: Text(l.recoverBack),
+        ),
+      ],
+    ),
+  ];
+}
+
+/// The lock screens' link to [RecoveryScreen].
+class RecoverLink extends StatelessWidget {
+  const RecoverLink({super.key});
+
+  @override
+  Widget build(BuildContext context) => TextButton(
+    onPressed: () => Navigator.of(context)
+        .push(MaterialPageRoute<void>(builder: (_) => const RecoveryScreen())),
+    child: Text(AppLocalizations.of(context).loginToRecover),
+  );
 }

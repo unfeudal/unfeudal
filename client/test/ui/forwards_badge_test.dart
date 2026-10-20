@@ -45,8 +45,8 @@ void main() {
             ],
           },
         );
-        await s.vault!.pinHostKey(web, 'ssh-ed25519', 'SHA256:${'A' * 43}');
-        tab = await s.connect(web);
+        await s.vault!.hostKeys.pin(web, 'ssh-ed25519', 'SHA256:${'A' * 43}');
+        tab = await s.connections.connect(web);
       });
       await pumpApp(t, state: s);
       await pumpReal(t, rounds: 5);
@@ -67,7 +67,7 @@ void main() {
       await pumpReal(t, rounds: 5);
       expect(tab.forwarder!.active, isEmpty);
       await t.runAsync(blocker.close);
-      await t.runAsync(() => s.closeTab(tab));
+      await t.runAsync(() => s.connections.closeTab(tab));
     },
   );
 
@@ -81,8 +81,8 @@ void main() {
         type: 'host',
         meta: hostJson('web', user: 'root'),
       );
-      await s.vault!.pinHostKey(web, 'ssh-ed25519', 'SHA256:${'A' * 43}');
-      await s.connect(web);
+      await s.vault!.hostKeys.pin(web, 'ssh-ed25519', 'SHA256:${'A' * 43}');
+      await s.connections.connect(web);
     });
     await pumpApp(t, state: s);
     await pumpReal(t, rounds: 5);

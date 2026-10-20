@@ -7,6 +7,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:unfeudal_client/src/ssh/ssh_connector.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
+import '../support/fakes.dart';
+
 final host = newId();
 KnownHostMeta pin(String type, String c) => KnownHostMeta.fromJson({
   'schemaVersion': 1,
@@ -14,36 +16,6 @@ KnownHostMeta pin(String type, String c) => KnownHostMeta.fromJson({
   'keyType': type,
   'sha256Fingerprint': 'SHA256:${c * 43}',
 });
-
-class Recorder implements SshCallbacks {
-  Recorder({this.pinned, this.answer = false});
-  KnownHostMeta? pinned;
-  bool answer;
-  final asked = <HostKeyCheck>[];
-  final pins = <String>[];
-  @override
-  KnownHostMeta? pinnedKey(String hostId) => pinned;
-  @override
-  Future<bool> confirmHostKey(HostKeyCheck c) async {
-    asked.add(c);
-    return answer;
-  }
-
-  @override
-  Future<void> pinHostKey(
-    String hostId,
-    String keyType,
-    String fingerprint,
-  ) async => pins.add('$keyType $fingerprint');
-  @override
-  Future<String?> askPassword(String target) async => null;
-  @override
-  Future<List<String>?> answerPrompts(
-    String name,
-    String instruction,
-    List<SshPrompt> prompts,
-  ) async => null;
-}
 
 /// A server that hangs up before saying anything.
 class ClosedSocket implements SSHSocket {
@@ -62,16 +34,16 @@ class ClosedSocket implements SSHSocket {
 }
 
 Future<bool> verify(
-  Recorder r, {
+  FakeSshCallbacks r, {
   String type = 'ssh-ed25519',
   String c = 'A',
-}) => SshConnector.verifyHostKey(
+}) async => (await SshConnector.verifyHostKey(
   hostId: host,
   hostName: 'web',
   keyType: type,
   fingerprint: 'SHA256:${c * 43}',
   callbacks: r,
-);
+)).accepted;
 
 void main() {
   test('decideHostKey', () {
@@ -102,26 +74,29 @@ void main() {
   });
 
   test('unknown key asks and pins only on yes', () async {
-    final no = Recorder();
+    final no = FakeSshCallbacks();
     expect(await verify(no), isFalse);
     expect(no.asked.single.decision, HostKeyDecision.unknown);
     expect(no.pins, isEmpty);
-    final yes = Recorder(answer: true);
+    final yes = FakeSshCallbacks(answer: true);
     expect(await verify(yes), isTrue);
-    expect(yes.pins, ['ssh-ed25519 SHA256:${'A' * 43}']);
+    expect(
+      (yes.pins[host]!.keyType, yes.pins[host]!.sha256Fingerprint),
+      ('ssh-ed25519', 'SHA256:${'A' * 43}'),
+    );
   });
 
   test(
     'changed key: refused when declined, pin untouched; re-pinned only on yes',
     () async {
-      final r = Recorder(pinned: pin('ssh-ed25519', 'A'));
+      final r = FakeSshCallbacks()..pins[host] = pin('ssh-ed25519', 'A');
       expect(await verify(r, c: 'B'), isFalse);
       expect(r.asked.single.decision, HostKeyDecision.changed);
       expect(r.asked.single.pinned!.sha256Fingerprint, 'SHA256:${'A' * 43}');
-      expect(r.pins, isEmpty);
+      expect(r.pins[host]!.sha256Fingerprint, 'SHA256:${'A' * 43}');
       r.answer = true;
       expect(await verify(r, c: 'B'), isTrue);
-      expect(r.pins.single, endsWith('B' * 43));
+      expect(r.pins[host]!.sha256Fingerprint, endsWith('B' * 43));
     },
   );
 
@@ -139,14 +114,14 @@ void main() {
         user: 'root',
       );
       await expectLater(
-        connector.connect(target, Recorder()),
+        connector.connectHop(target, FakeSshCallbacks()),
         throwsA(isA<SshConnectionFailed>()),
       );
     },
   );
 
   test('trusted key never asks', () async {
-    final r = Recorder(pinned: pin('ssh-ed25519', 'A'));
+    final r = FakeSshCallbacks()..pins[host] = pin('ssh-ed25519', 'A');
     expect(await verify(r), isTrue);
     expect(r.asked, isEmpty);
   });

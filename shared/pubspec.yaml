@@ -1,17 +1,14 @@
 name: unfeudal_shared
 description: Shared crypto, wire formats and models for Unfeudal.
 version: 0.1.0
-# repository: https://github.com/my_org/my_repo
 
 environment:
   sdk: ^3.13.5
 
-# Add regular dependencies here.
 dependencies:
   crypto: ^3.0.7
   cryptography: ^2.9.0
   unorm_dart: ^0.3.3
-  # path: ^1.9.0
 
 dev_dependencies:
   lints: ^6.1.0

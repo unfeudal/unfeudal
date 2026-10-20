@@ -44,7 +44,7 @@ void main() {
         [2, 'b', '2026-10-13T12:00:01.000Z'],
       ]);
       expect(events.first.prevHash, genesisHash);
-      expect(verifyChain(events).ok, isTrue);
+      expect(verifyChain(events), isNull);
       final head = (await s.db.query(
         "SELECT seq, hash FROM audit_heads WHERE scope = 'instance'",
       )).single;
@@ -109,7 +109,7 @@ void main() {
       ]);
       final events = await auditEvents(s, 'instance');
       expect(events.map((e) => e.seq), [for (var i = 1; i <= 20; i++) i]);
-      expect(verifyChain(events).ok, isTrue);
+      expect(verifyChain(events), isNull);
     },
   );
 

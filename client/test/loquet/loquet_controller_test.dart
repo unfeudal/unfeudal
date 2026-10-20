@@ -79,10 +79,8 @@ void main() {
           spontaneous: true,
         ),
       );
-      expect(
-        c.mood,
-        LoquetMood.offline,
-      ); // a grave one replaces a lesser one at once
+      // A grave mood replaces a lesser one at once.
+      expect(c.mood, LoquetMood.offline);
       c.detach();
     });
   });
@@ -117,12 +115,10 @@ void main() {
     fakeAsync((async) {
       final c = make()..attach();
       c.show(
-        c.engine.handle(
-          const ConnectSucceeded(hostId: 'h', user: 'root', tags: []),
-        ),
+        c.engine.handle(const ConnectSucceeded(hostId: 'h', user: 'root')),
       );
       expect(c.accessory, LoquetAccessory.hardHat);
-      c.show(c.engine.handle(const HostKeyChanged(hostId: 'h')));
+      c.show(c.engine.handle(const HostKeyChanged()));
       expect((c.mood, c.accessory), (LoquetMood.alert, null));
       c.detach();
     });
@@ -134,9 +130,7 @@ void main() {
     c.addListener(() => n++);
     c.mode = LoquetMode.off;
     expect((c.visible, c.engine.mode, n), (false, LoquetMode.off, 1));
-    c.show(
-      c.engine.handle(const ConnectSucceeded(hostId: 'h', user: 'u', tags: [])),
-    );
+    c.show(c.engine.handle(const ConnectSucceeded(hostId: 'h', user: 'u')));
     expect(c.line, isNull);
   });
 

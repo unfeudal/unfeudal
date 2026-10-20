@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 library;
 
+export 'package:cryptography/cryptography.dart' show SimpleKeyPair;
+
 export 'src/audit/audit_event.dart';
 export 'src/audit/chain.dart';
 export 'src/bytes.dart';
@@ -16,8 +18,8 @@ export 'src/crypto/safety_code.dart';
 export 'src/crypto/sealed_box.dart';
 export 'src/crypto/vault_export.dart';
 export 'src/enroll/enrollment.dart';
-export 'src/import/ssh_config.dart';
 export 'src/ids.dart';
+export 'src/import/ssh_config.dart';
 export 'src/net/lan.dart';
 export 'src/payload/folder.dart';
 export 'src/payload/host.dart';
@@ -41,4 +43,6 @@ export 'src/protocol/sync_page.dart';
 export 'src/protocol/version.dart';
 export 'src/ssh/jump_chain.dart';
 export 'src/time.dart';
+export 'src/util/base32.dart' show groupBy4;
+export 'src/util/json_reader.dart';
 export 'src/util/secure.dart';

@@ -39,7 +39,8 @@ void main() {
         matches(RegExp(r'^/tmp/unfeudal-export-\d{4}-\d{2}-\d{2}\.json$')),
       );
       expect(
-        jsonDecode(utf8.decode(saved.values.single))['format'],
+        (jsonDecode(utf8.decode(saved.values.single))
+            as Map<String, Object?>)['format'],
         'unfeudal-export',
       );
     },
@@ -65,7 +66,8 @@ void main() {
     await t.tap(find.byKey(const Key('export-submit')));
     await pumpReal(t, rounds: 20);
     expect(
-      jsonDecode(utf8.decode(saved.values.single))['format'],
+      (jsonDecode(utf8.decode(saved.values.single))
+          as Map<String, Object?>)['format'],
       'unfeudal-export-plain',
     );
   });

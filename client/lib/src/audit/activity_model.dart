@@ -24,10 +24,10 @@ class ActivityModel extends ChangeNotifier {
 
   final events = <AuditEvent>[];
   final alerts = <AnchorAlert>[];
-  bool hasMore = false;
   bool loading = false;
   Object? error;
   String? _next;
+  bool get hasMore => _next != null;
 
   /// The chain a view reads: `me` reads the caller's own chain; a folder view has no chain of its own.
   static String? chainOf(String scope) => switch (scope) {
@@ -52,7 +52,6 @@ class ActivityModel extends ChangeNotifier {
     events.addAll(page.events);
     alerts.addAll(anchors.check(page.events));
     _next = page.next;
-    hasMore = page.next != null;
   });
 
   /// Pages the whole chain at 500 a read and checks it against the anchors, an empty one too
@@ -77,18 +76,19 @@ class ActivityModel extends ChangeNotifier {
     return all;
   }
 
-  Future<ChainReport> verify() async => verifyChain(await wholeChain());
+  /// The first seq that does not verify, null when the chain holds.
+  Future<int?> verify() async => verifyChain(await wholeChain());
 
   /// The whole chain as JSON, verified on the way: a broken chain is still saved (it is the evidence).
-  Future<({String json, ChainReport report})> exportJson() async {
+  Future<({String json, int? brokenAt})> exportJson() async {
     final chain = await wholeChain();
     return (
       json: jsonEncode([for (final e in chain) e.toJson()]),
-      report: verifyChain(chain),
+      brokenAt: verifyChain(chain),
     );
   }
 
-  /// Errors land in [error], never thrown to the UI.
+  // Errors land in error, never thrown to the UI.
   Future<void> _guard(Future<void> Function() action) async {
     loading = true;
     error = null;

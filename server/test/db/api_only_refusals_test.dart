@@ -23,8 +23,9 @@ void main() {
   tearDown(() => s.close());
 
   const t = '2026-10-13T12:00:00.000Z';
+  // Throws if the schema refuses the row.
   Future<void> stored(String sql, [Map<String, Object?> p = const {}]) =>
-      s.db.execute(sql, p); // throws if the schema refuses
+      s.db.execute(sql, p);
   Map<String, Object?> entry(
     String type,
     String id, {

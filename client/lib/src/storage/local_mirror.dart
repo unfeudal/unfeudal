@@ -89,29 +89,42 @@ CREATE TABLE kv (
 
   final Database _db;
 
-  /// The file of a file mirror; null in memory.
+  // The file of a file mirror; null in memory.
   final String? _path;
 
   List<Item> items() => [
     for (final r in _db.select('SELECT json FROM items')) _item(r),
   ];
 
+  /// The ids of the server items, only those of [scope] when given.
+  Set<String> itemIds({ItemScope? scope}) => {
+    for (final r
+        in scope == null
+            ? _db.select('SELECT id FROM items')
+            : _db.select(
+                r"SELECT id FROM items WHERE json_extract(json, '$.scope') = ?",
+                [scope.name],
+              ))
+      r['id'] as String,
+  };
+
   Item? item(String id) {
     final rows = _db.select('SELECT json FROM items WHERE id = ?', [id]);
     return rows.isEmpty ? null : _item(rows.single);
   }
 
-  /// Server items. Returns how many were ignored as older than the stored revision (rollback guard);
+  /// Server items. One older than the stored revision is ignored (rollback guard);
   /// `acceptOlder` only for the full pull of an accepted server restore.
-  int upsertItems(Iterable<Item> items, {bool acceptOlder = false}) {
-    var ignored = 0;
+  void upsertItems(Iterable<Item> items, {bool acceptOlder = false}) {
     _transaction(() {
       for (final it in items) {
-        final current = item(it.id);
+        final current = _db.select(
+          r"SELECT json_extract(json, '$.revision') AS revision FROM items WHERE id = ?",
+          [it.id],
+        );
         if (!acceptOlder &&
-            current != null &&
-            (it.revision ?? 0) < (current.revision ?? 0)) {
-          ignored++;
+            current.isNotEmpty &&
+            (it.revision ?? 0) < (current.single['revision'] as int? ?? 0)) {
           continue;
         }
         _db.execute(
@@ -120,7 +133,6 @@ CREATE TABLE kv (
         );
       }
     });
-    return ignored;
   }
 
   void deleteItems(Iterable<String> ids) => _transaction(() {
@@ -145,13 +157,27 @@ CREATE TABLE kv (
     for (final r in _db.select(
       'SELECT json, base_revision, state, attempts, last_error FROM outbox ORDER BY rowid',
     ))
-      OutboxEntry(
-        _item(r),
-        r['base_revision'] as int,
-        OutboxState.values.byName(r['state'] as String),
-        r['attempts'] as int,
-        r['last_error'] as String?,
-      ),
+      _outboxEntry(r),
+  ];
+
+  OutboxEntry? outboxEntry(String itemId) {
+    final rows = _db.select(
+      'SELECT json, base_revision, state, attempts, last_error FROM outbox WHERE item_id = ?',
+      [itemId],
+    );
+    return rows.isEmpty ? null : _outboxEntry(rows.single);
+  }
+
+  /// The ids of the queued items in queue order, only those in [state] when given.
+  List<String> outboxIds({OutboxState? state}) => [
+    for (final r
+        in state == null
+            ? _db.select('SELECT item_id FROM outbox ORDER BY rowid')
+            : _db.select(
+                'SELECT item_id FROM outbox WHERE state = ? ORDER BY rowid',
+                [state.name],
+              ))
+      r['item_id'] as String,
   ];
 
   /// Local write. A second edit of a queued item keeps its first base revision and position, and makes a
@@ -161,6 +187,13 @@ CREATE TABLE kv (
     "ON CONFLICT(item_id) DO UPDATE SET json = excluded.json, state = 'pending', attempts = 0, last_error = NULL",
     [item.id, jsonEncode(item.toJson()), baseRevision],
   );
+
+  /// [enqueue] for each item on its own revision, in one transaction: one commit for a whole rotation.
+  void enqueueAll(Iterable<Item> items) => _transaction(() {
+    for (final item in items) {
+      enqueue(item, baseRevision: item.revision ?? 0);
+    }
+  });
 
   /// Returns the attempt count after this failure.
   int recordOutboxFailure(String itemId, String error) =>
@@ -188,14 +221,18 @@ CREATE TABLE kv (
   void removeOutbox(String itemId) =>
       _db.execute('DELETE FROM outbox WHERE item_id = ?', [itemId]);
 
-  /// Full resync: items stay until the full pull replaces them; outbox kept.
-  void resetForResync() =>
-      _deleteKv([KvKey.cursor, KvKey.orgCursor, KvKey.orgBlock]);
-
-  /// Accepted server restore: as a resync, and the audit anchors go. Pins and keyring stay; the
-  /// anti-replay marks are emptied by `LedgerStore.reset`.
-  void resetForRestore() =>
-      _deleteKv([KvKey.cursor, KvKey.orgCursor, KvKey.orgBlock, KvKey.anchors]);
+  /// Accepted server restore: the cursors, the cached org block and the audit anchors go; items stay until the
+  /// full pull replaces them, outbox kept. Pins and keyring stay; the anti-replay marks are emptied by `LedgerStore.reset`.
+  void resetForRestore() => _transaction(() {
+    for (final k in [
+      KvKey.cursor,
+      KvKey.orgCursor,
+      KvKey.orgBlock,
+      KvKey.anchors,
+    ]) {
+      setKv(k, null);
+    }
+  });
 
   void close() => _db.close();
 
@@ -210,13 +247,15 @@ CREATE TABLE kv (
     }
   }
 
-  void _deleteKv(List<KvKey> keys) => _transaction(() {
-    for (final k in keys) {
-      setKv(k, null);
-    }
-  });
-
   Item _item(Row row) => Item.fromJson(jsonDecode(row['json'] as String));
+
+  OutboxEntry _outboxEntry(Row row) => OutboxEntry(
+    _item(row),
+    row['base_revision'] as int,
+    OutboxState.values.byName(row['state'] as String),
+    row['attempts'] as int,
+    row['last_error'] as String?,
+  );
 
   void _transaction(void Function() body) {
     _db.execute('BEGIN');
@@ -224,6 +263,7 @@ CREATE TABLE kv (
       body();
       _db.execute('COMMIT');
     } catch (_) {
+      // Any failure in the body rolls the transaction back, then propagates.
       _db.execute('ROLLBACK');
       rethrow;
     }

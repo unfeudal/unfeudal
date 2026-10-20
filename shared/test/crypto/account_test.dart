@@ -1,11 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:test/test.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 void main() {
-  final crypto = AccountCrypto(kdf: KdfParams.testing, allowTestingKdf: true);
+  final crypto = AccountCrypto(
+    kdf: KdfParams.testing,
+    kdfFloor: KdfParams.testing,
+  );
   late NewAccount acc;
   setUpAll(() async => acc = await crypto.create('correct horse'));
 
@@ -55,6 +59,28 @@ void main() {
     );
   });
 
+  test('unlockWithAuthKey returns the authKey create gave', () async {
+    final proved = await crypto.unlockWithAuthKey(acc.bundle, 'correct horse');
+    expect(proved.authKey, acc.authKey);
+    expect(proved.unlocked.userKey, acc.unlocked.userKey);
+  });
+
+  test('unlockWithEncKey opens with the derived encKey only', () async {
+    final keys = await deriveMasterKeys(
+      'correct horse',
+      acc.bundle.salt,
+      acc.bundle.kdf,
+    );
+    expect(
+      (await crypto.unlockWithEncKey(acc.bundle, keys.encKey)).userKey,
+      acc.unlocked.userKey,
+    );
+    await expectLater(
+      crypto.unlockWithEncKey(acc.bundle, keys.authKey),
+      throwsA(isA<WrongPassword>()),
+    );
+  });
+
   test('wrong password throws WrongPassword', () async {
     await expectLater(
       crypto.unlock(acc.bundle, 'wrong horse'),
@@ -64,10 +90,8 @@ void main() {
 
   test('passwords under 8 code points after NFC are refused', () async {
     await expectLater(crypto.create('short12'), throwsA(isA<WeakPassword>()));
-    await expectLater(
-      crypto.create('cafééab'),
-      throwsA(isA<WeakPassword>()),
-    ); // 9 units, 7 after NFC
+    // 9 code units, 7 code points after NFC.
+    await expectLater(crypto.create('cafééab'), throwsA(isA<WeakPassword>()));
   });
 
   test('recovery key unlocks the same userKey; its auth key matches', () async {
@@ -114,63 +138,84 @@ void main() {
     );
   });
 
-  test('changePassword and rotateRecoveryKey keep unknown fields', () async {
-    final withExtra = AccountBundle.fromJson({
-      'future': [1, 2],
-      ...acc.bundle.toJson(),
+  group('changePassword and rotateRecoveryKey', () {
+    late AccountBundle withExtra;
+    late UnlockedAccount u;
+    late ({AccountBundle bundle, Uint8List authKey}) changed;
+    setUpAll(() async {
+      withExtra = AccountBundle.fromJson({
+        'future': [1, 2],
+        ...acc.bundle.toJson(),
+      });
+      u = await crypto.unlock(withExtra, 'correct horse');
+      changed = await crypto.changePassword(u, withExtra, 'battery staple');
     });
-    final u = await crypto.unlock(withExtra, 'correct horse');
 
-    final changed = await crypto.changePassword(u, withExtra, 'battery staple');
-    expect(
-      without(changed.bundle, ['salt', 'kdf', 'wrappedUserKey']),
-      without(withExtra, ['salt', 'kdf', 'wrappedUserKey']),
-    );
-    expect(changed.bundle.salt, isNot(withExtra.salt));
-    expect(changed.bundle.toJson()['future'], [1, 2]);
-    expect(
-      (await crypto.unlock(changed.bundle, 'battery staple')).userKey,
-      u.userKey,
-    );
-    await expectLater(
-      crypto.unlock(changed.bundle, 'correct horse'),
-      throwsA(isA<WrongPassword>()),
-    );
-    expect(
-      (await crypto.unlockWithRecovery(
-        changed.bundle,
-        acc.recoveryKey,
-      )).userKey,
-      u.userKey,
-    );
-    expect(
-      changed.authKey,
-      (await deriveMasterKeys(
-        'battery staple',
-        changed.bundle.salt,
-        KdfParams.testing,
-      )).authKey,
+    test(
+      'changePassword rewraps under a new salt and keeps unknown fields',
+      () {
+        expect(
+          without(changed.bundle, ['salt', 'kdf', 'wrappedUserKey']),
+          without(withExtra, ['salt', 'kdf', 'wrappedUserKey']),
+        );
+        expect(changed.bundle.salt, isNot(withExtra.salt));
+        expect(changed.bundle.toJson()['future'], [1, 2]);
+      },
     );
 
-    final rotated = await crypto.rotateRecoveryKey(u, withExtra);
-    expect(
-      without(rotated.bundle, ['wrappedUserKeyByRecovery']),
-      without(withExtra, ['wrappedUserKeyByRecovery']),
+    test(
+      'changePassword swaps the password and keeps the recovery key',
+      () async {
+        expect(
+          (await crypto.unlock(changed.bundle, 'battery staple')).userKey,
+          u.userKey,
+        );
+        await expectLater(
+          crypto.unlock(changed.bundle, 'correct horse'),
+          throwsA(isA<WrongPassword>()),
+        );
+        expect(
+          (await crypto.unlockWithRecovery(
+            changed.bundle,
+            acc.recoveryKey,
+          )).userKey,
+          u.userKey,
+        );
+        expect(
+          changed.authKey,
+          (await deriveMasterKeys(
+            'battery staple',
+            changed.bundle.salt,
+            KdfParams.testing,
+          )).authKey,
+        );
+      },
     );
-    expect(
-      (await crypto.unlockWithRecovery(
-        rotated.bundle,
-        rotated.recoveryKey,
-      )).userKey,
-      u.userKey,
-    );
-    await expectLater(
-      crypto.unlockWithRecovery(rotated.bundle, acc.recoveryKey),
-      throwsA(isA<InvalidRecoveryKey>()),
-    );
-    expect(
-      await recoveryAuthKey(RecoveryKey.decode(rotated.recoveryKey)),
-      rotated.recoveryAuthKey,
+
+    test(
+      'rotateRecoveryKey replaces the recovery key and keeps unknown fields',
+      () async {
+        final rotated = await crypto.rotateRecoveryKey(u, withExtra);
+        expect(
+          without(rotated.bundle, ['wrappedUserKeyByRecovery']),
+          without(withExtra, ['wrappedUserKeyByRecovery']),
+        );
+        expect(
+          (await crypto.unlockWithRecovery(
+            rotated.bundle,
+            rotated.recoveryKey,
+          )).userKey,
+          u.userKey,
+        );
+        await expectLater(
+          crypto.unlockWithRecovery(rotated.bundle, acc.recoveryKey),
+          throwsA(isA<InvalidRecoveryKey>()),
+        );
+        expect(
+          await recoveryAuthKey(RecoveryKey.decode(rotated.recoveryKey)),
+          rotated.recoveryAuthKey,
+        );
+      },
     );
   });
 

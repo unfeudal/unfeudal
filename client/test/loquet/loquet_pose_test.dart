@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: Apache-2.0
-import 'package:flutter/painting.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:unfeudal_client/src/design/tokens.dart';
 import 'package:unfeudal_client/src/loquet/loquet_pose.dart';
@@ -52,38 +51,15 @@ void main() {
     expect(LoquetPose.of(LoquetMood.idle).tone, LoquetTone.normal);
   });
 
-  test('palette follows the mockup', () {
+  test('palette reads the theme roles', () {
     for (final c in [UfColors.light, UfColors.dark]) {
       expect(LoquetPalette.of(LoquetTone.normal, c).body, c.accent);
-      expect(
-        LoquetPalette.of(LoquetTone.danger, c).body,
-        const Color(0xFFD9645A),
-      );
-      expect(
-        LoquetPalette.of(LoquetTone.warn, c).body,
-        const Color(0xFFC9A54E),
-      );
-      expect(LoquetPalette.of(LoquetTone.normal, c).feet, c.text);
-      expect(
-        LoquetPalette.of(LoquetTone.danger, c).face,
-        const Color(0xFF171B1F),
-      );
+      expect(LoquetPalette.of(LoquetTone.danger, c).body, c.danger);
+      expect(LoquetPalette.of(LoquetTone.warn, c).body, c.warn);
+      for (final tone in LoquetTone.values) {
+        final p = LoquetPalette.of(tone, c);
+        expect((p.face, p.feet, p.drop), (c.accentFg, c.text, c.accentText));
+      }
     }
-    expect(
-      LoquetPalette.of(LoquetTone.normal, UfColors.light).face,
-      const Color(0xFFEEF2F0),
-    );
-    expect(
-      LoquetPalette.of(LoquetTone.normal, UfColors.dark).face,
-      const Color(0xFF171B1F),
-    );
-    expect(
-      LoquetPalette.of(LoquetTone.normal, UfColors.light).hand,
-      const Color(0xFF2F5A8A),
-    );
-    expect(
-      LoquetPalette.of(LoquetTone.danger, UfColors.light).hand,
-      const Color(0xFFE07A70),
-    );
   });
 }

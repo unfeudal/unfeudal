@@ -35,7 +35,7 @@ void main() {
 
   test('a block arriving calls onOrgBlock after the page is applied', () async {
     final a = await serverOrgItem();
-    h.orgBlock = orgBlock(cursor: 1, itemIds: [a.id]);
+    h.orgBlock = orgBlock(itemIds: [a.id]);
     await e.syncNow();
     expect((m.item(a.id)?.id, blocks.single.orgCursor), (a.id, 1));
     await e.syncNow();
@@ -46,14 +46,12 @@ void main() {
     final a = await serverOrgItem(),
         b = await serverOrgItem(),
         queued = await serverOrgItem();
-    h.orgBlock = orgBlock(cursor: 1, itemIds: [a.id, b.id, queued.id]);
+    h.orgBlock = orgBlock(itemIds: [a.id, b.id, queued.id]);
     await e.syncNow();
     m.enqueue(queued, baseRevision: 1);
     h.failPuts[queued.id] = 403; // stays queued through the round
-    h.orgBlock = orgBlock(
-      cursor: 2,
-      itemIds: [a.id],
-    ); // the server stopped showing b and queued
+    // The server stopped showing b and queued.
+    h.orgBlock = orgBlock(cursor: 2, itemIds: [a.id]);
     await e.syncNow();
     expect(m.item(b.id), isNull);
     expect((m.item(a.id)?.id, m.item(queued.id)?.id), (a.id, queued.id));
@@ -63,7 +61,7 @@ void main() {
     'an id missing locally triggers one resync from cursor 0, never a loop',
     () async {
       final a = await serverOrgItem();
-      h.orgBlock = orgBlock(cursor: 1, itemIds: [a.id]);
+      h.orgBlock = orgBlock(itemIds: [a.id]);
       await e.syncNow();
       final ghost = newId();
       h.orgBlock = orgBlock(cursor: 2, itemIds: [a.id, ghost]);
@@ -81,7 +79,7 @@ void main() {
       h.pageSize = 1;
       final a = await serverOrgItem();
       final later = await serverOrgItem(); // written after the block snapshot: page 2, seq above page 1's cursor
-      h.orgBlock = orgBlock(cursor: 1, itemIds: [a.id]);
+      h.orgBlock = orgBlock(itemIds: [a.id]);
       await e.syncNow();
       expect((m.item(a.id)?.id, m.item(later.id)?.id), (a.id, later.id));
     },
@@ -89,7 +87,7 @@ void main() {
 
   test('a cached block is never used for the rule; personal items are never judged', () async {
     final a = await serverOrgItem();
-    h.orgBlock = orgBlock(cursor: 1, itemIds: [a.id]);
+    h.orgBlock = orgBlock(itemIds: [a.id]);
     await e.syncNow();
     h.orgBlock = null;
     h.serverPut(

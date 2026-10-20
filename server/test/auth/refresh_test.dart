@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import 'package:test/test.dart';
 import 'package:unfeudal_server/src/api/errors.dart';
+import 'package:unfeudal_server/src/audit/audit_log.dart';
 import 'package:unfeudal_server/src/auth/tokens.dart';
+import 'package:unfeudal_server/src/config/features.dart';
 import 'package:unfeudal_server/src/db/db.dart';
 import 'package:unfeudal_server/src/db/migrate.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
@@ -22,7 +24,13 @@ void main() {
     db = await openTestDb();
     await migrate(db);
     clock = FakeClock(DateTime.utc(2026, 10, 13, 12));
-    refresh = RefreshTokens(db, clock, const Duration(days: 30), secret);
+    refresh = RefreshTokens(
+      db,
+      clock,
+      const Duration(days: 30),
+      secret,
+      audit: AuditLog(clock, Features(const {}), secret),
+    );
     final t = iso(clock.now());
     await db.execute(
       "INSERT INTO users (id, email, bundle, auth_hash, created_at) VALUES (@u, 'a@b.c', '{}', 'h', @t)",

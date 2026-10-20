@@ -49,27 +49,30 @@ void main() {
     expect(await w.orgSeq(), seq + 1);
   });
 
-  test('create: names are 1–100 code points without control chars', () async {
-    for (final bad in ['', '   ', 'x' * 101, 'a\u0007b', 7, null]) {
+  test(
+    'create: names are 1 to 100 code points without control chars',
+    () async {
+      for (final bad in ['', '   ', 'x' * 101, 'a\u0007b', 7, null]) {
+        expect(
+          (await s.post(
+            '/api/v1/orgs',
+            token: w['mia'].accessToken,
+            body: {'name': bad},
+          )).status,
+          400,
+          reason: '$bad',
+        );
+      }
       expect(
         (await s.post(
           '/api/v1/orgs',
           token: w['mia'].accessToken,
-          body: {'name': bad},
+          body: {'name': 'é' * 100},
         )).status,
-        400,
-        reason: '$bad',
+        201,
       );
-    }
-    expect(
-      (await s.post(
-        '/api/v1/orgs',
-        token: w['mia'].accessToken,
-        body: {'name': 'é' * 100},
-      )).status,
-      201,
-    );
-  });
+    },
+  );
 
   test('create: org_creation, max_orgs_per_user, orgs flag', () async {
     final io = await TestServer.start(
@@ -116,74 +119,73 @@ void main() {
     expect((await s.post('/api/v1/orgs', body: {'name': 'A'})).status, 401);
   });
 
+  Future<int> updateAsAdam(Map<String, Object?> body) async => (await s.put(
+    '/api/v1/orgs/${w.orgId}',
+    token: w['adam'].accessToken,
+    body: body,
+  )).status;
+
+  test('update: admin only', () async {
+    final path = '/api/v1/orgs/${w.orgId}';
+    expect(
+      (await s.put(path, token: w.io.accessToken, body: {'name': 'X'})).status,
+      404,
+    );
+    expect(
+      (await s.put(
+        path,
+        token: w['mia'].accessToken,
+        body: {'name': 'X'},
+      )).status,
+      403,
+    );
+  });
+
   test(
-    'update: admin only; settings merged; org_seq only for name and mascot',
+    'update: retention values and an empty body leave org_seq alone',
     () async {
-      final path = '/api/v1/orgs/${w.orgId}';
-      expect(
-        (await s.put(
-          path,
-          token: w.io.accessToken,
-          body: {'name': 'X'},
-        )).status,
-        404,
-      );
-      expect(
-        (await s.put(
-          path,
-          token: w['mia'].accessToken,
-          body: {'name': 'X'},
-        )).status,
-        403,
-      );
       var seq = await w.orgSeq();
       expect(
-        (await s.put(
-          path,
-          token: w['adam'].accessToken,
-          body: {
-            'settings': {'auditDays': 90},
-          },
-        )).status,
+        await updateAsAdam({
+          'settings': {'auditDays': 90},
+        }),
         204,
       );
       expect(await w.orgSeq(), seq, reason: 'retention is not in the block');
-      expect(
-        (await s.put(
-          path,
-          token: w['adam'].accessToken,
-          body: {
-            'name': 'Acme 2',
-            'settings': {'mascot': false},
-          },
-        )).status,
-        204,
-      );
-      expect(await w.orgSeq(), seq + 1);
-      expect(await settings(w.orgId), {'auditDays': 90, 'mascot': false});
-      expect(
-        (await s.put(
-          path,
-          token: w['adam'].accessToken,
-          body: {
-            'settings': {'auditDays': null},
-          },
-        )).status,
-        204,
-      );
-      expect(await settings(w.orgId), {'mascot': false});
       seq = await w.orgSeq();
-      expect(
-        (await s.put(
-          path,
-          token: w['adam'].accessToken,
-          body: <String, Object?>{},
-        )).status,
-        204,
-      );
+      expect(await updateAsAdam(<String, Object?>{}), 204);
       expect(await w.orgSeq(), seq);
     },
   );
+
+  test('update: name and mascot bump org_seq; settings are merged', () async {
+    await updateAsAdam({
+      'settings': {'auditDays': 90},
+    });
+    final seq = await w.orgSeq();
+    expect(
+      await updateAsAdam({
+        'name': 'Acme 2',
+        'settings': {'mascot': false},
+      }),
+      204,
+    );
+    expect(await w.orgSeq(), seq + 1);
+    expect(await settings(w.orgId), {'auditDays': 90, 'mascot': false});
+  });
+
+  test('update: a null retention value clears it', () async {
+    await updateAsAdam({
+      'settings': {'auditDays': 90, 'mascot': false},
+    });
+    expect(
+      await updateAsAdam({
+        'settings': {'auditDays': null},
+      }),
+      204,
+    );
+    expect(await settings(w.orgId), {'mascot': false});
+  });
 
   test('update: mascot and retention values are checked', () async {
     final path = '/api/v1/orgs/${w.orgId}';
@@ -214,10 +216,9 @@ void main() {
       {
         'settings': {'unknown': 1},
       },
+      // Only the retention values clear with null.
       {
-        'settings': {
-          'mascot': null,
-        }, // only the retention values clear with null
+        'settings': {'mascot': null},
       },
       {
         'settings': {'mascot': 'yes'},

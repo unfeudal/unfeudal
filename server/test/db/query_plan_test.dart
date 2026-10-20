@@ -60,9 +60,8 @@ Future<String> plan(Db db, String sql) async {
         .join('\n');
   }
   return db.transaction((tx) async {
-    await tx.execute(
-      'SET LOCAL enable_seqscan = off',
-    ); // tiny tables: without it the planner always scans
+    // The tables are tiny: without this the planner always scans.
+    await tx.execute('SET LOCAL enable_seqscan = off');
     return (await tx.query('EXPLAIN $sql'))
         .map((r) => r.values.first)
         .join('\n');

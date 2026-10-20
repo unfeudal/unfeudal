@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import 'package:crypto/crypto.dart';
 
-/// Six groups of 5 digits from SHA-256 of the key (≈ 99.6 bits), compared aloud between members.
+/// Six groups of 5 digits from SHA-256 of the key (about 99.6 bits), compared aloud between members.
 String safetyCode(List<int> x25519PublicKey) {
   if (x25519PublicKey.length != 32) {
     throw ArgumentError('public key must be 32 bytes');
@@ -23,3 +23,8 @@ String keyFingerprint(List<int> publicKey) {
   }
   return '${sha256.convert(publicKey)}'.substring(0, 40);
 }
+
+/// Text shaped like a [keyFingerprint].
+bool isKeyFingerprint(String s) => _keyFingerprint.hasMatch(s);
+
+final _keyFingerprint = RegExp(r'^[0-9a-f]{40}$');

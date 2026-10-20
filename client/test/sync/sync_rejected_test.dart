@@ -59,7 +59,7 @@ void main() {
     h.serverPut(wireItem(id, revision: 0));
     await e.syncNow();
     h.failPuts[id] = 403;
-    await e.write(wireItem(id, revision: 1, deleted: true));
+    await e.write(wireItem(id, deleted: true));
     for (var i = 0; i < 3; i++) {
       await e.syncNow();
     }

@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import 'dart:convert';
 
-import 'package:cryptography/cryptography.dart';
 import 'package:flutter/foundation.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
@@ -39,7 +38,6 @@ class OrgController extends ChangeNotifier {
       block: () => block,
       userId: userId,
       publicKey: publicKey,
-      write: sync.write,
       online: online,
       emit: emit,
     );
@@ -70,11 +68,43 @@ class OrgController extends ChangeNotifier {
   final alerts = <String>{}; // refused folder keys and changed member keys
   HandoffReport? lastHandoff;
   RotationReport? lastRotation;
-  Object? lastError;
-  bool keyringReported = false;
 
   /// The org shown in the shell; null is the personal vault.
   String? selected;
+
+  /// Writes an item to the personal vault, or to [orgId]'s [folderId] through the org writer.
+  Future<String> saveItem({
+    required String type,
+    String? id,
+    String? orgId,
+    String? folderId,
+    required Map<String, Object?> meta,
+    Map<String, Object?>? secret,
+  }) => orgId == null
+      ? vault.upsertItem(
+          type: type,
+          id: id,
+          folderId: folderId,
+          meta: meta,
+          secret: secret,
+        )
+      : writer.upsert(
+          type: type,
+          id: id,
+          target: OrgTarget(orgId, folderId),
+          meta: meta,
+          secret: secret,
+        );
+
+  /// Moves an item to the trash, through the org writer for an org item.
+  Future<void> trashItem(String id) =>
+      _isOrgItem(id) ? writer.trash(id) : vault.trashItem(id);
+
+  /// Takes an item out of the trash, through the org writer for an org item.
+  Future<void> restoreItem(String id) =>
+      _isOrgItem(id) ? writer.restore(id) : vault.restoreItem(id);
+
+  bool _isOrgItem(String id) => vault.entry(id)?.orgId != null;
   SimpleKeyPair? _keyPair;
 
   List<OrgSummary> get orgs => block?.orgs ?? const [];
@@ -84,19 +114,16 @@ class OrgController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// The cached block serves offline orgs until the next one arrives. False: kv.keyring did not open.
-  Future<bool> unlock(UnlockedAccount account) async {
+  /// The cached block serves offline orgs until the next one arrives. Runs before the vault unlocks, so its
+  /// one reload already shows the org items; [MemberPins.seed] follows that reload.
+  Future<void> unlock(UnlockedAccount account) async {
     _keyPair = account.keyPair;
-    final opened = await keyring.load(account.userKey);
-    keyringReported = !opened;
+    await keyring.load(account.userKey);
     vault.keyring = keyring;
     if (mirror.getKv(KvKey.orgBlock) case final raw?) {
       block = OrgBlock.fromJson(jsonDecode(raw));
     }
-    await vault.reload();
-    pins.seed();
     notifyListeners();
-    return opened;
   }
 
   void lock() {
@@ -114,16 +141,15 @@ class OrgController extends ChangeNotifier {
     alerts.addAll(await keyring.apply(b, keyPair));
     await vault.reload();
     pins.seed();
-    if (b.orgs.any((o) => _isAdminOf(o))) {
+    if (b.orgs.any((o) => o.isAdmin)) {
       try {
         final report = lastHandoff = await handoff.run(b);
         alerts.addAll(report.alerts);
         lastRotation = await rotation.run(b);
-        lastError = null;
-      } on ApiException catch (e) {
-        lastError = e; // retried on the next block
-      } on NetworkException catch (e) {
-        lastError = e;
+      } on ApiException {
+        // retried on the next block
+      } on NetworkException {
+        // retried on the next block
       }
     }
     notifyListeners();
@@ -133,9 +159,8 @@ class OrgController extends ChangeNotifier {
   Future<void> rotateNow() async {
     final b = block;
     if (b == null) return;
-    lastRotation = await rotation.run(
-      b,
-    ); // each folder's failure stays pending inside
+    // Each folder's failure stays pending inside the result.
+    lastRotation = await rotation.run(b);
     notifyListeners();
   }
 
@@ -149,11 +174,31 @@ class OrgController extends ChangeNotifier {
     final b = block;
     return b == null
         ? const Explanation({}, [])
-        : explainFromBlock(b, orgId, userId, folderId);
+        : explainFromBlock(b, orgId, userId: userId, folderId: folderId);
   }
 
-  bool isAdmin(String orgId) => orgs.any((o) => o.id == orgId && _isAdminOf(o));
+  /// Whether [e] may be rewritten (restored): always for a personal item, `edit` on its parent folder for an org one.
+  bool canEditEntry(VaultEntry e) =>
+      e.orgId == null || writer.canEdit(e.orgId!, e.folderId);
 
-  static bool _isAdminOf(OrgSummary o) =>
-      o.status == 'confirmed' && (o.role == 'owner' || o.role == 'admin');
+  /// Whether [e]'s secrets may be shown: always for a personal item, `reveal` on its key folder for an org one.
+  bool canReveal(VaultEntry e) {
+    final item = e.item;
+    return item.scope == ItemScope.personal ||
+        permissions(item.orgId!, item.keyFolderId!).contains(Permission.reveal);
+  }
+
+  OrgSummary? byId(String? orgId) =>
+      orgs.where((o) => o.id == orgId).firstOrNull;
+
+  /// The org's members, by email.
+  List<OrgMember> membersOf(String orgId) => [
+    for (final m in block?.members ?? const <OrgMember>[])
+      if (m.orgId == orgId) m,
+  ]..sort((a, b) => a.email.compareTo(b.email));
+
+  bool isAdmin(String orgId) => block?.isAdminOf(orgId) ?? false;
+
+  /// The role alone, confirmed or not.
+  bool isOwner(String orgId) => byId(orgId)?.role == OrgRole.owner.name;
 }

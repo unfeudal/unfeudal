@@ -2,7 +2,6 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import '../bytes.dart';
 import '../crypto/cipher.dart';
 import '../crypto/envelope.dart';
 import '../crypto/errors.dart';
@@ -14,14 +13,10 @@ import '../util/secure.dart';
 
 enum EnrollKind { setup, invite }
 
-String normalizeSetupToken(String t) =>
-    t.toUpperCase().replaceAll(RegExp(r'[\s-]'), '');
+String normalizeSetupToken(String t) => ungroup(t);
 
 /// RFC 4648 base32 of 16 random bytes, no padding: 26 characters.
 String newSetupToken() => base32Encode(secureBytes(16));
-
-/// Groups of 4 joined by `-`, for display; [normalizeSetupToken] reverts it.
-String groupSetupToken(String t) => groupBy4(t);
 
 /// A normalized setup token: 26 base32 characters.
 bool isSetupToken(String t) => _setupToken.hasMatch(t);
@@ -88,7 +83,7 @@ class Enrollment {
   static Future<Enrollment> parseFile(
     String text, {
     String? passphrase,
-    bool allowTestingKdf = false,
+    KdfParams kdfFloor = KdfParams.defaults,
   }) async {
     // Bad JSON throws FormatException.
     final r = JsonReader(jsonDecode(text), 'enroll');
@@ -102,7 +97,7 @@ class Enrollment {
     final kdf = KdfParams.fromJson(e.object('kdf'));
     final envelope = Envelope.fromJson(e.object('envelope'));
     // Before any derivation: the file may come from anyone.
-    kdf.ensureAcceptable(allowTesting: allowTestingKdf);
+    kdf.ensureAcceptable(floor: kdfFloor);
     if (passphrase == null) throw const WrongPassword();
     final key = await hkdf32(await argon2id(passphrase, salt, kdf), _info);
     final Uint8List plain;
@@ -114,32 +109,14 @@ class Enrollment {
     return _fromFields(JsonReader(jsonDecode(utf8.decode(plain)), 'enroll'));
   }
 
-  /// Encrypted: {"unfeudal-enroll": 1, "encrypted": {salt, kdf, envelope}}, keyId `enroll`, no aad,
-  /// plaintext {"server", "token", "kind"}.
-  Future<String> toFile({
-    String? passphrase,
-    KdfParams kdf = KdfParams.defaults,
-  }) async {
-    final fields = {'server': '$server', 'token': token, 'kind': kind.name};
-    if (passphrase == null) {
-      return jsonEncode({'unfeudal-enroll': 1, ...fields});
-    }
-    final salt = secureBytes(16);
-    final key = await hkdf32(await argon2id(passphrase, salt, kdf), _info);
-    final envelope = await SymmetricCipher.encrypt(
-      key,
-      utf8.encode(jsonEncode(fields)),
-      KeyIds.enroll,
-    );
-    return jsonEncode({
-      'unfeudal-enroll': 1,
-      'encrypted': {
-        'salt': b64(salt),
-        'kdf': kdf.toJson(),
-        'envelope': envelope.toJson(),
-      },
-    });
-  }
+  /// Plain only; [parseFile] also reads encrypted files
+  /// {"unfeudal-enroll": 1, "encrypted": {salt, kdf, envelope}}, keyId `enroll`, no aad.
+  String toFile() => jsonEncode({
+    'unfeudal-enroll': 1,
+    'server': '$server',
+    'token': token,
+    'kind': kind.name,
+  });
 
   static Enrollment _fromFields(JsonReader r) => Enrollment(
     Uri.parse(r.text('server', max: 2048)),
@@ -147,7 +124,7 @@ class Enrollment {
     _kind(r.opt<String>('kind')),
   );
 
-  /// Absent means setup.
+  // Absent means setup.
   static EnrollKind _kind(String? name) => name == null
       ? EnrollKind.setup
       : EnrollKind.values.asNameMap()[name] ??

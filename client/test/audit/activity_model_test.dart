@@ -43,7 +43,7 @@ void main() {
       expect([m.events.length, m.hasMore], [100, true]);
       await m.more();
       expect([m.events.length, m.hasMore], [150, false]);
-      expect((await m.verify()).ok, isTrue);
+      expect(await m.verify(), isNull);
       expect(
         h.requests.where((r) => r == 'GET /api/v1/audit'),
         hasLength(3),
@@ -51,7 +51,7 @@ void main() {
       );
       final exported = await m.exportJson();
       expect(jsonDecode(exported.json) as List, hasLength(150));
-      expect(exported.report.ok, isTrue);
+      expect(exported.brokenAt, isNull);
       expect(
         [
           ActivityModel.exportFileName('org:$testOrgId'),
@@ -114,7 +114,7 @@ void main() {
         userId: me,
         scope: 'me',
       );
-      expect((await m.verify()).ok, isTrue, reason: 'an empty chain verifies');
+      expect(await m.verify(), isNull, reason: 'an empty chain verifies');
       expect(m.alerts.single.kind, AnchorAlertKind.vanished);
     },
   );

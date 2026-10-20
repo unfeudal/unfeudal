@@ -8,21 +8,31 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
 import '../../app_state.dart';
-import '../../design/empty_state.dart';
+import '../../design/choices.dart';
 import '../../design/dialog.dart';
+import '../../design/empty_state.dart';
+import '../../design/field.dart';
 import '../../design/icons.dart';
+import '../../design/inputs.dart';
 import '../../design/motion.dart';
+import '../../design/rows.dart';
+import '../../design/toast.dart';
 import '../../design/tokens.dart';
 import '../../events/app_events.dart';
 import '../../keys/key_tools.dart';
-import '../../vault/org_writer.dart';
+import '../../orgs/host_binding.dart';
 import '../../vault/vault.dart';
 import '../form_dialog.dart';
 import '../history/item_history_panel.dart';
 import '../hosts/editor_frame.dart';
 import '../manage_frame.dart';
+import '../secret_clipboard.dart';
 
-/// Where the keychain reads and writes: the personal vault, or one org folder (shared identities).
+part 'identity_row.dart';
+part 'keychain_list.dart';
+part 'place_picker.dart';
+
+// Where the keychain reads and writes: the personal vault, or one org folder (shared identities).
 class _Place {
   _Place(this.state, this.folderId);
 
@@ -32,9 +42,11 @@ class _Place {
   VaultEntry? get _folder =>
       folderId == null ? null : state.vault!.entry(folderId!);
 
+  String? get _orgId => folderId == null ? null : _folder!.orgId!;
+
   bool get editable =>
       folderId == null ||
-      (state.orgs?.writer.canEdit(_folder!.orgId!, folderId) ?? false);
+      (state.orgs?.writer.canEdit(_orgId!, folderId) ?? false);
 
   bool holds(VaultEntry e) =>
       folderId == null ? e.orgId == null : e.folderId == folderId;
@@ -43,32 +55,20 @@ class _Place {
     Map<String, Object?> meta, {
     Map<String, Object?>? secret,
     String? id,
-  }) async {
-    if (folderId == null) {
-      await state.vault!.upsertItem(
-        type: 'identity',
-        id: id,
-        meta: meta,
-        secret: secret,
-      );
-    } else {
-      await state.orgs!.writer.upsert(
-        type: 'identity',
-        id: id,
-        target: OrgTarget(_folder!.orgId!, folderId),
-        meta: meta,
-        secret: secret,
-      );
-    }
-  }
+  }) => state.orgs!.saveItem(
+    type: 'identity',
+    id: id,
+    orgId: _orgId,
+    folderId: folderId,
+    meta: meta,
+    secret: secret,
+  );
 
-  Future<void> trash(String id) => folderId == null
-      ? state.vault!.trashItem(id)
-      : state.orgs!.writer.trash(id);
+  Future<void> trash(String id) => state.orgs!.trashItem(id);
 }
 
-/// SSH keys and passwords: generate, import, add a password, copy a public key, rename, trash; personal, or
-/// shared in an org folder.
+/// The selected vault's SSH keys and passwords: generate, import, add a password, copy a public key, rename,
+/// trash; an org vault keeps them per folder and lists the personal keys bound to its hosts, read-only.
 class KeychainScreen extends StatefulWidget {
   const KeychainScreen({super.key, this.onBack});
 
@@ -79,6 +79,7 @@ class KeychainScreen extends StatefulWidget {
 }
 
 class _KeychainScreenState extends State<KeychainScreen> {
+  // Where new keys of an org vault go; the personal vault has a single place.
   String? _folderId;
 
   @override
@@ -86,178 +87,201 @@ class _KeychainScreenState extends State<KeychainScreen> {
     final l = AppLocalizations.of(context);
     final state = AppScope.of(context);
     final vault = state.vault!;
+    final orgId = state.orgs?.selected;
+    final vaultName = vaultNameOf(l, state, orgId);
     final orgFolders = [
-      for (final e in vault.ofKind(ItemKind.folder))
-        if (e.orgId != null && e.state == EntryState.ok) e,
-    ];
-    if (_folderId != null && !orgFolders.any((e) => e.id == _folderId)) {
-      _folderId = null; // the folder left this vault
+      if (orgId != null)
+        for (final e in vault.ofKind(ItemKind.folder))
+          if (e.orgId == orgId && e.state == EntryState.ok) e,
+    ]..sort(byName);
+    if (!orgFolders.any((e) => e.id == _folderId)) {
+      _folderId = orgFolders.firstOrNull?.id; // the vault or the folder changed
     }
     final place = _Place(state, _folderId);
-    final readOnly = (state.sync?.readOnly ?? true) || !place.editable;
-    final identities =
-        vault
-            .ofKind(ItemKind.identity)
-            .where((e) => e.state == EntryState.ok && place.holds(e))
-            .toList()
-          ..sort((a, b) => (a.name ?? '').compareTo(b.name ?? ''));
-    Future<void> form(
-      String title,
-      List<FormDialogField> fields,
-      String saveKey,
-      Future<void> Function(Map<String, String>) save, {
-      Map<String, String> initial = const {},
-    }) => showUfDialog<bool>(
-      context,
-      (_) => FormDialog(
-        title: title,
-        fields: fields,
-        saveKey: saveKey,
-        saveLabel: l.keySave,
-        onSave: save,
-        initial: initial,
-      ),
-    );
+    final serverReadOnly = state.sync?.readOnly ?? true;
+    final readOnly =
+        serverReadOnly ||
+        (orgId != null && _folderId == null) ||
+        !place.editable;
+    final identities = _identitiesIn(vault, place, orgId: orgId);
+    final linked = _linkedKeys(vault, orgId);
+    final empty = identities.isEmpty && linked.isEmpty && orgFolders.isEmpty;
     return ManageFrame(
       title: l.keychainTitle,
+      subtitle: vaultName,
       onBack: widget.onBack,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        spacing: 16,
-        children: [
-          if (orgFolders.isNotEmpty)
-            Align(
-              alignment: Alignment.centerLeft,
-              child: SizedBox(
-                width: 320,
-                child: entryPicker(
-                  key: 'keychain-place',
-                  label: l.keychainPlace,
-                  none: l.vaultPersonal,
-                  entries: orgFolders,
-                  value: _folderId,
-                  onChanged: (v) => setState(() => _folderId = v),
-                ),
-              ),
+      actions: [
+        FilledButton.icon(
+          key: const Key('key-generate'),
+          icon: const Icon(UfIcons.plus),
+          onPressed: readOnly ? null : () => _openGenerate(place),
+          label: Text(l.keyGenerate),
+        ),
+        OutlinedButton(
+          key: const Key('key-import'),
+          onPressed: readOnly ? null : () => _openImport(place),
+          child: Text(l.keyImport),
+        ),
+        OutlinedButton(
+          key: const Key('key-password'),
+          onPressed: readOnly ? null : () => _openPassword(place),
+          child: Text(l.keyPassword),
+        ),
+      ],
+      maxWidth: empty ? null : 980,
+      child: empty
+          ? EmptyState(title: l.keychainTitle, body: l.keychainEmpty)
+          : _KeychainList(
+              orgFolders: orgFolders,
+              folderId: _folderId,
+              onFolderChanged: (v) => setState(() => _folderId = v),
+              vaultName: vaultName,
+              rows: [
+                for (final e in identities)
+                  _row(e, place: place, readOnly: readOnly),
+              ],
+              linked: linked,
             ),
-          Wrap(
-            spacing: 8,
-            children: [
-              FilledButton.icon(
-                key: const Key('key-generate'),
-                icon: const Icon(UfIcons.plus, size: 15),
-                onPressed: readOnly
-                    ? null
-                    : () => form(
-                        l.keyGenerate,
-                        [
-                          FormDialogField('gen-name', l.keyName),
-                          FormDialogField(
-                            'gen-passphrase',
-                            l.keyPassphrase,
-                            kind: FormFieldKind.secret,
-                          ),
-                          FormDialogField(
-                            'gen-type-rsa',
-                            l.keyTypeRsa,
-                            kind: FormFieldKind.toggle,
-                            offLabel: l.keyTypeEd25519,
-                          ),
-                        ],
-                        'gen-save',
-                        (v) => _generate(place, v),
-                      ),
-                label: Text(l.keyGenerate),
-              ),
-              OutlinedButton(
-                key: const Key('key-import'),
-                onPressed: readOnly
-                    ? null
-                    : () => form(
-                        l.keyImport,
-                        [
-                          FormDialogField('import-name', l.keyName),
-                          FormDialogField(
-                            'import-pem',
-                            l.keyPem,
-                            lines: 6,
-                            mono: true,
-                          ),
-                          FormDialogField(
-                            'import-passphrase',
-                            l.keyPassphrase,
-                            kind: FormFieldKind.secret,
-                          ),
-                        ],
-                        'import-save',
-                        (v) => _import(place, v),
-                      ),
-                child: Text(l.keyImport),
-              ),
-              OutlinedButton(
-                key: const Key('key-password'),
-                onPressed: readOnly
-                    ? null
-                    : () => form(
-                        l.keyPassword,
-                        [
-                          FormDialogField('pw-name', l.keyName),
-                          FormDialogField(
-                            'pw-value',
-                            l.keyKindPassword,
-                            kind: FormFieldKind.secret,
-                          ),
-                        ],
-                        'pw-save',
-                        (v) => _password(place, v),
-                      ),
-                child: Text(l.keyPassword),
-              ),
-            ],
-          ),
-          Expanded(
-            child: identities.isEmpty
-                ? EmptyState(title: l.keychainTitle, body: l.keychainEmpty)
-                : ListView(
-                    padding: const EdgeInsets.only(bottom: 40),
-                    children: [
-                      for (final e in identities)
-                        _IdentityRow(
-                          entry: e,
-                          readOnly: readOnly,
-                          onRename: () => form(
-                            l.keyRename,
-                            [FormDialogField('identity-name', l.keyName)],
-                            'identity-name-save',
-                            (v) => place.save(
-                              IdentityMeta.fromJson({
-                                ...?e.meta,
-                                'name': v['identity-name']!.trim(),
-                              }).toJson(),
-                              id: e.id,
-                            ),
-                            initial: {'identity-name': e.name ?? ''},
-                          ),
-                          onDelete: () => _confirmTrash(context, place, e),
-                          onReveal: canReveal(state, e)
-                              ? () => _reveal(context, e)
-                              : null,
-                          onHistory: state.serverHas('item_history')
-                              ? () => showUfDialog<void>(
-                                  context,
-                                  (_) => ItemHistoryPanel(itemId: e.id),
-                                )
-                              : null,
-                        ),
-                    ],
-                  ),
-          ),
-        ],
-      ),
     );
   }
 
-  /// Shows the secret once per opening and reports that it was shown.
+  static List<VaultEntry> _identitiesIn(
+    Vault vault,
+    _Place place, {
+    required String? orgId,
+  }) =>
+      vault
+          .ofKind(ItemKind.identity)
+          .where(
+            (e) =>
+                e.state == EntryState.ok &&
+                // an org vault without folders holds no key
+                (orgId == null || place.folderId != null) &&
+                place.holds(e),
+          )
+          .toList()
+        ..sort(byName);
+
+  // Personal keys bound to this org's hosts: shown here, edited in the personal vault.
+  static List<VaultEntry> _linkedKeys(Vault vault, String? orgId) =>
+      orgId == null
+      ? const <VaultEntry>[]
+      : ({
+          for (final h in vault.ofKind(ItemKind.host))
+            if (h.orgId == orgId) ?bindingFor(vault, h.id),
+        }.map(vault.entry).nonNulls.toList()..sort(byName));
+
+  Widget _row(VaultEntry e, {required _Place place, required bool readOnly}) {
+    final state = AppScope.read(context);
+    return _IdentityRow(
+      entry: e,
+      readOnly: readOnly,
+      onRename: () => _openRename(place, e),
+      onDelete: () => _confirmTrash(context, place, e),
+      onReveal: state.serverInfo.has(Flag.reveal) && state.orgs!.canReveal(e)
+          ? () => _reveal(context, e)
+          : null,
+      onHistory: state.serverInfo.has(Flag.itemHistory)
+          ? () => showUfDialog<void>(
+              context,
+              (_) => ItemHistoryPanel(itemId: e.id),
+            )
+          : null,
+    );
+  }
+
+  Future<void> _form({
+    required String title,
+    required List<FormDialogField> fields,
+    required String saveKey,
+    required Future<void> Function(Map<String, String>) onSave,
+    Map<String, String> initial = const {},
+  }) => showUfDialog<bool>(
+    context,
+    (_) => FormDialog(
+      title: title,
+      fields: fields,
+      saveKey: saveKey,
+      saveLabel: AppLocalizations.of(context).keySave,
+      onSave: onSave,
+      initial: initial,
+    ),
+  );
+
+  Future<void> _openRename(_Place place, VaultEntry e) {
+    final l = AppLocalizations.of(context);
+    return _form(
+      title: l.keyRename,
+      fields: [FormDialogField('identity-name', l.keyName)],
+      saveKey: 'identity-name-save',
+      onSave: (v) => place.save(
+        IdentityMeta.fromJson({...?e.meta, 'name': v['identity-name']!.trim()})
+            .toJson(),
+        id: e.id,
+      ),
+      initial: {'identity-name': e.name ?? ''},
+    );
+  }
+
+  Future<void> _openGenerate(_Place place) {
+    final l = AppLocalizations.of(context);
+    return _form(
+      title: l.keyGenerate,
+      fields: [
+        FormDialogField('gen-name', l.keyName),
+        FormDialogField(
+          'gen-passphrase',
+          l.keyPassphrase,
+          kind: FormFieldKind.secret,
+        ),
+        FormDialogField(
+          'gen-type-rsa',
+          l.keyTypeRsa,
+          kind: FormFieldKind.toggle,
+          offLabel: l.keyTypeEd25519,
+        ),
+      ],
+      saveKey: 'gen-save',
+      onSave: (v) => _generate(place, v),
+    );
+  }
+
+  Future<void> _openImport(_Place place) {
+    final l = AppLocalizations.of(context);
+    return _form(
+      title: l.keyImport,
+      fields: [
+        FormDialogField('import-name', l.keyName),
+        FormDialogField('import-pem', l.keyPem, lines: 6, mono: true),
+        FormDialogField(
+          'import-passphrase',
+          l.keyPassphrase,
+          kind: FormFieldKind.secret,
+        ),
+      ],
+      saveKey: 'import-save',
+      onSave: (v) => _import(place, v),
+    );
+  }
+
+  Future<void> _openPassword(_Place place) {
+    final l = AppLocalizations.of(context);
+    return _form(
+      title: l.keyPassword,
+      fields: [
+        FormDialogField('pw-name', l.keyName),
+        FormDialogField(
+          'pw-value',
+          l.keyKindPassword,
+          kind: FormFieldKind.secret,
+        ),
+      ],
+      saveKey: 'pw-save',
+      onSave: (v) => _password(place, v),
+    );
+  }
+
+  // Shows the secret once per opening and reports that it was shown.
   static Future<void> _reveal(BuildContext context, VaultEntry e) async {
     final state = AppScope.read(context);
     final secret = await state.vault!.identitySecret(e.id);
@@ -279,14 +303,14 @@ class _KeychainScreenState extends State<KeychainScreen> {
         : await generateEd25519(comment: name, passphrase: passphrase);
     await _savePrivateKey(
       place,
-      name,
-      key.privateKeyPem,
-      passphrase,
-      key.publicKey,
+      name: name,
+      pem: key.privateKeyPem,
+      passphrase: passphrase,
+      publicKey: key.publicKey,
     );
   }
 
-  /// The key is read (and its passphrase checked) before anything is stored; the original text is kept.
+  // The key is read (and its passphrase checked) before anything is stored; the original text is kept.
   static Future<void> _import(_Place place, Map<String, String> v) async {
     final passphrase = v['import-passphrase']!.isEmpty
         ? null
@@ -295,20 +319,20 @@ class _KeychainScreenState extends State<KeychainScreen> {
     final publicKey = publicKeyOf(pem, passphrase: passphrase);
     await _savePrivateKey(
       place,
-      v['import-name']!.trim(),
-      pem,
-      passphrase,
-      publicKey,
+      name: v['import-name']!.trim(),
+      pem: pem,
+      passphrase: passphrase,
+      publicKey: publicKey,
     );
   }
 
   static Future<void> _savePrivateKey(
-    _Place place,
-    String name,
-    String pem,
-    String? passphrase,
-    String publicKey,
-  ) => place.save(
+    _Place place, {
+    required String name,
+    required String pem,
+    required String? passphrase,
+    required String publicKey,
+  }) => place.save(
     IdentityMeta(
       name: name,
       kind: IdentityKind.privateKey,
@@ -345,197 +369,5 @@ class _KeychainScreenState extends State<KeychainScreen> {
       action: l.keyDelete,
     );
     if (yes) await place.trash(e.id);
-  }
-}
-
-class _IdentityRow extends StatelessWidget {
-  const _IdentityRow({
-    required this.entry,
-    required this.readOnly,
-    required this.onRename,
-    required this.onDelete,
-    this.onReveal,
-    this.onHistory,
-  });
-
-  final VaultEntry entry;
-  final bool readOnly;
-  final VoidCallback onRename;
-  final VoidCallback onDelete;
-
-  /// Null hides the button (no reveal flag, or no reveal right on the folder).
-  final VoidCallback? onReveal;
-
-  /// Null hides the button (no item history on this server).
-  final VoidCallback? onHistory;
-
-  @override
-  Widget build(BuildContext context) {
-    final l = AppLocalizations.of(context);
-    final publicKey = entry.meta?['publicKey'] as String?;
-    final isKey = entry.meta?['kind'] == IdentityKind.privateKey.name;
-    final colors = UfColors.of(context);
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 960),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          child: Row(
-            spacing: 14,
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: colors.field,
-                  borderRadius: const BorderRadius.all(Radius.circular(10)),
-                ),
-                child: Icon(
-                  isKey ? UfIcons.key : UfIcons.lock,
-                  size: 18,
-                  color: colors.accent,
-                ),
-              ),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      entry.name ?? '',
-                      style: const TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                    if (publicKey == null)
-                      Text(
-                        isKey ? l.keyKindPrivateKey : l.keyKindPassword,
-                        style: TextStyle(color: colors.muted, fontSize: 13),
-                      )
-                    else
-                      Text(
-                        publicKey,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: monoStyle.copyWith(
-                          color: colors.muted,
-                          fontSize: 12,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              if (publicKey != null)
-                IconButton(
-                  key: Key('identity-copy-${entry.id}'),
-                  tooltip: l.keyCopyPublic,
-                  onPressed: () async {
-                    final messenger = ScaffoldMessenger.of(context);
-                    await Clipboard.setData(ClipboardData(text: publicKey));
-                    messenger.showSnackBar(
-                      SnackBar(content: Text(l.keyCopied)),
-                    );
-                  },
-                  icon: const Icon(UfIcons.copy, size: 17),
-                ),
-              if (onReveal != null)
-                IconButton(
-                  key: Key('identity-reveal-${entry.id}'),
-                  tooltip: l.identityReveal,
-                  onPressed: onReveal,
-                  icon: const Icon(UfIcons.eye, size: 17),
-                ),
-              if (onHistory != null)
-                IconButton(
-                  key: Key('identity-history-${entry.id}'),
-                  tooltip: l.itemHistory,
-                  onPressed: onHistory,
-                  icon: const Icon(UfIcons.clockCounterClockwise, size: 17),
-                ),
-              IconButton(
-                key: Key('identity-rename-${entry.id}'),
-                tooltip: l.keyRename,
-                onPressed: readOnly ? null : onRename,
-                icon: const Icon(UfIcons.pencil, size: 17),
-              ),
-              IconButton(
-                key: Key('identity-delete-${entry.id}'),
-                tooltip: l.keyDelete,
-                onPressed: readOnly ? null : onDelete,
-                icon: const Icon(UfIcons.trash, size: 17),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// The password, or the private key and its passphrase; a copy is wiped from the clipboard after a minute.
-class _RevealDialog extends StatefulWidget {
-  const _RevealDialog({required this.name, required this.secret});
-
-  final String name;
-  final IdentitySecret secret;
-
-  @override
-  State<_RevealDialog> createState() => _RevealDialogState();
-}
-
-class _RevealDialogState extends State<_RevealDialog> {
-  Timer? _clear;
-  String? _copied;
-
-  Future<void> _copy(String text) async {
-    await Clipboard.setData(ClipboardData(text: text));
-    _copied = text;
-    _clear?.cancel();
-    _clear = Timer(const Duration(seconds: 60), _wipe);
-  }
-
-  /// Clears the clipboard only if it still holds the copied secret.
-  Future<void> _wipe() async {
-    _clear?.cancel();
-    _clear = null;
-    final now = await Clipboard.getData(Clipboard.kTextPlain);
-    if (now?.text == _copied) {
-      await Clipboard.setData(const ClipboardData(text: ''));
-    }
-  }
-
-  @override
-  void dispose() {
-    if (_clear != null) unawaited(_wipe());
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final l = AppLocalizations.of(context);
-    final copy = MaterialLocalizations.of(context).copyButtonLabel;
-    final s = widget.secret;
-    Widget field(String value) => Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: SelectionArea(
-            child: Text(value, style: monoStyle.copyWith(fontSize: 13)),
-          ),
-        ),
-        IconButton(
-          tooltip: copy,
-          onPressed: () => _copy(value),
-          icon: const Icon(UfIcons.copy, size: 17),
-        ),
-      ],
-    );
-    return UfDialog(
-      title: l.identityRevealTitle(widget.name),
-      actions: [CancelButton(onPressed: () => Navigator.of(context).pop())],
-      children: [
-        if (s.password case final password?) field(password),
-        if (s.passphrase case final passphrase?) field(passphrase),
-        if (s.privateKeyPem case final pem?) field(pem),
-      ],
-    );
   }
 }

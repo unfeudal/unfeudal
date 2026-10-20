@@ -2,15 +2,13 @@
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../api/api_client.dart';
+import 'block_permissions.dart';
 import 'folder_keyring.dart';
 import 'member_pins.dart';
 
-class HandoffReport {
-  HandoffReport(this.sent, this.unconfirmed, this.alerts);
-  final Set<(String folderId, String userId)> sent;
-  final Set<String> unconfirmed; // not pinned on this device: the admin confirms them (safety code dialog)
-  final Set<String> alerts; // pinned key changed: never sealed to
-}
+/// [unconfirmed]: not pinned on this device, the admin confirms them (safety code dialog).
+/// [alerts]: pinned key changed, never sealed to.
+typedef HandoffReport = ({Set<String> unconfirmed, Set<String> alerts});
 
 class KeyHandoff {
   KeyHandoff({required this.api, required this.keyring, required this.pins});
@@ -19,15 +17,10 @@ class KeyHandoff {
   final MemberPins pins;
 
   Future<HandoffReport> run(OrgBlock block) async {
-    final report = HandoffReport({}, {}, {});
+    final HandoffReport report = (unconfirmed: {}, alerts: {});
     final byFolder = <String, List<WrappedFolderKeys>>{};
     for (final r in block.keyRequests) {
-      final org = block.orgs.where((o) => o.id == r.orgId).firstOrNull;
-      if (org == null ||
-          org.status != 'confirmed' ||
-          (org.role != 'owner' && org.role != 'admin')) {
-        continue;
-      }
+      if (!block.isAdminOf(r.orgId)) continue;
       final keys = keyring.current(r.folderId);
       if (keys == null || keys.version != r.version) {
         continue; // not held here: another admin device answers
@@ -44,9 +37,8 @@ class KeyHandoff {
           report.alerts.add(r.userId);
           continue;
         case PinCheck.unpinned:
-          report.unconfirmed.add(
-            r.userId,
-          ); // a member the server lists is never trusted without a human
+          // A member the server lists is never trusted without a human.
+          report.unconfirmed.add(r.userId);
           continue;
         case PinCheck.matches:
           break;
@@ -62,10 +54,9 @@ class KeyHandoff {
               withSecret: r.secret,
             ),
           );
-      report.sent.add((r.folderId, r.userId));
     }
     for (final MapEntry(key: folderId, value: wraps) in byFolder.entries) {
-      await api.putFolderKeys(
+      await api.orgs.putFolderKeys(
         folderId,
         version: wraps.first.version,
         wrapped: wraps,

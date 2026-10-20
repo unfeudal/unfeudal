@@ -6,61 +6,106 @@ import '../../l10n/app_localizations.dart';
 import '../design/icons.dart';
 import '../design/tokens.dart';
 
-/// Keychain, devices and settings: a back arrow and a title over the content, next to the rail.
-/// Back and Escape call [onBack], or pop the route when the screen was pushed on its own.
+/// A section screen in place of the sessions: back arrow, Alegreya title, an optional subtitle and actions, then
+/// the content. Back and Escape call [onBack], or pop the route when the screen was pushed on its own.
 class ManageFrame extends StatelessWidget {
   const ManageFrame({
     super.key,
     required this.title,
     required this.child,
     this.onBack,
+    this.subtitle,
+    this.actions = const [],
+    this.maxWidth,
   });
 
   final String title;
   final Widget child;
   final VoidCallback? onBack;
 
+  /// The vault or account the section belongs to.
+  final String? subtitle;
+
+  /// Buttons right of the title, primary first.
+  final List<Widget> actions;
+
+  /// Keeps the content at most this wide, on the left.
+  final double? maxWidth;
+
   @override
   Widget build(BuildContext context) {
-    final colors = UfColors.of(context);
     void back() =>
         onBack != null ? onBack!() : Navigator.of(context).maybePop();
-    // `side`, like the tree it replaces: fields stay visible in the light theme
     return Material(
-      color: colors.side,
+      color: UfColors.of(context).bg,
       child: CallbackShortcuts(
         bindings: {const SingleActivator(LogicalKeyboardKey.escape): back},
         child: Focus(
           autofocus: true,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(40, 28, 40, 0),
+            padding: const EdgeInsets.fromLTRB(32, 24, 32, 0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
-              spacing: 22,
+              spacing: 16,
               children: [
                 Row(
-                  spacing: 14,
+                  spacing: 10,
                   children: [
                     IconButton(
                       key: const Key('manage-back'),
                       tooltip: AppLocalizations.of(context).manageBack,
                       onPressed: back,
-                      icon: const Icon(UfIcons.caretLeft, size: 18),
+                      icon: const Icon(UfIcons.caretLeft),
                     ),
                     Expanded(
-                      child: Text(
-                        title,
-                        style: Theme.of(context).textTheme.displaySmall,
-                      ),
+                      child: _ManageTitle(title: title, subtitle: subtitle),
                     ),
+                    ...actions,
                   ],
                 ),
-                Expanded(child: child),
+                Expanded(
+                  child: switch (maxWidth) {
+                    null => child,
+                    final width => Align(
+                      alignment: Alignment.topLeft,
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(maxWidth: width),
+                        child: child,
+                      ),
+                    ),
+                  },
+                ),
               ],
             ),
           ),
         ),
       ),
+    );
+  }
+}
+
+class _ManageTitle extends StatelessWidget {
+  const _ManageTitle({required this.title, this.subtitle});
+
+  final String title;
+  final String? subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: text.displaySmall),
+        if (subtitle case final subtitle?)
+          Text(
+            subtitle,
+            style: text.bodySmall!.copyWith(
+              color: UfColors.of(context).muted,
+              fontSize: 13,
+            ),
+          ),
+      ],
     );
   }
 }

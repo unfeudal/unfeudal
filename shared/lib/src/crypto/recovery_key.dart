@@ -11,7 +11,8 @@ import 'kdf.dart';
 abstract final class RecoveryKey {
   static Uint8List generate() => secureBytes(32);
 
-  /// 32 bytes + SHA-256(key)[0] → base32 (no padding, trailing bits zero) → groups of 4 joined by '-'.
+  /// The 32 bytes followed by SHA-256(key)[0], in base32 (no padding, trailing bits zero),
+  /// split into groups of 4 joined by '-'.
   static String encode(List<int> key) {
     if (key.length != 32) {
       throw ArgumentError.value(key.length, 'key', 'must be 32 bytes');
@@ -20,7 +21,7 @@ abstract final class RecoveryKey {
   }
 
   static Uint8List decode(String text) {
-    final s = text.toUpperCase().replaceAll(RegExp(r'[\s-]'), '');
+    final s = ungroup(text);
     if (s.length != 53) throw const InvalidRecoveryKey();
     final out = <int>[];
     var acc = 0, bits = 0;

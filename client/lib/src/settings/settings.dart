@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui' show PlatformDispatcher;
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
+
+import '../../l10n/app_localizations.dart';
 
 enum LoquetMode { on, sober, off }
 
@@ -31,7 +33,7 @@ class Settings {
     if (json is! Map<String, Object?>) return const Settings();
     const d = Settings();
     T? byName<T extends Enum>(List<T> values, Object? v) =>
-        values.where((e) => e.name == v).firstOrNull;
+        values.asNameMap()[v];
     return Settings(
       themeMode: byName(ThemeMode.values, json['themeMode']) ?? d.themeMode,
       terminalTheme:
@@ -123,7 +125,6 @@ class Settings {
     ThemeMode? themeMode,
     TerminalThemeId? terminalTheme,
     LoquetMode? loquetMode,
-    String? locale,
     String? terminalFont,
     int? terminalFontSize,
     bool? performanceMode,
@@ -133,7 +134,7 @@ class Settings {
     themeMode: themeMode ?? this.themeMode,
     terminalTheme: terminalTheme ?? this.terminalTheme,
     loquetMode: loquetMode ?? this.loquetMode,
-    locale: locale ?? this.locale,
+    locale: locale,
     terminalFont: terminalFont ?? this.terminalFont,
     terminalFontSize: terminalFontSize ?? this.terminalFontSize,
     performanceMode: performanceMode ?? this.performanceMode,
@@ -142,34 +143,45 @@ class Settings {
     extra: extra,
   );
 
-  // ponytail: extra compared one level deep; nested unknown values only affect change detection
-  @override
-  bool operator ==(Object other) =>
-      other is Settings && mapEquals(other.toJson(), toJson());
+  /// The chosen language, else the system's when the app has it; null otherwise.
+  String? get uiLocale {
+    if (locale case final chosen?) return chosen;
+    final system = PlatformDispatcher.instance.locale.languageCode;
+    return AppLocalizations.supportedLocales.any(
+          (l) => l.languageCode == system,
+        )
+        ? system
+        : null;
+  }
 
   @override
-  int get hashCode => Object.hashAllUnordered(
-    toJson().entries.map((e) => Object.hash(e.key, e.value)),
-  );
+  bool operator ==(Object other) =>
+      other is Settings && _jsonEquals(other.toJson(), toJson());
+
+  // The keys only: unknown values can be nested maps and lists, which hash by identity.
+  @override
+  int get hashCode => Object.hashAllUnordered(toJson().keys);
 }
+
+// Equality of decoded JSON, nested maps and lists included.
+bool _jsonEquals(Object? a, Object? b) => switch ((a, b)) {
+  (final Map<Object?, Object?> x, final Map<Object?, Object?> y) =>
+    x.length == y.length &&
+        x.keys.every((k) => y.containsKey(k) && _jsonEquals(x[k], y[k])),
+  (final List<Object?> x, final List<Object?> y) =>
+    x.length == y.length && x.indexed.every((e) => _jsonEquals(e.$2, y[e.$1])),
+  _ => a == b,
+};
 
 /// `settings.json` on this machine: missing or unreadable gives defaults, writes are atomic.
 class SettingsStore {
-  SettingsStore(File file) : _file = file;
+  SettingsStore(this._file);
 
-  /// No file: [load] returns the last value saved (tests).
-  SettingsStore.memory([Settings initial = const Settings()])
-    : _file = null,
-      _saved = initial;
-
-  final File? _file;
-  Settings _saved = const Settings();
+  final File _file;
 
   Future<Settings> load() async {
-    final file = _file;
-    if (file == null) return _saved;
     try {
-      return Settings.fromJson(jsonDecode(await file.readAsString()));
+      return Settings.fromJson(jsonDecode(await _file.readAsString()));
     } on FileSystemException {
       return const Settings();
     } on FormatException {
@@ -178,13 +190,8 @@ class SettingsStore {
   }
 
   Future<void> save(Settings settings) async {
-    final file = _file;
-    if (file == null) {
-      _saved = settings;
-      return;
-    }
-    final tmp = File('${file.path}.tmp');
+    final tmp = File('${_file.path}.tmp');
     await tmp.writeAsString(jsonEncode(settings.toJson()), flush: true);
-    await tmp.rename(file.path);
+    await tmp.rename(_file.path);
   }
 }

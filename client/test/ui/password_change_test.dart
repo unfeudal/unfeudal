@@ -52,12 +52,7 @@ void main() {
       final h = SyncHarness();
       final s = await signedInState(t, harness: h);
       late String other;
-      await t.runAsync(
-        () async => other = (await h.signIn(
-          email: testEmail,
-          password: testPassword,
-        )).deviceId,
-      );
+      await t.runAsync(() async => other = (await h.signIn()).deviceId);
       await pumpApp(t, state: s, child: const PasswordChangeScreen());
       await fill(t);
       expect(h.requests.where(isPost), hasLength(1));

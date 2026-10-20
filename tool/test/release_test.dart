@@ -33,49 +33,60 @@ String read(Directory d, String path) =>
 final day = DateTime.utc(2026, 11, 2);
 
 void main() {
-  test('bump client: pubspec, clientVersion, changelog, fixtures, firstPublicRelease once, and the server patch announcing it', () {
-    final d = repo();
-    expect(bump(d, 'client', '0.2.0', date: day), [
-      ('client', '0.2.0'),
-      ('server', '0.1.1'),
-    ]);
-    expect(
-      read(d, 'client/pubspec.yaml'),
-      'name: unfeudal_client\nversion: 0.2.0\n',
-    );
-    expect(
-      read(d, 'client/lib/src/version.dart'),
-      contains("const clientVersion = '0.2.0';"),
-    );
-    expect(
-      read(d, 'server/lib/src/version.dart'),
-      "const serverVersion = '0.1.1';\nconst latestClientVersion = '0.2.0';\n",
-    );
-    expect(
-      read(d, 'server/CHANGELOG.md'),
-      contains(
-        '## [0.1.1] - 2026-11-02\n### Added\n- Mail.\n### Changed\n- Announces client 0.2.0.\n',
-      ),
-    );
-    expect(
-      read(d, 'client/CHANGELOG.md'),
-      '# Changelog\n\n## [Unreleased]\n\n## [0.2.0] - 2026-11-02\n',
-    );
-    expect(read(d, 'shared/test/fixtures/v0.2.0/api_info.json'), '{}\n');
-    expect(
-      read(d, 'client/lib/src/version.dart'),
-      contains("const String? firstPublicRelease = '2026-11-02';"),
-    );
-    bump(d, 'client', '0.3.0', date: DateTime.utc(2027, 1, 5));
-    expect(
-      read(d, 'client/lib/src/version.dart'),
-      contains("const String? firstPublicRelease = '2026-11-02';"),
-    );
+  group('bump client', () {
+    late Directory d;
+    late String bumped;
+    setUp(() {
+      d = repo();
+      bumped = bump(d, 'client', '0.2.0', date: day);
+    });
+
+    test('writes pubspec, clientVersion, changelog and fixtures', () {
+      expect(bumped, '0.2.0');
+      expect(
+        read(d, 'client/pubspec.yaml'),
+        'name: unfeudal_client\nversion: 0.2.0\n',
+      );
+      expect(
+        read(d, 'client/lib/src/version.dart'),
+        contains("const clientVersion = '0.2.0';"),
+      );
+      expect(
+        read(d, 'client/CHANGELOG.md'),
+        '# Changelog\n\n## [Unreleased]\n\n## [0.2.0] - 2026-11-02\n',
+      );
+      expect(read(d, 'shared/test/fixtures/v0.2.0/api_info.json'), '{}\n');
+    });
+
+    test('releases a server patch announcing the client', () {
+      expect(
+        read(d, 'server/lib/src/version.dart'),
+        "const serverVersion = '0.1.1';\nconst latestClientVersion = '0.2.0';\n",
+      );
+      expect(
+        read(d, 'server/CHANGELOG.md'),
+        contains(
+          '## [0.1.1] - 2026-11-02\n### Added\n- Mail.\n### Changed\n- Announces client 0.2.0.\n',
+        ),
+      );
+    });
+
+    test('sets firstPublicRelease once', () {
+      expect(
+        read(d, 'client/lib/src/version.dart'),
+        contains("const String? firstPublicRelease = '2026-11-02';"),
+      );
+      bump(d, 'client', '0.3.0', date: DateTime.utc(2027, 1, 5));
+      expect(
+        read(d, 'client/lib/src/version.dart'),
+        contains("const String? firstPublicRelease = '2026-11-02';"),
+      );
+    });
   });
 
   test('bump server: pubspec and serverVersion only; the notes move under the version', () {
     final d = repo();
-    expect(bump(d, 'server', '0.1.1', date: day), [('server', '0.1.1')]);
+    expect(bump(d, 'server', '0.1.1', date: day), '0.1.1');
     expect(
       read(d, 'server/lib/src/version.dart'),
       "const serverVersion = '0.1.1';\nconst latestClientVersion = '0.1.0';\n",
@@ -88,9 +99,9 @@ void main() {
 
   test('patch, minor and major resolve from the current version', () {
     final d = repo(); // server 0.1.0
-    expect(bump(d, 'server', 'patch', date: day), [('server', '0.1.1')]);
-    expect(bump(d, 'server', 'minor', date: day), [('server', '0.2.0')]);
-    expect(bump(d, 'server', 'major', date: day), [('server', '1.0.0')]);
+    expect(bump(d, 'server', 'patch', date: day), '0.1.1');
+    expect(bump(d, 'server', 'minor', date: day), '0.2.0');
+    expect(bump(d, 'server', 'major', date: day), '1.0.0');
   });
 
   test('a bad package or version is refused', () {

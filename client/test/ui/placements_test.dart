@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:unfeudal_client/l10n/app_localizations.dart';
 import 'package:unfeudal_client/src/design/logo.dart';
+import 'package:unfeudal_client/src/design/segmented.dart';
 import 'package:unfeudal_client/src/loquet/loquet.dart';
 import 'package:unfeudal_client/src/loquet/loquet_pose.dart';
 import 'package:unfeudal_client/src/loquet/mood.dart';
@@ -41,17 +42,17 @@ void main() {
     expect(find.text("That's not the right password."), findsOneWidget);
   });
 
-  testWidgets('tree card: status text, reasons on a concerned click', (
+  testWidgets('sidebar footer: status text, reasons on a concerned click', (
     t,
   ) async {
     final s = await signedInState(t);
     await pumpApp(t, state: s);
-    expect(find.byKey(const Key('loquet-spot-tree')), findsOneWidget);
+    expect(find.byKey(const Key('loquet-spot-sidebar')), findsOneWidget);
     s.loquet.setHealth(const VaultHealth(syncOver7Days: true));
     await t.pump();
     await t.tap(
       find.descendant(
-        of: find.byKey(const Key('loquet-spot-tree')),
+        of: find.byKey(const Key('loquet-spot-sidebar')),
         matching: find.byType(Loquet),
       ),
     );
@@ -59,7 +60,9 @@ void main() {
     expect(find.text('No sync for over 7 days'), findsOneWidget);
   });
 
-  testWidgets('tree hidden: Loquet moves to the rail', (t) async {
+  testWidgets('sidebar hidden: Loquet leaves with it for the title bar', (
+    t,
+  ) async {
     final s = await signedInState(t);
     await pumpApp(t, state: s);
     await t.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
@@ -68,19 +71,15 @@ void main() {
     await t.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
     await t.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     await t.pumpAndSettle();
-    expect(loquetIn(t, 'loquet-spot-rail').size, 36);
+    expect(find.byKey(const Key('loquet-spot-sidebar')), findsNothing);
   });
 
-  testWidgets('the Konami listener wraps rail and tree, never the terminal', (
+  testWidgets('the Konami listener wraps the sidebar, never the terminal', (
     t,
   ) async {
     final s = await signedInState(t);
     await pumpApp(t, state: s);
     final keys = find.byKey(const Key('loquet-keys'));
-    expect(
-      find.descendant(of: keys, matching: find.byKey(const Key('vault-rail'))),
-      findsOneWidget,
-    );
     expect(
       find.descendant(of: keys, matching: find.byKey(const Key('tree-panel'))),
       findsOneWidget,
@@ -139,8 +138,10 @@ void main() {
       );
       expect(
         t
-            .widget<ChoiceChip>(find.byKey(const Key('loquet-mode-on')))
-            .onSelected,
+            .widget<UfSegmented<LoquetMode>>(
+              find.byKey(const Key('loquet-mode')),
+            )
+            .onChanged,
         isNull,
       );
     },
@@ -155,7 +156,7 @@ void main() {
     expect(find.byType(Loquet), findsNothing);
     expect(
       find.descendant(
-        of: find.byKey(const Key('loquet-spot-tree')),
+        of: find.byKey(const Key('loquet-spot-sidebar')),
         matching: find.byType(UfLogo),
       ),
       findsOneWidget,

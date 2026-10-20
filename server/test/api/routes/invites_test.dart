@@ -10,7 +10,8 @@ import '../../support/test_server.dart';
 const smtp = {
   'UNFEUDAL_SMTP_HOST': 'smtp.test',
   'UNFEUDAL_SMTP_FROM': 'vault@example.org',
-  'UNFEUDAL_FEATURE_SECURITY_EMAILS': 'false', // invite mails only
+  // Invite mails only.
+  'UNFEUDAL_FEATURE_SECURITY_EMAILS': 'false',
 };
 
 void main() {
@@ -163,9 +164,8 @@ void main() {
       'createdAt',
       'expiresAt',
     ]);
-    s.clock.advance(
-      const Duration(days: 7) - const Duration(seconds: 1),
-    ); // a expired, b not yet
+    // Invite a has expired, b not yet.
+    s.clock.advance(const Duration(days: 7) - const Duration(seconds: 1));
     final adam = await s.login(w['adam'].email, w['adam'].password);
     final mia = await s.login(w['mia'].email, w['mia'].password);
     final later = await s.get(
@@ -184,7 +184,14 @@ void main() {
     );
   });
 
-  test('revoke: who may manage it, then owner rule, then accepted', () async {
+  Future<
+    ({
+      Map<Object?, Object?> member,
+      Map<Object?, Object?> admin,
+      String instanceId,
+    })
+  >
+  startWithInvites() async {
     await start();
     final member =
         (await invite('adam', 'a@example.org')).body['invite']! as Map;
@@ -202,15 +209,25 @@ void main() {
         'x': iso(s.clock.now().add(const Duration(days: 1))),
       },
     );
-    Future<int> revoke(String? who, Object? id, {String? token}) async =>
-        (await s.delete(
-          '/api/v1/invites/$id',
-          token: token ?? w[who!].accessToken,
-        )).status;
+    return (member: member, admin: admin, instanceId: instanceId);
+  }
+
+  Future<int> revoke(String? who, Object? id, {String? token}) async =>
+      (await s.delete(
+        '/api/v1/invites/$id',
+        token: token ?? w[who!].accessToken,
+      )).status;
+
+  test('revoke: who may manage it, then owner rule', () async {
+    final (:member, :admin, :instanceId) = await startWithInvites();
     expect(await revoke('mia', member['id']), 404);
     expect(await revoke('adam', admin['id']), 403);
     expect(await revoke('olivia', instanceId), 404);
     expect(await revoke('adam', newId()), 404);
+  });
+
+  test('revoke: a second revoke keeps the first time', () async {
+    final (:member, admin: _, instanceId: _) = await startWithInvites();
     expect(await revoke('adam', member['id']), 204);
     final at = (await s.db.query(
       'SELECT revoked_at FROM invites WHERE id = @i',
@@ -224,11 +241,18 @@ void main() {
       })).single['revoked_at'],
       at,
     );
-    await s.db.execute('UPDATE invites SET accepted_at = @t WHERE id = @i', {
-      't': iso(s.clock.now()),
-      'i': admin['id'],
-    });
-    expect(await revoke('olivia', admin['id']), 409);
-    expect(await revoke(null, instanceId, token: w.io.accessToken), 204);
   });
+
+  test(
+    'revoke: an accepted invite is 409; the IO revokes instance invites',
+    () async {
+      final (member: _, :admin, :instanceId) = await startWithInvites();
+      await s.db.execute('UPDATE invites SET accepted_at = @t WHERE id = @i', {
+        't': iso(s.clock.now()),
+        'i': admin['id'],
+      });
+      expect(await revoke('olivia', admin['id']), 409);
+      expect(await revoke(null, instanceId, token: w.io.accessToken), 204);
+    },
+  );
 }

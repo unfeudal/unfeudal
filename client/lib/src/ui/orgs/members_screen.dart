@@ -1,18 +1,21 @@
 // SPDX-License-Identifier: Apache-2.0
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
-import '../../app_state.dart';
 import '../../design/banner.dart';
+import '../../design/buttons.dart';
+import '../../design/choices.dart';
 import '../../design/dialog.dart';
-import '../../design/motion.dart';
+import '../../design/feedback.dart';
+import '../../design/icons.dart';
+import '../../design/rows.dart';
 import '../../design/tokens.dart';
 import '../../orgs/member_pins.dart';
-import '../describe_error.dart';
-import '../manage_frame.dart';
-import 'invite_dialog.dart';
+import '../busy_action.dart';
 import 'safety_code_dialog.dart';
 
 String roleLabel(AppLocalizations l, OrgRole role) => switch (role) {
@@ -38,37 +41,24 @@ Future<void> confirmAndLeaveOrg(
     action: l.orgLeave,
   );
   if (!yes) return;
-  await state.api!.removeMember(orgId, state.stored!.userId);
+  await state.api!.orgs.removeMember(orgId, state.stored!.userId);
   state.orgs!.select(null);
   await state.sync!.syncNow();
 }
 
-/// The org's members from the cached block: admins see status and keys, confirm and verify through the safety code.
+/// The org's members from the cached block: admins see status and keys, confirm and verify through the safety
+/// code, change roles and remove.
 class MembersScreen extends StatefulWidget {
-  const MembersScreen({super.key, required this.orgId, this.onBack});
+  const MembersScreen({super.key, required this.orgId});
 
   final String orgId;
-  final VoidCallback? onBack;
 
   @override
   State<MembersScreen> createState() => _MembersScreenState();
 }
 
-class _MembersScreenState extends State<MembersScreen> {
-  String? _error;
-
-  Future<void> _run(Future<void> Function(AppState state) action) async {
-    final l = AppLocalizations.of(context);
-    final state = AppScope.read(context);
-    try {
-      await action(state);
-      if (mounted) setState(() => _error = null);
-    } on Exception catch (e) {
-      if (mounted) setState(() => _error = describeError(l, e));
-    }
-  }
-
-  /// Confirms an accepted member: pinned first, then confirmed on the server.
+class _MembersScreenState extends State<MembersScreen> with BusyAction {
+  // Pinned first, then confirmed on the server.
   Future<void> _confirm(OrgMember m) async {
     final verified = await showSafetyCode(
       context,
@@ -76,14 +66,15 @@ class _MembersScreenState extends State<MembersScreen> {
       publicKey: m.publicKey!,
     );
     if (verified == null) return;
-    await _run((state) async {
+    await run(() async {
+      final state = AppScope.read(context);
       await state.orgs!.pins.pin(m.userId, m.publicKey!, verified: verified);
-      await state.api!.confirmMember(widget.orgId, m.userId);
+      await state.api!.orgs.confirmMember(widget.orgId, m.userId);
       await state.sync!.syncNow();
     });
   }
 
-  /// Pins a confirmed member on this device; a changed key rotates every folder they can view.
+  // Pins a confirmed member on this device; a changed key rotates every folder they can view.
   Future<void> _verify(OrgMember m) async {
     final orgs = AppScope.read(context).orgs!;
     final changed = orgs.pins.check(m.userId, m.publicKey!) == PinCheck.changed;
@@ -93,7 +84,8 @@ class _MembersScreenState extends State<MembersScreen> {
       publicKey: m.publicKey!,
     );
     if (verified == null) return;
-    await _run((state) async {
+    await run(() async {
+      final state = AppScope.read(context);
       await orgs.pins.pin(m.userId, m.publicKey!, verified: verified);
       orgs.alerts.remove(m.userId);
       await state.sync!.syncNow();
@@ -120,14 +112,12 @@ class _MembersScreenState extends State<MembersScreen> {
       action: l.memberRemove,
     );
     if (!yes) return;
-    await _run((state) async {
-      await state.api!.removeMember(widget.orgId, m.userId);
+    await run(() async {
+      final state = AppScope.read(context);
+      await state.api!.orgs.removeMember(widget.orgId, m.userId);
       await state.sync!.syncNow();
     });
   }
-
-  Future<void> _leave(String orgName) =>
-      _run((state) => confirmAndLeaveOrg(context, widget.orgId, orgName));
 
   /// Pins live in the vault: its changes redraw the badges.
   @override
@@ -137,17 +127,12 @@ class _MembersScreenState extends State<MembersScreen> {
   );
 
   Widget _members(BuildContext context) {
-    final l = AppLocalizations.of(context);
     final state = AppScope.of(context);
     final orgs = state.orgs!;
     final me = state.stored!.userId;
-    final org = orgs.orgs.where((o) => o.id == widget.orgId).firstOrNull;
     final isAdmin = orgs.isAdmin(widget.orgId);
-    final isOwner = isAdmin && org?.role == OrgRole.owner.name;
-    final members = [
-      for (final m in orgs.block?.members ?? const <OrgMember>[])
-        if (m.orgId == widget.orgId) m,
-    ]..sort((a, b) => a.email.compareTo(b.email));
+    final isOwner = isAdmin && orgs.isOwner(widget.orgId);
+    final members = orgs.membersOf(widget.orgId);
     final unconfirmed = orgs.lastHandoff?.unconfirmed ?? const <String>{};
     // an owner may change their own role while another confirmed owner remains
     final anotherOwner = members.any(
@@ -157,34 +142,14 @@ class _MembersScreenState extends State<MembersScreen> {
           m.status != MemberStatus.accepted.name &&
           m.disabled != true,
     );
-    return ManageFrame(
-      title: l.membersTitle,
-      onBack: widget.onBack,
+    // a Material of its own: the section, a dialog or a test may host it
+    return Material(
+      type: MaterialType.transparency,
       child: ListView(
         padding: const EdgeInsets.only(bottom: 40),
         children: [
-          if (_error case final error?)
+          if (problem case final error?)
             StatusBanner(tone: BannerTone.danger, message: error),
-          Row(
-            spacing: 8,
-            children: [
-              if (isAdmin)
-                FilledButton(
-                  key: const Key('members-invite'),
-                  onPressed: () => showUfDialog<void>(
-                    context,
-                    (_) => InviteDialog(orgId: widget.orgId),
-                  ),
-                  child: Text(l.inviteTitle),
-                ),
-              const Spacer(),
-              TextButton(
-                key: const Key('org-leave'),
-                onPressed: () => _leave(org?.name ?? ''),
-                child: Text(l.orgLeave),
-              ),
-            ],
-          ),
           for (final m in members)
             _row(
               context,
@@ -211,102 +176,121 @@ class _MembersScreenState extends State<MembersScreen> {
   }) {
     final l = AppLocalizations.of(context);
     final colors = UfColors.of(context);
-    final orgs = AppScope.of(context).orgs!;
     final role = _roleOf(m.role);
     final accepted = m.status == MemberStatus.accepted.name;
     final self = m.userId == me;
-    final key = m.publicKey;
-    final pin = orgs.pins.pinOf(m.userId);
-    final changed =
-        (key != null && orgs.pins.check(m.userId, key) == PinCheck.changed) ||
-        orgs.alerts.contains(m.userId);
-    final unpinned =
-        !accepted &&
-        pin == null &&
-        (m.status != null || unconfirmed.contains(m.userId));
-    final muted = TextStyle(color: colors.muted, fontSize: 12);
-    final badges = <Widget>[
-      if (isAdmin && accepted) Text(l.memberAwaiting, style: muted),
-      if (isAdmin && !self && changed)
-        Text(
-          l.memberKeyChanged,
-          key: Key('member-key-changed-${m.userId}'),
-          style: muted.copyWith(color: colors.danger),
-        )
-      else if (isAdmin && !self && pin != null)
-        Text(
-          pin.verified ? l.memberVerified : l.memberNotVerified,
-          style: muted,
-        )
-      else if (isAdmin && !self && unpinned)
-        Text(l.memberUnpinned, style: muted),
-    ];
     final touchable = isOwner || role == OrgRole.member;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        spacing: 12,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              spacing: 2,
-              children: [Text(m.email), ...badges],
-            ),
+    return ItemRow(
+      icon: UfIcons.user,
+      title: m.email,
+      trailing: [
+        if (isAdmin && accepted)
+          UfStatusChip(l.memberAwaiting, tone: UfChipTone.warn),
+        if (isAdmin && !self) ?_keyBadge(l, m, unconfirmed),
+        if (isAdmin && role != null)
+          _roleSelect(
+            l,
+            m,
+            role,
+            isOwner: isOwner,
+            canChange: touchable && (!self || (isOwner && anotherOwner)),
+          )
+        else if (role != null)
+          UfTag(roleLabel(l, role)),
+        if (isAdmin && accepted && m.publicKey != null)
+          FilledButton(
+            key: Key('member-confirm-${m.userId}'),
+            style: smallButton,
+            onPressed: () => _confirm(m),
+            child: Text(l.memberConfirm),
           ),
-          if (isAdmin && role != null)
-            DropdownButton<OrgRole>(
-              key: Key('member-role-${m.userId}'),
-              value: role,
-              onChanged: touchable && (!self || (isOwner && anotherOwner))
-                  ? (r) {
-                      if (r == null || r == role) return;
-                      _run((state) async {
-                        await state.api!.setMemberRole(
-                          widget.orgId,
-                          m.userId,
-                          r,
-                        );
-                        await state.sync!.syncNow();
-                      });
-                    }
-                  : null,
-              items: [
-                for (final r in OrgRole.values)
-                  DropdownMenuItem(
-                    key: Key('role-option-${r.name}'),
-                    value: r,
-                    enabled: isOwner || r == OrgRole.member,
-                    child: Text(roleLabel(l, r)),
-                  ),
-              ],
-            )
-          else if (role != null)
-            Text(roleLabel(l, role), style: muted),
-          if (isAdmin && accepted && key != null)
-            FilledButton(
-              key: Key('member-confirm-${m.userId}'),
-              onPressed: () => _confirm(m),
-              child: Text(l.memberConfirm),
-            ),
-          if (isAdmin &&
-              !self &&
-              !accepted &&
-              key != null &&
-              (pin == null || !pin.verified || changed))
-            TextButton(
-              key: Key('member-verify-${m.userId}'),
-              onPressed: () => _verify(m),
-              child: Text(l.memberVerify),
-            ),
-          if (isAdmin && !self && touchable)
-            TextButton(
-              key: Key('member-remove-${m.userId}'),
-              onPressed: () => _remove(m),
-              child: Text(l.memberRemove),
-            ),
-        ],
-      ),
+        if (isAdmin && !self && !accepted && _offersVerify(m))
+          OutlinedButton(
+            key: Key('member-verify-${m.userId}'),
+            style: smallButton,
+            onPressed: () => _verify(m),
+            child: Text(l.memberVerify),
+          ),
+        if (isAdmin && !self && touchable)
+          TextButton(
+            key: Key('member-remove-${m.userId}'),
+            style: dangerQuietStyle(colors).merge(smallButton),
+            onPressed: () => _remove(m),
+            child: Text(l.memberRemove),
+          ),
+      ],
     );
   }
+
+  bool _keyChanged(OrgMember m) {
+    final orgs = AppScope.read(context).orgs!;
+    final key = m.publicKey;
+    return (key != null &&
+            orgs.pins.check(m.userId, key) == PinCheck.changed) ||
+        orgs.alerts.contains(m.userId);
+  }
+
+  bool _offersVerify(OrgMember m) {
+    final pin = AppScope.read(context).orgs!.pins.pinOf(m.userId);
+    return m.publicKey != null &&
+        (pin == null || !pin.verified || _keyChanged(m));
+  }
+
+  // The key badge an admin sees on another member.
+  Widget? _keyBadge(AppLocalizations l, OrgMember m, Set<String> unconfirmed) {
+    final pin = AppScope.read(context).orgs!.pins.pinOf(m.userId);
+    final unpinned =
+        m.status != MemberStatus.accepted.name &&
+        pin == null &&
+        (m.status != null || unconfirmed.contains(m.userId));
+    if (_keyChanged(m)) {
+      return UfStatusChip(
+        l.memberKeyChanged,
+        key: Key('member-key-changed-${m.userId}'),
+        tone: UfChipTone.danger,
+      );
+    }
+    if (pin != null) {
+      return UfStatusChip(
+        pin.verified ? l.memberVerified : l.memberNotVerified,
+        tone: pin.verified ? UfChipTone.ok : UfChipTone.muted,
+      );
+    }
+    if (unpinned) return UfStatusChip(l.memberUnpinned, tone: UfChipTone.muted);
+    return null;
+  }
+
+  Widget _roleSelect(
+    AppLocalizations l,
+    OrgMember m,
+    OrgRole role, {
+    required bool isOwner,
+    required bool canChange,
+  }) {
+    return UfSelect<OrgRole>(
+      key: Key('member-role-${m.userId}'),
+      value: role,
+      onChanged: canChange
+          ? (r) {
+              if (r == role) return;
+              unawaited(_setRole(m, r));
+            }
+          : null,
+      options: [
+        for (final r in OrgRole.values)
+          UfOption(
+            r,
+            roleLabel(l, r),
+            key: Key('role-option-${r.name}'),
+            enabled: isOwner || r == OrgRole.member,
+          ),
+      ],
+    );
+  }
+
+  Future<void> _setRole(OrgMember m, OrgRole role) => run(() async {
+    final state = AppScope.read(context);
+    await state.api!.orgs.setMemberRole(widget.orgId, m.userId, role);
+    await state.sync!.syncNow();
+  });
 }

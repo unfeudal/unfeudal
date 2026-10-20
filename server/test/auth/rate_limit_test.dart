@@ -88,7 +88,7 @@ void main() {
     expect(await count(acctKey('new@b.c')), isNull);
   });
 
-  test('acct: each attempt bars the next for 1 s, 2 s, 4 s… 30 s; a barred attempt is not counted; reset clears', () async {
+  test('acct: each attempt bars the next for 1, 2, 4 and so on up to 30 seconds; a barred attempt is not counted; reset clears', () async {
     final waits = <int>[];
     for (var i = 0; i < 7; i++) {
       await limiter.hit([acct]);
