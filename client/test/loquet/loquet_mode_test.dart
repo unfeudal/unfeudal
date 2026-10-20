@@ -18,7 +18,14 @@ OrgSummary org({
 void main() {
   test('server flag off beats every pref', () {
     for (final pref in LoquetMode.values) {
-      expect(effectiveLoquetMode(false, const [], pref), LoquetMode.off);
+      expect(
+        effectiveLoquetMode(
+          serverFlag: false,
+          orgSettings: const [],
+          pref: pref,
+        ),
+        LoquetMode.off,
+      );
     }
   });
 
@@ -28,11 +35,22 @@ void main() {
       org(status: 'accepted', settings: {'mascot': false}),
       org(settings: {'mascot': true}),
     ];
-    expect(effectiveLoquetMode(true, orgs, LoquetMode.on), LoquetMode.off);
     expect(
-      effectiveLoquetMode(true, [
-        org(status: 'accepted', settings: {'mascot': false}),
-      ], LoquetMode.sober),
+      effectiveLoquetMode(
+        serverFlag: true,
+        orgSettings: orgs,
+        pref: LoquetMode.on,
+      ),
+      LoquetMode.off,
+    );
+    expect(
+      effectiveLoquetMode(
+        serverFlag: true,
+        orgSettings: [
+          org(status: 'accepted', settings: {'mascot': false}),
+        ],
+        pref: LoquetMode.sober,
+      ),
       LoquetMode.off,
     );
   });
@@ -43,8 +61,18 @@ void main() {
       org(settings: {'future': 1}),
     ];
     for (final pref in LoquetMode.values) {
-      expect(effectiveLoquetMode(true, orgs, pref), pref);
-      expect(effectiveLoquetMode(true, const [], pref), pref);
+      expect(
+        effectiveLoquetMode(serverFlag: true, orgSettings: orgs, pref: pref),
+        pref,
+      );
+      expect(
+        effectiveLoquetMode(
+          serverFlag: true,
+          orgSettings: const [],
+          pref: pref,
+        ),
+        pref,
+      );
     }
   });
 
@@ -58,7 +86,11 @@ void main() {
       ]) {
         for (final pref in LoquetMode.values) {
           expect(
-            effectiveLoquetMode(server, orgs, pref).index,
+            effectiveLoquetMode(
+              serverFlag: server,
+              orgSettings: orgs,
+              pref: pref,
+            ).index,
             greaterThanOrEqualTo(pref.index),
           );
         }

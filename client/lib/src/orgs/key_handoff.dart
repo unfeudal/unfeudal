@@ -56,7 +56,7 @@ class KeyHandoff {
           );
     }
     for (final MapEntry(key: folderId, value: wraps) in byFolder.entries) {
-      await api.putFolderKeys(
+      await api.orgs.putFolderKeys(
         folderId,
         version: wraps.first.version,
         wrapped: wraps,

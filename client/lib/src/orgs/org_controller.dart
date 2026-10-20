@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import 'dart:convert';
 
-import 'package:cryptography/cryptography.dart';
 import 'package:flutter/foundation.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
@@ -72,6 +71,40 @@ class OrgController extends ChangeNotifier {
 
   /// The org shown in the shell; null is the personal vault.
   String? selected;
+
+  /// Writes an item to the personal vault, or to [orgId]'s [folderId] through the org writer.
+  Future<String> saveItem({
+    required String type,
+    String? id,
+    String? orgId,
+    String? folderId,
+    required Map<String, Object?> meta,
+    Map<String, Object?>? secret,
+  }) => orgId == null
+      ? vault.upsertItem(
+          type: type,
+          id: id,
+          folderId: folderId,
+          meta: meta,
+          secret: secret,
+        )
+      : writer.upsert(
+          type: type,
+          id: id,
+          target: OrgTarget(orgId, folderId),
+          meta: meta,
+          secret: secret,
+        );
+
+  /// Moves an item to the trash, through the org writer for an org item.
+  Future<void> trashItem(String id) =>
+      _isOrgItem(id) ? writer.trash(id) : vault.trashItem(id);
+
+  /// Takes an item out of the trash, through the org writer for an org item.
+  Future<void> restoreItem(String id) =>
+      _isOrgItem(id) ? writer.restore(id) : vault.restoreItem(id);
+
+  bool _isOrgItem(String id) => vault.entry(id)?.orgId != null;
   SimpleKeyPair? _keyPair;
 
   List<OrgSummary> get orgs => block?.orgs ?? const [];
@@ -141,7 +174,7 @@ class OrgController extends ChangeNotifier {
     final b = block;
     return b == null
         ? const Explanation({}, [])
-        : explainFromBlock(b, orgId, userId, folderId);
+        : explainFromBlock(b, orgId, userId: userId, folderId: folderId);
   }
 
   /// Whether [e] may be rewritten (restored): always for a personal item, `edit` on its parent folder for an org one.

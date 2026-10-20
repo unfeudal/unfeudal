@@ -8,7 +8,12 @@ import 'package:dartssh2/dartssh2.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../debug_trace.dart';
-import 'jump_connector.dart';
+
+abstract interface class HopClient {
+  Future<SSHSocket> forwardLocal(String host, int port);
+  Future<SshShell> shell();
+  Future<void> close();
+}
 
 enum HostKeyDecision { trusted, unknown, changed }
 
@@ -56,7 +61,7 @@ class HostKeyRejected implements Exception {
 }
 
 class SshPrompt {
-  const SshPrompt(this.text, this.echo);
+  const SshPrompt(this.text, {required this.echo});
   final String text;
   final bool echo;
 }
@@ -177,15 +182,7 @@ class SshConnector {
             ? identity!.password
             : callbacks.askPassword('${target.user}@${target.hostName}');
       },
-      onUserInfoRequest: (request) {
-        trace(
-          TraceArea.ssh,
-          'keyboard-interactive: ${request.prompts.length} prompts',
-        );
-        return callbacks.answerPrompts(request.name, request.instruction, [
-          for (final p in request.prompts) SshPrompt(p.promptText, p.echo),
-        ]);
-      },
+      onUserInfoRequest: (request) => _answerPrompts(request, callbacks),
       onVerifyHostKey: (type, fingerprintBytes) async {
         // dartssh2 passes `SHA256:<base64>` as UTF-8 bytes.
         final fingerprint = utf8.decode(fingerprintBytes);
@@ -222,6 +219,19 @@ class SshConnector {
       rethrow;
     }
   }
+
+  Future<List<String>?> _answerPrompts(
+    SSHUserInfoRequest request,
+    SshCallbacks callbacks,
+  ) {
+    trace(
+      TraceArea.ssh,
+      'keyboard-interactive: ${request.prompts.length} prompts',
+    );
+    return callbacks.answerPrompts(request.name, request.instruction, [
+      for (final p in request.prompts) SshPrompt(p.promptText, echo: p.echo),
+    ]);
+  }
 }
 
 class _DartSshHop implements HopClient {
@@ -237,10 +247,7 @@ class _DartSshHop implements HopClient {
   @override
   Future<SshShell> shell() async {
     try {
-      final shell = _DartSshShell(
-        _client,
-        await _client.shell(pty: const SSHPtyConfig(width: 80, height: 24)),
-      );
+      final shell = _DartSshShell(_client, await _client.shell());
       trace(TraceArea.ssh, 'shell open ${shortId(_hostId)}');
       return shell;
     } on SSHError {

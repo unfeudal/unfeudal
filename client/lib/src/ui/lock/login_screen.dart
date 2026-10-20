@@ -125,29 +125,24 @@ class _LoginScreenState extends State<LoginScreen> with BusyAction {
               onPressed: _submit,
               label: l.loginSubmit,
             ),
-            links: [
-              TextButton(
-                onPressed: () => state.show(AppStage.setup),
-                child: Text(l.loginToSetup),
-              ),
-              TextButton(
-                onPressed: () => state.show(AppStage.join),
-                child: Text(l.loginToJoin),
-              ),
-              // shown unless the last known answer of this server says the recovery kit is off
-              if (state.stored == null || state.serverHas(Flag.recoveryKit))
-                TextButton(
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => const RecoveryScreen(),
-                    ),
-                  ),
-                  child: Text(l.loginToRecover),
-                ),
-            ],
+            links: _otherWaysIn(state, l),
           ),
         ],
       ),
     );
   }
+
+  List<Widget> _otherWaysIn(AppState state, AppLocalizations l) => [
+    TextButton(
+      onPressed: () => state.show(AppStage.setup),
+      child: Text(l.loginToSetup),
+    ),
+    TextButton(
+      onPressed: () => state.show(AppStage.join),
+      child: Text(l.loginToJoin),
+    ),
+    // shown unless the last known answer of this server says the recovery kit is off
+    if (state.stored == null || state.serverInfo.has(Flag.recoveryKit))
+      const RecoverLink(),
+  ];
 }

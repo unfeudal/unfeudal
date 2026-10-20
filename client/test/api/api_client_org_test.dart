@@ -33,15 +33,15 @@ void main() {
       h.orgReplies['POST /orgs/$o/teams'] = (b) => SyncHarness.reply({
         'team': {'id': t, 'name': b['name'], 'memberIds': b['memberIds']},
       }, 201);
-      createdOrgId = (await api.createOrg('Acme')).id;
-      await api.updateOrg(o, name: 'Acme 2', settings: {'mascot': false});
-      await api.setMemberRole(o, u, OrgRole.admin);
-      await api.confirmMember(o, u);
-      await api.removeMember(o, u);
-      team = await api.createTeam(o, name: 'Ops', memberIds: [u]);
-      await api.updateTeam(o, t, memberIds: const []);
-      await api.deleteTeam(o, t);
-      await api.putAcl(f, [
+      createdOrgId = (await api.orgs.create('Acme')).id;
+      await api.orgs.update(o, name: 'Acme 2', settings: {'mascot': false});
+      await api.orgs.setMemberRole(o, u, OrgRole.admin);
+      await api.orgs.confirmMember(o, u);
+      await api.orgs.removeMember(o, u);
+      team = await api.orgs.createTeam(o, name: 'Ops', memberIds: [u]);
+      await api.orgs.updateTeam(o, t, memberIds: const []);
+      await api.orgs.deleteTeam(o, t);
+      await api.orgs.putAcl(f, [
         AclEntry(f, PrincipalType.team, t, const {Permission.view}, const {}),
       ]);
       final keys = FolderKeys.generate(1), me = await memberKeys();
@@ -51,9 +51,9 @@ void main() {
         recipientPublicKey: me.publicKey,
         userId: u,
       );
-      await api.putFolderKeys(f, version: 1, wrapped: [wrap]);
-      await api.rotationDone(f);
-      await api.deleteOrg(o);
+      await api.orgs.putFolderKeys(f, version: 1, wrapped: [wrap]);
+      await api.orgs.rotationDone(f);
+      await api.orgs.delete(o);
     });
 
     test('createOrg and createTeam parse the replies', () {
@@ -133,14 +133,14 @@ void main() {
       ],
     });
     h.orgReplies['POST /invites/join'] = (_) => SyncHarness.reply({'orgId': o});
-    final inv = await api.createInvite(o, email: 'a@b.c');
+    final inv = await api.orgs.createInvite(o, email: 'a@b.c');
     expect(
       (inv.id, inv.mailSent, inv.link.startsWith('unfeudal://')),
       (id, true, true),
     );
-    expect((await api.orgInvites(o)).single.email, 'a@b.c');
-    await api.revokeInvite(id);
-    expect(await api.joinInvite('t' * 43), o);
+    expect((await api.orgs.invites(o)).single.email, 'a@b.c');
+    await api.orgs.revokeInvite(id);
+    expect(await api.orgs.joinInvite('t' * 43), o);
     expect(h.orgCalls.first.body, {'email': 'a@b.c', 'role': 'member'});
     expect(h.orgCalls.map((c) => c.route), contains('DELETE /invites/$id'));
   });
@@ -183,19 +183,19 @@ void main() {
       },
       'mailSent': false,
     }, 201);
-    final users = await api.adminUsers();
+    final users = await api.admin.users();
     expect(
       (users.single.isInstanceOwner, users.single.createdAt),
       (true, DateTime.utc(2026, 10, 15, 12)),
     );
-    final orgs = await api.adminOrgs();
+    final orgs = await api.admin.orgs();
     expect(orgs.single.owners, ['a@b.c']);
     expect(orgs.single.storageBytes, 1024);
     expect(orgs.single.lastActivityAt, null);
-    expect((await api.adminInvite('n@b.c')).role, isNull);
-    await api.adminSetDisabled(u, true);
-    await api.adminDeleteUser(u);
-    await api.adminDeleteOrg(o, 'Acme');
+    expect((await api.admin.invite('n@b.c')).role, isNull);
+    await api.admin.setDisabled(u, disabled: true);
+    await api.admin.deleteUser(u);
+    await api.admin.deleteOrg(o, 'Acme');
     expect(
       [
         for (final c in h.orgCalls)
@@ -218,7 +218,7 @@ void main() {
           'reason': 'last_owner',
           'orgs': ['Acme'],
         }, 409);
-    final e = await api
+    final e = await api.orgs
         .removeMember(testOrgId, '${'1' * 8}-1111-4111-8111-111111111111')
         .then<Object>((_) => 'ok', onError: (Object e) => e);
     expect(
@@ -229,16 +229,16 @@ void main() {
     );
     api.isReadOnly = () => true;
     for (final call in <Future<Object?> Function()>[
-      () => api.createOrg('X'),
-      () => api.joinInvite('t'),
-      () => api.putAcl(newId(), const []),
-      () => api.adminInvite('a@b.c'),
+      () => api.orgs.create('X'),
+      () => api.orgs.joinInvite('t'),
+      () => api.orgs.putAcl(newId(), const []),
+      () => api.admin.invite('a@b.c'),
     ]) {
       await expectLater(call(), throwsA(isA<ReadOnlyException>()));
     }
     expect(
-      await api
-          .orgInvites(testOrgId)
+      await api.orgs
+          .invites(testOrgId)
           .then((_) => 'ok', onError: (Object e) => '$e'),
       isNot(contains('ReadOnly')),
     );

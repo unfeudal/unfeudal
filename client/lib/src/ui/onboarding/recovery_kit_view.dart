@@ -12,9 +12,11 @@ import 'package:printing/printing.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
 import '../../design/choices.dart';
+import '../../design/inputs.dart';
 import '../../design/tokens.dart';
 import '../lock/lock_frame.dart';
 import '../save_file.dart';
+import '../secret_clipboard.dart';
 
 /// What a recovery kit prints.
 typedef RecoveryKit = ({
@@ -133,7 +135,7 @@ class RecoveryKitView extends StatefulWidget {
 class _RecoveryKitViewState extends State<RecoveryKitView> {
   final _created = DateTime.now();
   bool _confirmed = false;
-  Timer? _clear;
+  final _clipboard = SecretClipboard();
 
   RecoveryKit _kit() {
     final stored = AppScope.read(context).stored;
@@ -179,25 +181,9 @@ class _RecoveryKitViewState extends State<RecoveryKitView> {
         ],
       );
 
-  Future<void> _copy() async {
-    await Clipboard.setData(ClipboardData(text: widget.recoveryKey));
-    _clear?.cancel();
-    _clear = Timer(const Duration(seconds: 60), _wipe);
-  }
-
-  // Clears the clipboard only if it still holds the key.
-  Future<void> _wipe() async {
-    _clear?.cancel();
-    _clear = null;
-    final now = await Clipboard.getData(Clipboard.kTextPlain);
-    if (now?.text == widget.recoveryKey) {
-      await Clipboard.setData(const ClipboardData(text: ''));
-    }
-  }
-
   @override
   void dispose() {
-    if (_clear != null) unawaited(_wipe());
+    _clipboard.dispose();
     super.dispose();
   }
 
@@ -211,26 +197,14 @@ class _RecoveryKitViewState extends State<RecoveryKitView> {
         title: l.kitTitle,
         subtitle: l.kitBody,
         children: [
-          // ponytail: solid `edge` for the read-only frame, Flutter has no dashed border; paint one if it matters
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            decoration: BoxDecoration(
-              borderRadius: UfRadius.control,
-              border: Border.all(color: colors.edge),
-            ),
-            child: SelectableText(
-              widget.recoveryKey,
-              key: const Key('recovery-key'),
-              style: monoStyle.copyWith(fontSize: 17, height: 1.7),
-            ),
-          ),
+          _RecoveryKeyBox(widget.recoveryKey),
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: [
               OutlinedButton(
                 key: const Key('recovery-copy'),
-                onPressed: _copy,
+                onPressed: () => _clipboard.copy(widget.recoveryKey),
                 child: Text(l.kitCopy),
               ),
               OutlinedButton(
@@ -266,6 +240,27 @@ class _RecoveryKitViewState extends State<RecoveryKitView> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _RecoveryKeyBox extends StatelessWidget {
+  const _RecoveryKeyBox(this.recoveryKey);
+
+  final String recoveryKey;
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      painter: UfDashedEdge(UfColors.of(context).edge),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        child: SelectableText(
+          recoveryKey,
+          key: const Key('recovery-key'),
+          style: monoStyle.copyWith(fontSize: 17, height: 1.7),
+        ),
       ),
     );
   }

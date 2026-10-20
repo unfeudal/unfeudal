@@ -13,6 +13,7 @@ import '../../design/rows.dart';
 import '../../design/seal.dart';
 import '../../design/tokens.dart';
 import '../../terminal/snippet_insertion.dart';
+import '../../terminal/terminal_session.dart';
 import '../../vault/org_writer.dart';
 import '../../vault/snippet_store.dart';
 import '../../vault/vault.dart';
@@ -51,7 +52,7 @@ class _SnippetsScreenState extends State<SnippetsScreen> {
     final orgId = state.orgs?.selected;
     final vaultName = vaultNameOf(l, state, orgId);
     final readOnly = state.sync?.readOnly ?? true;
-    final tab = state.activeSession;
+    final tab = state.connections.activeSession;
     final canInsert = tab?.state == SealState.connected;
     final snippets = [
       for (final s in store.list(query: _query.text))
@@ -59,24 +60,6 @@ class _SnippetsScreenState extends State<SnippetsScreen> {
     ];
     final muted = Theme.of(context).textTheme.bodySmall!
         .copyWith(color: colors.muted);
-
-    Future<void> insert(SnippetMeta meta) async {
-      await insertSnippet(
-        tab!,
-        meta.command,
-        confirm: () => confirmUnsafeMultiline(context),
-      );
-    }
-
-    Future<void> delete(String id, SnippetMeta meta) async {
-      final yes = await confirmDanger(
-        context,
-        question: l.snippetDeleteConfirm(meta.name),
-        action: l.snippetDelete,
-      );
-      if (yes) await store.delete(id);
-    }
-
     return ManageFrame(
       title: l.snippetsTitle,
       subtitle: vaultName,
@@ -94,26 +77,7 @@ class _SnippetsScreenState extends State<SnippetsScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         spacing: 8,
         children: [
-          SizedBox(
-            width: 360,
-            child: TextField(
-              key: const Key('snippets-search'),
-              controller: _query,
-              onChanged: (_) => setState(() {}),
-              decoration: InputDecoration(
-                hintText: l.snippetsSearch,
-                prefixIcon: Padding(
-                  padding: const EdgeInsetsDirectional.only(start: 10, end: 8),
-                  child: Icon(
-                    UfIcons.magnifyingGlass,
-                    size: 14,
-                    color: colors.muted,
-                  ),
-                ),
-                prefixIconConstraints: const BoxConstraints(),
-              ),
-            ),
-          ),
+          _SnippetSearch(controller: _query, onChanged: () => setState(() {})),
           Text(canInsert ? l.snippetsNote : l.snippetNoTerminal, style: muted),
           Expanded(
             child: snippets.isEmpty && _query.text.isEmpty
@@ -124,59 +88,66 @@ class _SnippetsScreenState extends State<SnippetsScreen> {
                         ? null
                         : (l.snippetNew, () => _edit(context, store, orgId)),
                   )
-                : ListView(
-                    padding: const EdgeInsets.only(bottom: 40),
-                    children: [
-                      for (final (:id, :meta) in snippets)
-                        if (!readOnly &&
-                                state.orgs!.canEditEntry(vault.entry(id)!)
-                            case final editable)
-                          ItemRow(
-                            key: Key('snippet-$id'),
-                            icon: UfIcons.terminal,
-                            title: meta.name,
-                            subtitle: meta.command.trimLeft().split('\n').first,
-                            monoSubtitle: true,
-                            trailing: [
-                              for (final tag in meta.tags.take(3)) UfTag(tag),
-                              OutlinedButton(
-                                key: Key('snippet-insert-$id'),
-                                style: smallButton,
-                                onPressed: canInsert
-                                    ? () => insert(meta)
-                                    : null,
-                                child: Text(l.snippetInsert),
-                              ),
-                              IconButton(
-                                key: Key('snippet-edit-$id'),
-                                tooltip: l.snippetEdit,
-                                onPressed: editable
-                                    ? () => _edit(
-                                        context,
-                                        store,
-                                        orgId,
-                                        id: id,
-                                        meta: meta,
-                                      )
-                                    : null,
-                                icon: const Icon(UfIcons.pencil),
-                              ),
-                              IconButton(
-                                key: Key('snippet-delete-$id'),
-                                tooltip: l.snippetDelete,
-                                onPressed: editable
-                                    ? () => delete(id, meta)
-                                    : null,
-                                icon: const Icon(UfIcons.trash),
-                              ),
-                            ],
-                          ),
-                    ],
+                : _snippetList(
+                    store,
+                    orgId,
+                    snippets: snippets,
+                    readOnly: readOnly,
+                    insertInto: canInsert ? tab : null,
                   ),
           ),
         ],
       ),
     );
+  }
+
+  // A null [insertInto] disables Insert: no terminal is connected.
+  Widget _snippetList(
+    SnippetStore store,
+    String? orgId, {
+    required List<({String id, SnippetMeta meta})> snippets,
+    required bool readOnly,
+    required TerminalSession? insertInto,
+  }) {
+    final state = AppScope.read(context);
+    return ListView(
+      padding: const EdgeInsets.only(bottom: 40),
+      children: [
+        for (final (:id, :meta) in snippets)
+          if (!readOnly && state.orgs!.canEditEntry(state.vault!.entry(id)!)
+              case final editable)
+            _SnippetRow(
+              id: id,
+              meta: meta,
+              onInsert: switch (insertInto) {
+                final tab? => () => _insert(tab, meta),
+                null => null,
+              },
+              onEdit: editable
+                  ? () => _edit(context, store, orgId, id: id, meta: meta)
+                  : null,
+              onDelete: editable ? () => _delete(store, id, meta) : null,
+            ),
+      ],
+    );
+  }
+
+  Future<void> _insert(TerminalSession tab, SnippetMeta meta) async {
+    await insertSnippet(
+      tab,
+      meta.command,
+      confirm: () => confirmUnsafeMultiline(context),
+    );
+  }
+
+  Future<void> _delete(SnippetStore store, String id, SnippetMeta meta) async {
+    final l = AppLocalizations.of(context);
+    final yes = await confirmDanger(
+      context,
+      question: l.snippetDeleteConfirm(meta.name),
+      action: l.snippetDelete,
+    );
+    if (yes) await store.delete(id);
   }
 
   Future<void> _edit(
@@ -320,6 +291,84 @@ class _SnippetEditorState extends State<_SnippetEditor> {
             value: _folderId,
             onChanged: (v) => setState(() => _folderId = v),
           ),
+      ],
+    );
+  }
+}
+
+class _SnippetSearch extends StatelessWidget {
+  const _SnippetSearch({required this.controller, required this.onChanged});
+
+  final TextEditingController controller;
+  final VoidCallback onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    final colors = UfColors.of(context);
+    return SizedBox(
+      width: 360,
+      child: TextField(
+        key: const Key('snippets-search'),
+        controller: controller,
+        onChanged: (_) => onChanged(),
+        decoration: InputDecoration(
+          hintText: l.snippetsSearch,
+          prefixIcon: Padding(
+            padding: const EdgeInsetsDirectional.only(start: 10, end: 8),
+            child: Icon(UfIcons.magnifyingGlass, size: 14, color: colors.muted),
+          ),
+          prefixIconConstraints: const BoxConstraints(),
+        ),
+      ),
+    );
+  }
+}
+
+class _SnippetRow extends StatelessWidget {
+  const _SnippetRow({
+    required this.id,
+    required this.meta,
+    required this.onInsert,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  final String id;
+  final SnippetMeta meta;
+  final VoidCallback? onInsert;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    return ItemRow(
+      key: Key('snippet-$id'),
+      icon: UfIcons.terminal,
+      title: meta.name,
+      subtitle: meta.command.trimLeft().split('\n').first,
+      monoSubtitle: true,
+      trailing: [
+        for (final tag in meta.tags.take(3)) UfTag(tag),
+        OutlinedButton(
+          key: Key('snippet-insert-$id'),
+          style: smallButton,
+          onPressed: onInsert,
+          child: Text(l.snippetInsert),
+        ),
+        IconButton(
+          key: Key('snippet-edit-$id'),
+          tooltip: l.snippetEdit,
+          onPressed: onEdit,
+          icon: const Icon(UfIcons.pencil),
+        ),
+        IconButton(
+          key: Key('snippet-delete-$id'),
+          tooltip: l.snippetDelete,
+          onPressed: onDelete,
+          icon: const Icon(UfIcons.trash),
+        ),
       ],
     );
   }

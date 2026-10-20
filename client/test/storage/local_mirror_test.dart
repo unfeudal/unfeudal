@@ -62,7 +62,7 @@ void main() {
       expect(m.item(a)!.revision, 3);
       m.upsertItems([wireItem(a, revision: 3, deleted: true)]);
       expect(m.item(a)!.deleted, isTrue);
-      m.upsertItems([wireItem(a, revision: 1)], acceptOlder: true);
+      m.upsertItems([wireItem(a)], acceptOlder: true);
       expect(m.item(a)!.revision, 1);
       m.deleteItems([a]);
       expect(m.items(), isEmpty);
@@ -143,4 +143,17 @@ void main() {
       },
     );
   });
+
+  test(
+    'enqueueAll queues every item on its own revision, in one transaction',
+    () {
+      final m = LocalMirror.inMemory();
+      final (a, b) = (newId(), newId());
+      m.enqueueAll([wireItem(a, revision: 3), wireItem(b, revision: 0)]);
+      expect(
+        {for (final e in m.outbox()) e.item.id: e.baseRevision},
+        {a: 3, b: 0},
+      );
+    },
+  );
 }

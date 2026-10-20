@@ -5,6 +5,7 @@ import 'package:unfeudal_client/src/app_state.dart';
 import 'package:unfeudal_client/src/design/seal.dart';
 import 'package:unfeudal_client/src/events/app_events.dart';
 import 'package:unfeudal_client/src/settings/settings.dart';
+import 'package:unfeudal_client/src/ssh/connections.dart';
 import 'package:unfeudal_client/src/ssh/ssh_connector.dart';
 import 'package:unfeudal_client/src/storage/local_mirror.dart';
 import 'package:unfeudal_client/src/sync/ledger_store.dart';
@@ -23,7 +24,7 @@ Future<(SyncHarness, AppState, FakeSshConnector)> home({
     ..keyType = 'ssh-ed25519'
     ..fingerprint = 'SHA256:${'A' * 43}';
   final s = testAppState(harness: h, ssh: ssh, settingsStore: store)
-    ..dialogs = dialogs;
+    ..connections.dialogs = dialogs;
   await s.boot();
   await s.login(
     server: h.baseUrl,
@@ -46,14 +47,17 @@ void main() {
         'startupCommand': 'uptime',
       },
     );
-    final tab = await s.connect(id);
+    final tab = await s.connections.connect(id);
     expect(dialogs.checks.single.decision, HostKeyDecision.unknown);
     expect(
-      (tab.state, s.sealFor(id)),
+      (tab.state, s.connections.sealFor(id)),
       (SealState.connected, SealState.connected),
     );
     expect(String.fromCharCodes(ssh.shells.single.written.first), 'uptime\n');
-    expect(s.vault!.trustedPin(id)!.sha256Fingerprint, 'SHA256:${'A' * 43}');
+    expect(
+      s.vault!.hostKeys.pinOf(id)!.sha256Fingerprint,
+      'SHA256:${'A' * 43}',
+    );
     await s.sync!.syncNow();
     expect(h.serverItems.where((i) => i.type == 'knownHost'), hasLength(1));
     await Future<void>.delayed(Duration.zero);
@@ -139,10 +143,10 @@ void main() {
       type: 'host',
       meta: hostJson('web', user: 'root'),
     );
-    final tab = await s.connect(id);
+    final tab = await s.connections.connect(id);
     expect(tab.state, SealState.verify);
     expect(tab.error, isA<HostKeyRejected>());
-    expect(s.vault!.trustedPin(id), isNull);
+    expect(s.vault!.hostKeys.pinOf(id), isNull);
   });
 
   test('server-deleted pin still answers changed', () async {
@@ -152,7 +156,7 @@ void main() {
       type: 'host',
       meta: hostJson('web', user: 'root'),
     );
-    await s.connect(id);
+    await s.connections.connect(id);
     await s.sync!.syncNow();
     h.purge(h.serverItems.firstWhere((i) => i.type == 'knownHost').id);
     await s.sync!.syncNow();
@@ -160,7 +164,7 @@ void main() {
     dialogs.accept = false;
     final events = <AppEvent>[];
     s.events.listen(events.add);
-    final tab = await s.connect(id);
+    final tab = await s.connections.connect(id);
     expect(
       (dialogs.checks.last.decision, tab.state),
       (HostKeyDecision.changed, SealState.changed),
@@ -172,7 +176,7 @@ void main() {
   test('a host without any user fails with MissingUser', () async {
     final (_, s, _) = await home(dialogs: FakeDialogs()..accept = true);
     final id = await s.vault!.upsertItem(type: 'host', meta: hostJson('web'));
-    expect((await s.connect(id)).error, isA<MissingUser>());
+    expect((await s.connections.connect(id)).error, isA<MissingUser>());
   });
 
   test(
@@ -185,7 +189,7 @@ void main() {
       );
       await s.sync!.syncNow();
       final profile = s.vault!.ofKind(ItemKind.profile).single;
-      expect(s.vault!.profile.prefs, {
+      expect(s.vault!.profile.meta.prefs, {
         'themeMode': 'dark',
         'terminalTheme': 'charte',
         'loquetMode': 'on',
@@ -215,7 +219,7 @@ void main() {
     final (h, s, _) = await home();
     final other = await h.signIn();
     expect(
-      (await s.loadDevices()).map((d) => d.id),
+      (await s.api!.devices()).map((d) => d.id),
       containsAll([other.deviceId, s.stored!.deviceId]),
     );
     await s.revokeDevice(other.deviceId);

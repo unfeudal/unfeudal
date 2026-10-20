@@ -11,8 +11,8 @@ import '../../design/inputs.dart';
 import '../../vault/org_writer.dart';
 import '../../vault/vault.dart';
 import '../busy_action.dart';
-import '../history/item_history_panel.dart';
 import '../fields.dart';
+import '../history/item_history_panel.dart';
 import 'access_tab.dart';
 import 'editor_frame.dart';
 import 'jump_host_picker.dart';
@@ -160,7 +160,7 @@ class _FolderEditorPanelState extends State<FolderEditorPanel> with BusyAction {
       action: l.folderDelete,
     );
     if (!yes) return;
-    await state.trashItem(widget.folderId!);
+    await state.orgs!.trashItem(widget.folderId!);
     widget.onClose?.call();
   }
 
@@ -170,18 +170,6 @@ class _FolderEditorPanelState extends State<FolderEditorPanel> with BusyAction {
     final state = AppScope.of(context);
     final vault = state.vault!;
     final readOnly = state.sync?.readOnly ?? true;
-    final excluded = _subtree(vault);
-    final parents = [
-      for (final e in vault.ofKind(ItemKind.folder))
-        if (e.state == EntryState.ok &&
-            e.orgId == _orgId &&
-            !excluded.contains(e.id))
-          e,
-    ];
-    final identities = vault
-        .ofKind(ItemKind.identity)
-        .where((e) => e.state == EntryState.ok && e.orgId == _orgId)
-        .toList();
     final parentName = vault.entry(_parentId ?? '')?.name;
     return UfShake(
       shakes: _shakes,
@@ -193,7 +181,7 @@ class _FolderEditorPanelState extends State<FolderEditorPanel> with BusyAction {
         tabs: [
           if ((_orgId, widget.folderId) case (final org?, final folder?))
             (l.inspectorTabAccess, [AccessTab(orgId: org, folderId: folder)]),
-          if (state.serverHas(Flag.itemHistory) && widget.folderId != null)
+          if (state.serverInfo.has(Flag.itemHistory) && widget.folderId != null)
             (
               l.itemHistory,
               [ItemHistoryPanel.embedded(itemId: widget.folderId!)],
@@ -213,62 +201,76 @@ class _FolderEditorPanelState extends State<FolderEditorPanel> with BusyAction {
               )
             : null,
         children: [
-          keyedField(
-            'folder-name',
-            _name,
-            l.folderName,
-            error: _problems['name'],
-          ),
-          entryPicker(
-            key: 'folder-parent',
-            label: l.folderParent,
-            none: l.folderRoot,
-            entries: parents,
-            value: _parentId,
-            onChanged: (v) => setState(() => _parentId = v),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(top: 6),
-            child: Text(
-              l.folderDefaults,
-              style: Theme.of(context).textTheme.titleMedium!
-                  .copyWith(fontSize: 14),
-            ),
-          ),
-          UfField(
-            label: l.hostPort,
-            child: UfNumberField(
-              key: const Key('folder-port'),
-              value: _port,
-              min: 1,
-              width: double.infinity,
-              onChanged: (port) => setState(() => _port = port),
-            ),
-          ),
-          keyedField(
-            'folder-user',
-            _user,
-            l.hostUser,
-            error: _problems['user'],
-          ),
-          entryPicker(
-            key: 'folder-identity',
-            label: l.hostIdentity,
-            none: l.hostDefault,
-            entries: identities,
-            value: _identityId,
-            onChanged: (v) => setState(() => _identityId = v),
-          ),
-          JumpHostPicker(
-            key: const Key('folder-jump'),
-            hostId: null,
-            folderId: widget.folderId,
-            value: _jumpHostId,
-            onChanged: (v) => setState(() => _jumpHostId = v),
-          ),
+          ..._fields(l, vault),
           if (problem case final error?) UfErrorLine(error),
         ],
       ),
     );
+  }
+
+  List<Widget> _fields(AppLocalizations l, Vault vault) {
+    final excluded = _subtree(vault);
+    final parents = [
+      for (final e in vault.ofKind(ItemKind.folder))
+        if (e.state == EntryState.ok &&
+            e.orgId == _orgId &&
+            !excluded.contains(e.id))
+          e,
+    ];
+    return [
+      keyedField('folder-name', _name, l.folderName, error: _problems['name']),
+      entryPicker(
+        key: 'folder-parent',
+        label: l.folderParent,
+        none: l.folderRoot,
+        entries: parents,
+        value: _parentId,
+        onChanged: (v) => setState(() => _parentId = v),
+      ),
+      ..._defaultFields(l, vault),
+    ];
+  }
+
+  List<Widget> _defaultFields(AppLocalizations l, Vault vault) {
+    final identities = vault
+        .ofKind(ItemKind.identity)
+        .where((e) => e.state == EntryState.ok && e.orgId == _orgId)
+        .toList();
+    return [
+      Padding(
+        padding: const EdgeInsets.only(top: 6),
+        child: Text(
+          l.folderDefaults,
+          style: Theme.of(context).textTheme.titleMedium!
+              .copyWith(fontSize: 14),
+        ),
+      ),
+      UfField(
+        label: l.hostPort,
+        child: UfNumberField(
+          key: const Key('folder-port'),
+          value: _port,
+          min: 1,
+          width: double.infinity,
+          onChanged: (port) => setState(() => _port = port),
+        ),
+      ),
+      keyedField('folder-user', _user, l.hostUser, error: _problems['user']),
+      entryPicker(
+        key: 'folder-identity',
+        label: l.hostIdentity,
+        none: l.hostDefault,
+        entries: identities,
+        value: _identityId,
+        onChanged: (v) => setState(() => _identityId = v),
+      ),
+      JumpHostPicker(
+        key: const Key('folder-jump'),
+        hostId: null,
+        folderId: widget.folderId,
+        value: _jumpHostId,
+        onChanged: (v) => setState(() => _jumpHostId = v),
+      ),
+    ];
   }
 }

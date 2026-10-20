@@ -10,7 +10,7 @@ import 'block_permissions.dart';
 import 'folder_keyring.dart';
 import 'member_pins.dart';
 
-/// [done]: folders whose rotation finished this run. [blocked]: readers to confirm before the rotation can go on.
+/// `done`: folders whose rotation finished this run. `blocked`: readers to confirm before the rotation can go on.
 typedef RotationReport = ({Set<String> done, Set<String> blocked});
 
 /// Admin clients rotate a folder's keys when a reader lost access, then re-seal its items.
@@ -52,7 +52,6 @@ class RotationService {
     return (done: done, blocked: blocked);
   }
 
-  // ponytail: re-seals one folder at a time; batch when a folder holds thousands of items.
   Future<bool> rotate(OrgBlock block, String orgId, String folderId) async {
     final pending = block.pendingRotations
         .where((p) => p.folderId == folderId)
@@ -62,51 +61,14 @@ class RotationService {
     var keys = held;
     if (pending?.rotatedVersion == null ||
         held.version < pending!.rotatedVersion!) {
-      final removed = {...?pending?.removedUserIds};
-      final wraps = <WrappedFolderKeys>[];
-      final next = FolderKeys.generate(held.version + 1);
-      for (final m in block.members.where(
-        (m) =>
-            m.orgId == orgId &&
-            !removed.contains(m.userId) &&
-            m.disabled != true,
-      )) {
-        final access = FolderKeyAccess.of(
-          explainFromBlock(block, orgId, m.userId, folderId).effective,
-        );
-        if (!access.hasMeta || m.publicKey == null) continue;
-        if (m.userId != userId &&
-            pins.check(m.userId, m.publicKey!) != PinCheck.matches) {
-          _blocked.add(m.userId); // unpinned: the admin confirms them first; changed: alert. Never pinned here.
-          continue;
-        }
-        wraps.add(
-          await WrappedFolderKeys.wrap(
-            next,
-            folderId: folderId,
-            recipientPublicKey: m.publicKey!,
-            userId: m.userId,
-            withSecret: access.hasSecret,
-          ),
-        );
-      }
-      if (_blocked.isNotEmpty) {
-        return false; // the server would refuse an incomplete rotation
-      }
-      final previous = [
-        for (var v = 1; v <= held.version; v++) ?keyring.keyFor(folderId, v),
-      ];
-      await api.putFolderKeys(
-        folderId,
-        version: next.version,
-        wrapped: wraps,
-        history: await FolderKeyHistory.seal(
-          next,
-          previous,
-          folderId: folderId,
-        ),
+      final next = await _rotateKeys(
+        block,
+        orgId,
+        folderId: folderId,
+        held: held,
+        removed: {...?pending?.removedUserIds},
       );
-      await keyring.put(folderId, next);
+      if (next == null) return false;
       keys = next;
     }
     await writer.resealAll(
@@ -125,8 +87,62 @@ class RotationService {
     )) {
       return false;
     }
-    await api.rotationDone(folderId);
+    await api.orgs.rotationDone(folderId);
     emit(const KeyRotated());
     return true;
+  }
+
+  // Null when a reader still needs confirming: nothing is sent then.
+  Future<FolderKeys?> _rotateKeys(
+    OrgBlock block,
+    String orgId, {
+    required String folderId,
+    required FolderKeys held,
+    required Set<String> removed,
+  }) async {
+    final wraps = <WrappedFolderKeys>[];
+    final next = FolderKeys.generate(held.version + 1);
+    for (final m in block.members.where(
+      (m) =>
+          m.orgId == orgId && !removed.contains(m.userId) && m.disabled != true,
+    )) {
+      final access = FolderKeyAccess.of(
+        explainFromBlock(
+          block,
+          orgId,
+          userId: m.userId,
+          folderId: folderId,
+        ).effective,
+      );
+      if (!access.hasMeta || m.publicKey == null) continue;
+      if (m.userId != userId &&
+          pins.check(m.userId, m.publicKey!) != PinCheck.matches) {
+        _blocked.add(m.userId); // unpinned: the admin confirms them first; changed: alert. Never pinned here.
+        continue;
+      }
+      wraps.add(
+        await WrappedFolderKeys.wrap(
+          next,
+          folderId: folderId,
+          recipientPublicKey: m.publicKey!,
+          userId: m.userId,
+          withSecret: access.hasSecret,
+        ),
+      );
+    }
+    if (_blocked.isNotEmpty) {
+      return null; // the server would refuse an incomplete rotation
+    }
+    final previous = [
+      for (var v = 1; v <= held.version; v++) ?keyring.keyFor(folderId, v),
+    ];
+    await api.orgs.putFolderKeys(
+      folderId,
+      version: next.version,
+      wrapped: wraps,
+      history: await FolderKeyHistory.seal(next, previous, folderId: folderId),
+    );
+    await keyring.put(folderId, next);
+    return next;
   }
 }

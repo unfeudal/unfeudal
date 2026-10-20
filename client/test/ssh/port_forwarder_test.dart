@@ -109,6 +109,7 @@ void main() {
       );
       await f.start(fwd(port));
       final s = await Socket.connect(InternetAddress.loopbackIPv4, port);
+      addTearDown(s.destroy);
       await s.drain<void>().timeout(const Duration(seconds: 2));
       expect(f.active.keys, [port]);
       await f.stopAll();

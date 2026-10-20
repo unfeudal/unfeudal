@@ -4,6 +4,7 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
+import '../../app_state.dart';
 import '../../design/choices.dart';
 import '../../design/feedback.dart';
 import '../../design/field.dart';
@@ -18,6 +19,8 @@ import 'editor_frame.dart';
 import 'forwards_editor.dart';
 import 'host_binding_field.dart';
 import 'jump_host_picker.dart';
+
+part 'host_form_fields.dart';
 
 /// Edits a host; empty port, user and key show the inherited value and where it comes from.
 class HostEditorPanel extends StatefulWidget {
@@ -34,22 +37,10 @@ class HostEditorPanel extends StatefulWidget {
   State<HostEditorPanel> createState() => _HostEditorPanelState();
 }
 
-class _HostEditorPanelState extends State<HostEditorPanel> with BusyAction {
-  final _name = TextEditingController();
-  final _address = TextEditingController();
-  final _user = TextEditingController();
-  final _tags = TextEditingController();
-  final _notes = TextEditingController();
-  final _startup = TextEditingController();
-  int? _port;
-  String? _identityId;
-  String? _folderId;
-  String? _jumpHostId;
-  IdentityMode _identityMode = IdentityMode.shared;
-
+class _HostEditorPanelState extends State<HostEditorPanel>
+    with BusyAction, _HostFormFields {
   // Null while a forward row has a problem.
   List<PortForward>? _forwards = const [];
-  final _problems = <String, String>{};
 
   // Bumped by a refused save, to shake the panel.
   int _shakes = 0;
@@ -95,12 +86,6 @@ class _HostEditorPanelState extends State<HostEditorPanel> with BusyAction {
     }
     super.dispose();
   }
-
-  VaultEntry? get _entry => widget.hostId == null
-      ? null
-      : AppScope.read(context).vault!.entry(widget.hostId!);
-
-  String? get _orgId => _entry?.orgId ?? widget.orgId;
 
   Future<void> _save() async {
     final l = AppLocalizations.of(context);
@@ -149,7 +134,7 @@ class _HostEditorPanelState extends State<HostEditorPanel> with BusyAction {
     if (_problems.isNotEmpty) return setState(() => _shakes++);
     await run(() async {
       final isNew = widget.hostId == null;
-      await state.saveItem(
+      await state.orgs!.saveItem(
         type: 'host',
         id: widget.hostId,
         orgId: _orgId,
@@ -167,7 +152,7 @@ class _HostEditorPanelState extends State<HostEditorPanel> with BusyAction {
 
   Future<void> _trash() async {
     final state = AppScope.read(context);
-    await state.trashItem(widget.hostId!);
+    await state.orgs!.trashItem(widget.hostId!);
     widget.onClose?.call();
   }
 
@@ -186,89 +171,21 @@ class _HostEditorPanelState extends State<HostEditorPanel> with BusyAction {
     final resolved = entry == null || entry.state != EntryState.ok
         ? null
         : vault.hostLookup(entry.id)?.resolved;
-    String? source(String field) => switch (resolved?.sources[field]) {
-      null => null,
-      'default' => l.hostDefault,
-      final String folder => l.hostInherited(vault.entry(folder)?.name ?? ''),
-    };
-
-    /// An empty inheritable field shows the resolved value as a hint and its source under it.
-    Widget field(
-      String key,
-      TextEditingController controller,
-      String label,
-      String problemKey, {
-      Object? resolvedValue,
-      bool inheritable = false,
-      int lines = 1,
-      bool mono = false,
-    }) {
-      final inherits = inheritable && controller.text.trim().isEmpty;
-      final decoration = InputDecoration(
-        hintText: inherits && resolvedValue != null ? '$resolvedValue' : null,
-      );
-      return UfField(
-        label: label,
-        source: inherits ? source(problemKey) : null,
-        error: _problems[problemKey],
-        child: TextField(
-          key: Key(key),
-          controller: controller,
-          readOnly: !editable,
-          maxLines: lines,
-          onChanged: inheritable ? (_) => setState(() {}) : null,
-          style: mono ? monoField : null,
-          decoration: editable
-              ? decoration
-              : readOnlyDecoration(context, decoration),
-        ),
-      );
-    }
-
-    final orgId = _orgId;
-    final identities = vault
-        .ofKind(ItemKind.identity)
-        .where((e) => e.state == EntryState.ok && e.orgId == orgId)
-        .toList();
-    final folders = vault
-        .ofKind(ItemKind.folder)
-        .where((e) => e.state == EntryState.ok && e.orgId == orgId)
-        .toList();
     final folderName = vault.entry(_folderId ?? '')?.name;
     final readOnly = state.sync?.readOnly ?? true;
     return UfShake(
       shakes: _shakes,
       child: EditorFrame(
         title: entry?.name ?? l.treeNewHost,
-        crumb: [vaultNameOf(l, state, orgId), ?folderName].join(' / '),
+        crumb: [vaultNameOf(l, state, _orgId), ?folderName].join(' / '),
         notice: notice,
         onClose: widget.onClose,
         onConnect: switch (widget.hostId) {
-          final id? when entry?.state == EntryState.ok => () => state.connect(
-            id,
-          ),
+          final id? when entry?.state == EntryState.ok =>
+            () => state.connections.connect(id),
           _ => null,
         },
-        tabs: [
-          (
-            l.inspectorTabForwards,
-            [
-              ForwardsEditor(
-                forwards: _forwards ?? const [],
-                enabled: editable,
-                onChanged: (forwards) => setState(() => _forwards = forwards),
-              ),
-            ],
-          ),
-          if ((orgId, _folderId) case (final org?, final folder?)
-              when widget.hostId != null)
-            (l.inspectorTabAccess, [AccessTab(orgId: org, folderId: folder)]),
-          if (state.serverHas(Flag.itemHistory) && widget.hostId != null)
-            (
-              l.itemHistory,
-              [ItemHistoryPanel.embedded(itemId: widget.hostId!)],
-            ),
-        ],
+        tabs: _tabs(l, state, editable: editable),
         save: editable
             ? FilledButton(
                 key: const Key('host-save'),
@@ -284,119 +201,35 @@ class _HostEditorPanelState extends State<HostEditorPanel> with BusyAction {
               )
             : null,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            spacing: 12,
-            children: [
-              field('host-name', _name, l.hostName, 'name'),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                spacing: 10,
-                children: [
-                  Expanded(
-                    flex: 2,
-                    child: field(
-                      'host-address',
-                      _address,
-                      l.hostAddress,
-                      'address',
-                    ),
-                  ),
-                  Expanded(
-                    child: UfField(
-                      label: l.hostPort,
-                      source: _port == null ? source('port') : null,
-                      error: _problems['port'],
-                      child: UfNumberField(
-                        key: const Key('host-port'),
-                        value: _port,
-                        min: 1,
-                        width: double.infinity,
-                        placeholder: resolved?.port,
-                        onChanged: editable
-                            ? (port) => setState(() => _port = port)
-                            : null,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              field(
-                'host-user',
-                _user,
-                l.hostUser,
-                'user',
-                inheritable: true,
-                resolvedValue: resolved?.user,
-              ),
-            ],
-          ),
-          entryPicker(
-            key: 'host-identity',
-            label: l.hostIdentity,
-            none: l.hostDefault,
-            entries: identities,
-            value: _identityId,
-            source: _identityId == null ? source('identityId') : null,
-            onChanged: editable ? (v) => setState(() => _identityId = v) : null,
-          ),
-          if (orgId != null)
-            Column(
-              key: const Key('host-identity-mode'),
-              crossAxisAlignment: CrossAxisAlignment.start,
-              spacing: 8,
-              children: [
-                for (final (mode, label) in [
-                  (IdentityMode.shared, l.hostIdentityShared),
-                  (IdentityMode.perMember, l.hostIdentityPerMember),
-                ])
-                  UfRadio<IdentityMode>(
-                    key: Key('identity-mode-${mode.name}'),
-                    value: mode,
-                    groupValue: _identityMode,
-                    label: label,
-                    onChanged: editable
-                        ? (mode) => setState(() => _identityMode = mode)
-                        : null,
-                  ),
-              ],
-            ),
-          if (orgId != null &&
-              _identityMode == IdentityMode.perMember &&
-              widget.hostId != null)
-            HostBindingField(hostId: widget.hostId!),
-          JumpHostPicker(
-            key: const Key('jump-picker'),
-            hostId: widget.hostId,
-            folderId: _folderId,
-            value: _jumpHostId,
-            inheritedId: resolved?.jumpHostId,
-            inheritedFrom: switch (resolved?.sources['jumpHostId']) {
-              null || 'default' || 'host' => null,
-              final String folder => vault.entry(folder)?.name,
-            },
-            onChanged: editable ? (v) => setState(() => _jumpHostId = v) : null,
-          ),
-          entryPicker(
-            key: 'host-folder',
-            label: l.hostFolder,
-            none: l.folderRoot,
-            entries: folders,
-            value: _folderId,
-            onChanged: editable ? (v) => setState(() => _folderId = v) : null,
-          ),
-          field('host-tags', _tags, l.hostTags, 'tags'),
-          field('host-notes', _notes, l.hostNotes, 'notes', lines: 3),
-          field(
-            'host-startup',
-            _startup,
-            l.hostStartup,
-            'startupCommand',
-            mono: true,
-          ),
+          _addressFields(l, editable: editable, resolved: resolved),
+          ..._identityFields(l, editable: editable, resolved: resolved),
+          ..._placementFields(l, editable: editable, resolved: resolved),
+          ..._detailFields(l, editable: editable),
           if (problem case final error?) UfErrorLine(error),
         ],
       ),
     );
   }
+
+  List<(String, List<Widget>)> _tabs(
+    AppLocalizations l,
+    AppState state, {
+    required bool editable,
+  }) => [
+    (
+      l.inspectorTabForwards,
+      [
+        ForwardsEditor(
+          forwards: _forwards ?? const [],
+          enabled: editable,
+          onChanged: (forwards) => setState(() => _forwards = forwards),
+        ),
+      ],
+    ),
+    if ((_orgId, _folderId) case (final org?, final folder?)
+        when widget.hostId != null)
+      (l.inspectorTabAccess, [AccessTab(orgId: org, folderId: folder)]),
+    if (state.serverInfo.has(Flag.itemHistory) && widget.hostId != null)
+      (l.itemHistory, [ItemHistoryPanel.embedded(itemId: widget.hostId!)]),
+  ];
 }

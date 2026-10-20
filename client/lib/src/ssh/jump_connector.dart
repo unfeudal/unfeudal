@@ -3,12 +3,6 @@ import 'package:dartssh2/dartssh2.dart';
 
 import 'ssh_connector.dart';
 
-abstract interface class HopClient {
-  Future<SSHSocket> forwardLocal(String host, int port);
-  Future<SshShell> shell();
-  Future<void> close();
-}
-
 /// [over]: the previous hop's forwarded channel; null = direct TCP.
 typedef HopOpener = Future<HopClient> Function(
   ConnectTarget target, {

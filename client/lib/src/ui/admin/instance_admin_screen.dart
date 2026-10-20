@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../l10n/app_localizations.dart';
@@ -42,7 +44,7 @@ class _InstanceAdminPanelState extends State<InstanceAdminPanel>
   @override
   void initState() {
     super.initState();
-    _load();
+    unawaited(_load());
   }
 
   @override
@@ -54,9 +56,9 @@ class _InstanceAdminPanelState extends State<InstanceAdminPanel>
   Future<void> _load() => run(() async {
     final api = AppScope.read(context).api!;
     final (users, orgs, invites) = await (
-      api.adminUsers(),
-      api.adminOrgs(),
-      api.adminInvites(),
+      api.admin.users(),
+      api.admin.orgs(),
+      api.admin.invites(),
     ).wait;
     if (mounted) {
       setState(() {
@@ -68,17 +70,18 @@ class _InstanceAdminPanelState extends State<InstanceAdminPanel>
   });
 
   Future<void> _toggle(AdminUser u) => run(() async {
-    await AppScope.read(context).api!.adminSetDisabled(u.id, !u.disabled);
+    await AppScope.read(context).api!.admin
+        .setDisabled(u.id, disabled: !u.disabled);
     setState(() {
       _users = [
         for (final x in _users)
           x.id == u.id
               ? AdminUser(
-                  x.id,
-                  x.email,
-                  !x.disabled,
-                  x.isInstanceOwner,
-                  x.createdAt,
+                  id: x.id,
+                  email: x.email,
+                  disabled: !x.disabled,
+                  isInstanceOwner: x.isInstanceOwner,
+                  createdAt: x.createdAt,
                 )
               : x,
       ];
@@ -96,7 +99,7 @@ class _InstanceAdminPanelState extends State<InstanceAdminPanel>
       return;
     }
     await run(() async {
-      await api.adminDeleteUser(u.id);
+      await api.admin.deleteUser(u.id);
       setState(
         () => _users = [
           for (final x in _users)
@@ -121,7 +124,7 @@ class _InstanceAdminPanelState extends State<InstanceAdminPanel>
     );
     if (yes != true) return;
     await run(() async {
-      await api.adminDeleteOrg(o.id, o.name);
+      await api.admin.deleteOrg(o.id, o.name);
       setState(
         () => _orgs = [
           for (final x in _orgs)
@@ -137,8 +140,8 @@ class _InstanceAdminPanelState extends State<InstanceAdminPanel>
     final email = _email.text.trim();
     if (email.isEmpty) return setState(() => problem = l.fieldRequired);
     await run(() async {
-      final created = await api.adminInvite(email);
-      final invites = await api.adminInvites();
+      final created = await api.admin.invite(email);
+      final invites = await api.admin.invites();
       setState(() {
         _created = created;
         _invites = invites;
@@ -147,7 +150,7 @@ class _InstanceAdminPanelState extends State<InstanceAdminPanel>
   }
 
   Future<void> _revoke(PendingInvite p) => run(() async {
-    await AppScope.read(context).api!.revokeInvite(p.id);
+    await AppScope.read(context).api!.orgs.revokeInvite(p.id);
     setState(
       () => _invites = [
         for (final x in _invites)
@@ -159,9 +162,6 @@ class _InstanceAdminPanelState extends State<InstanceAdminPanel>
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
-    final colors = UfColors.of(context);
-    final dates = MaterialLocalizations.of(context);
-    final created = _created;
     return DefaultTabController(
       length: 3,
       child: Column(
@@ -180,92 +180,154 @@ class _InstanceAdminPanelState extends State<InstanceAdminPanel>
           Expanded(
             child: TabBarView(
               children: [
-                ListView(
-                  children: [
-                    for (final u in _users)
-                      ItemRow(
-                        icon: UfIcons.user,
-                        title: u.email,
-                        trailing: [
-                          if (!u.isInstanceOwner) ...[
-                            TextButton(
-                              key: Key('admin-user-disable-${u.id}'),
-                              style: smallButton,
-                              onPressed: () => _toggle(u),
-                              child: Text(
-                                u.disabled ? l.adminEnable : l.adminDisable,
-                              ),
-                            ),
-                            TextButton(
-                              key: Key('admin-user-delete-${u.id}'),
-                              style: dangerQuietStyle(colors)
-                                  .merge(smallButton),
-                              onPressed: () => _deleteUser(u),
-                              child: Text(l.adminDelete),
-                            ),
-                          ],
-                        ],
-                      ),
-                  ],
+                _AccountsTab(
+                  users: _users,
+                  onToggle: _toggle,
+                  onDelete: _deleteUser,
                 ),
-                ListView(
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      spacing: 8,
-                      children: [
-                        Expanded(
-                          child: keyedField(
-                            'admin-invite-email',
-                            _email,
-                            l.inviteEmail,
-                            keyboard: TextInputType.emailAddress,
-                          ),
-                        ),
-                        FilledButton(
-                          key: const Key('admin-invite-create'),
-                          onPressed: _invite,
-                          child: Text(l.inviteCreate),
-                        ),
-                      ],
-                    ),
-                    if (created != null) InviteResult(created: created),
-                    for (final p in _invites)
-                      PendingInviteRow(invite: p, onRevoke: () => _revoke(p)),
-                  ],
+                _InvitesTab(
+                  email: _email,
+                  created: _created,
+                  invites: _invites,
+                  onInvite: _invite,
+                  onRevoke: _revoke,
                 ),
-                ListView(
-                  children: [
-                    for (final o in _orgs)
-                      ItemRow(
-                        icon: UfIcons.usersThree,
-                        title: o.name,
-                        subtitle: [
-                          o.owners.join(', '),
-                          l.adminOrgMembers(o.memberCount),
-                          o.lastActivityAt == null
-                              ? noValue
-                              : dates.formatMediumDate(
-                                  o.lastActivityAt!.toLocal(),
-                                ),
-                        ].join(' · '),
-                        trailing: [
-                          UfTag(sizeLabel(l, o.storageBytes)),
-                          TextButton(
-                            key: Key('admin-org-delete-${o.id}'),
-                            style: dangerQuietStyle(colors).merge(smallButton),
-                            onPressed: () => _deleteOrg(o),
-                            child: Text(l.adminOrgDelete),
-                          ),
-                        ],
-                      ),
-                  ],
-                ),
+                _OrgsTab(orgs: _orgs, onDelete: _deleteOrg),
               ],
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _AccountsTab extends StatelessWidget {
+  const _AccountsTab({
+    required this.users,
+    required this.onToggle,
+    required this.onDelete,
+  });
+
+  final List<AdminUser> users;
+  final ValueChanged<AdminUser> onToggle;
+  final ValueChanged<AdminUser> onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    final colors = UfColors.of(context);
+    return ListView(
+      children: [
+        for (final u in users)
+          ItemRow(
+            icon: UfIcons.user,
+            title: u.email,
+            trailing: [
+              if (!u.isInstanceOwner) ...[
+                TextButton(
+                  key: Key('admin-user-disable-${u.id}'),
+                  style: smallButton,
+                  onPressed: () => onToggle(u),
+                  child: Text(u.disabled ? l.adminEnable : l.adminDisable),
+                ),
+                TextButton(
+                  key: Key('admin-user-delete-${u.id}'),
+                  style: dangerQuietStyle(colors).merge(smallButton),
+                  onPressed: () => onDelete(u),
+                  child: Text(l.adminDelete),
+                ),
+              ],
+            ],
+          ),
+      ],
+    );
+  }
+}
+
+class _InvitesTab extends StatelessWidget {
+  const _InvitesTab({
+    required this.email,
+    required this.created,
+    required this.invites,
+    required this.onInvite,
+    required this.onRevoke,
+  });
+
+  final TextEditingController email;
+  final InviteCreated? created;
+  final List<PendingInvite> invites;
+  final VoidCallback onInvite;
+  final ValueChanged<PendingInvite> onRevoke;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    final created = this.created;
+    return ListView(
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          spacing: 8,
+          children: [
+            Expanded(
+              child: keyedField(
+                'admin-invite-email',
+                email,
+                l.inviteEmail,
+                keyboard: TextInputType.emailAddress,
+              ),
+            ),
+            FilledButton(
+              key: const Key('admin-invite-create'),
+              onPressed: onInvite,
+              child: Text(l.inviteCreate),
+            ),
+          ],
+        ),
+        if (created != null) InviteResult(created: created),
+        for (final p in invites)
+          PendingInviteRow(invite: p, onRevoke: () => onRevoke(p)),
+      ],
+    );
+  }
+}
+
+class _OrgsTab extends StatelessWidget {
+  const _OrgsTab({required this.orgs, required this.onDelete});
+
+  final List<AdminOrg> orgs;
+  final ValueChanged<AdminOrg> onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    final colors = UfColors.of(context);
+    final dates = MaterialLocalizations.of(context);
+    return ListView(
+      children: [
+        for (final o in orgs)
+          ItemRow(
+            icon: UfIcons.usersThree,
+            title: o.name,
+            subtitle: [
+              o.owners.join(', '),
+              l.adminOrgMembers(o.memberCount),
+              o.lastActivityAt == null
+                  ? noValue
+                  : dates.formatMediumDate(o.lastActivityAt!.toLocal()),
+            ].join(' · '),
+            trailing: [
+              UfTag(sizeLabel(l, o.storageBytes)),
+              TextButton(
+                key: Key('admin-org-delete-${o.id}'),
+                style: dangerQuietStyle(colors).merge(smallButton),
+                onPressed: () => onDelete(o),
+                child: Text(l.adminOrgDelete),
+              ),
+            ],
+          ),
+      ],
     );
   }
 }

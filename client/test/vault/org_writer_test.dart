@@ -18,7 +18,6 @@ void main() {
     await c.keyring.put(f, FolderKeys.generate(1));
     await c.keyring.put(g, FolderKeys.generate(1));
     block = orgBlock(
-      role: 'member',
       members: [c.me(role: 'member')],
       folderTree: [node(f), node(g)],
       acl: [
@@ -144,7 +143,6 @@ void main() {
       throwsA(isA<OrgWriteRefused>()),
     );
     block = orgBlock(
-      role: 'member',
       members: [c.me(role: 'member')],
       folderTree: [node(f), node(g)],
       acl: [
@@ -199,7 +197,6 @@ void main() {
     await expectLater(
       writer.createFolder(
         orgId: testOrgId,
-        parentId: null,
         meta: FolderMeta.fromJson(folderJson('root')),
       ),
       throwsA(
@@ -256,7 +253,12 @@ void main() {
       (ItemScope.org, f, false, 0),
     );
     expect(
-      explainFromBlock(block, testOrgId, c.userId, f).effective,
+      explainFromBlock(
+        block,
+        testOrgId,
+        userId: c.userId,
+        folderId: f,
+      ).effective,
       contains(Permission.edit),
     );
   });

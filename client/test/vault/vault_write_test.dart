@@ -225,10 +225,10 @@ void main() {
       ]);
       final v = await testVault(key, m);
       expect(
-        (v.profile.displayName, v.profile.prefs['themeMode']),
+        (v.profile.meta.displayName, v.profile.meta.prefs['themeMode']),
         ('Camille', 'dark'),
       );
-      await v.setPrefs({'themeMode': null, 'locale': 'fr'});
+      await v.profile.setPrefs({'themeMode': null, 'locale': 'fr'});
       final sent = m.outbox().single.item;
       expect(sent.id, low);
       expect(

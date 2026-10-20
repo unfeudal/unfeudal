@@ -9,6 +9,10 @@ import '../api/api_client.dart';
 import '../debug_trace.dart';
 import '../storage/local_mirror.dart';
 import '../version.dart';
+import 'conflict_resolver.dart';
+import 'item_puller.dart';
+import 'outbox_pusher.dart';
+import 'restore_gate.dart';
 
 /// The ApiInfo the last sync round stored in [mirror].
 ApiInfo? storedApiInfo(LocalMirror mirror) =>
@@ -26,18 +30,17 @@ class SyncEngine extends ChangeNotifier {
     this._now = DateTime.now,
   }) {
     api.isReadOnly = () =>
-        compat?.mode == CompatMode.readOnly ||
-        (mirror.getKv(KvKey.refusedEpoch) != null && !_apiIgnoresRefusal);
+        compat?.mode == CompatMode.readOnly || _restore.apiRefusesWrites;
   }
+
+  static const interval = Duration(seconds: 30);
+  static const maxAttempts = 3;
+  static const maxBackoff = Duration(minutes: 10);
 
   final ApiClient api;
   final LocalMirror mirror;
   final String deviceId;
-  static const interval = Duration(seconds: 30);
   final DateTime Function() _now;
-
-  static const maxAttempts = 3;
-  static const maxBackoff = Duration(minutes: 10);
 
   /// Conflict copy of a local write (the vault seals it).
   Future<Item?> Function(Item mine, {required bool personal})? copyOf;
@@ -51,7 +54,6 @@ class SyncEngine extends ChangeNotifier {
 
   /// Called with each block that arrives, after its pages and the itemIds rule are applied.
   Future<void> Function(OrgBlock block)? onOrgBlock;
-  bool _resyncing = false;
 
   bool online = true;
   Object? lastError;
@@ -61,7 +63,47 @@ class SyncEngine extends ChangeNotifier {
   /// A newer client's version: only its text is shown, the link is compiled in.
   String? updateVersion;
 
+  late final _restore = RestoreGate(mirror);
+  late final _resolver = ConflictResolver(
+    mirror: mirror,
+    deviceId: deviceId,
+    markChanged: _markChanged,
+    // The hooks are read on each call: they are assigned after construction.
+    copyOf: (mine, {required personal}) async =>
+        copyOf?.call(mine, personal: personal),
+  );
+  late final _pusher = OutboxPusher(
+    api: api,
+    mirror: mirror,
+    resolver: _resolver,
+    markChanged: _markChanged,
+    onClientTooOld: _tooOld,
+    now: _now,
+    interval: interval,
+    maxAttempts: maxAttempts,
+    maxBackoff: maxBackoff,
+  );
+  late final _puller = ItemPuller(
+    api: api,
+    mirror: mirror,
+    markChanged: _markChanged,
+    onOrgBlock: (block) async => onOrgBlock?.call(block),
+  );
+
+  ApiInfo? _storedInfo;
+  Timer? _timer;
+  // The mirror changed during this round: the vault reloads at its end.
+  bool _changed = false;
+  Future<void>? _running;
+  bool _again = false;
+
+  // A round still in flight when the engine is disposed ends without notifying.
+  bool _disposed = false;
+
   bool get readOnly => compat?.mode == CompatMode.readOnly || restoreRefused;
+
+  bool get restoreRefused => _restore.restoreRefused;
+  bool get restorePending => _restore.restorePending;
 
   /// Writes the server refused 3 times; they wait for retry, keep a personal copy, or discard.
   List<OutboxEntry> get rejected => [
@@ -74,16 +116,8 @@ class SyncEngine extends ChangeNotifier {
 
   /// The ApiInfo the last successful round stored, parsed once per round.
   ApiInfo? get storedInfo => _storedInfo ??= storedApiInfo(mirror);
-  ApiInfo? _storedInfo;
 
-  Timer? _timer;
-
-  // The mirror changed during this round: the vault reloads at its end.
-  bool _changed = false;
-  int _failures = 0;
-  DateTime? _pushAfter;
-  Future<void>? _running;
-  bool _again = false;
+  String? get _storedEpoch => storedInfo?.instanceEpoch;
 
   void start() {
     unawaited(syncNow());
@@ -98,9 +132,12 @@ class SyncEngine extends ChangeNotifier {
   /// One round at a time; a call during a round schedules one more, and resolves after it.
   Future<void> syncNow() => _single(_round);
 
-  Future<void> write(Item item) async {
+  Future<void> write(Item item) => writeAll([item]);
+
+  /// Queues every item at once, then one round pushes them.
+  Future<void> writeAll(List<Item> items) async {
     if (readOnly) throw const ReadOnlyException();
-    mirror.enqueue(item, baseRevision: item.revision ?? 0);
+    mirror.enqueueAll(items);
     unawaited(syncNow());
   }
 
@@ -126,6 +163,29 @@ class SyncEngine extends ChangeNotifier {
     if (copy != null) mirror.enqueue(copy, baseRevision: 0);
     _changed = true;
     await syncNow();
+  }
+
+  Future<void> refuseRestore() async {
+    trace(TraceArea.sync, 'restore refused: read-only');
+    _restore.refuse(storedEpoch: _storedEpoch);
+    notifyListeners();
+  }
+
+  Future<void> acceptRestore() async {
+    trace(TraceArea.sync, 'restore accepted: full pull');
+    // Resets cursor, orgCursor and orgBlock, and empties the anchors.
+    mirror.resetForRestore();
+    // LedgerStore.reset: marks emptied, pins kept.
+    await onRestoreAccepted?.call();
+    // A full pull that accepts older revisions, a push, then the ApiInfo is stored.
+    await _restore.accept(() => _single(() => _round(restoring: true)));
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    stop();
+    super.dispose();
   }
 
   Future<void> _single(Future<void> Function() first) {
@@ -159,26 +219,18 @@ class SyncEngine extends ChangeNotifier {
         TraceArea.sync,
         'compat ${compat!.mode.name}${compat!.reason == null ? '' : ' (${compat!.reason})'}',
       );
-      if (!restoring && _mustPause(info)) {
+      if (!restoring && _restore.mustPause(info, storedEpoch: _storedEpoch)) {
         trace(TraceArea.sync, 'paused: server restored or restore refused');
         return;
       }
-      if (restoring) await _pull(full: true, acceptOlder: true);
+      if (restoring) await _puller.pull(full: true, acceptOlder: true);
       // A client too old to write (read-only mode) only pulls.
       if (compat!.mode == CompatMode.full) {
-        await _push();
+        await _pusher.push();
       }
-      if (!restoring) await _pull();
-      // A missing epoch never replaces the stored one.
-      final stored = _storedEpoch;
-      final raw = jsonEncode({
-        ...info.toJson(),
-        if (info.instanceEpoch == null && stored != null)
-          'instanceEpoch': stored,
-      });
-      mirror.setKv(KvKey.apiInfo, raw);
-      _storedInfo = ApiInfo.fromJson(jsonDecode(raw));
-      if (restoring) _finishRestore();
+      if (!restoring) await _puller.pull();
+      _storeInfo(info);
+      if (restoring) _restore.finish();
       lastSyncAt = _now();
       lastError = null;
       trace(TraceArea.sync, 'round done, outbox ${mirror.outboxIds().length}');
@@ -194,7 +246,7 @@ class SyncEngine extends ChangeNotifier {
       if (e.status == 401) {
         onUnauthorized?.call(e.unauthorizedReason);
       } else if (e.conflictReason == ConflictReason.cursorAhead) {
-        _pending = true;
+        _restore.markPending();
       } else {
         lastError = e;
       }
@@ -206,12 +258,26 @@ class SyncEngine extends ChangeNotifier {
       trace(TraceArea.sync, 'read-only switched on during the round');
       // Nothing is lost: the outbox stays for a later round.
       lastError = e;
+    } on Object catch (e) {
+      // The round runs from a timer, where a thrown error would be lost: it shows in the
+      // sync banner instead, the outbox stays and the next round retries.
+      trace(TraceArea.sync, 'round failed: ${e.runtimeType}');
+      lastError = e;
     } finally {
-      if (_changed) {
-        _changed = false;
-        await onChanged?.call();
-      }
-      notifyListeners();
+      await _reloadIfChanged();
+      if (!_disposed) notifyListeners();
+    }
+  }
+
+  Future<void> _reloadIfChanged() async {
+    if (!_changed) return;
+    _changed = false;
+    try {
+      await onChanged?.call();
+    } on Object catch (e) {
+      // A failed reload must not stop the listeners from hearing about the round.
+      trace(TraceArea.sync, 'reload failed: ${e.runtimeType}');
+      lastError = e;
     }
   }
 
@@ -221,7 +287,7 @@ class SyncEngine extends ChangeNotifier {
     updateVersion = compareVersions(info.latestClient, clientVersion) > 0
         ? info.latestClient
         : null;
-    _apiIgnoresRefusal = _accepting;
+    _restore.onNegotiated();
     return compat!.api != null;
   }
 
@@ -230,227 +296,16 @@ class SyncEngine extends ChangeNotifier {
     compat = Compat(CompatMode.readOnly, compat?.api, 'client-too-old');
   }
 
-  Future<void> _pull({bool full = false, bool acceptOlder = false}) async {
-    var cursor = full ? 0 : int.parse(mirror.getKv(KvKey.cursor) ?? '0');
-    var orgCursor = full ? 0 : int.parse(mirror.getKv(KvKey.orgCursor) ?? '0');
-    final seen = <String>{};
-    OrgBlock? arrived;
-    // Ids received after the block's response: their seq is above its cursor.
-    final later = <String>{};
-    for (var more = true; more;) {
-      // The page is parsed whole before anything is applied.
-      final page = await api.sync(cursor: cursor, orgCursor: orgCursor);
-      mirror.upsertItems(page.items, acceptOlder: acceptOlder);
-      if (page.items.isNotEmpty) _changed = true;
-      seen.addAll(page.items.map((i) => i.id));
-      if (arrived != null) later.addAll(page.items.map((i) => i.id));
-      if (page.org case final org?) {
-        mirror
-          ..setKv(KvKey.orgBlock, jsonEncode(org.toJson()))
-          ..setKv(KvKey.orgCursor, '${org.orgCursor}');
-        orgCursor = org.orgCursor;
-        arrived = org;
-        _changed = true;
-        later.clear();
-      }
-      trace(
-        TraceArea.sync,
-        'pulled ${page.items.length} items, cursor $cursor → ${page.cursor}',
-      );
-      cursor = page.cursor;
-      mirror.setKv(KvKey.cursor, '$cursor');
-      more = page.more;
-    }
-    if (full) {
-      // Replaced by the server's, only once the whole pull succeeded; queued items stay.
-      final queued = mirror.outboxIds().toSet();
-      _delete([
-        for (final id in mirror.itemIds())
-          if (!seen.contains(id) && !queued.contains(id)) id,
-      ]);
-    }
-    if (arrived == null) return;
-    final visible = arrived.itemIds.toSet();
-    final queued = mirror.outboxIds().toSet();
-    _delete([
-      for (final id in mirror.itemIds(scope: ItemScope.org))
-        if (!visible.contains(id) &&
-            !queued.contains(id) &&
-            !later.contains(id))
-          id,
-    ]);
-    final held = mirror.itemIds();
-    if (!full && !_resyncing && visible.any((id) => !held.contains(id))) {
-      // Only once: a server that keeps listing a missing id cannot loop us.
-      _resyncing = true;
-      try {
-        return await _pull(full: true, acceptOlder: acceptOlder);
-      } finally {
-        _resyncing = false;
-      }
-    }
-    await onOrgBlock?.call(arrived);
-  }
-
-  void _delete(List<String> ids) {
-    if (ids.isEmpty) return;
-    mirror.deleteItems(ids);
-    _changed = true;
-  }
-
-  // The epoch of the last /api/info, for a refusal.
-  String? _seenEpoch;
-  bool _pending = false;
-  // The accepted round may write although the refusal is still stored.
-  bool _accepting = false;
-
-  // The API applies a stored refusal from the first negotiation on, except in a negotiation of an accepted restore.
-  bool _apiIgnoresRefusal = true;
-
-  bool get restoreRefused =>
-      !_accepting && mirror.getKv(KvKey.refusedEpoch) != null;
-  bool get restorePending => _pending || restoreRefused;
-
-  String? get _storedEpoch => storedInfo?.instanceEpoch;
-
-  // Called after negotiation on every normal round. No push, no pull while it returns true.
-  bool _mustPause(ApiInfo info) {
-    _seenEpoch = info.instanceEpoch;
+  void _storeInfo(ApiInfo info) {
+    // A missing epoch never replaces the stored one.
     final stored = _storedEpoch;
-    final changed =
-        info.instanceEpoch == null ||
-        (stored != null && info.instanceEpoch != stored);
-    if (changed || restoreRefused) _pending = true;
-    return _pending;
+    final raw = jsonEncode({
+      ...info.toJson(),
+      if (info.instanceEpoch == null && stored != null) 'instanceEpoch': stored,
+    });
+    mirror.setKv(KvKey.apiInfo, raw);
+    _storedInfo = ApiInfo.fromJson(jsonDecode(raw));
   }
 
-  Future<void> refuseRestore() async {
-    trace(TraceArea.sync, 'restore refused: read-only');
-    // An empty string marks a missing epoch.
-    mirror.setKv(KvKey.refusedEpoch, _seenEpoch ?? _storedEpoch ?? '');
-    _apiIgnoresRefusal = false;
-    notifyListeners();
-  }
-
-  Future<void> acceptRestore() async {
-    trace(TraceArea.sync, 'restore accepted: full pull');
-    // Resets cursor, orgCursor and orgBlock, and empties the anchors.
-    mirror.resetForRestore();
-    // LedgerStore.reset: marks emptied, pins kept.
-    await onRestoreAccepted?.call();
-    _pending = false;
-    _accepting = true;
-    try {
-      // A full pull that accepts older revisions, a push, then the ApiInfo is stored.
-      await _single(() => _round(restoring: true));
-    } finally {
-      _accepting = false;
-      _apiIgnoresRefusal = false;
-    }
-  }
-
-  void _finishRestore() {
-    mirror.setKv(KvKey.refusedEpoch, null);
-  }
-
-  Future<void> _push() async {
-    if (_pushAfter case final after? when _now().isBefore(after)) return;
-    for (final e in mirror.outbox().where(
-      (e) => e.state == OutboxState.pending,
-    )) {
-      try {
-        _settle(e.item, await api.putItem(e.item, ifMatch: e.baseRevision));
-        trace(
-          TraceArea.sync,
-          'pushed ${e.item.kind.name} ${shortId(e.item.id)}',
-        );
-        _failures = 0;
-        _pushAfter = null;
-      } on NetworkException {
-        // Nothing is counted on the entry; the round then marks the client offline.
-        _backOff(null);
-        rethrow;
-      } on ApiException catch (x) {
-        if (x.status == 401) rethrow;
-        trace(
-          TraceArea.sync,
-          'push ${shortId(e.item.id)} refused: ${x.status} ${x.reason ?? x.code}',
-        );
-        if (x.conflictReason == ConflictReason.clientTooOld) {
-          return _tooOld();
-        }
-        if (x.status == 409) {
-          await _conflict(e.item, x.item);
-        } else if (x.status == 429 || x.status >= 500) {
-          // Nothing is counted on the entry.
-          return _backOff(x.retryAfter);
-        } else if (mirror.recordOutboxFailure(e.item.id, x.code) >=
-            maxAttempts) {
-          // Other refusals (400, 403, 413 and the like) reject the entry after maxAttempts.
-          mirror.rejectOutbox(e.item.id);
-          _changed = true;
-        }
-      }
-    }
-  }
-
-  // interval * 2^(failures - 1), capped at maxBackoff; a longer `retry-after` wins.
-  void _backOff(Duration? retryAfter) {
-    _failures++;
-    final doubled = interval * (1 << (_failures - 1).clamp(0, 20));
-    var wait = doubled < maxBackoff ? doubled : maxBackoff;
-    if (retryAfter != null && retryAfter > wait) wait = retryAfter;
-    _pushAfter = _now().add(wait);
-    trace(TraceArea.sync, 'push backs off ${wait.inSeconds} s');
-  }
-
-  // The server accepted sent: mirror it; drop the outbox entry unless it was edited meanwhile (then rebase it).
-  void _settle(Item sent, Item stored) {
-    mirror.upsertItems([stored]);
-    _changed = true;
-    final queued = mirror.outboxEntry(sent.id);
-    if (queued == null) return;
-    if (jsonEncode(queued.item.toJson()) == jsonEncode(sent.toJson())) {
-      mirror.removeOutbox(sent.id);
-    } else {
-      mirror.rebaseOutbox(sent.id, stored.revision!);
-    }
-  }
-
-  Future<void> _conflict(Item mine, Item? current) async {
-    _changed = true;
-    // Gone without a tombstone: create it again.
-    if (current == null) {
-      return mirror.rebaseOutbox(mine.id, 0);
-    }
-    final ours =
-        current.updatedDevice == deviceId &&
-        current.deleted == mine.deleted &&
-        jsonEncode(current.meta?.toJson()) == jsonEncode(mine.meta?.toJson());
-    // Our own write, whose response was lost.
-    if (ours) return _settle(mine, current);
-    trace(TraceArea.sync, 'conflict on ${mine.kind.name} ${shortId(mine.id)}');
-    mirror.upsertItems([current]);
-    // The server copy of a known host is kept; the ledger's hostPins decide here.
-    if (mine.kind == ItemKind.knownHost) {
-      return mirror.removeOutbox(mine.id);
-    }
-    final deletedThere = current.purged || (current.deleted && !mine.deleted);
-    // Our delete (restorable) or the profile (last write wins) goes over the server's.
-    if (!deletedThere && (mine.deleted || mine.kind == ItemKind.profile)) {
-      return mirror.rebaseOutbox(mine.id, current.revision!);
-    }
-    // Otherwise the server's deletion or version wins; an edit of ours is kept as a copy.
-    final copy = mine.deleted
-        ? null
-        : await copyOf?.call(mine, personal: false);
-    mirror.removeOutbox(mine.id);
-    if (copy != null) mirror.enqueue(copy, baseRevision: 0);
-  }
-
-  @override
-  void dispose() {
-    stop();
-    super.dispose();
-  }
+  void _markChanged() => _changed = true;
 }

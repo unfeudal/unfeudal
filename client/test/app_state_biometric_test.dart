@@ -30,7 +30,7 @@ void main() {
     'enable, lock, unlock with biometrics: home again, offline too',
     () async {
       final (h, s, _) = await home();
-      expect(await s.biometricAvailable(), isTrue);
+      expect(await s.biometrics!.isAvailable(), isTrue);
       expect(await s.enableBiometrics(), isTrue);
       await s.lock();
       h.offline = true;
@@ -60,7 +60,7 @@ void main() {
     h.expireSessions();
     await s.sync!.syncNow();
     expect(
-      (s.signedOutBecause, await s.biometric!.isEnabled()),
+      (s.signedOutBecause, await s.biometrics!.isEnabled()),
       (SignOutReason.sessionExpired, true),
     );
     final (h2, s2, _) = await home();
@@ -68,7 +68,7 @@ void main() {
     h2.devices[s2.stored!.deviceId]!.revokedAt = h2.now;
     await s2.sync!.syncNow();
     expect(
-      (s2.signedOutBecause, await s2.biometric!.isEnabled()),
+      (s2.signedOutBecause, await s2.biometrics!.isEnabled()),
       (SignOutReason.deviceRevoked, false),
     );
   });
@@ -81,7 +81,7 @@ void main() {
       h.capabilities = ['recovery_kit', 'sync'];
       await s.sync!.syncNow();
       expect(
-        (await s.biometric!.isEnabled(), await s.biometricAvailable()),
+        (await s.biometrics!.isEnabled(), await s.biometrics!.isAvailable()),
         (false, false),
       );
     },
@@ -92,11 +92,11 @@ void main() {
     () async {
       final (_, s, _) = await home();
       await s.enableBiometrics();
-      await s.changeMasterPassword(testPassword, 'another-long-password');
+      await s.credentials.changePassword(testPassword, 'another-long-password');
       await s.lock();
       expect(await s.unlockWithBiometrics(), isTrue);
       await s.signOut();
-      expect(await s.biometric!.isEnabled(), isFalse);
+      expect(await s.biometrics!.isEnabled(), isFalse);
     },
   );
 }

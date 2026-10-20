@@ -52,7 +52,7 @@ class SealedKv {
       _aad,
       json,
       key,
-      KeyIds.user,
+      keyId: KeyIds.user,
       seq: ++_writes,
     );
     _mirror.setKv(_slot, jsonEncode(sealed.toJson()));

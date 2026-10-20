@@ -7,7 +7,7 @@ import 'package:path/path.dart' as p;
 
 /// One app per user account: two instances would share one device session and the second refresh would
 /// replay a rotated token, which revokes the device. The first instance listens on a loopback port written
-/// in [portFile]; a later launch knocks there, the first one comes forward, the later one exits.
+/// in `portFile`; a later launch knocks there, the first one comes forward, the later one exits.
 class SingleInstance {
   SingleInstance._(this._server);
 
@@ -49,7 +49,7 @@ class SingleInstance {
   // True when a live instance answered; a stale port file or another program on that port is not one.
   static Future<bool> _knockAt(File portFile) async {
     final port = int.tryParse(
-      await portFile.exists() ? (await portFile.readAsString()).trim() : '',
+      portFile.existsSync() ? (await portFile.readAsString()).trim() : '',
     );
     if (port == null) return false;
     try {

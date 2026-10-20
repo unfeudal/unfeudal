@@ -68,7 +68,7 @@ class MemberPins {
 
   /// The `ok` memberPin entry of [userId] with the smallest id.
   (VaultEntry, MemberPinMeta)? _entryOf(String userId) {
-    final e = Vault.winner(
+    final e = winner(
       vault.ofKind(ItemKind.memberPin),
       (e) => MemberPinMeta.fromJson(e.meta).userId == userId,
     );

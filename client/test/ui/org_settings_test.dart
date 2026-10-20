@@ -101,7 +101,7 @@ void main() {
       await t.tap(find.byKey(const Key('rotation-now')));
       await pumpReal(t);
       expect(s.orgs!.lastRotation, isNotNull);
-      await open(t, const RotationBanner(), role: 'member', pending: const []);
+      await open(t, const RotationBanner(), role: 'member');
       expect(find.byKey(const Key('rotation-now')), findsNothing);
     },
   );

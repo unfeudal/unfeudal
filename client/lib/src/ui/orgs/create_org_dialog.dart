@@ -28,7 +28,7 @@ class CreateOrgDialog extends StatelessWidget {
       saveKey: 'org-create',
       saveLabel: l.orgCreate,
       onSave: (values) async {
-        final org = await state.api!.createOrg(values['org-name']!.trim());
+        final org = await state.api!.orgs.create(values['org-name']!.trim());
         await state.sync!.syncNow();
         state.orgs!.select(org.id);
       },

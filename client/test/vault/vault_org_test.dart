@@ -110,7 +110,6 @@ void main() {
         id: id,
         folderId: f,
         meta: hostJson('v1'),
-        seq: 1,
         revision: 3,
       ),
     ]);

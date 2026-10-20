@@ -31,7 +31,7 @@ class TrashScreen extends StatefulWidget {
 class _TrashScreenState extends State<TrashScreen> with BusyAction {
   Future<void> _restore(VaultEntry e) async {
     final state = AppScope.read(context);
-    await run(() => state.restoreItem(e.id));
+    await run(() => state.orgs!.restoreItem(e.id));
   }
 
   // An item inside a trashed org folder moves to a live folder the user can edit (re-sealed with its keys).
@@ -74,7 +74,7 @@ class _TrashScreenState extends State<TrashScreen> with BusyAction {
     final state = AppScope.of(context);
     final vault = state.vault!;
     final readOnly = state.sync?.readOnly ?? true;
-    final days = state.trashDays;
+    final days = state.serverInfo.trashDays;
     final dates = MaterialLocalizations.of(context);
     final orgId = state.orgs?.selected;
     final vaultName = vaultNameOf(l, state, orgId);
@@ -108,60 +108,94 @@ class _TrashScreenState extends State<TrashScreen> with BusyAction {
               children: [
                 if (problem case final error?) UfErrorLine(error),
                 for (final e in trashed) ...[
-                  ItemRow(
-                    key: Key('trash-${e.id}'),
-                    icon: _icon(e.item.kind),
-                    title: e.state == EntryState.ok
-                        ? e.name ?? ''
-                        : l.treeUnreadable,
-                    dimmed: e.state != EntryState.ok,
+                  _TrashRow(
+                    entry: e,
                     subtitle: when(e),
-                    trailing: [
-                      OutlinedButton(
-                        key: Key('trash-restore-${e.id}'),
-                        style: smallButton,
-                        onPressed: blocked(e) ? null : () => _restore(e),
-                        child: Text(l.trashRestore),
-                      ),
-                    ],
+                    onRestore: blocked(e) ? null : () => _restore(e),
                   ),
                   // a trashed org folder stays readable: what is inside can be moved out before the purge
                   if (e.orgId != null && e.item.kind == ItemKind.folder)
                     for (final c in vault.entries)
                       if (c.folderId == e.id && !c.item.deleted)
-                        Padding(
-                          padding: const EdgeInsets.only(left: 44),
-                          child: ItemRow(
-                            key: Key('trash-inside-${c.id}'),
-                            icon: _icon(c.item.kind),
-                            title: c.state == EntryState.ok
-                                ? c.name ?? ''
-                                : l.treeUnreadable,
-                            dimmed: c.state != EntryState.ok,
-                            trailing: [
-                              OutlinedButton(
-                                key: Key('trash-move-out-${c.id}'),
-                                style: smallButton,
-                                onPressed: blocked(c)
-                                    ? null
-                                    : () => _moveOut(c),
-                                child: Text(l.trashMoveOut),
-                              ),
-                            ],
-                          ),
+                        _InsideRow(
+                          entry: c,
+                          onMoveOut: blocked(c) ? null : () => _moveOut(c),
                         ),
                 ],
               ],
             ),
     );
   }
+}
 
-  static IconData _icon(ItemKind? kind) => switch (kind) {
-    ItemKind.folder => UfIcons.folderSimple,
-    ItemKind.identity => UfIcons.key,
-    ItemKind.snippet => UfIcons.terminal,
-    _ => UfIcons.desktop,
-  };
+IconData _icon(ItemKind? kind) => switch (kind) {
+  ItemKind.folder => UfIcons.folderSimple,
+  ItemKind.identity => UfIcons.key,
+  ItemKind.snippet => UfIcons.terminal,
+  _ => UfIcons.desktop,
+};
+
+class _TrashRow extends StatelessWidget {
+  const _TrashRow({
+    required this.entry,
+    required this.subtitle,
+    required this.onRestore,
+  });
+
+  final VaultEntry entry;
+  final String subtitle;
+  final VoidCallback? onRestore;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    return ItemRow(
+      key: Key('trash-${entry.id}'),
+      icon: _icon(entry.item.kind),
+      title: entry.state == EntryState.ok ? entry.name ?? '' : l.treeUnreadable,
+      dimmed: entry.state != EntryState.ok,
+      subtitle: subtitle,
+      trailing: [
+        OutlinedButton(
+          key: Key('trash-restore-${entry.id}'),
+          style: smallButton,
+          onPressed: onRestore,
+          child: Text(l.trashRestore),
+        ),
+      ],
+    );
+  }
+}
+
+class _InsideRow extends StatelessWidget {
+  const _InsideRow({required this.entry, required this.onMoveOut});
+
+  final VaultEntry entry;
+  final VoidCallback? onMoveOut;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(left: 44),
+      child: ItemRow(
+        key: Key('trash-inside-${entry.id}'),
+        icon: _icon(entry.item.kind),
+        title: entry.state == EntryState.ok
+            ? entry.name ?? ''
+            : l.treeUnreadable,
+        dimmed: entry.state != EntryState.ok,
+        trailing: [
+          OutlinedButton(
+            key: Key('trash-move-out-${entry.id}'),
+            style: smallButton,
+            onPressed: onMoveOut,
+            child: Text(l.trashMoveOut),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _MoveOutDialog extends StatefulWidget {

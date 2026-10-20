@@ -174,7 +174,6 @@ class ItemRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = UfColors.of(context);
-    final text = Theme.of(context).textTheme;
     final tile = icon == null
         ? null
         : Container(
@@ -198,31 +197,11 @@ class ItemRow extends StatelessWidget {
             children: [
               ?tile,
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: text.labelLarge!.copyWith(
-                        fontSize: 13.5,
-                        color: dimmed ? colors.muted : colors.text,
-                      ),
-                    ),
-                    if (subtitle case final subtitle?)
-                      Text(
-                        subtitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: monoSubtitle
-                            ? monoStyle.copyWith(
-                                fontSize: 11,
-                                color: colors.muted,
-                              )
-                            : text.bodySmall!.copyWith(color: colors.muted),
-                      ),
-                  ],
+                child: _ItemRowText(
+                  title: title,
+                  subtitle: subtitle,
+                  monoSubtitle: monoSubtitle,
+                  dimmed: dimmed,
                 ),
               ),
               // a narrow row wraps its actions onto a second line instead of overflowing
@@ -241,6 +220,49 @@ class ItemRow extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _ItemRowText extends StatelessWidget {
+  const _ItemRowText({
+    required this.title,
+    required this.subtitle,
+    required this.monoSubtitle,
+    required this.dimmed,
+  });
+
+  final String title;
+  final String? subtitle;
+  final bool monoSubtitle;
+  final bool dimmed;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = UfColors.of(context);
+    final text = Theme.of(context).textTheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: text.labelLarge!.copyWith(
+            fontSize: 13.5,
+            color: dimmed ? colors.muted : colors.text,
+          ),
+        ),
+        if (subtitle case final subtitle?)
+          Text(
+            subtitle,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: monoSubtitle
+                ? monoStyle.copyWith(fontSize: 11, color: colors.muted)
+                : text.bodySmall!.copyWith(color: colors.muted),
+          ),
+      ],
     );
   }
 }

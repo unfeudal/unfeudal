@@ -11,30 +11,35 @@ import '../../../l10n/app_localizations.dart';
 import '../../api/api_client.dart';
 import '../../app_scope.dart';
 import '../../app_state.dart';
-import '../../design/banner.dart';
 import '../../debug_trace.dart';
+import '../../design/banner.dart';
 import '../../design/motion.dart';
+import '../../ssh/connections.dart';
+import '../../ssh/ssh_connector.dart';
 import '../../storage/local_mirror.dart';
 import '../../sync/sync_engine.dart';
 import '../../version.dart';
 import '../activity/activity_screen.dart';
 import '../describe_error.dart';
+import '../history/trash_screen.dart';
 import '../hosts/folder_editor_panel.dart';
 import '../hosts/host_editor_panel.dart';
-import '../../ssh/ssh_connector.dart';
-import '../history/trash_screen.dart';
 import '../hosts/host_key_dialog.dart';
 import '../keychain/keychain_screen.dart';
+import '../orgs/members_section.dart';
 import '../orgs/rotation_banner.dart';
 import '../settings/settings_screen.dart';
+import '../snippets/snippets_screen.dart';
 import '../terminal/ssh_dialogs.dart';
 import '../terminal/terminal_tabs.dart';
-import 'shortcuts.dart';
-import '../orgs/members_section.dart';
-import '../snippets/snippets_screen.dart';
 import 'shell_chrome.dart';
+import 'shortcuts.dart';
 import 'sidebar.dart';
 import 'tree_panel.dart';
+
+part 'shell_keys.dart';
+part 'shell_sessions.dart';
+part 'sidebar_resizer.dart';
 
 /// Opens a link in the system browser; replaced in tests.
 @visibleForTesting
@@ -68,14 +73,11 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
   // Kept to clear the title bar on dispose, when the context can no longer look it up.
   ShellChrome? _chrome;
 
-  static const _minTree = 220.0, _maxTree = 400.0, _resizeStep = 16.0;
-
   @override
   void initState() {
     super.initState();
-    _state
-      ..dialogs = this
-      ..onHomeMounted();
+    _state.connections.dialogs = this;
+    _state.onHomeMounted();
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _chrome = mounted ? ShellChromeScope.maybeOf(context) : null,
     );
@@ -85,7 +87,9 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
   @override
   void dispose() {
     HardwareKeyboard.instance.removeHandler(_onKey);
-    if (identical(_state.dialogs, this)) _state.dialogs = null;
+    if (identical(_state.connections.dialogs, this)) {
+      _state.connections.dialogs = null;
+    }
     _state.onHomeUnmounted();
     _searchFocus.dispose();
     _terminalFocus.dispose();
@@ -114,8 +118,8 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
       case UfShortcut.focusSearch || UfShortcut.newTab:
         _focusSearch();
       case UfShortcut.closeTab:
-        if (_state.activeSession case final tab?) {
-          unawaited(_state.closeTab(tab));
+        if (_state.connections.activeSession case final tab?) {
+          unawaited(_state.connections.closeTab(tab));
         }
       // handled by the focused terminal
       case UfShortcut.copy ||
@@ -127,36 +131,6 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
     }
     return true;
   }
-
-  // Ctrl+1 to Ctrl+9 (Cmd on macOS) picks the personal vault, then each org in order; the terminal keeps its keys.
-  bool _vaultShortcut(KeyEvent event, HardwareKeyboard keyboard) {
-    final mac = defaultTargetPlatform == TargetPlatform.macOS;
-    final modifier = mac ? keyboard.isMetaPressed : keyboard.isControlPressed;
-    if (event is! KeyDownEvent || !modifier || keyboard.isShiftPressed) {
-      return false;
-    }
-    if (_terminalFocus.hasFocus) return false;
-    final digit = _digits.indexOf(event.logicalKey);
-    if (digit < 0) return false;
-    final orgs = _state.serverHas(Flag.orgs) ? _state.orgs : null;
-    final vaults = [null, ...?orgs?.orgs.map((o) => o.id)];
-    if (digit >= vaults.length) return false;
-    orgs?.select(vaults[digit]);
-    _show(null);
-    return true;
-  }
-
-  static const _digits = [
-    LogicalKeyboardKey.digit1,
-    LogicalKeyboardKey.digit2,
-    LogicalKeyboardKey.digit3,
-    LogicalKeyboardKey.digit4,
-    LogicalKeyboardKey.digit5,
-    LogicalKeyboardKey.digit6,
-    LogicalKeyboardKey.digit7,
-    LogicalKeyboardKey.digit8,
-    LogicalKeyboardKey.digit9,
-  ];
 
   void _focusSearch() {
     setState(() {
@@ -240,10 +214,6 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
     () => _treeWidth = (_treeWidth + delta).clamp(_minTree, _maxTree),
   );
 
-  void _saveWidth() => unawaited(
-    _state.updateSettings(_state.settings.copyWith(treeWidth: _treeWidth)),
-  );
-
   @override
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
@@ -261,16 +231,7 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
             Focus(
               key: const Key('loquet-keys'),
               focusNode: _loquetKeys,
-              onKeyEvent: (_, e) {
-                if (e is KeyDownEvent) {
-                  state.loquet.show(state.loquet.engine.key(e.logicalKey));
-                }
-                // focused itself (a tap on the background), it keeps the arrows from moving the focus
-                // away; a focused field or row inside still gets every key
-                return _loquetKeys.hasPrimaryFocus
-                    ? KeyEventResult.handled
-                    : KeyEventResult.ignored;
-              },
+              onKeyEvent: (_, e) => _onLoquetKey(state, e),
               child: GestureDetector(
                 behavior: HitTestBehavior.translucent,
                 onTap: _loquetKeys.requestFocus,
@@ -301,29 +262,12 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
               ShellPage.activity => ActivityScreen(onBack: back),
               ShellPage.trash => TrashScreen(onBack: back),
               ShellPage.settings => SettingsScreen(onBack: back),
-              null => Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  ...banners,
-                  Expanded(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Expanded(
-                          child: Focus(
-                            focusNode: _terminalFocus,
-                            child: TerminalTabs(
-                              onNewTab: _focusSearch,
-                              onEditHost: _editHost,
-                            ),
-                          ),
-                        ),
-                        if (_editor case final editor?)
-                          GrowIn(key: ObjectKey(editor), child: editor),
-                      ],
-                    ),
-                  ),
-                ],
+              null => _Sessions(
+                banners: banners,
+                terminalFocus: _terminalFocus,
+                onNewTab: _focusSearch,
+                onEditHost: _editHost,
+                editor: _editor,
               ),
             },
           ),
@@ -338,7 +282,7 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
     if (chrome == null) return;
     final l = AppLocalizations.of(context);
     final vault = selectedOrg(state)?.name ?? l.vaultPersonal;
-    final tab = state.activeSession?.title ?? l.statusNoSession;
+    final tab = state.connections.activeSession?.title ?? l.statusNoSession;
     final title = switch (page) {
       ShellPage.settings => l.railSettings,
       final page? => '$vault \u2014 ${pageTitle(l, page)}',
@@ -375,33 +319,6 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
             ),
           )
         : _editHost(e.id),
-  );
-
-  Widget _resizer() => Focus(
-    onKeyEvent: (_, event) {
-      if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
-        return KeyEventResult.ignored;
-      }
-      final step = switch (event.logicalKey) {
-        LogicalKeyboardKey.arrowLeft => -_resizeStep,
-        LogicalKeyboardKey.arrowRight => _resizeStep,
-        _ => null,
-      };
-      if (step == null) return KeyEventResult.ignored;
-      _resize(step);
-      _saveWidth();
-      return KeyEventResult.handled;
-    },
-    child: MouseRegion(
-      cursor: SystemMouseCursors.resizeColumn,
-      child: GestureDetector(
-        key: const Key('tree-resizer'),
-        behavior: HitTestBehavior.opaque,
-        onHorizontalDragUpdate: (d) => _resize(d.delta.dx),
-        onHorizontalDragEnd: (_) => _saveWidth(),
-        child: const SizedBox(width: 6, height: double.infinity),
-      ),
-    ),
   );
 
   // Top to bottom: plain http, restore, read-only, update, rejected writes, offline, protocol, key rotations,
@@ -448,27 +365,8 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
           action: download,
           actionKey: const Key('update-download'),
         ),
-      for (final entry in sync?.rejected ?? const <OutboxEntry>[])
-        StatusBanner(
-          tone: BannerTone.danger,
-          message: l.bannerRejected(
-            state.vault?.entry(entry.item.id)?.name ?? entry.item.type,
-            describeError(l, ApiException(entry.lastError ?? 'internal', 0)),
-          ),
-          action: (
-            l.rejectedRetry,
-            () => unawaited(sync!.retry(entry.item.id)),
-          ),
-          secondAction: (
-            l.rejectedKeep,
-            () => unawaited(sync!.keepPersonalCopy(entry.item.id)),
-          ),
-          onDismiss: () => unawaited(sync!.discard(entry.item.id)),
-          dismissTooltip: l.rejectedDiscard,
-          actionKey: Key('unsynced-retry-${entry.item.id}'),
-          secondActionKey: Key('unsynced-keep-${entry.item.id}'),
-          dismissKey: Key('unsynced-discard-${entry.item.id}'),
-        ),
+      if (sync != null)
+        for (final entry in sync.rejected) _rejectedBanner(l, state, entry),
       if (sync != null && !sync.online)
         StatusBanner(tone: BannerTone.warn, message: l.bannerOffline),
       if (sync?.lastError is FormatException)
@@ -482,11 +380,4 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
         ),
     ];
   }
-
-  static String _readOnlyReason(AppLocalizations l, SyncEngine sync) =>
-      switch (sync.compat?.reason) {
-        'no-common-api' => l.readOnlyNoCommonApi,
-        'client-too-old' => l.readOnlyClientTooOld,
-        _ => l.bannerRestoreRefused,
-      };
 }

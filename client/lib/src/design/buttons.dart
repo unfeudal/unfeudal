@@ -83,7 +83,7 @@ class BusyLabel extends StatelessWidget {
   }
 }
 
-/// A [FilledButton] with a [BusyLabel], disabled while [busy].
+/// A [FilledButton] with a [BusyLabel], disabled while `busy`.
 class BusyButton extends FilledButton {
   BusyButton({
     super.key,

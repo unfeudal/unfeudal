@@ -53,12 +53,12 @@ class _TeamsScreenState extends State<TeamsScreen> with BusyAction {
     await run(() async {
       final memberIds = editing.memberIds.toList()..sort();
       editing.id == null
-          ? await state.api!.createTeam(
+          ? await state.api!.orgs.createTeam(
               widget.orgId,
               name: name,
               memberIds: memberIds,
             )
-          : await state.api!.updateTeam(
+          : await state.api!.orgs.updateTeam(
               widget.orgId,
               editing.id!,
               name: name,
@@ -84,7 +84,7 @@ class _TeamsScreenState extends State<TeamsScreen> with BusyAction {
     );
     if (!yes) return;
     await run(() async {
-      await state.api!.deleteTeam(widget.orgId, team.id);
+      await state.api!.orgs.deleteTeam(widget.orgId, team.id);
       await state.sync!.syncNow();
     });
   }
@@ -95,7 +95,7 @@ class _TeamsScreenState extends State<TeamsScreen> with BusyAction {
     final colors = UfColors.of(context);
     final state = AppScope.of(context);
     final block = state.orgs!.block;
-    final enabled = state.serverHas(Flag.teams);
+    final enabled = state.serverInfo.has(Flag.teams);
     final teams = [
       for (final t in block?.teams ?? const <OrgTeam>[])
         if (t.orgId == widget.orgId) t,
@@ -121,76 +121,124 @@ class _TeamsScreenState extends State<TeamsScreen> with BusyAction {
             ),
           ),
           if (editing != null)
-            Card(
-              margin: const EdgeInsets.only(top: 12),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  spacing: 8,
-                  children: [
-                    keyedField(
-                      'team-name',
-                      editing.name,
-                      l.teamName,
-                      maxLength: 100,
-                    ),
-                    for (final m in members)
-                      UfCheckboxRow(
-                        key: Key('team-member-${m.userId}'),
-                        value: editing.memberIds.contains(m.userId),
-                        label: m.email,
-                        onChanged: (on) => setState(
-                          () => on
-                              ? editing.memberIds.add(m.userId)
-                              : editing.memberIds.remove(m.userId),
-                        ),
-                      ),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: FilledButton(
-                        key: const Key('team-save'),
-                        onPressed: _save,
-                        child: Text(l.teamSave),
-                      ),
-                    ),
-                  ],
-                ),
+            _TeamEditor(
+              name: editing.name,
+              memberIds: editing.memberIds,
+              members: members,
+              onToggle: (userId, {required on}) => setState(
+                () => on
+                    ? editing.memberIds.add(userId)
+                    : editing.memberIds.remove(userId),
               ),
+              onSave: _save,
             ),
           if (problem case final error?) UfErrorLine(error),
           const SizedBox(height: 8),
           if (teams.isEmpty && editing == null)
             Text(l.teamsEmpty, style: muted),
           for (final t in teams)
-            UfFocusRing(
-              child: InkWell(
-                key: Key('team-${t.id}'),
-                hoverDuration: UfMotion.of(context).fast,
-                onTap: () => _edit(t),
-                child: ItemRow(
-                  icon: UfIcons.usersThree,
-                  title: t.name,
-                  subtitle: [
-                    for (final m in members)
-                      if (t.memberIds.contains(m.userId)) m.email,
-                  ].join(', '),
-                  trailing: [
-                    UfStatusChip(
-                      l.teamMemberCount(t.memberIds.length),
-                      tone: UfChipTone.muted,
-                    ),
-                    IconButton(
-                      key: Key('team-delete-${t.id}'),
-                      tooltip: l.teamDelete,
-                      onPressed: () => _delete(t),
-                      icon: const Icon(UfIcons.trash),
-                    ),
-                  ],
-                ),
-              ),
+            _TeamRow(
+              team: t,
+              members: members,
+              onTap: () => _edit(t),
+              onDelete: () => _delete(t),
             ),
         ],
+      ),
+    );
+  }
+}
+
+class _TeamEditor extends StatelessWidget {
+  const _TeamEditor({
+    required this.name,
+    required this.memberIds,
+    required this.members,
+    required this.onToggle,
+    required this.onSave,
+  });
+
+  final TextEditingController name;
+  final Set<String> memberIds;
+  final List<OrgMember> members;
+  final void Function(String userId, {required bool on}) onToggle;
+  final VoidCallback onSave;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    return Card(
+      margin: const EdgeInsets.only(top: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          spacing: 8,
+          children: [
+            keyedField('team-name', name, l.teamName, maxLength: 100),
+            for (final m in members)
+              UfCheckboxRow(
+                key: Key('team-member-${m.userId}'),
+                value: memberIds.contains(m.userId),
+                label: m.email,
+                onChanged: (on) => onToggle(m.userId, on: on),
+              ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: FilledButton(
+                key: const Key('team-save'),
+                onPressed: onSave,
+                child: Text(l.teamSave),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TeamRow extends StatelessWidget {
+  const _TeamRow({
+    required this.team,
+    required this.members,
+    required this.onTap,
+    required this.onDelete,
+  });
+
+  final OrgTeam team;
+  final List<OrgMember> members;
+  final VoidCallback onTap;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    return UfFocusRing(
+      child: InkWell(
+        key: Key('team-${team.id}'),
+        hoverDuration: UfMotion.of(context).fast,
+        onTap: onTap,
+        child: ItemRow(
+          icon: UfIcons.usersThree,
+          title: team.name,
+          subtitle: [
+            for (final m in members)
+              if (team.memberIds.contains(m.userId)) m.email,
+          ].join(', '),
+          trailing: [
+            UfStatusChip(
+              l.teamMemberCount(team.memberIds.length),
+              tone: UfChipTone.muted,
+            ),
+            IconButton(
+              key: Key('team-delete-${team.id}'),
+              tooltip: l.teamDelete,
+              onPressed: onDelete,
+              icon: const Icon(UfIcons.trash),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -37,8 +37,7 @@ class _UnlockScreenState extends State<UnlockScreen> with BusyAction {
   late final Future<bool> _biometric = _biometricEnabled();
 
   Future<bool> _biometricEnabled() async =>
-      _state.serverHas(Flag.biometricUnlock) &&
-      (await _state.biometric?.isEnabled() ?? false);
+      await _state.biometrics?.isOffered() ?? false;
 
   @override
   void initState() {
@@ -129,40 +128,31 @@ class _UnlockScreenState extends State<UnlockScreen> with BusyAction {
               onPressed: _submit,
               label: l.unlockSubmit,
             ),
-            links: [
-              FutureBuilder(
-                future: _biometric,
-                builder: (context, enabled) => enabled.data ?? false
-                    ? TextButton(
-                        key: const Key('unlock-biometric'),
-                        onPressed: busy ? null : _state.unlockWithBiometrics,
-                        child: Text(
-                          Platform.isMacOS
-                              ? l.unlockBiometricMac
-                              : l.unlockBiometricWindows,
-                        ),
-                      )
-                    : const SizedBox.shrink(),
-              ),
-              TextButton(
-                onPressed: _state.signOut,
-                child: Text(l.unlockRelogin),
-              ),
-              if (state.serverHas(Flag.recoveryKit))
-                TextButton(
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => const RecoveryScreen(),
-                    ),
-                  ),
-                  child: Text(l.loginToRecover),
-                ),
-            ],
+            links: _otherWaysIn(state, l),
           ),
         ],
       ),
     );
   }
+
+  List<Widget> _otherWaysIn(AppState state, AppLocalizations l) => [
+    FutureBuilder(
+      future: _biometric,
+      builder: (context, enabled) => enabled.data ?? false
+          ? TextButton(
+              key: const Key('unlock-biometric'),
+              onPressed: busy ? null : _state.unlockWithBiometrics,
+              child: Text(
+                Platform.isMacOS
+                    ? l.unlockBiometricMac
+                    : l.unlockBiometricWindows,
+              ),
+            )
+          : const SizedBox.shrink(),
+    ),
+    TextButton(onPressed: _state.signOut, child: Text(l.unlockRelogin)),
+    if (state.serverInfo.has(Flag.recoveryKit)) const RecoverLink(),
+  ];
 }
 
 // The known account on this device, in place of an e-mail field: its initial, name and address.

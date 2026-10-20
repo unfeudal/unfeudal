@@ -54,7 +54,7 @@ class _AclEditorState extends State<AclEditor> with BusyAction {
   Future<void> _save() async {
     final state = AppScope.read(context);
     await run(() async {
-      await state.api!.putAcl(widget.folderId, [
+      await state.api!.orgs.putAcl(widget.folderId, [
         for (final MapEntry(key: id, value: (type, allow, deny))
             in _entries.entries)
           if (allow.isNotEmpty || deny.isNotEmpty)
@@ -62,6 +62,54 @@ class _AclEditorState extends State<AclEditor> with BusyAction {
       ]);
       await state.sync!.syncNow();
     });
+  }
+
+  // One right of one principal: allow, deny (members only) or unset. A manager who is not an admin can only
+  // deny what they lack, and keeps their own manage.
+  Widget _toggle(
+    String id,
+    PrincipalType type,
+    Permission p, {
+    required bool isAdmin,
+    required Set<Permission> held,
+    required String me,
+  }) {
+    final l = AppLocalizations.of(context);
+    final (_, allow, deny) =
+        _entries[id] ?? (type, <Permission>{}, <Permission>{});
+    final state = allow.contains(p)
+        ? UfTriState.allow
+        : deny.contains(p)
+        ? UfTriState.deny
+        : UfTriState.unset;
+    final canDeny = type == PrincipalType.user;
+    final canGrant = isAdmin || held.contains(p);
+    final locked =
+        !isAdmin &&
+        ((id == me && p == Permission.manage) ||
+            (!canGrant && !canDeny && state == UfTriState.unset));
+    return UfTriToggle(
+      key: Key('acl-$id-${p.name}'),
+      state: state,
+      canDeny: canDeny,
+      semanticLabel: permissionLabel(l, p),
+      onChanged: locked
+          ? null
+          : (next) => setState(() {
+              final to = next == UfTriState.allow && !canGrant
+                  ? UfTriState.deny
+                  : next;
+              final entry = _entries[id] ??= (
+                type,
+                <Permission>{},
+                <Permission>{},
+              );
+              entry.$2.remove(p);
+              entry.$3.remove(p);
+              if (to == UfTriState.allow) entry.$2.add(p);
+              if (to == UfTriState.deny) entry.$3.add(p);
+            }),
+    );
   }
 
   @override
@@ -75,58 +123,19 @@ class _AclEditorState extends State<AclEditor> with BusyAction {
     final isAdmin = orgs.isAdmin(widget.orgId);
     final held = orgs.permissions(widget.orgId, widget.folderId);
     final teams = [
-      if (state.serverHas(Flag.teams))
+      if (state.serverInfo.has(Flag.teams))
         for (final t in block?.teams ?? const <OrgTeam>[])
           if (t.orgId == widget.orgId) t,
     ]..sort((a, b) => a.name.compareTo(b.name));
-    final members = state.serverHas(Flag.userOverrides)
+    final members = state.serverInfo.has(Flag.userOverrides)
         ? orgs.membersOf(widget.orgId)
         : const <OrgMember>[];
     final folderName = state.vault?.entry(widget.folderId)?.name ?? '';
 
-    /// One right of one principal: allow, deny (members only) or unset. A manager who is not an admin can only
-    /// deny what they lack, and keeps their own manage.
-    Widget toggle(String id, PrincipalType type, Permission p) {
-      final (_, allow, deny) =
-          _entries[id] ?? (type, <Permission>{}, <Permission>{});
-      final state = allow.contains(p)
-          ? UfTriState.allow
-          : deny.contains(p)
-          ? UfTriState.deny
-          : UfTriState.unset;
-      final canDeny = type == PrincipalType.user;
-      final canGrant = isAdmin || held.contains(p);
-      final locked =
-          !isAdmin &&
-          ((id == me && p == Permission.manage) ||
-              (!canGrant && !canDeny && state == UfTriState.unset));
-      return UfTriToggle(
-        key: Key('acl-$id-${p.name}'),
-        state: state,
-        canDeny: canDeny,
-        semanticLabel: permissionLabel(l, p),
-        onChanged: locked
-            ? null
-            : (next) => setState(() {
-                final to = next == UfTriState.allow && !canGrant
-                    ? UfTriState.deny
-                    : next;
-                final entry = _entries[id] ??= (
-                  type,
-                  <Permission>{},
-                  <Permission>{},
-                );
-                entry.$2.remove(p);
-                entry.$3.remove(p);
-                if (to == UfTriState.allow) entry.$2.add(p);
-                if (to == UfTriState.deny) entry.$3.add(p);
-              }),
-      );
-    }
-
     List<Widget> row(String id, String name, PrincipalType type) => [
       Text(name, overflow: TextOverflow.ellipsis),
-      for (final p in Permission.values) toggle(id, type, p),
+      for (final p in Permission.values)
+        _toggle(id, type, p, isAdmin: isAdmin, held: held, me: me),
     ];
 
     return ManageFrame(

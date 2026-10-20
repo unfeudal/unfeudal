@@ -141,85 +141,91 @@ class _RecoveryScreenState extends State<RecoveryScreen> with BusyAction {
         step: l.stepOf(_step, 2),
         title: first ? l.recoverTitle : l.recoverPasswordTitle,
         subtitle: first ? l.recoverSubtitle : l.recoverPasswordSubtitle,
-        children: [
-          if (first) ...[
-            keyedField(
-              'recover-server',
-              _server,
-              l.loginServer,
-              keyboard: TextInputType.url,
-            ),
-            keyedField(
-              'recover-email',
-              _email,
-              l.loginEmail,
-              keyboard: TextInputType.emailAddress,
-            ),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton(
-                key: const Key('recover-open-kit'),
-                onPressed: _openKit,
-                child: Text(l.recoverOpenKit),
-              ),
-            ),
-            keyedField(
-              'recover-key',
-              _key,
-              l.recoverKey,
-              mono: true,
-              hint: 'XXXX-XXXX-XXXX-XXXX-\u2026',
-              onSubmitted: (_) => _next(),
-            ),
-          ] else ...[
-            keyedField(
-              'recover-password',
-              _password,
-              l.recoverNewPassword,
-              secret: true,
-              strength: true,
-            ),
-            keyedField(
-              'recover-confirm',
-              _confirm,
-              l.setupConfirm,
-              secret: true,
-            ),
-            LockNotice(l.setupWarning),
-          ],
-          if (problem case final problem?) UfErrorLine(problem),
-          if (first)
-            LockActions(
-              primary: FilledButton(
-                key: const Key('recover-next'),
-                onPressed: _next,
-                child: Text(l.stepNext),
-              ),
-              links: [
-                CancelButton(onPressed: () => Navigator.of(context).maybePop()),
-              ],
-            )
-          else
-            LockActions(
-              primary: BusyButton(
-                key: const Key('recover-submit'),
-                busy: busy,
-                onPressed: _submit,
-                label: l.recoverSubmit,
-              ),
-              links: [
-                TextButton(
-                  key: const Key('recover-back'),
-                  onPressed: () => setState(() {
-                    problem = null;
-                    _step = 1;
-                  }),
-                  child: Text(l.recoverBack),
-                ),
-              ],
-            ),
-        ],
+        children: first ? _identifyStep(l) : _passwordStep(l),
       ),
     );
   }
+
+  List<Widget> _identifyStep(AppLocalizations l) => [
+    keyedField(
+      'recover-server',
+      _server,
+      l.loginServer,
+      keyboard: TextInputType.url,
+    ),
+    keyedField(
+      'recover-email',
+      _email,
+      l.loginEmail,
+      keyboard: TextInputType.emailAddress,
+    ),
+    Align(
+      alignment: Alignment.centerLeft,
+      child: TextButton(
+        key: const Key('recover-open-kit'),
+        onPressed: _openKit,
+        child: Text(l.recoverOpenKit),
+      ),
+    ),
+    keyedField(
+      'recover-key',
+      _key,
+      l.recoverKey,
+      mono: true,
+      hint: 'XXXX-XXXX-XXXX-XXXX-\u2026',
+      onSubmitted: (_) => _next(),
+    ),
+    if (problem case final problem?) UfErrorLine(problem),
+    LockActions(
+      primary: FilledButton(
+        key: const Key('recover-next'),
+        onPressed: _next,
+        child: Text(l.stepNext),
+      ),
+      links: [CancelButton(onPressed: () => Navigator.of(context).maybePop())],
+    ),
+  ];
+
+  List<Widget> _passwordStep(AppLocalizations l) => [
+    keyedField(
+      'recover-password',
+      _password,
+      l.recoverNewPassword,
+      secret: true,
+      strength: true,
+    ),
+    keyedField('recover-confirm', _confirm, l.setupConfirm, secret: true),
+    LockNotice(l.setupWarning),
+    if (problem case final problem?) UfErrorLine(problem),
+    LockActions(
+      primary: BusyButton(
+        key: const Key('recover-submit'),
+        busy: busy,
+        onPressed: _submit,
+        label: l.recoverSubmit,
+      ),
+      links: [
+        TextButton(
+          key: const Key('recover-back'),
+          onPressed: () => setState(() {
+            problem = null;
+            _step = 1;
+          }),
+          child: Text(l.recoverBack),
+        ),
+      ],
+    ),
+  ];
+}
+
+/// The lock screens' link to [RecoveryScreen].
+class RecoverLink extends StatelessWidget {
+  const RecoverLink({super.key});
+
+  @override
+  Widget build(BuildContext context) => TextButton(
+    onPressed: () => Navigator.of(context)
+        .push(MaterialPageRoute<void>(builder: (_) => const RecoveryScreen())),
+    child: Text(AppLocalizations.of(context).loginToRecover),
+  );
 }

@@ -125,4 +125,15 @@ void main() {
       'autoLockMinutes',
     });
   });
+
+  test('settings with the same nested unknown values are equal', () {
+    Settings read() => Settings.fromJson({
+      'future': {
+        'panels': [1, 2],
+      },
+    });
+
+    expect(read(), read());
+    expect(read().hashCode, read().hashCode);
+  });
 }

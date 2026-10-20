@@ -36,7 +36,7 @@ void main() {
     await pumpReal(t, rounds: 5);
     await t.tap(find.byKey(const Key('settings-biometric')));
     await pumpReal(t, rounds: 5);
-    expect(await t.runAsync(() => s.biometric!.isEnabled()), isTrue);
+    expect(await t.runAsync(() => s.biometrics!.isEnabled()), isTrue);
     await t.runAsync(s.lock);
     await pumpApp(t, state: s, child: const UnlockScreen());
     await pumpReal(t, rounds: 5);

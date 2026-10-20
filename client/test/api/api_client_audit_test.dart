@@ -88,7 +88,7 @@ void main() {
       'server': {'auditDays': 365, 'maxVersions': 0, 'trashDays': 30},
       'org': {'auditDays': 90, 'maxVersions': null, 'trashDays': null},
     };
-    final r = await api.orgRetention(testOrgId);
+    final r = await api.orgs.retention(testOrgId);
     expect(r.server, {'auditDays': 365, 'maxVersions': 0, 'trashDays': 30});
     expect(r.org, {'auditDays': 90, 'maxVersions': null, 'trashDays': null});
   });

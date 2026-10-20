@@ -163,7 +163,7 @@ Future<Item> sealOrgItem(
       aad(PayloadPart.meta),
       meta,
       keys.metaKey,
-      KeyIds.folder(keyFolder, keys.version, PayloadPart.meta),
+      keyId: KeyIds.folder(keyFolder, keys.version, PayloadPart.meta),
       seq: seq,
     )).toJson(),
     'secret': secret == null
@@ -172,7 +172,7 @@ Future<Item> sealOrgItem(
             aad(PayloadPart.secret),
             secret,
             keys.secretKey!,
-            KeyIds.folder(keyFolder, keys.version, PayloadPart.secret),
+            keyId: KeyIds.folder(keyFolder, keys.version, PayloadPart.secret),
             seq: seq,
           )).toJson(),
     'createdAt': iso(DateTime.utc(2026, 10, 14)),
@@ -221,8 +221,7 @@ class ClientOrg {
     final vault = Vault(
       mirror: mirror,
       ledger: LedgerStore(mirror),
-      write: (item) async =>
-          mirror.enqueue(item, baseRevision: item.revision ?? 0),
+      write: (items) async => mirror.enqueueAll(items),
     );
     await vault.unlock(acc.unlocked.userKey);
     final keyring = FolderKeyring(mirror);

@@ -257,7 +257,6 @@
     }
   },
   "hostKeyAccept": "Accept the new key",
-  "cancel": "Cancel",
   "startupCommandTitle": "Run this startup command on {host}?",
   "@startupCommandTitle": {
     "placeholders": {

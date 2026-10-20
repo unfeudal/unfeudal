@@ -19,6 +19,7 @@ void main() {
       ..accessToken = login.accessToken
       ..refreshToken = login.refreshToken;
     final events = StreamController<AppEvent>.broadcast();
+    addTearDown(events.close);
     var enabled = true;
     EventReporter(
       events: events.stream,
@@ -29,11 +30,11 @@ void main() {
     final f = PortForward(localPort: 5432, remoteHost: 'db', remotePort: 5432);
     for (final e in <AppEvent>[
       JumpUsed(hostId: host, hopIds: [bastion]),
-      ConnectSucceeded(hostId: host, user: 'root', tags: const []),
+      ConnectSucceeded(hostId: host, user: 'root'),
       ForwardStarted(hostId: host, forward: f),
       ForwardStopped(hostId: host, localPort: 5432),
       SessionClosed(hostId: host),
-      ConnectSucceeded(hostId: host, user: 'root', tags: const []),
+      ConnectSucceeded(hostId: host, user: 'root'),
       SecretRevealed(itemId: host),
     ]) {
       events.add(e);
@@ -96,7 +97,7 @@ void main() {
       ..keyType = 'ssh-ed25519'
       ..fingerprint = 'SHA256:${'A' * 43}';
     final AppState s = testAppState(harness: h, ssh: ssh)
-      ..dialogs = (FakeDialogs()..accept = true);
+      ..connections.dialogs = (FakeDialogs()..accept = true);
     await s.boot();
     await s.login(
       server: h.baseUrl,
@@ -115,11 +116,11 @@ void main() {
         ),
     ];
     await s.sync!.syncNow();
-    await s.closeTab(await s.connect(a));
-    await s.connect(b);
+    await s.connections.closeTab(await s.connections.connect(a));
+    await s.connections.connect(b);
     ssh.shells.last.hangUp();
     await Future<void>.delayed(Duration.zero);
-    await s.connect(c);
+    await s.connections.connect(c);
     await Future.sync(s.lock);
     await Future<void>.delayed(const Duration(milliseconds: 20));
     expect(closed, [a, b, c]);

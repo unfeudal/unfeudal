@@ -33,7 +33,7 @@ Future<void> bindHost(Vault vault, String hostId, String identityId) =>
     );
 
 (VaultEntry, HostBindingMeta)? _bindingOf(Vault vault, String hostId) {
-  final e = Vault.winner(
+  final e = winner(
     vault.ofKind(ItemKind.hostBinding),
     (e) => HostBindingMeta.fromJson(e.meta).hostItemId == hostId,
   );

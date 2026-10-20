@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import 'dart:typed_data';
 
-import 'package:cryptography/cryptography.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:unfeudal_client/src/orgs/folder_keyring.dart';
 import 'package:unfeudal_client/src/storage/local_mirror.dart';

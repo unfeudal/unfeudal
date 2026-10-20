@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
@@ -53,13 +55,13 @@ class _OrgSettingsScreenState extends State<OrgSettingsScreen> with BusyAction {
     for (final k in _retention) {
       _values[k] = _saved[k] as int?;
     }
-    _loadRetention();
+    unawaited(_loadRetention());
   }
 
   // The org's values start the fields; a failed read leaves them as they are, without the server's values.
   Future<void> _loadRetention() async {
     try {
-      final r = await AppScope.read(context).api!.orgRetention(widget.orgId);
+      final r = await AppScope.read(context).api!.orgs.retention(widget.orgId);
       if (!mounted) return;
       setState(() {
         _server = r.server;
@@ -93,7 +95,7 @@ class _OrgSettingsScreenState extends State<OrgSettingsScreen> with BusyAction {
     final rename = name.isNotEmpty && name != _saved['name'];
     if (settings.isEmpty && !rename) return;
     await run(() async {
-      await state.api!.updateOrg(
+      await state.api!.orgs.update(
         widget.orgId,
         name: rename ? name : null,
         settings: settings.isEmpty ? null : settings,
@@ -117,22 +119,16 @@ class _OrgSettingsScreenState extends State<OrgSettingsScreen> with BusyAction {
     );
     if (yes != true || !mounted) return;
     await run(() async {
-      await state.api!.deleteOrg(widget.orgId);
+      await state.api!.orgs.delete(widget.orgId);
       // the section closes once the org leaves the selection
       state.orgs!.select(null);
       await state.sync!.syncNow();
     });
   }
 
-  @override
-  Widget build(BuildContext context) {
+  Widget _retentionRow(String key, String settingKey, String label) {
     final l = AppLocalizations.of(context);
-    final colors = UfColors.of(context);
-    final orgs = AppScope.of(context).orgs;
-    final org = orgs?.byId(widget.orgId);
-    final isAdmin = orgs?.isAdmin(widget.orgId) ?? false;
-    final isOwner = orgs?.isOwner(widget.orgId) ?? false;
-    Widget number(String key, String settingKey, String label) => SettingRow(
+    return SettingRow(
       label: label,
       hint: switch (_server?[settingKey]) {
         null => null,
@@ -146,55 +142,70 @@ class _OrgSettingsScreenState extends State<OrgSettingsScreen> with BusyAction {
         onChanged: (v) => setState(() => _values[settingKey] = v),
       ),
     );
+  }
+
+  List<Widget> _adminRows() {
+    final l = AppLocalizations.of(context);
+    return [
+      SettingRow(
+        label: l.orgName,
+        trailing: SizedBox(
+          width: 240,
+          child: TextField(
+            key: const Key('org-name-field'),
+            controller: _name,
+            maxLength: 100,
+            decoration: const InputDecoration(counterText: ''),
+          ),
+        ),
+      ),
+      SettingRow(
+        label: l.orgMascot,
+        onTap: () => setState(() => _mascot = !_mascot),
+        trailing: UfSwitch(
+          key: const Key('org-mascot'),
+          semanticLabel: l.orgMascot,
+          value: _mascot,
+          onChanged: (v) => setState(() => _mascot = v),
+        ),
+      ),
+      _retentionRow('org-audit-days', 'auditDays', l.orgAuditDays),
+      _retentionRow('org-max-versions', 'maxVersions', l.orgMaxVersions),
+      _retentionRow('org-trash-days', 'trashDays', l.orgTrashDays),
+      if (problem case final error?)
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: UfErrorLine(error),
+        ),
+      Padding(
+        padding: const EdgeInsets.only(top: 12, bottom: 24),
+        child: Align(
+          alignment: Alignment.centerRight,
+          child: FilledButton(
+            key: const Key('org-settings-save'),
+            onPressed: _save,
+            child: Text(l.orgSettingsSave),
+          ),
+        ),
+      ),
+    ];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    final colors = UfColors.of(context);
+    final orgs = AppScope.of(context).orgs;
+    final org = orgs?.byId(widget.orgId);
+    final isAdmin = orgs?.isAdmin(widget.orgId) ?? false;
+    final isOwner = orgs?.isOwner(widget.orgId) ?? false;
     // a Material of its own: the section, a dialog or a test may host it
     return Material(
       type: MaterialType.transparency,
       child: ListView(
         padding: const EdgeInsets.only(bottom: 40),
         children: [
-          if (isAdmin) ...[
-            SettingRow(
-              label: l.orgName,
-              trailing: SizedBox(
-                width: 240,
-                child: TextField(
-                  key: const Key('org-name-field'),
-                  controller: _name,
-                  maxLength: 100,
-                  decoration: const InputDecoration(counterText: ''),
-                ),
-              ),
-            ),
-            SettingRow(
-              label: l.orgMascot,
-              onTap: () => setState(() => _mascot = !_mascot),
-              trailing: UfSwitch(
-                key: const Key('org-mascot'),
-                semanticLabel: l.orgMascot,
-                value: _mascot,
-                onChanged: (v) => setState(() => _mascot = v),
-              ),
-            ),
-            number('org-audit-days', 'auditDays', l.orgAuditDays),
-            number('org-max-versions', 'maxVersions', l.orgMaxVersions),
-            number('org-trash-days', 'trashDays', l.orgTrashDays),
-            if (problem case final error?)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: UfErrorLine(error),
-              ),
-            Padding(
-              padding: const EdgeInsets.only(top: 12, bottom: 24),
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: FilledButton(
-                  key: const Key('org-settings-save'),
-                  onPressed: _save,
-                  child: Text(l.orgSettingsSave),
-                ),
-              ),
-            ),
-          ],
+          if (isAdmin) ..._adminRows(),
           SettingRow(
             label: l.orgLeave,
             trailing: TextButton(

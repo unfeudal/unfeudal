@@ -14,10 +14,10 @@ extension OrgBlockAdmin on OrgBlock {
 /// see it) or, for the caller's own row, from `orgs`. Unknown permission names are skipped.
 Explanation explainFromBlock(
   OrgBlock block,
-  String orgId,
-  String userId,
-  String folderId,
-) {
+  String orgId, {
+  required String userId,
+  required String folderId,
+}) {
   final index = (_indexes[block] ??= {}).putIfAbsent(
     orgId,
     () => _OrgIndex(block, orgId),

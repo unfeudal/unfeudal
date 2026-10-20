@@ -747,7 +747,7 @@ class SyncHarness {
       if (current == null) return _error(404, 'not_found');
       return _json({
         'revisions': current.$1.purged
-            ? []
+            ? <Object?>[]
             : [
                 current.$1.toJson(),
                 for (final i in revisionsOf[id] ?? <Item>[]) i.toJson(),

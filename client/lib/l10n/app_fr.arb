@@ -156,7 +156,6 @@
   "hostKeyPresented": "Présentée",
   "hostKeyTypeName": "Saisir {host} pour accepter la nouvelle clé",
   "hostKeyAccept": "Accepter la nouvelle clé",
-  "cancel": "Annuler",
   "startupCommandTitle": "Lancer cette commande de démarrage sur {host} ?",
   "startupCommandBody": "Commande définie par un membre de l'organisation. Elle s'exécute dans cette session, avec les droits du compte SSH utilisé.",
   "startupCommandRun": "Lancer",

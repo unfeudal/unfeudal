@@ -85,15 +85,17 @@ class _LoquetState extends State<Loquet> with TickerProviderStateMixin {
         LoquetMood.connecting => null,
         _ => old.mood == LoquetMood.sleep ? LoquetFx.stretch : null,
       };
-      _fade.forward(from: 0).whenComplete(() {
-        if (!mounted) return;
-        setState(() => _previous = null);
-        if (widget.mood == LoquetMood.connecting) {
-          _play(null, const Duration(milliseconds: 520));
-        } else if (entry != null) {
-          _play(entry);
-        }
-      });
+      unawaited(
+        _fade.forward(from: 0).whenComplete(() {
+          if (!mounted) return;
+          setState(() => _previous = null);
+          if (widget.mood == LoquetMood.connecting) {
+            _play(null, const Duration(milliseconds: 520));
+          } else if (entry != null) {
+            _play(entry);
+          }
+        }),
+      );
     } else if (widget.fx != null && widget.fx != old.fx) {
       _play(widget.fx);
     }

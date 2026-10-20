@@ -128,7 +128,10 @@ void main() {
       const KeyboardInteractiveDialog(
         name: 'otp',
         instruction: '',
-        prompts: [SshPrompt('Code: ', true), SshPrompt('Password: ', false)],
+        prompts: [
+          SshPrompt('Code: ', echo: true),
+          SshPrompt('Password: ', echo: false),
+        ],
       ),
     );
     final fields = t.widgetList<TextField>(find.byType(TextField)).toList();

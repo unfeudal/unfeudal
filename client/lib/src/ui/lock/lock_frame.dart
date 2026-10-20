@@ -44,42 +44,13 @@ class LockFrame extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = UfColors.of(context);
-    final text = Theme.of(context).textTheme;
     final content = Column(
       mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       spacing: 24,
       children: [
-        Row(
-          spacing: 10,
-          children: [
-            UfLogo(size: 28, color: colors.text),
-            Text(
-              'unfeudal',
-              style: text.titleMedium!.copyWith(
-                fontSize: 21,
-                letterSpacing: -0.5,
-              ),
-            ),
-          ],
-        ),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          spacing: 6,
-          children: [
-            if (step case final step?)
-              Text(step, style: text.labelSmall!.copyWith(color: colors.muted)),
-            Text(title, style: text.displaySmall),
-            if (subtitle case final subtitle?)
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 440),
-                child: Text(
-                  subtitle,
-                  style: text.bodyMedium!.copyWith(color: colors.muted),
-                ),
-              ),
-          ],
-        ),
+        const _Wordmark(),
+        _LockHeading(step: step, title: title, subtitle: subtitle),
         Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           spacing: 12,
@@ -122,6 +93,56 @@ class LockFrame extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+class _Wordmark extends StatelessWidget {
+  const _Wordmark();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      spacing: 10,
+      children: [
+        UfLogo(size: 28, color: UfColors.of(context).text),
+        Text(
+          'unfeudal',
+          style: Theme.of(context).textTheme.titleMedium!
+              .copyWith(fontSize: 21, letterSpacing: -0.5),
+        ),
+      ],
+    );
+  }
+}
+
+class _LockHeading extends StatelessWidget {
+  const _LockHeading({required this.step, required this.title, this.subtitle});
+
+  final String? step;
+  final String title;
+  final String? subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = UfColors.of(context);
+    final text = Theme.of(context).textTheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      spacing: 6,
+      children: [
+        if (step case final step?)
+          Text(step, style: text.labelSmall!.copyWith(color: colors.muted)),
+        Text(title, style: text.displaySmall),
+        if (subtitle case final subtitle?)
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 440),
+            child: Text(
+              subtitle,
+              style: text.bodyMedium!.copyWith(color: colors.muted),
+            ),
+          ),
+      ],
     );
   }
 }

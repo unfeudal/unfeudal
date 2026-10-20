@@ -13,6 +13,8 @@ import 'loquet_memory.dart';
 import 'loquet_pose.dart';
 import 'mood.dart';
 
+part 'reaction_rules.dart';
+
 /// What Loquet does for a moment: a mood over the baseline, maybe an accessory, a line or a movement.
 class Reaction {
   const Reaction(
@@ -135,37 +137,7 @@ class ReactionEngine {
   Reaction? handle(AppEvent event) {
     switch (event) {
       case Unlocked(:final displayName):
-        final first = memory.firstUnlock;
-        if (first == null) {
-          memory.firstUnlock = _now();
-          unawaited(memory.save());
-        }
-        if (first != null &&
-            _now().difference(first) >= const Duration(days: 365)) {
-          final r = _out(
-            const Reaction(
-              LoquetMood.happy,
-              line: LineKey.oneYear,
-              important: true,
-            ),
-            once: 'oneYear',
-          );
-          if (r != null) return r;
-        }
-        if (_now().hour >= 5 && _now().hour < 8) {
-          final r = _out(
-            const Reaction(LoquetMood.yawn, line: LineKey.earlyYawn),
-            once: 'yawn:$_day',
-          );
-          if (r != null) return r;
-        }
-        return _out(
-          Reaction(
-            LoquetMood.happy,
-            line: LineKey.welcome,
-            params: {'name': ?displayName},
-          ),
-        );
+        return _unlocked(displayName);
       case UnlockFailed(:final consecutive) when consecutive >= 3:
         return _out(
           const Reaction(
@@ -179,46 +151,8 @@ class ReactionEngine {
         return _out(
           const Reaction(LoquetMood.connecting, hold: Duration(seconds: 60)),
         );
-      case ConnectSucceeded(:final hostId, :final user):
-        memory.connections++;
-        unawaited(memory.save());
-        for (final (count, line) in [
-          (100, LineKey.connections100),
-          (1000, LineKey.connections1000),
-        ]) {
-          if (memory.connections == count) {
-            final r = _out(
-              Reaction(LoquetMood.happy, line: line, important: true),
-              once: line.name,
-            );
-            if (r != null) return r;
-          }
-        }
-        if (user == 'root' && !_rootHosts.contains(hostId)) {
-          final r = _out(
-            const Reaction(
-              LoquetMood.happy,
-              accessory: LoquetAccessory.hardHat,
-              line: LineKey.root,
-            ),
-            egg: true,
-          );
-          if (r != null) {
-            _rootHosts.add(hostId);
-            return r;
-          }
-        }
-        final t = _now();
-        if (t.weekday == DateTime.friday &&
-            t.hour >= 17 &&
-            event.tags.contains('prod')) {
-          final r = _out(
-            const Reaction(LoquetMood.happy, line: LineKey.fridayProd),
-            once: 'friday:$_day',
-          );
-          if (r != null) return r;
-        }
-        return _out(const Reaction(LoquetMood.happy, line: LineKey.connected));
+      case ConnectSucceeded():
+        return _connected(event);
       case ConnectFailed():
         return _out(
           Reaction(baseline, hold: const Duration(milliseconds: 500)),
@@ -252,6 +186,13 @@ class ReactionEngine {
       case UserIdle():
         _dozing = true;
         return _out(const Reaction(LoquetMood.sleep, spontaneous: true));
+      default:
+        return _handleUserAction(event);
+    }
+  }
+
+  Reaction? _handleUserAction(AppEvent event) {
+    switch (event) {
       case ThemeChanged(mode: ThemeMode.dark):
         return _out(
           Reaction(
@@ -263,36 +204,7 @@ class ReactionEngine {
           egg: true,
         );
       case HostCreated(:final name):
-        memory.hostsCreated++;
-        unawaited(memory.save());
-        if (name == 'localhost') {
-          final r = _out(
-            const Reaction(LoquetMood.happy, line: LineKey.localhost),
-            once: 'localhost',
-            egg: true,
-          );
-          if (r != null) return r;
-        }
-        if (memory.hostsCreated == 1) {
-          final r = _out(
-            const Reaction(
-              LoquetMood.happy,
-              line: LineKey.firstHost,
-              important: true,
-            ),
-            once: 'firstHost',
-          );
-          if (r != null) return r;
-        }
-        if (memory.hostsCreated == 42) {
-          final r = _out(
-            const Reaction(LoquetMood.happy, line: LineKey.host42),
-            once: 'host42',
-            egg: true,
-          );
-          if (r != null) return r;
-        }
-        return _out(const Reaction(LoquetMood.happy));
+        return _hostCreated(name);
       case DeviceAdded(:final activeDevices) when activeDevices >= 2:
         return _out(
           const Reaction(
@@ -303,29 +215,7 @@ class ReactionEngine {
           once: 'secondDevice',
         );
       case LoquetClicked():
-        final t = _now();
-        _clicks
-          ..add(t)
-          ..removeWhere((c) => t.difference(c) > const Duration(seconds: 4));
-        if (_clicks.length >= 10) {
-          _clicks.clear();
-          final r = _out(
-            const Reaction(LoquetMood.dizzy, line: LineKey.dizzy),
-            once: 'dizzy:$_day',
-            egg: true,
-          );
-          if (r != null) return r;
-        }
-        if (baseline == LoquetMood.concerned) {
-          return _out(
-            const Reaction(
-              LoquetMood.concerned,
-              reasons: true,
-              hold: Duration(seconds: 6),
-            ),
-          );
-        }
-        return _out(Reaction(baseline, line: LineKey.idleClick));
+        return _clicked();
       case SharedVaultCreated():
         return milestone('sharedVault', LineKey.sharedVault);
       case KeyRotated():

@@ -18,7 +18,7 @@ void main() {
       ..keyType = 'ssh-ed25519'
       ..fingerprint = 'SHA256:${'A' * 43}';
     final s = testAppState(harness: h, ssh: ssh)
-      ..dialogs = (FakeDialogs()..accept = true);
+      ..connections.dialogs = (FakeDialogs()..accept = true);
     await s.boot();
     await s.login(
       server: h.baseUrl,
@@ -47,7 +47,7 @@ void main() {
       itemIds: [host.id],
     );
     await s.sync!.syncNow();
-    final unbound = await s.connect(host.id);
+    final unbound = await s.connections.connect(host.id);
     expect(unbound.error, isA<MissingBinding>());
     final mine = await s.vault!.upsertItem(
       type: 'identity',
@@ -72,7 +72,7 @@ void main() {
         .map((e) => e.item)
         .singleWhere((i) => i.type == 'hostBinding');
     expect((binding.scope, binding.folderId), (ItemScope.personal, null));
-    await s.connect(host.id);
+    await s.connections.connect(host.id);
     expect(ssh.targets.last.identity!.password, 'mine');
     await bindHost(s.vault!, host.id, mine);
     expect(

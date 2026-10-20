@@ -72,7 +72,7 @@ void main() {
       meta: hostJson('web', user: 'root'),
     );
     await s.sync!.syncNow();
-    await s.loadDevices();
+    await s.api!.devices();
     await s.lock();
     await s.unlock(testPassword);
     await s.sync!.syncNow();

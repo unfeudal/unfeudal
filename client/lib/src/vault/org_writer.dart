@@ -78,7 +78,7 @@ class OrgWriter implements WriteScope {
     }
     final id = newId();
     final keys = FolderKeys.generate(1);
-    final item = await vault.sealItem(
+    final item = await vault.sealer.sealItem(
       id: id,
       type: 'folder',
       orgId: orgId,
@@ -87,7 +87,7 @@ class OrgWriter implements WriteScope {
       keyFor: _keysOf(id, keys),
     );
     mirror.upsertItems([await api.putItem(item, ifMatch: 0)]);
-    await api.putFolderKeys(
+    await api.orgs.putFolderKeys(
       id,
       version: 1,
       wrapped: [
@@ -112,6 +112,7 @@ class OrgWriter implements WriteScope {
   /// Both parts of each item opened with the keys they were sealed with, sealed again with [keys] (rotation);
   /// the vault reloads once, after the last.
   Future<void> resealAll(Iterable<Item> items, FolderKeys keys) async {
+    final sealed = <Item>[];
     try {
       for (final item in items) {
         final meta = await _open(item, PayloadPart.meta);
@@ -121,8 +122,8 @@ class OrgWriter implements WriteScope {
         if (secret != null && keys.secretKey == null) {
           throw const OrgWriteRefused(OrgWriteRefusal.noSecretKey);
         }
-        await vault.send(
-          await vault.sealItem(
+        sealed.add(
+          await vault.sealer.sealItem(
             id: item.id,
             type: item.type,
             orgId: item.orgId!,
@@ -143,13 +144,15 @@ class OrgWriter implements WriteScope {
         );
       }
     } finally {
-      await vault.reload(); // also after a refusal midway: the items already queued show
+      // The items sealed before a refusal midway go too, and show; one commit and one round for all.
+      if (sealed.isNotEmpty) await vault.sendAll(sealed);
+      await vault.reload();
     }
   }
 
   /// A new id in the same org folder, sealed at the folder's current version, revision 0. Null for an unknown type.
   Future<Item?> conflictCopy(Item mine, {required String suffix}) =>
-      vault.conflictCopyIn(
+      vault.sealer.conflictCopyIn(
         this,
         mine,
         suffix: suffix,
@@ -167,8 +170,8 @@ class OrgWriter implements WriteScope {
     return explainFromBlock(
       block,
       orgId,
-      userId,
-      folderId,
+      userId: userId,
+      folderId: folderId,
     ).effective.contains(Permission.edit);
   }
 

@@ -164,15 +164,13 @@ class _UfCommandPaletteState extends State<UfCommandPalette> {
               style: text.labelSmall!.copyWith(color: colors.muted),
             ),
           ),
-          for (final row in group.rows) _row(colors, text, row, index++),
+          for (final row in group.rows) _row(row, index++),
         ],
     ];
   }
 
-  Widget _row(UfColors colors, TextTheme text, UfPaletteRow row, int index) {
+  Widget _row(UfPaletteRow row, int index) {
     final active = index == _active;
-    final hint = row.hint;
-    final detail = row.detail;
     return Semantics(
       key: active ? _activeRow : null,
       button: true,
@@ -183,52 +181,70 @@ class _UfCommandPaletteState extends State<UfCommandPalette> {
         onEnter: (_) => setState(() => _active = index),
         child: GestureDetector(
           onTap: row.onSelected,
-          child: Container(
-            constraints: const BoxConstraints(minHeight: 32),
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: active ? colors.panelHover : null,
-              borderRadius: UfRadius.control,
+          child: _PaletteRowBody(row: row, query: _query, isActive: active),
+        ),
+      ),
+    );
+  }
+}
+
+class _PaletteRowBody extends StatelessWidget {
+  const _PaletteRowBody({
+    required this.row,
+    required this.query,
+    required this.isActive,
+  });
+
+  final UfPaletteRow row;
+  final String query;
+  final bool isActive;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = UfColors.of(context);
+    final text = Theme.of(context).textTheme;
+    final hint = row.hint;
+    final detail = row.detail;
+    return Container(
+      constraints: const BoxConstraints(minHeight: 32),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: isActive ? colors.panelHover : null,
+        borderRadius: UfRadius.control,
+      ),
+      child: Row(
+        spacing: 10,
+        children: [
+          if (row.icon case final icon?)
+            IconTheme.merge(
+              data: IconThemeData(size: 14, color: colors.muted),
+              child: icon,
             ),
-            child: Row(
-              spacing: 10,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (row.icon case final icon?)
-                  IconTheme.merge(
-                    data: IconThemeData(size: 14, color: colors.muted),
-                    child: icon,
-                  ),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      UfMatchText(
-                        row.label,
-                        query: _query,
-                        style: text.bodyMedium!.copyWith(fontSize: 13.5),
-                      ),
-                      if (detail != null)
-                        Text(
-                          detail,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: text.bodySmall!.copyWith(color: colors.muted),
-                        ),
-                    ],
-                  ),
+                UfMatchText(
+                  row.label,
+                  query: query,
+                  style: text.bodyMedium!.copyWith(fontSize: 13.5),
                 ),
-                if (hint != null)
+                if (detail != null)
                   Text(
-                    hint,
-                    style: monoStyle.copyWith(
-                      fontSize: 11,
-                      color: colors.muted,
-                    ),
+                    detail,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: text.bodySmall!.copyWith(color: colors.muted),
                   ),
               ],
             ),
           ),
-        ),
+          if (hint != null)
+            Text(
+              hint,
+              style: monoStyle.copyWith(fontSize: 11, color: colors.muted),
+            ),
+        ],
       ),
     );
   }

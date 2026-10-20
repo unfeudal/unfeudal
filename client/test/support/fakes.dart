@@ -11,7 +11,7 @@ import 'package:unfeudal_client/src/loquet/loquet_memory.dart';
 import 'package:unfeudal_client/src/session/biometrics.dart';
 import 'package:unfeudal_client/src/session/session_store.dart';
 import 'package:unfeudal_client/src/settings/settings.dart';
-import 'package:unfeudal_client/src/ssh/jump_connector.dart';
+import 'package:unfeudal_client/src/ssh/connections.dart';
 import 'package:unfeudal_client/src/ssh/ssh_connector.dart';
 import 'package:unfeudal_client/src/storage/local_mirror.dart';
 import 'package:unfeudal_client/src/sync/ledger_store.dart';
@@ -52,7 +52,7 @@ Item wireItem(
   if (purged) 'purged': true,
   'meta': purged ? null : fakeEnvelope().toJson(),
   'secret': null,
-  'createdAt': iso(DateTime.utc(2026, 10, 1)),
+  'createdAt': iso(DateTime.utc(2026, 10)),
   'updatedAt': iso(DateTime.utc(2026, 10, 14)),
   'updatedBy': testUserId,
   'updatedDevice': updatedDevice ?? testDeviceId,
@@ -93,7 +93,7 @@ Future<Item> sealItem(
       aad(PayloadPart.meta),
       meta,
       key,
-      KeyIds.user,
+      keyId: KeyIds.user,
       seq: seq,
     )).toJson(),
     'secret': secret == null
@@ -102,7 +102,7 @@ Future<Item> sealItem(
             aad(PayloadPart.secret),
             secret,
             key,
-            KeyIds.user,
+            keyId: KeyIds.user,
             seq: seq,
           )).toJson(),
     'createdAt': iso(createdAt ?? DateTime.utc(2026, 10, 14)),
@@ -147,8 +147,7 @@ Future<Vault> testVault(Uint8List key, LocalMirror mirror) async {
   final v = Vault(
     mirror: mirror,
     ledger: LedgerStore(mirror),
-    write: (item) async =>
-        mirror.enqueue(item, baseRevision: item.revision ?? 0),
+    write: (items) async => mirror.enqueueAll(items),
   );
   await v.unlock(key);
   return v;
@@ -211,7 +210,7 @@ class FakeSecureKv implements SecureKv {
 class FakeSshConnector extends SshConnector {
   String keyType = 'ssh-ed25519';
   String fingerprint = 'SHA256:${'A' * 43}';
-  Object? failWith;
+  Exception? failWith;
   final targets = <ConnectTarget>[];
   final shells = <FakeShell>[];
   final hops = <FakeHop>[];
@@ -349,7 +348,6 @@ Future<int> freePort() async {
 
 class FakeShell implements SshShell {
   final _stdout = StreamController<Uint8List>.broadcast();
-  final _stderr = StreamController<Uint8List>.broadcast();
   final _done = Completer<void>();
   final written = <Uint8List>[];
   final sizes = <(int, int)>[];
@@ -365,7 +363,7 @@ class FakeShell implements SshShell {
   Stream<Uint8List> get stdout => _stdout.stream;
 
   @override
-  Stream<Uint8List> get stderr => _stderr.stream;
+  Stream<Uint8List> get stderr => const Stream.empty();
 
   @override
   void write(Uint8List data) => written.add(data);

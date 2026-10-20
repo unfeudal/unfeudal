@@ -35,7 +35,7 @@ class LicensesScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
-    final source = AppScope.of(context).serverSource;
+    final source = AppScope.of(context).serverInfo.source;
     return ManageFrame(
       title: l.settingsLicenses,
       maxWidth: 520,

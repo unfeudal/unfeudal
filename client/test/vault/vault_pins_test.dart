@@ -24,12 +24,7 @@ void main() {
 
   test('ledger pin wins over a reverted or deleted knownHost item', () async {
     final m = LocalMirror.inMemory();
-    final kh = await sealItem(
-      key,
-      type: 'knownHost',
-      meta: pin('A'),
-      revision: 1,
-    );
+    final kh = await sealItem(key, type: 'knownHost', meta: pin('A'));
     m.upsertItems([kh]);
     final v = await testVault(key, m);
     // The server swaps the key.
@@ -44,14 +39,17 @@ void main() {
       ),
     ]);
     await v.reload();
-    expect(v.trustedPin(host)!.sha256Fingerprint, 'SHA256:${'A' * 43}');
+    expect(v.hostKeys.pinOf(host)!.sha256Fingerprint, 'SHA256:${'A' * 43}');
     m.upsertItems([
       wireItem(kh.id, type: 'knownHost', purged: true, revision: 3),
     ]);
     await v.reload();
-    expect(v.trustedPin(host)!.sha256Fingerprint, 'SHA256:${'A' * 43}');
+    expect(v.hostKeys.pinOf(host)!.sha256Fingerprint, 'SHA256:${'A' * 43}');
     final restarted = await testVault(key, m); // the ledger is on disk, sealed
-    expect(restarted.trustedPin(host)!.sha256Fingerprint, 'SHA256:${'A' * 43}');
+    expect(
+      restarted.hostKeys.pinOf(host)!.sha256Fingerprint,
+      'SHA256:${'A' * 43}',
+    );
   });
 
   test(
@@ -64,8 +62,8 @@ void main() {
         await sealItem(key, type: 'knownHost', meta: pin('C')),
       ]);
       final v = await testVault(key, m);
-      await v.pinHostKey(host, 'ssh-ed25519', 'SHA256:${'B' * 43}');
-      expect(v.trustedPin(host)!.sha256Fingerprint, 'SHA256:${'B' * 43}');
+      await v.hostKeys.pin(host, 'ssh-ed25519', 'SHA256:${'B' * 43}');
+      expect(v.hostKeys.pinOf(host)!.sha256Fingerprint, 'SHA256:${'B' * 43}');
       expect(m.outbox().single.item.id, low);
     },
   );

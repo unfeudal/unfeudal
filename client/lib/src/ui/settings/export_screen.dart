@@ -65,7 +65,7 @@ class _ExportScreenState extends State<ExportScreen> with BusyAction {
       final out = await exportVault(
         state.vault!,
         passphrase: _plain ? null : _passphrase.text,
-        kdf: state.kdf,
+        kdf: state.crypto.kdf,
         now: now,
       );
       await (widget.writeFile ?? writeFileBytes)(path, utf8.encode(out.text));
@@ -89,24 +89,9 @@ class _ExportScreenState extends State<ExportScreen> with BusyAction {
       child: ListView(
         shrinkWrap: true,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            spacing: 8,
-            children: [
-              for (final (key, plain, title) in [
-                ('export-encrypted', false, l.exportEncrypted),
-                ('export-plain', true, l.exportPlain),
-              ])
-                Expanded(
-                  child: UfChoiceCard<bool>(
-                    key: Key(key),
-                    value: plain,
-                    groupValue: _plain,
-                    onChanged: (v) => setState(() => _plain = v),
-                    title: title,
-                  ),
-                ),
-            ],
+          _FormatChoice(
+            plain: _plain,
+            onChanged: (v) => setState(() => _plain = v),
           ),
           if (_plain) ...[
             UfNotice(tone: BannerTone.danger, message: l.exportPlainWarning),
@@ -143,6 +128,37 @@ class _ExportScreenState extends State<ExportScreen> with BusyAction {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _FormatChoice extends StatelessWidget {
+  const _FormatChoice({required this.plain, required this.onChanged});
+
+  final bool plain;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      spacing: 8,
+      children: [
+        for (final (key, value, title) in [
+          ('export-encrypted', false, l.exportEncrypted),
+          ('export-plain', true, l.exportPlain),
+        ])
+          Expanded(
+            child: UfChoiceCard<bool>(
+              key: Key(key),
+              value: value,
+              groupValue: plain,
+              onChanged: onChanged,
+              title: title,
+            ),
+          ),
+      ],
     );
   }
 }

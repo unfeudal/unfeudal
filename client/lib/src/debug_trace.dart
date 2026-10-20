@@ -2,8 +2,8 @@
 import 'dart:convert';
 import 'dart:developer' as developer;
 
-import 'package:cryptography/cryptography.dart';
 import 'package:flutter/foundation.dart';
+import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 /// What a trace line is about; `--dart-define=UNFEUDAL_TRACE=http,sync` keeps only those.
 enum TraceArea { http, session, sync, ssh, vault, ui }
@@ -37,9 +37,6 @@ String shortId(String id) => id.length <= 8 ? id : id.substring(0, 8);
 /// A token's first 6 hex digits of SHA-256: tells two tokens apart without revealing either.
 Future<String> tokenTag(String? token) async {
   if (token == null) return '-';
-  final digest = await Sha256().hash(utf8.encode(token));
-  return digest.bytes
-      .take(3)
-      .map((b) => b.toRadixString(16).padLeft(2, '0'))
-      .join();
+  final digest = await sha256Digest(utf8.encode(token));
+  return digest.take(3).map((b) => b.toRadixString(16).padLeft(2, '0')).join();
 }

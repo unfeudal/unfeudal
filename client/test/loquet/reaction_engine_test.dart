@@ -7,8 +7,8 @@ import 'package:unfeudal_client/src/loquet/loquet_pose.dart';
 import 'package:unfeudal_client/src/loquet/reaction_engine.dart';
 import 'package:unfeudal_client/src/settings/settings.dart';
 
-const ok = ConnectSucceeded(hostId: 'h', user: 'deploy', tags: []);
-const asRoot = ConnectSucceeded(hostId: 'h', user: 'root', tags: []);
+const ok = ConnectSucceeded(hostId: 'h', user: 'deploy');
+const asRoot = ConnectSucceeded(hostId: 'h', user: 'root');
 
 void main() {
   late DateTime now;

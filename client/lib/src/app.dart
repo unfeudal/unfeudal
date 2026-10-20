@@ -11,12 +11,12 @@ import 'design/tokens.dart';
 import 'settings/settings.dart';
 import 'ui/lock/lock_frame.dart';
 import 'ui/lock/login_screen.dart';
+import 'ui/lock/unlock_screen.dart';
 import 'ui/onboarding/join_screen.dart';
 import 'ui/onboarding/setup_screen.dart';
 import 'ui/shell/home_shell.dart';
 import 'ui/shell/shell_chrome.dart';
 import 'ui/title_bar.dart';
-import 'ui/lock/unlock_screen.dart';
 import 'window/window_chrome.dart';
 
 /// Theme, language and motion from the cached settings (usable before unlock), then the screen of the stage.

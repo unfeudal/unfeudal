@@ -63,7 +63,9 @@ void main() {
     expect(s.stage, AppStage.setup);
     // 53 base32 characters in groups of 4.
     expect(s.recoveryKey!.replaceAll('-', ''), hasLength(53));
-    expect(jsonDecode(s.mirror!.getKv(KvKey.bundle)!)['bundleVersion'], 0);
+    final bundle =
+        jsonDecode(s.mirror!.getKv(KvKey.bundle)!) as Map<String, Object?>;
+    expect(bundle['bundleVersion'], 0);
     s.finishOnboarding();
     expect((s.stage, s.recoveryKey), (AppStage.home, null));
     expect(s.stored!.isInstanceOwner, isTrue);
@@ -165,11 +167,13 @@ void main() {
       meta: hostJson('web', user: 'root'),
     );
     final shell = FakeShell();
-    s.tabs.add(TerminalSession(hostId: 'x', title: 'x')..attach(shell));
+    s.connections.tabs.add(
+      TerminalSession(hostId: 'x', title: 'x')..attach(shell),
+    );
     await s.lock();
     expect(s.vault!.isUnlocked, false);
     expect(s.vault!.entries, isEmpty);
-    expect(s.tabs, isEmpty);
+    expect(s.connections.tabs, isEmpty);
     expect(s.stage, AppStage.unlock);
     expect(shell.closed, isTrue);
   });
@@ -233,9 +237,11 @@ void main() {
 
   test('recovery kit regeneration and recovery with the key', () async {
     final (h, s, _, _) = await loggedIn();
-    final fresh = await s.regenerateRecoveryKit(password);
+    final fresh = await s.credentials.regenerateRecoveryKit(password);
     expect(h.accounts[email]!.bundleVersion, 1);
-    expect(jsonDecode(s.mirror!.getKv(KvKey.bundle)!)['bundleVersion'], 1);
+    final bundle =
+        jsonDecode(s.mirror!.getKv(KvKey.bundle)!) as Map<String, Object?>;
+    expect(bundle['bundleVersion'], 1);
     final other = testAppState(harness: h);
     await other.boot();
     final next = await other.recover(

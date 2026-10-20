@@ -2,9 +2,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:unfeudal_client/src/design/segmented.dart';
 import 'package:unfeudal_client/l10n/app_localizations.dart';
 import 'package:unfeudal_client/src/design/logo.dart';
+import 'package:unfeudal_client/src/design/segmented.dart';
 import 'package:unfeudal_client/src/loquet/loquet.dart';
 import 'package:unfeudal_client/src/loquet/loquet_pose.dart';
 import 'package:unfeudal_client/src/loquet/mood.dart';

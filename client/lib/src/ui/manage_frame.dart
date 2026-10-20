@@ -34,12 +34,10 @@ class ManageFrame extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = UfColors.of(context);
-    final text = Theme.of(context).textTheme;
     void back() =>
         onBack != null ? onBack!() : Navigator.of(context).maybePop();
     return Material(
-      color: colors.bg,
+      color: UfColors.of(context).bg,
       child: CallbackShortcuts(
         bindings: {const SingleActivator(LogicalKeyboardKey.escape): back},
         child: Focus(
@@ -60,20 +58,7 @@ class ManageFrame extends StatelessWidget {
                       icon: const Icon(UfIcons.caretLeft),
                     ),
                     Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(title, style: text.displaySmall),
-                          if (subtitle case final subtitle?)
-                            Text(
-                              subtitle,
-                              style: text.bodySmall!.copyWith(
-                                color: colors.muted,
-                                fontSize: 13,
-                              ),
-                            ),
-                        ],
-                      ),
+                      child: _ManageTitle(title: title, subtitle: subtitle),
                     ),
                     ...actions,
                   ],
@@ -95,6 +80,32 @@ class ManageFrame extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _ManageTitle extends StatelessWidget {
+  const _ManageTitle({required this.title, this.subtitle});
+
+  final String title;
+  final String? subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: text.displaySmall),
+        if (subtitle case final subtitle?)
+          Text(
+            subtitle,
+            style: text.bodySmall!.copyWith(
+              color: UfColors.of(context).muted,
+              fontSize: 13,
+            ),
+          ),
+      ],
     );
   }
 }

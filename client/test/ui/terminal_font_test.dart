@@ -26,8 +26,8 @@ void main() {
       (s.settings.terminalFont, s.settings.terminalFontSize),
       ('Consolas', 16),
     );
-    expect(s.vault!.profile.prefs['terminalFont'], 'Consolas');
-    expect(s.vault!.profile.prefs['terminalFontSize'], 16);
+    expect(s.vault!.profile.meta.prefs['terminalFont'], 'Consolas');
+    expect(s.vault!.profile.meta.prefs['terminalFontSize'], 16);
   }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
 
   testWidgets('a synced font from another platform stays selected', (t) async {
@@ -61,8 +61,8 @@ void main() {
         type: 'host',
         meta: hostJson('web', user: 'root'),
       );
-      await s.vault!.pinHostKey(web, 'ssh-ed25519', 'SHA256:${'A' * 43}');
-      await s.connect(web);
+      await s.vault!.hostKeys.pin(web, 'ssh-ed25519', 'SHA256:${'A' * 43}');
+      await s.connections.connect(web);
     });
     await pumpApp(t, state: s);
     await pumpReal(t, rounds: 5);

@@ -40,7 +40,13 @@ class LockMachine extends ChangeNotifier {
     LockScreenState.peek,
   }, LockScreenState.checking);
 
-  void fail() => _move({LockScreenState.checking}, LockScreenState.error);
+  /// Wrong passwords in a row; a right one sets it back to 0.
+  int failures = 0;
+
+  void fail() {
+    failures++;
+    _move({LockScreenState.checking}, LockScreenState.error);
+  }
 
   void succeed() => _move({
     LockScreenState.checking,

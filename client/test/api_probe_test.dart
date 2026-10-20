@@ -30,7 +30,7 @@ void main() {
         ],
       ],
     ], hasLength(3));
-    expect(const SSHPtyConfig(width: 80, height: 24).width, 80);
+    expect(const SSHPtyConfig().width, 80);
     expect(SSHAuthFailError('denied'), isA<SSHAuthError>());
   });
 
@@ -55,7 +55,7 @@ void main() {
   );
 
   test('xterm2 terminal surface', () {
-    final t = Terminal(maxLines: 1000);
+    final t = Terminal();
     String? sent;
     t.onOutput = (data) => sent = data;
     t.write('hello');
@@ -151,10 +151,7 @@ void main() {
             scrollController: ScrollController(),
             autofocus: true,
             shortcuts: const {},
-            textStyle: const TerminalStyle(
-              fontFamily: 'JetBrainsMono',
-              fontSize: 13,
-            ),
+            textStyle: const TerminalStyle(fontFamily: 'JetBrainsMono'),
             onSecondaryTapDown: (details, offset) {},
             onKeyEvent: (node, e) {
               if (e is KeyDownEvent &&

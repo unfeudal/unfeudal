@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -20,6 +21,8 @@ import '../describe_error.dart';
 import '../hosts/editor_frame.dart';
 import '../manage_frame.dart';
 import '../save_file.dart';
+
+part 'event_list.dart';
 
 /// The audit views this account may read: in a vault, its actions and the org chain it administers or the
 /// folders it manages; from Settings, its account chain or the instance. Verify and export read the whole chain.
@@ -50,12 +53,14 @@ class _ActivityScreenState extends State<ActivityScreen> {
 
   ActivityModel _open(String scope) {
     final state = AppScope.read(context);
-    return ActivityModel(
+    final model = ActivityModel(
       api: state.api!,
       anchors: AuditAnchors(state.mirror!),
       userId: state.stored!.userId,
       scope: scope,
-    )..load();
+    );
+    unawaited(model.load());
+    return model;
   }
 
   @override
@@ -184,126 +189,47 @@ class _ActivityScreenState extends State<ActivityScreen> {
     final scopes = _scopes(l, state);
     final chain = ActivityModel.chainOf(_scope);
     final nameOf = _resolver(l, state);
-    final dates = MaterialLocalizations.of(context);
     final muted = Theme.of(context).textTheme.bodySmall!
         .copyWith(color: colors.muted);
-    final orgId = state.orgs?.selected;
-    final vaultName = vaultNameOf(l, state, orgId);
     return ManageFrame(
       title: l.activityTitle,
-      subtitle: _fromSettings ? null : vaultName,
+      subtitle: _fromSettings
+          ? null
+          : vaultNameOf(l, state, state.orgs?.selected),
       onBack: widget.onBack,
       maxWidth: 980,
       child: ListenableBuilder(
         listenable: _model,
         builder: (context, _) {
           final m = _model;
-          final alert = m.alerts.firstOrNull;
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             spacing: 10,
             children: [
-              Row(
-                spacing: 8,
-                children: [
-                  if (scopes.length > 1)
-                    UfSelect<String?>(
-                      key: const Key('activity-scope'),
-                      value: scopes.any((s) => s.$1 == _scope) ? _scope : null,
-                      options: [
-                        for (final (scope, label) in scopes)
-                          UfOption(
-                            scope,
-                            label,
-                            key: Key('activity-scope-$scope'),
-                          ),
-                      ],
-                      onChanged: (s) {
-                        if (s != null && s != _scope) _select(s);
-                      },
-                    )
-                  else
-                    Text(
-                      scopes.first.$2,
-                      key: Key('activity-scope-${scopes.first.$1}'),
-                      style: Theme.of(context).textTheme.labelLarge,
-                    ),
-                  const Spacer(),
-                  if (chain != null) ...[
-                    OutlinedButton(
-                      key: const Key('activity-verify'),
-                      style: smallButton,
-                      onPressed: _verify,
-                      child: Text(l.activityVerify),
-                    ),
-                    OutlinedButton(
-                      key: const Key('activity-export'),
-                      style: smallButton,
-                      onPressed: _export,
-                      child: Text(l.activityExport),
-                    ),
-                  ],
-                ],
+              _ActivityToolbar(
+                scopes: scopes,
+                scope: _scope,
+                hasChain: chain != null,
+                onSelect: _select,
+                onVerify: _verify,
+                onExport: _export,
               ),
-              if (alert != null)
-                UfNotice(
-                  key: const Key('activity-alert'),
-                  tone: BannerTone.danger,
-                  message: alert.kind == AnchorAlertKind.rewritten
-                      ? l.activityRewritten(alert.scope, alert.seq)
-                      : l.activityVanished(alert.scope, alert.seq),
-                ),
+              if (m.alerts.firstOrNull case final alert?)
+                _AnchorAlertNotice(alert: alert),
               if (m.error case final Exception e)
                 UfNotice(tone: BannerTone.warn, message: describeError(l, e)),
               if (_notice case final notice?) Text(notice, style: muted),
               Expanded(
                 child: m.events.isEmpty && !m.loading
                     ? EmptyState(title: l.activityTitle, body: l.activityEmpty)
-                    : UfStagger(
-                        child: ListView.builder(
-                          itemCount: m.events.length,
-                          itemBuilder: (context, i) {
-                            final e = m.events[i];
-                            final ts = DateTime.parse(e.ts).toLocal();
-                            return UfStaggerItem(
-                              index: i,
-                              child: EventRow(
-                                when:
-                                    '${dates.formatShortDate(ts)} ${dates.formatTimeOfDay(TimeOfDay.fromDateTime(ts))}',
-                                text: describeEvent(l, e, nameOf),
-                                who: [
-                                  if (e.actorUser case final actor?)
-                                    nameOf(actor),
-                                  ?e.ipAddress,
-                                ].join(' · '),
-                                trailing:
-                                    e.action == 'org.deleted' &&
-                                        state.stored!.isInstanceOwner &&
-                                        e.targetIds.isNotEmpty
-                                    ? OutlinedButton(
-                                        key: Key(
-                                          'activity-open-org-${e.targetIds.first}',
-                                        ),
-                                        style: smallButton,
-                                        onPressed: () =>
-                                            _select('org:${e.targetIds.first}'),
-                                        child: Text(l.activityOpenDeletedOrg),
-                                      )
-                                    : null,
-                              ),
-                            );
-                          },
-                        ),
+                    : _EventList(
+                        events: m.events,
+                        nameOf: nameOf,
+                        canOpenDeletedOrgs: state.stored!.isInstanceOwner,
+                        onOpenOrg: (id) => _select('org:$id'),
                       ),
               ),
-              if (m.hasMore)
-                Align(
-                  child: TextButton(
-                    key: const Key('activity-more'),
-                    onPressed: m.loading ? null : m.more,
-                    child: BusyLabel(busy: m.loading, label: l.activityMore),
-                  ),
-                ),
+              if (m.hasMore) _LoadMoreButton(model: m),
               Padding(
                 padding: const EdgeInsets.only(bottom: 16),
                 child: Text(l.activitySshNote, style: muted),
@@ -316,48 +242,101 @@ class _ActivityScreenState extends State<ActivityScreen> {
   }
 }
 
-/// One audit event: when, what, who; the same row for every chain.
-class EventRow extends StatelessWidget {
-  const EventRow({
-    super.key,
-    required this.when,
-    required this.text,
-    required this.who,
-    this.trailing,
-  });
+class _AnchorAlertNotice extends StatelessWidget {
+  const _AnchorAlertNotice({required this.alert});
 
-  final String when;
-  final String text;
-  final String who;
-  final Widget? trailing;
+  final AnchorAlert alert;
 
   @override
   Widget build(BuildContext context) {
-    final colors = UfColors.of(context);
-    final muted = Theme.of(context).textTheme.bodySmall!
-        .copyWith(color: colors.muted);
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: colors.line)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        child: Row(
-          spacing: 16,
-          children: [
-            SizedBox(width: 130, child: Text(when, style: muted)),
-            Expanded(
-              child: Text(
-                text,
-                style: Theme.of(context).textTheme.bodyMedium!
-                    .copyWith(fontSize: 13.5),
-              ),
-            ),
-            if (who.isNotEmpty) Text(who, style: muted),
-            ?trailing,
-          ],
+    final l = AppLocalizations.of(context);
+    return UfNotice(
+      key: const Key('activity-alert'),
+      tone: BannerTone.danger,
+      message: alert.kind == AnchorAlertKind.rewritten
+          ? l.activityRewritten(alert.scope, alert.seq)
+          : l.activityVanished(alert.scope, alert.seq),
+    );
+  }
+}
+
+class _LoadMoreButton extends StatelessWidget {
+  const _LoadMoreButton({required this.model});
+
+  final ActivityModel model;
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      child: TextButton(
+        key: const Key('activity-more'),
+        onPressed: model.loading ? null : model.more,
+        child: BusyLabel(
+          busy: model.loading,
+          label: AppLocalizations.of(context).activityMore,
         ),
       ),
+    );
+  }
+}
+
+class _ActivityToolbar extends StatelessWidget {
+  const _ActivityToolbar({
+    required this.scopes,
+    required this.scope,
+    required this.hasChain,
+    required this.onSelect,
+    required this.onVerify,
+    required this.onExport,
+  });
+
+  final List<(String, String)> scopes;
+  final String scope;
+  final bool hasChain;
+  final ValueChanged<String> onSelect;
+  final VoidCallback onVerify;
+  final VoidCallback onExport;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    return Row(
+      spacing: 8,
+      children: [
+        if (scopes.length > 1)
+          UfSelect<String?>(
+            key: const Key('activity-scope'),
+            value: scopes.any((s) => s.$1 == scope) ? scope : null,
+            options: [
+              for (final (scope, label) in scopes)
+                UfOption(scope, label, key: Key('activity-scope-$scope')),
+            ],
+            onChanged: (s) {
+              if (s != null && s != scope) onSelect(s);
+            },
+          )
+        else
+          Text(
+            scopes.first.$2,
+            key: Key('activity-scope-${scopes.first.$1}'),
+            style: Theme.of(context).textTheme.labelLarge,
+          ),
+        const Spacer(),
+        if (hasChain) ...[
+          OutlinedButton(
+            key: const Key('activity-verify'),
+            style: smallButton,
+            onPressed: onVerify,
+            child: Text(l.activityVerify),
+          ),
+          OutlinedButton(
+            key: const Key('activity-export'),
+            style: smallButton,
+            onPressed: onExport,
+            child: Text(l.activityExport),
+          ),
+        ],
+      ],
     );
   }
 }

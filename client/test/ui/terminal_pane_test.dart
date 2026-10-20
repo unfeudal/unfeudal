@@ -30,8 +30,8 @@ Future<(AppState, TerminalSession, FakeSshConnector)> open(
       type: 'host',
       meta: hostJson('web', user: 'root'),
     );
-    await s.vault!.pinHostKey(web, 'ssh-ed25519', 'SHA256:${'A' * 43}');
-    tab = await s.connect(web);
+    await s.vault!.hostKeys.pin(web, 'ssh-ed25519', 'SHA256:${'A' * 43}');
+    tab = await s.connections.connect(web);
   });
   await pumpApp(t, state: s);
   await pumpReal(t, rounds: 5);
@@ -160,14 +160,14 @@ void main() {
       expect(find.text(l.termClosed), findsOneWidget);
       await t.tap(find.byKey(const Key('term-reconnect')));
       await pumpReal(t, rounds: 5);
-      expect(s.tabs.single.state, SealState.connected);
+      expect(s.connections.tabs.single.state, SealState.connected);
       expect(ssh.shells, hasLength(2));
       ssh.shells.last.hangUp();
       await pumpReal(t, rounds: 3);
       await t.tap(find.byType(TerminalView));
       await chord(t, LogicalKeyboardKey.keyR);
       await pumpReal(t, rounds: 5);
-      expect(s.tabs.single.state, SealState.connected);
+      expect(s.connections.tabs.single.state, SealState.connected);
       expect(ssh.shells, hasLength(3));
     },
     variant: windows,

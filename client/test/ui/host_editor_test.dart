@@ -4,8 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:unfeudal_client/l10n/app_localizations.dart';
 import 'package:unfeudal_client/src/design/field.dart';
 import 'package:unfeudal_client/src/events/app_events.dart';
-import 'package:unfeudal_client/src/ui/hosts/folder_editor_panel.dart';
 import 'package:unfeudal_client/src/ui/hosts/editor_frame.dart';
+import 'package:unfeudal_client/src/ui/hosts/folder_editor_panel.dart';
 import 'package:unfeudal_client/src/ui/hosts/host_editor_panel.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 

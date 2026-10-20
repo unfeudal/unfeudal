@@ -57,7 +57,7 @@ void main() {
         fingerprint: keyFingerprint(k.publicKey),
         verified: true,
       ));
-      final forged = await c.vault.seal(
+      final forged = await c.vault.sealer.seal(
         id: pinItem.id,
         type: 'memberPin',
         revision: 5,
@@ -72,7 +72,7 @@ void main() {
   test('a pin made on another device seeds the ledger', () async {
     final k = await memberKeys();
     c.mirror.upsertItems([
-      await c.vault.seal(
+      await c.vault.sealer.seal(
         id: newId(),
         type: 'memberPin',
         revision: 1,
@@ -91,7 +91,6 @@ void main() {
   test('explainFromBlock resolves a member from the block rows', () {
     final f = newId(), g = newId(), team = newId();
     final block = orgBlock(
-      role: 'member',
       members: [memberRow(mia)],
       folderTree: [node(f), node(g, f)],
       teams: [
@@ -107,21 +106,30 @@ void main() {
         aclRow(g, mia, deny: ['connect']),
       ],
     );
-    expect(explainFromBlock(block, testOrgId, mia, g).effective, {
-      Permission.view,
-    });
-    expect(explainFromBlock(block, testOrgId, mia, f).effective, {
-      Permission.view,
-      Permission.connect,
-    });
-    expect(explainFromBlock(block, testOrgId, mia, newId()).effective, isEmpty);
+    expect(
+      explainFromBlock(block, testOrgId, userId: mia, folderId: g).effective,
+      {Permission.view},
+    );
+    expect(
+      explainFromBlock(block, testOrgId, userId: mia, folderId: f).effective,
+      {Permission.view, Permission.connect},
+    );
+    expect(
+      explainFromBlock(
+        block,
+        testOrgId,
+        userId: mia,
+        folderId: newId(),
+      ).effective,
+      isEmpty,
+    );
     final admin = orgBlock(
       role: 'admin',
       members: [memberRow(mia, role: 'admin', status: 'confirmed')],
       folderTree: [node(f)],
     );
     expect(
-      explainFromBlock(admin, testOrgId, mia, f).effective,
+      explainFromBlock(admin, testOrgId, userId: mia, folderId: f).effective,
       Permission.values.toSet(),
     );
   });

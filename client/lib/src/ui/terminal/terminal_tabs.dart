@@ -26,8 +26,9 @@ class TerminalTabs extends StatelessWidget {
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
     final state = AppScope.of(context);
+    final connections = state.connections;
     final colors = UfColors.of(context);
-    if (state.tabs.isEmpty) {
+    if (connections.tabs.isEmpty) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -38,70 +39,18 @@ class TerminalTabs extends StatelessWidget {
         ],
       );
     }
-    final active = state.activeTab.clamp(0, state.tabs.length - 1);
+    final active = connections.activeTab.clamp(0, connections.tabs.length - 1);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Container(
-          height: 38,
-          padding: const EdgeInsets.symmetric(horizontal: 6),
-          decoration: BoxDecoration(
-            color: colors.side,
-            border: Border(bottom: BorderSide(color: colors.line)),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Flexible(
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  shrinkWrap: true,
-                  children: [
-                    for (var i = 0; i < state.tabs.length; i++)
-                      ListenableBuilder(
-                        listenable: state.tabs[i],
-                        builder: (context, _) => _TabChip(
-                          key: Key('tab-$i'),
-                          index: i,
-                          title: state.tabs[i].title,
-                          seal: state.tabs[i].state,
-                          selected: i == active,
-                          onSelect: () => state.selectTab(i),
-                          onClose: () => state.closeTab(state.tabs[i]),
-                          badge: ForwardsBadge(
-                            tab: state.tabs[i],
-                            configured:
-                                state.vault
-                                    ?.hostLookup(state.tabs[i].hostId)
-                                    ?.meta
-                                    .forwards ??
-                                const [],
-                            index: i,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.only(left: 2, bottom: 5),
-                child: IconButton(
-                  key: const Key('tab-new'),
-                  tooltip: l.treeSearch(UfShortcuts.label(UfShortcut.newTab)),
-                  onPressed: onNewTab,
-                  icon: const Icon(UfIcons.plus),
-                ),
-              ),
-            ],
-          ),
-        ),
+        _TabStrip(active: active, onNewTab: onNewTab),
         Expanded(
           child: ColoredBox(
             color: colors.term,
             child: IndexedStack(
               index: active,
               children: [
-                for (final tab in state.tabs)
+                for (final tab in connections.tabs)
                   TerminalPane(
                     key: ObjectKey(tab),
                     session: tab,
@@ -113,6 +62,74 @@ class TerminalTabs extends StatelessWidget {
         ),
         const _StatusBar(),
       ],
+    );
+  }
+}
+
+class _TabStrip extends StatelessWidget {
+  const _TabStrip({required this.active, required this.onNewTab});
+
+  final int active;
+  final VoidCallback? onNewTab;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    final state = AppScope.of(context);
+    final connections = state.connections;
+    final colors = UfColors.of(context);
+    return Container(
+      height: 38,
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      decoration: BoxDecoration(
+        color: colors.side,
+        border: Border(bottom: BorderSide(color: colors.line)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Flexible(
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              shrinkWrap: true,
+              children: [
+                for (var i = 0; i < connections.tabs.length; i++)
+                  ListenableBuilder(
+                    listenable: connections.tabs[i],
+                    builder: (context, _) => _TabChip(
+                      key: Key('tab-$i'),
+                      index: i,
+                      title: connections.tabs[i].title,
+                      seal: connections.tabs[i].state,
+                      selected: i == active,
+                      onSelect: () => connections.selectTab(i),
+                      onClose: () => connections.closeTab(connections.tabs[i]),
+                      badge: ForwardsBadge(
+                        tab: connections.tabs[i],
+                        configured:
+                            state.vault
+                                ?.hostLookup(connections.tabs[i].hostId)
+                                ?.meta
+                                .forwards ??
+                            const [],
+                        index: i,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(left: 2, bottom: 5),
+            child: IconButton(
+              key: const Key('tab-new'),
+              tooltip: l.treeSearch(UfShortcuts.label(UfShortcut.newTab)),
+              onPressed: onNewTab,
+              icon: const Icon(UfIcons.plus),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -144,6 +161,25 @@ class _TabChip extends StatefulWidget {
 class _TabChipState extends State<_TabChip> {
   bool _hover = false;
 
+  BoxDecoration _decoration(UfColors colors, BorderRadius top) {
+    final selected = widget.selected;
+    return BoxDecoration(
+      color: selected
+          ? colors.term
+          : _hover
+          ? colors.panelHover
+          : Colors.transparent,
+      borderRadius: top,
+      border: selected
+          ? Border(
+              top: BorderSide(color: colors.line),
+              left: BorderSide(color: colors.line),
+              right: BorderSide(color: colors.line),
+            )
+          : null,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = UfColors.of(context);
@@ -169,21 +205,7 @@ class _TabChipState extends State<_TabChip> {
             offset: Offset(0, selected ? 1 : 0),
             child: Container(
               height: selected ? 33 : 32,
-              decoration: BoxDecoration(
-                color: selected
-                    ? colors.term
-                    : _hover
-                    ? colors.panelHover
-                    : Colors.transparent,
-                borderRadius: top,
-                border: selected
-                    ? Border(
-                        top: BorderSide(color: colors.line),
-                        left: BorderSide(color: colors.line),
-                        right: BorderSide(color: colors.line),
-                      )
-                    : null,
-              ),
+              decoration: _decoration(colors, top),
               child: Material(
                 type: MaterialType.transparency,
                 child: UfFocusRing(
@@ -192,35 +214,14 @@ class _TabChipState extends State<_TabChip> {
                     borderRadius: top,
                     hoverColor: Colors.transparent,
                     onTap: widget.onSelect,
-                    child: Padding(
-                      padding: const EdgeInsets.only(left: 10, right: 6),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        spacing: 8,
-                        children: [
-                          Seal(state: widget.seal, size: 12),
-                          Text(widget.title, style: text),
-                          widget.badge,
-                          Opacity(
-                            opacity: selected || _hover ? 0.75 : 0,
-                            child: IconButton(
-                              key: Key('tab-close-${widget.index}'),
-                              tooltip: AppLocalizations.of(context).tabClose,
-                              iconSize: 12,
-                              style: IconButton.styleFrom(
-                                fixedSize: const Size.square(16),
-                                minimumSize: const Size.square(16),
-                                padding: EdgeInsets.zero,
-                                shape: const RoundedRectangleBorder(
-                                  borderRadius: UfRadius.key,
-                                ),
-                              ),
-                              onPressed: widget.onClose,
-                              icon: const Icon(UfIcons.x),
-                            ),
-                          ),
-                        ],
-                      ),
+                    child: _TabChipLabel(
+                      index: widget.index,
+                      title: widget.title,
+                      seal: widget.seal,
+                      style: text,
+                      badge: widget.badge,
+                      showClose: selected || _hover,
+                      onClose: widget.onClose,
                     ),
                   ),
                 ),
@@ -228,6 +229,58 @@ class _TabChipState extends State<_TabChip> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _TabChipLabel extends StatelessWidget {
+  const _TabChipLabel({
+    required this.index,
+    required this.title,
+    required this.seal,
+    required this.style,
+    required this.badge,
+    required this.showClose,
+    required this.onClose,
+  });
+
+  final int index;
+  final String title;
+  final SealState seal;
+  final TextStyle style;
+  final Widget badge;
+  final bool showClose;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 10, right: 6),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        spacing: 8,
+        children: [
+          Seal(state: seal, size: 12),
+          Text(title, style: style),
+          badge,
+          Opacity(
+            opacity: showClose ? 0.75 : 0,
+            child: IconButton(
+              key: Key('tab-close-$index'),
+              tooltip: AppLocalizations.of(context).tabClose,
+              iconSize: 12,
+              style: IconButton.styleFrom(
+                fixedSize: const Size.square(16),
+                minimumSize: const Size.square(16),
+                padding: EdgeInsets.zero,
+                shape: const RoundedRectangleBorder(borderRadius: UfRadius.key),
+              ),
+              onPressed: onClose,
+              icon: const Icon(UfIcons.x),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -244,9 +297,7 @@ class _StatusBar extends StatelessWidget {
     final colors = UfColors.of(context);
     final style = Theme.of(context).textTheme.bodySmall!
         .copyWith(color: colors.muted);
-    final tab = state.tabs.isEmpty
-        ? null
-        : state.tabs[state.activeTab.clamp(0, state.tabs.length - 1)];
+    final tab = state.connections.activeSession;
     final forwards = tab?.forwarder;
     return Container(
       key: const Key('status-bar'),

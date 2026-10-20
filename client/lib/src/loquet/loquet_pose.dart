@@ -78,72 +78,84 @@ class LoquetPose {
 
   /// [eyeX] (0 left to 1 right) only moves the eyes of [LoquetMood.watching].
   factory LoquetPose.of(LoquetMood mood, {double eyeX = 0.5}) => switch (mood) {
-    LoquetMood.idle => const LoquetPose(LoquetEyes.open, LoquetMouth.smile),
     LoquetMood.watching => LoquetPose(
       LoquetEyes.follow,
       LoquetMouth.smallO,
       lookX: eyeX.clamp(0, 1) * 12 - 6,
     ),
-    LoquetMood.covering => const LoquetPose(
-      LoquetEyes.closed,
-      LoquetMouth.flat,
-      hands: LoquetHands.cover,
-    ),
-    LoquetMood.peeking => const LoquetPose(
-      LoquetEyes.oneOpen,
-      LoquetMouth.flat,
-      hands: LoquetHands.peek,
-    ),
-    LoquetMood.happy => const LoquetPose(
-      LoquetEyes.arcs,
-      LoquetMouth.openSmile,
-    ),
-    LoquetMood.sad => const LoquetPose(
-      LoquetEyes.worried,
-      LoquetMouth.frown,
-      tone: LoquetTone.danger,
-    ),
-    LoquetMood.alert => const LoquetPose(
-      LoquetEyes.wide,
-      LoquetMouth.bigO,
-      extras: {LoquetExtra.sweat},
-      tone: LoquetTone.danger,
-    ),
-    LoquetMood.connecting => const LoquetPose(
-      LoquetEyes.up,
-      LoquetMouth.smallO,
-    ),
-    LoquetMood.search => const LoquetPose(
-      LoquetEyes.aside,
-      LoquetMouth.smallO,
-      extras: {LoquetExtra.magnifier},
-    ),
-    LoquetMood.offline => const LoquetPose(
-      LoquetEyes.flat,
-      LoquetMouth.frown,
-      tone: LoquetTone.warn,
-    ),
-    LoquetMood.sleep => const LoquetPose(
-      LoquetEyes.closed,
-      LoquetMouth.flat,
-      extras: {LoquetExtra.zzz},
-    ),
+    LoquetMood.idle => const LoquetPose(LoquetEyes.open, LoquetMouth.smile),
+    LoquetMood.covering => _covering,
+    LoquetMood.peeking => _peeking,
+    LoquetMood.happy => _happy,
+    LoquetMood.sad => _sad,
+    LoquetMood.alert => _alert,
+    LoquetMood.connecting => _connecting,
+    LoquetMood.search => _search,
+    LoquetMood.offline => _offline,
+    LoquetMood.sleep => _sleep,
     LoquetMood.sleepy => const LoquetPose(LoquetEyes.sleepy, LoquetMouth.tiny),
-    LoquetMood.yawn => const LoquetPose(
-      LoquetEyes.squeezed,
-      LoquetMouth.yawn,
-      extras: {LoquetExtra.tear},
-    ),
-    LoquetMood.cheerful => const LoquetPose(
-      LoquetEyes.cheerful,
-      LoquetMouth.grin,
-    ),
-    LoquetMood.concerned => const LoquetPose(
-      LoquetEyes.glance,
-      LoquetMouth.wavy,
-    ),
+    LoquetMood.yawn => _yawn,
+    LoquetMood.cheerful => _cheerful,
+    LoquetMood.concerned => _concerned,
     LoquetMood.dizzy => const LoquetPose(LoquetEyes.spiral, LoquetMouth.zigzag),
   };
+
+  static const _covering = LoquetPose(
+    LoquetEyes.closed,
+    LoquetMouth.flat,
+    hands: LoquetHands.cover,
+  );
+
+  static const _peeking = LoquetPose(
+    LoquetEyes.oneOpen,
+    LoquetMouth.flat,
+    hands: LoquetHands.peek,
+  );
+
+  static const _happy = LoquetPose(LoquetEyes.arcs, LoquetMouth.openSmile);
+
+  static const _sad = LoquetPose(
+    LoquetEyes.worried,
+    LoquetMouth.frown,
+    tone: LoquetTone.danger,
+  );
+
+  static const _alert = LoquetPose(
+    LoquetEyes.wide,
+    LoquetMouth.bigO,
+    extras: {LoquetExtra.sweat},
+    tone: LoquetTone.danger,
+  );
+
+  static const _connecting = LoquetPose(LoquetEyes.up, LoquetMouth.smallO);
+
+  static const _search = LoquetPose(
+    LoquetEyes.aside,
+    LoquetMouth.smallO,
+    extras: {LoquetExtra.magnifier},
+  );
+
+  static const _offline = LoquetPose(
+    LoquetEyes.flat,
+    LoquetMouth.frown,
+    tone: LoquetTone.warn,
+  );
+
+  static const _sleep = LoquetPose(
+    LoquetEyes.closed,
+    LoquetMouth.flat,
+    extras: {LoquetExtra.zzz},
+  );
+
+  static const _yawn = LoquetPose(
+    LoquetEyes.squeezed,
+    LoquetMouth.yawn,
+    extras: {LoquetExtra.tear},
+  );
+
+  static const _cheerful = LoquetPose(LoquetEyes.cheerful, LoquetMouth.grin);
+
+  static const _concerned = LoquetPose(LoquetEyes.glance, LoquetMouth.wavy);
 
   final LoquetEyes eyes;
   final LoquetMouth mouth;

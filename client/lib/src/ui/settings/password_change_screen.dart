@@ -4,6 +4,7 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
+import '../../app_state.dart';
 import '../../design/buttons.dart';
 import '../../design/field.dart';
 import '../../design/toast.dart';
@@ -49,27 +50,33 @@ class _PasswordChangeScreenState extends State<PasswordChangeScreen>
     await run(() async {
       try {
         if (widget.securityReset) {
-          final kit = await state.securityReset(_current.text, _next.text);
-          if (mounted) {
-            setState(() {
-              _kit = kit;
-              _done = true;
-            });
-          }
+          await _resetAndShowKit(state);
         } else {
-          await state.changeMasterPassword(_current.text, _next.text);
-          if (!mounted) return;
-          showUfToast(context, l.passwordChanged);
-          Navigator.of(context).maybePop();
+          await _changeAndClose(state, l);
         }
       } on WrongPassword {
-        if (mounted) {
-          setState(() {
-            problem = l.passwordCurrentWrong;
-          });
-        }
+        if (mounted) setState(() => problem = l.passwordCurrentWrong);
       }
     });
+  }
+
+  Future<void> _resetAndShowKit(AppState state) async {
+    final kit = await state.credentials.securityReset(
+      _current.text,
+      _next.text,
+    );
+    if (!mounted) return;
+    setState(() {
+      _kit = kit;
+      _done = true;
+    });
+  }
+
+  Future<void> _changeAndClose(AppState state, AppLocalizations l) async {
+    await state.credentials.changePassword(_current.text, _next.text);
+    if (!mounted) return;
+    showUfToast(context, l.passwordChanged);
+    Navigator.of(context).maybePop();
   }
 
   @override

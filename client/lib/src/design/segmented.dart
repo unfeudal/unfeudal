@@ -168,7 +168,7 @@ class _Track extends MultiChildRenderObjectWidget {
 
   @override
   _RenderTrack createRenderObject(BuildContext context) =>
-      _RenderTrack(slide, from, to, expand);
+      _RenderTrack(slide, from, to, expand: expand);
 
   @override
   void updateRenderObject(BuildContext context, _RenderTrack track) => track
@@ -184,7 +184,7 @@ class _RenderTrack extends RenderBox
     with
         ContainerRenderObjectMixin<RenderBox, _TrackSlot>,
         RenderBoxContainerDefaultsMixin<RenderBox, _TrackSlot> {
-  _RenderTrack(this._slide, this._from, this._to, this._expand);
+  _RenderTrack(this._slide, this._from, this._to, {required this._expand});
 
   static const _gap = 2.0;
 

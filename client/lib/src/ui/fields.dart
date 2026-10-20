@@ -8,6 +8,7 @@ import '../design/field.dart';
 import '../design/icons.dart';
 import '../design/inputs.dart';
 import '../design/tokens.dart';
+import 'password_guess.dart';
 
 /// A labelled text field; its [TextField] carries the test key. A [secret] one has an eye to show its text,
 /// keyed `<key>-peek`; a [strength] one (a new password) has the strength meter under it. Without a [label]
@@ -56,13 +57,13 @@ Widget keyedField(
       : UfField(label: label, error: error, child: field);
 }
 
-/// 0 when empty, 1 under the minimum length, then up to 4 with length and character classes.
+/// 0 when empty, 1 under the minimum length or guessable, then up to 4 with length and character classes.
 int passwordScore(String password) {
-  // ponytail: length and classes only, blind to dictionary words and patterns; zxcvbn-like scoring if
-  // users need real guidance
   final length = passwordLength(password);
   if (length == 0) return 0;
-  if (length < AccountCrypto.minPasswordLength) return 1;
+  if (length < AccountCrypto.minPasswordLength || isGuessable(password)) {
+    return 1;
+  }
   final classes = [
     RegExp('[a-z]'),
     RegExp('[A-Z]'),

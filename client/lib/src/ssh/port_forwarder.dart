@@ -101,7 +101,7 @@ class PortForwarder extends ChangeNotifier {
         unawaited(
           local.cast<List<int>>().pipe(remote.sink).catchError((Object _) {}),
         );
-      } catch (_) {
+      } on Object catch (_) {
         // Any failure to open the channel ends only this connection, never the forward.
         local.destroy();
       }

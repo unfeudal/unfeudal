@@ -71,7 +71,7 @@ class _SetupScreenState extends State<SetupScreen> with BusyAction {
         password: _password.text,
         displayName: _name.text.trim().isEmpty ? null : _name.text.trim(),
       );
-      if (!state.serverHas(Flag.recoveryKit)) state.finishOnboarding();
+      if (!state.serverInfo.has(Flag.recoveryKit)) state.finishOnboarding();
     });
   }
 
@@ -94,83 +94,79 @@ class _SetupScreenState extends State<SetupScreen> with BusyAction {
             : l.setupAccountSubtitle(
                 Uri.tryParse(_server.text.trim())?.host ?? '',
               ),
-        children: [
-          if (first) ...[
-            keyedField(
-              'setup-server',
-              _server,
-              l.setupServer,
-              keyboard: TextInputType.url,
-            ),
-            keyedField(
-              'setup-token',
-              _token,
-              l.setupToken,
-              mono: true,
-              hint: 'ABCD-EFGH-IJKL-MNOP-QRST-UVWX-YZ',
-              onSubmitted: (_) => _next(),
-            ),
-          ] else ...[
-            keyedField(
-              'setup-email',
-              _email,
-              l.setupEmail,
-              keyboard: TextInputType.emailAddress,
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              spacing: 14,
-              children: [
-                keyedField(
-                  'setup-password',
-                  _password,
-                  l.setupPassword,
-                  secret: true,
-                  strength: true,
-                ),
-                keyedField(
-                  'setup-confirm',
-                  _confirm,
-                  l.setupConfirm,
-                  secret: true,
-                ),
-              ],
-            ),
-            keyedField('setup-name', _name, l.setupDisplayName),
-            LockNotice(l.setupWarning),
-          ],
-          if (problem case final problem?) UfErrorLine(problem),
-          if (first)
-            LockActions(
-              primary: FilledButton(
-                key: const Key('setup-next'),
-                onPressed: _next,
-                child: Text(l.stepNext),
-              ),
-            )
-          else
-            LockActions(
-              primary: BusyButton(
-                key: const Key('setup-submit'),
-                busy: busy,
-                onPressed: _submit,
-                label: l.setupSubmit,
-              ),
-              links: [
-                TextButton(
-                  key: const Key('setup-back'),
-                  onPressed: () => setState(() {
-                    problem = null;
-                    _step = 1;
-                  }),
-                  child: Text(l.setupBack),
-                ),
-              ],
-            ),
-        ],
+        children: first ? _serverStep(l) : _accountStep(l),
       ),
     );
   }
+
+  List<Widget> _serverStep(AppLocalizations l) => [
+    keyedField(
+      'setup-server',
+      _server,
+      l.setupServer,
+      keyboard: TextInputType.url,
+    ),
+    keyedField(
+      'setup-token',
+      _token,
+      l.setupToken,
+      mono: true,
+      hint: 'ABCD-EFGH-IJKL-MNOP-QRST-UVWX-YZ',
+      onSubmitted: (_) => _next(),
+    ),
+    if (problem case final problem?) UfErrorLine(problem),
+    LockActions(
+      primary: FilledButton(
+        key: const Key('setup-next'),
+        onPressed: _next,
+        child: Text(l.stepNext),
+      ),
+    ),
+  ];
+
+  List<Widget> _accountStep(AppLocalizations l) => [
+    keyedField(
+      'setup-email',
+      _email,
+      l.setupEmail,
+      keyboard: TextInputType.emailAddress,
+    ),
+    Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: 14,
+      children: [
+        keyedField(
+          'setup-password',
+          _password,
+          l.setupPassword,
+          secret: true,
+          strength: true,
+        ),
+        keyedField('setup-confirm', _confirm, l.setupConfirm, secret: true),
+      ],
+    ),
+    keyedField('setup-name', _name, l.setupDisplayName),
+    LockNotice(l.setupWarning),
+    if (problem case final problem?) UfErrorLine(problem),
+    LockActions(
+      primary: BusyButton(
+        key: const Key('setup-submit'),
+        busy: busy,
+        onPressed: _submit,
+        label: l.setupSubmit,
+      ),
+      links: [
+        TextButton(
+          key: const Key('setup-back'),
+          onPressed: () => setState(() {
+            problem = null;
+            _step = 1;
+          }),
+          child: Text(l.setupBack),
+        ),
+      ],
+    ),
+  ];
 }
 
 String? checkNewPassword(

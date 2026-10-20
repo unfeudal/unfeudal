@@ -8,7 +8,7 @@ import '../storage/local_mirror.dart';
 
 /// Same envelopes with `deleted` flipped: `deleted` is not in the AAD, so nothing is re-sealed; `secret: null`
 /// keeps the stored one, and a queued secret not stored yet is sent again as is.
-Item withDeleted(LocalMirror mirror, Item item, bool deleted) {
+Item withDeleted(LocalMirror mirror, Item item, {required bool deleted}) {
   final json = item.toJson()
     ..removeWhere((k, _) => _serverSet.contains(k))
     ..['deleted'] = deleted;
@@ -89,7 +89,7 @@ Future<Item> sealPayloads({
       ),
       json,
       key,
-      keyId,
+      keyId: keyId,
       seq: seq,
     );
   }

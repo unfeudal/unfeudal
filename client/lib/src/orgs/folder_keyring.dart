@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import 'dart:typed_data';
 
-import 'package:cryptography/cryptography.dart';
-import 'package:cryptography/helpers.dart' show constantTimeBytesEquality;
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../storage/local_mirror.dart';
@@ -94,7 +92,7 @@ class FolderKeyring {
           if (had == null ||
               (had.secretKey == null &&
                   k.secretKey != null &&
-                  constantTimeBytesEquality.equals(had.metaKey, k.metaKey))) {
+                  constantTimeEquals(had.metaKey, k.metaKey))) {
             versions[k.version] = k;
           }
         }

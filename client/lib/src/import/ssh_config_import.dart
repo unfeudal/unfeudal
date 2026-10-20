@@ -6,7 +6,12 @@ import '../keys/key_tools.dart';
 import '../vault/vault.dart';
 
 class PlannedHost {
-  const PlannedHost(this.source, this.duplicate, this.keyPath, this.jumpAlias);
+  const PlannedHost({
+    required this.source,
+    required this.duplicate,
+    required this.keyPath,
+    required this.jumpAlias,
+  });
 
   final SshConfigHost source;
 
@@ -81,10 +86,10 @@ class SshConfigImporter {
       [
         for (final h in valid)
           PlannedHost(
-            h,
-            existing.contains(h.alias.toLowerCase()),
-            keys[_expand(h.identityFile)]?.path,
-            jumps[h.alias],
+            source: h,
+            duplicate: existing.contains(h.alias.toLowerCase()),
+            keyPath: keys[_expand(h.identityFile)]?.path,
+            jumpAlias: jumps[h.alias],
           ),
       ],
       [...keys.values.nonNulls],

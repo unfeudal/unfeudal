@@ -10,27 +10,27 @@ OrgRole? _role(JsonReader r) => switch (r.opt<String>('role')) {
 
 /// A new invite (org or instance): the link and file are shown once.
 class InviteCreated {
-  InviteCreated(
-    this.id,
-    this.email,
-    this.role,
-    this.expiresAt,
-    this.link,
-    this.file,
-    this.mailSent,
-  );
+  InviteCreated({
+    required this.id,
+    required this.email,
+    required this.role,
+    required this.expiresAt,
+    required this.link,
+    required this.file,
+    required this.mailSent,
+  });
 
   factory InviteCreated.fromJson(Object? json) {
     final body = JsonReader(json, 'invite created');
     final r = JsonReader(body.object('invite'), 'invite');
     return InviteCreated(
-      r.uuid('id'),
-      r.req<String>('email'),
-      _role(r),
-      r.time('expiresAt'),
-      r.req<String>('link'),
-      r.req<String>('file'),
-      body.req<bool>('mailSent'),
+      id: r.uuid('id'),
+      email: r.req<String>('email'),
+      role: _role(r),
+      expiresAt: r.time('expiresAt'),
+      link: r.req<String>('link'),
+      file: r.req<String>('file'),
+      mailSent: body.req<bool>('mailSent'),
     );
   }
 
@@ -74,22 +74,22 @@ class PendingInvite {
 }
 
 class AdminUser {
-  AdminUser(
-    this.id,
-    this.email,
-    this.disabled,
-    this.isInstanceOwner,
-    this.createdAt,
-  );
+  AdminUser({
+    required this.id,
+    required this.email,
+    required this.disabled,
+    required this.isInstanceOwner,
+    required this.createdAt,
+  });
 
   factory AdminUser.fromJson(Object? json) {
     final r = JsonReader(json, 'admin user');
     return AdminUser(
-      r.uuid('id'),
-      r.req<String>('email'),
-      r.req<bool>('disabled'),
-      r.req<bool>('isInstanceOwner'),
-      r.time('createdAt'),
+      id: r.uuid('id'),
+      email: r.req<String>('email'),
+      disabled: r.req<bool>('disabled'),
+      isInstanceOwner: r.req<bool>('isInstanceOwner'),
+      createdAt: r.time('createdAt'),
     );
   }
 

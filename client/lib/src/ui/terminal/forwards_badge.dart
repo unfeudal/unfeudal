@@ -119,14 +119,14 @@ class _ForwardRow extends StatelessWidget {
               running
                   ? TextButton(
                       key: Key('forward-stop-$port'),
-                      onPressed: () => state.stopForward(tab, port),
+                      onPressed: () => state.connections.stopForward(tab, port),
                       child: Text(l.forwardStop),
                     )
                   : TextButton(
                       key: Key('forward-start-$port'),
                       onPressed: () async {
                         try {
-                          await state.startForward(tab, forward);
+                          await state.connections.startForward(tab, forward);
                         } on Exception {
                           // shown under the row from forwarder.failed
                         }

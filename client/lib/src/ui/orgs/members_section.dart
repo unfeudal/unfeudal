@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
@@ -41,6 +43,22 @@ class _MembersSectionState extends State<MembersSection> {
   // Bumped after an invitation is created, so the pending list reloads.
   int _invites = 0;
 
+  Future<void> _invite() async {
+    await showUfDialog<void>(context, (_) => InviteDialog(orgId: widget.orgId));
+    if (mounted) setState(() => _invites++);
+  }
+
+  Widget _groupBody(MembersGroup group) => switch (group) {
+    MembersGroup.members => MembersScreen(orgId: widget.orgId),
+    MembersGroup.invitations => PendingInvites(
+      key: ValueKey(_invites),
+      orgId: widget.orgId,
+    ),
+    MembersGroup.teams => TeamsScreen(orgId: widget.orgId),
+    MembersGroup.folders => FolderAccessList(orgId: widget.orgId),
+    MembersGroup.organization => OrgSettingsScreen(orgId: widget.orgId),
+  };
+
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
@@ -51,7 +69,7 @@ class _MembersSectionState extends State<MembersSection> {
     final groups = [
       (MembersGroup.members, l.membersTitle),
       if (isAdmin) (MembersGroup.invitations, l.adminInvites),
-      if (isAdmin && state.serverHas(Flag.teams))
+      if (isAdmin && state.serverInfo.has(Flag.teams))
         (MembersGroup.teams, l.teamsTitle),
       (MembersGroup.folders, l.membersGroupFolders),
       (MembersGroup.organization, l.orgMenu),
@@ -68,13 +86,7 @@ class _MembersSectionState extends State<MembersSection> {
           FilledButton.icon(
             key: const Key('members-invite'),
             icon: const Icon(UfIcons.userPlus),
-            onPressed: () async {
-              await showUfDialog<void>(
-                context,
-                (_) => InviteDialog(orgId: widget.orgId),
-              );
-              if (mounted) setState(() => _invites++);
-            },
+            onPressed: _invite,
             label: Text(l.inviteTitle),
           ),
       ],
@@ -98,22 +110,7 @@ class _MembersSectionState extends State<MembersSection> {
                     alignment: Alignment.topLeft,
                     child: ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 760),
-                      child: switch (group) {
-                        MembersGroup.members => MembersScreen(
-                          orgId: widget.orgId,
-                        ),
-                        MembersGroup.invitations => PendingInvites(
-                          key: ValueKey(_invites),
-                          orgId: widget.orgId,
-                        ),
-                        MembersGroup.teams => TeamsScreen(orgId: widget.orgId),
-                        MembersGroup.folders => FolderAccessList(
-                          orgId: widget.orgId,
-                        ),
-                        MembersGroup.organization => OrgSettingsScreen(
-                          orgId: widget.orgId,
-                        ),
-                      },
+                      child: _groupBody(group),
                     ),
                   ),
                 ),
@@ -142,17 +139,18 @@ class _PendingInvitesState extends State<PendingInvites> with BusyAction {
   @override
   void initState() {
     super.initState();
-    _load();
+    unawaited(_load());
   }
 
   Future<void> _load() => run(() async {
-    final pending = await AppScope.read(context).api!.orgInvites(widget.orgId);
+    final pending = await AppScope.read(context).api!.orgs
+        .invites(widget.orgId);
     if (mounted) setState(() => _pending = pending);
   });
 
   // The list is updated here, not fetched again.
   Future<void> _revoke(PendingInvite invite) => run(() async {
-    await AppScope.read(context).api!.revokeInvite(invite.id);
+    await AppScope.read(context).api!.orgs.revokeInvite(invite.id);
     if (mounted) {
       setState(
         () => _pending = [

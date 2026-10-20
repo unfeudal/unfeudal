@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui' show PlatformDispatcher;
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
+
+import '../../l10n/app_localizations.dart';
 
 enum LoquetMode { on, sober, off }
 
@@ -141,16 +143,35 @@ class Settings {
     extra: extra,
   );
 
-  // ponytail: extra compared one level deep; nested unknown values only affect change detection
-  @override
-  bool operator ==(Object other) =>
-      other is Settings && mapEquals(other.toJson(), toJson());
+  /// The chosen language, else the system's when the app has it; null otherwise.
+  String? get uiLocale {
+    if (locale case final chosen?) return chosen;
+    final system = PlatformDispatcher.instance.locale.languageCode;
+    return AppLocalizations.supportedLocales.any(
+          (l) => l.languageCode == system,
+        )
+        ? system
+        : null;
+  }
 
   @override
-  int get hashCode => Object.hashAllUnordered(
-    toJson().entries.map((e) => Object.hash(e.key, e.value)),
-  );
+  bool operator ==(Object other) =>
+      other is Settings && _jsonEquals(other.toJson(), toJson());
+
+  // The keys only: unknown values can be nested maps and lists, which hash by identity.
+  @override
+  int get hashCode => Object.hashAllUnordered(toJson().keys);
 }
+
+// Equality of decoded JSON, nested maps and lists included.
+bool _jsonEquals(Object? a, Object? b) => switch ((a, b)) {
+  (final Map<Object?, Object?> x, final Map<Object?, Object?> y) =>
+    x.length == y.length &&
+        x.keys.every((k) => y.containsKey(k) && _jsonEquals(x[k], y[k])),
+  (final List<Object?> x, final List<Object?> y) =>
+    x.length == y.length && x.indexed.every((e) => _jsonEquals(e.$2, y[e.$1])),
+  _ => a == b,
+};
 
 /// `settings.json` on this machine: missing or unreadable gives defaults, writes are atomic.
 class SettingsStore {

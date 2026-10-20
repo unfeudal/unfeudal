@@ -50,8 +50,8 @@ void main() {
             aclRow(rw, me, allow: ['view', 'edit', 'connect']),
           ],
           wrappedKeys: [
-            await wrappedRow(keys, ro, pub, secret: true),
-            await wrappedRow(keys, rw, pub, secret: true),
+            await wrappedRow(keys, ro, pub),
+            await wrappedRow(keys, rw, pub),
           ],
           itemIds: folders.map((e) => e.id).toList(),
         );

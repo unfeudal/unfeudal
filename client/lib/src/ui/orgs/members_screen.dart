@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
@@ -39,7 +41,7 @@ Future<void> confirmAndLeaveOrg(
     action: l.orgLeave,
   );
   if (!yes) return;
-  await state.api!.removeMember(orgId, state.stored!.userId);
+  await state.api!.orgs.removeMember(orgId, state.stored!.userId);
   state.orgs!.select(null);
   await state.sync!.syncNow();
 }
@@ -67,7 +69,7 @@ class _MembersScreenState extends State<MembersScreen> with BusyAction {
     await run(() async {
       final state = AppScope.read(context);
       await state.orgs!.pins.pin(m.userId, m.publicKey!, verified: verified);
-      await state.api!.confirmMember(widget.orgId, m.userId);
+      await state.api!.orgs.confirmMember(widget.orgId, m.userId);
       await state.sync!.syncNow();
     });
   }
@@ -112,7 +114,7 @@ class _MembersScreenState extends State<MembersScreen> with BusyAction {
     if (!yes) return;
     await run(() async {
       final state = AppScope.read(context);
-      await state.api!.removeMember(widget.orgId, m.userId);
+      await state.api!.orgs.removeMember(widget.orgId, m.userId);
       await state.sync!.syncNow();
     });
   }
@@ -174,80 +176,35 @@ class _MembersScreenState extends State<MembersScreen> with BusyAction {
   }) {
     final l = AppLocalizations.of(context);
     final colors = UfColors.of(context);
-    final orgs = AppScope.of(context).orgs!;
     final role = _roleOf(m.role);
     final accepted = m.status == MemberStatus.accepted.name;
     final self = m.userId == me;
-    final key = m.publicKey;
-    final pin = orgs.pins.pinOf(m.userId);
-    final changed =
-        (key != null && orgs.pins.check(m.userId, key) == PinCheck.changed) ||
-        orgs.alerts.contains(m.userId);
-    final unpinned =
-        !accepted &&
-        pin == null &&
-        (m.status != null || unconfirmed.contains(m.userId));
-    final badges = <Widget>[
-      if (isAdmin && accepted)
-        UfStatusChip(l.memberAwaiting, tone: UfChipTone.warn),
-      if (isAdmin && !self && changed)
-        UfStatusChip(
-          l.memberKeyChanged,
-          key: Key('member-key-changed-${m.userId}'),
-          tone: UfChipTone.danger,
-        )
-      else if (isAdmin && !self && pin != null)
-        UfStatusChip(
-          pin.verified ? l.memberVerified : l.memberNotVerified,
-          tone: pin.verified ? UfChipTone.ok : UfChipTone.muted,
-        )
-      else if (isAdmin && !self && unpinned)
-        UfStatusChip(l.memberUnpinned, tone: UfChipTone.muted),
-    ];
     final touchable = isOwner || role == OrgRole.member;
     return ItemRow(
       icon: UfIcons.user,
       title: m.email,
       trailing: [
-        ...badges,
+        if (isAdmin && accepted)
+          UfStatusChip(l.memberAwaiting, tone: UfChipTone.warn),
+        if (isAdmin && !self) ?_keyBadge(l, m, unconfirmed),
         if (isAdmin && role != null)
-          UfSelect<OrgRole>(
-            key: Key('member-role-${m.userId}'),
-            value: role,
-            onChanged: touchable && (!self || (isOwner && anotherOwner))
-                ? (r) {
-                    if (r == role) return;
-                    run(() async {
-                      final state = AppScope.read(context);
-                      await state.api!.setMemberRole(widget.orgId, m.userId, r);
-                      await state.sync!.syncNow();
-                    });
-                  }
-                : null,
-            options: [
-              for (final r in OrgRole.values)
-                UfOption(
-                  r,
-                  roleLabel(l, r),
-                  key: Key('role-option-${r.name}'),
-                  enabled: isOwner || r == OrgRole.member,
-                ),
-            ],
+          _roleSelect(
+            l,
+            m,
+            role,
+            isOwner: isOwner,
+            canChange: touchable && (!self || (isOwner && anotherOwner)),
           )
         else if (role != null)
           UfTag(roleLabel(l, role)),
-        if (isAdmin && accepted && key != null)
+        if (isAdmin && accepted && m.publicKey != null)
           FilledButton(
             key: Key('member-confirm-${m.userId}'),
             style: smallButton,
             onPressed: () => _confirm(m),
             child: Text(l.memberConfirm),
           ),
-        if (isAdmin &&
-            !self &&
-            !accepted &&
-            key != null &&
-            (pin == null || !pin.verified || changed))
+        if (isAdmin && !self && !accepted && _offersVerify(m))
           OutlinedButton(
             key: Key('member-verify-${m.userId}'),
             style: smallButton,
@@ -264,4 +221,76 @@ class _MembersScreenState extends State<MembersScreen> with BusyAction {
       ],
     );
   }
+
+  bool _keyChanged(OrgMember m) {
+    final orgs = AppScope.read(context).orgs!;
+    final key = m.publicKey;
+    return (key != null &&
+            orgs.pins.check(m.userId, key) == PinCheck.changed) ||
+        orgs.alerts.contains(m.userId);
+  }
+
+  bool _offersVerify(OrgMember m) {
+    final pin = AppScope.read(context).orgs!.pins.pinOf(m.userId);
+    return m.publicKey != null &&
+        (pin == null || !pin.verified || _keyChanged(m));
+  }
+
+  // The key badge an admin sees on another member.
+  Widget? _keyBadge(AppLocalizations l, OrgMember m, Set<String> unconfirmed) {
+    final pin = AppScope.read(context).orgs!.pins.pinOf(m.userId);
+    final unpinned =
+        m.status != MemberStatus.accepted.name &&
+        pin == null &&
+        (m.status != null || unconfirmed.contains(m.userId));
+    if (_keyChanged(m)) {
+      return UfStatusChip(
+        l.memberKeyChanged,
+        key: Key('member-key-changed-${m.userId}'),
+        tone: UfChipTone.danger,
+      );
+    }
+    if (pin != null) {
+      return UfStatusChip(
+        pin.verified ? l.memberVerified : l.memberNotVerified,
+        tone: pin.verified ? UfChipTone.ok : UfChipTone.muted,
+      );
+    }
+    if (unpinned) return UfStatusChip(l.memberUnpinned, tone: UfChipTone.muted);
+    return null;
+  }
+
+  Widget _roleSelect(
+    AppLocalizations l,
+    OrgMember m,
+    OrgRole role, {
+    required bool isOwner,
+    required bool canChange,
+  }) {
+    return UfSelect<OrgRole>(
+      key: Key('member-role-${m.userId}'),
+      value: role,
+      onChanged: canChange
+          ? (r) {
+              if (r == role) return;
+              unawaited(_setRole(m, r));
+            }
+          : null,
+      options: [
+        for (final r in OrgRole.values)
+          UfOption(
+            r,
+            roleLabel(l, r),
+            key: Key('role-option-${r.name}'),
+            enabled: isOwner || r == OrgRole.member,
+          ),
+      ],
+    );
+  }
+
+  Future<void> _setRole(OrgMember m, OrgRole role) => run(() async {
+    final state = AppScope.read(context);
+    await state.api!.orgs.setMemberRole(widget.orgId, m.userId, role);
+    await state.sync!.syncNow();
+  });
 }

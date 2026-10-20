@@ -5,9 +5,9 @@ import '../loquet/loquet_pose.dart';
 import '../loquet/loquet_spot.dart';
 import 'buttons.dart';
 import 'motion.dart';
+import 'tokens.dart';
 
 export 'buttons.dart' show dangerButtonStyle, dangerQuietStyle;
-import 'tokens.dart';
 
 /// A dialog: an optional mark left of the title and message, then content, then actions on the right.
 class UfDialog extends StatelessWidget {
@@ -33,15 +33,6 @@ class UfDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = UfColors.of(context);
-    final text = Theme.of(context).textTheme;
-    final heading = [
-      if (title case final title?) Text(title, style: text.titleLarge),
-      if (message case final message?)
-        Text(
-          message,
-          style: text.bodyMedium!.copyWith(color: colors.muted, fontSize: 13.5),
-        ),
-    ];
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 32),
       backgroundColor: Colors.transparent,
@@ -63,20 +54,11 @@ class UfDialog extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               spacing: 10,
               children: [
-                if (heading.isNotEmpty)
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    spacing: 12,
-                    children: [
-                      ?leading,
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          spacing: 6,
-                          children: heading,
-                        ),
-                      ),
-                    ],
+                if (title != null || message != null)
+                  _DialogHeading(
+                    leading: leading,
+                    title: title,
+                    message: message,
                   ),
                 ...children,
                 Padding(
@@ -93,6 +75,48 @@ class UfDialog extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _DialogHeading extends StatelessWidget {
+  const _DialogHeading({
+    required this.leading,
+    required this.title,
+    required this.message,
+  });
+
+  final Widget? leading;
+  final String? title;
+  final String? message;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = UfColors.of(context);
+    final text = Theme.of(context).textTheme;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      spacing: 12,
+      children: [
+        ?leading,
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            spacing: 6,
+            children: [
+              if (title case final title?) Text(title, style: text.titleLarge),
+              if (message case final message?)
+                Text(
+                  message,
+                  style: text.bodyMedium!.copyWith(
+                    color: colors.muted,
+                    fontSize: 13.5,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

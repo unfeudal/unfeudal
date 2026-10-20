@@ -58,45 +58,56 @@ class WhyRightsView extends StatefulWidget {
 class _WhyRightsViewState extends State<WhyRightsView> {
   late String _userId = widget.userId;
 
-  @override
-  Widget build(BuildContext context) {
-    final l = AppLocalizations.of(context);
-    final colors = UfColors.of(context);
-    final state = AppScope.of(context);
-    final orgs = state.orgs!;
-    final block = orgs.block;
-    final members = orgs.membersOf(widget.orgId);
+  String? _describe(
+    AppLocalizations l,
+    ExplanationStep s, {
+    required List<OrgMember> members,
+    required String? role,
+  }) {
+    final state = AppScope.read(context);
     String principal(ExplanationStep s) => switch (s.principalType) {
       PrincipalType.team =>
-        block?.teams.where((t) => t.id == s.principalId).firstOrNull?.name ??
+        state.orgs!.block?.teams
+                .where((t) => t.id == s.principalId)
+                .firstOrNull
+                ?.name ??
             '',
       _ =>
         members.where((m) => m.userId == s.principalId).firstOrNull?.email ??
             '',
     };
     String folder(String? id) => state.vault?.entry(id ?? '')?.name ?? '';
+    return switch (s.kind) {
+      StepKind.role => l.whyRole(
+        roleLabel(
+          l,
+          OrgRole.values.firstWhere(
+            (r) => r.name == role,
+            orElse: () => OrgRole.admin,
+          ),
+        ),
+      ),
+      StepKind.entry => l.whyEntry(
+        principal(s),
+        folder(s.folderId),
+        permissionList(l, s.permissions),
+      ),
+      StepKind.denied => l.whyDenied(permissionList(l, s.permissions)),
+      StepKind.notConfirmed || StepKind.disabled => null,
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    final colors = UfColors.of(context);
+    final state = AppScope.of(context);
+    final orgs = state.orgs!;
+    final members = orgs.membersOf(widget.orgId);
     final why = orgs.explain(widget.orgId, widget.folderId, _userId);
     final role = members.where((m) => m.userId == _userId).firstOrNull?.role;
     final lines = [
-      for (final s in why.steps)
-        switch (s.kind) {
-          StepKind.role => l.whyRole(
-            roleLabel(
-              l,
-              OrgRole.values.firstWhere(
-                (r) => r.name == role,
-                orElse: () => OrgRole.admin,
-              ),
-            ),
-          ),
-          StepKind.entry => l.whyEntry(
-            principal(s),
-            folder(s.folderId),
-            permissionList(l, s.permissions),
-          ),
-          StepKind.denied => l.whyDenied(permissionList(l, s.permissions)),
-          StepKind.notConfirmed || StepKind.disabled => null,
-        },
+      for (final s in why.steps) _describe(l, s, members: members, role: role),
     ].nonNulls;
     return ManageFrame(
       title: l.whyTitle,

@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../design/buttons.dart';
-import '../design/segmented.dart';
 import '../design/dialog.dart';
 import '../design/field.dart';
+import '../design/segmented.dart';
 import 'busy_action.dart';
 import 'fields.dart';
 

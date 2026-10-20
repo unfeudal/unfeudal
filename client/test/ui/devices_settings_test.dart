@@ -56,9 +56,12 @@ void main() {
         (s.settings.themeMode, s.settings.autoLockMinutes),
         (ThemeMode.dark, 5),
       );
-      expect(s.vault!.profile.prefs['themeMode'], 'dark');
-      expect(s.vault!.profile.prefs.containsKey('autoLockMinutes'), isFalse);
-      expect(find.text(safetyCode(s.accountPublicKey)), findsOneWidget);
+      expect(s.vault!.profile.meta.prefs['themeMode'], 'dark');
+      expect(
+        s.vault!.profile.meta.prefs.containsKey('autoLockMinutes'),
+        isFalse,
+      );
+      expect(find.text(safetyCode(s.credentials.publicKey)), findsOneWidget);
     },
   );
 

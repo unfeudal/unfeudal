@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -45,7 +46,7 @@ class _ItemHistoryPanelState extends State<ItemHistoryPanel> with BusyAction {
   @override
   void initState() {
     super.initState();
-    _load();
+    unawaited(_load());
   }
 
   @override
@@ -55,7 +56,7 @@ class _ItemHistoryPanelState extends State<ItemHistoryPanel> with BusyAction {
     _versions = null;
     _secrets.clear();
     _reported = false;
-    _load();
+    unawaited(_load());
   }
 
   Future<void> _load() => run(() async {
@@ -119,7 +120,7 @@ class _ItemHistoryPanelState extends State<ItemHistoryPanel> with BusyAction {
         // writing null would drop the secret: refuse instead
         return setState(() => problem = l.historySecretUnreadable);
       }
-      await state.saveItem(
+      await state.orgs!.saveItem(
         type: entry.item.type,
         id: widget.itemId,
         orgId: entry.orgId,
@@ -137,17 +138,9 @@ class _ItemHistoryPanelState extends State<ItemHistoryPanel> with BusyAction {
     });
   }
 
-  static String _show(Object? value) => switch (value) {
-    null => noValue,
-    final List<Object?> list => list.join(', '),
-    final Map<Object?, Object?> map => jsonEncode(map),
-    _ => '$value',
-  };
-
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
-    final colors = UfColors.of(context);
     final state = AppScope.of(context);
     final entry = state.vault?.entry(widget.itemId);
     final versions = _versions;
@@ -159,83 +152,23 @@ class _ItemHistoryPanelState extends State<ItemHistoryPanel> with BusyAction {
         !(state.sync?.readOnly ?? true);
     final reveal =
         entry != null &&
-        state.serverHas(Flag.reveal) && // client-only flag
+        state.serverInfo.has(Flag.reveal) && // client-only flag
         state.orgs!.canReveal(entry);
-    final dates = MaterialLocalizations.of(context);
-    final muted = TextStyle(color: colors.muted, fontSize: 12);
-
-    Widget changes(Map<String, Object?>? before, Map<String, Object?>? after) =>
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            for (final c in diffPayloads(before, after))
-              Row(
-                spacing: 8,
-                children: [
-                  Text(c.field, style: muted),
-                  Flexible(
-                    child: Text([_show(c.before), _show(c.after)].join(' → ')),
-                  ),
-                ],
-              ),
-          ],
-        );
-
     final children = [
       if (problem case final error?)
         UfErrorLine(error, key: const Key('history-error')),
       if (versions == null && problem == null)
         Center(child: UfLoading(l.loading)),
       for (final (i, v) in (versions ?? const <_Version>[]).indexed)
-        Container(
+        _VersionTile(
           key: Key('history-rev-${v.item.revision}'),
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            spacing: 4,
-            children: [
-              Text(
-                l.historyVersion(
-                  v.item.revision ?? 0,
-                  v.item.updatedAt == null
-                      ? ''
-                      : dates.formatMediumDate(v.item.updatedAt!.toLocal()),
-                ),
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-              if (v.meta == null)
-                Text(l.historyUnreadable, style: muted)
-              else if (i == versions!.length - 1)
-                Text(l.historyFirst, style: muted)
-              else
-                changes(versions[i + 1].meta, v.meta),
-              if (i + 1 < versions!.length &&
-                  (v.item.secret != null ||
-                      versions[i + 1].item.secret != null)) ...[
-                if (_secrets.containsKey(v.item.revision))
-                  changes(
-                    _secrets[versions[i + 1].item.revision],
-                    _secrets[v.item.revision],
-                  )
-                else if (reveal)
-                  TextButton(
-                    key: Key('history-reveal-${v.item.revision}'),
-                    onPressed: () => _reveal(i),
-                    child: Text(l.historyReveal),
-                  )
-                else
-                  Text(l.historySecretHidden, style: muted),
-              ],
-              if (i > 0)
-                TextButton(
-                  key: Key('history-restore-${v.item.revision}'),
-                  onPressed: restorable && v.meta != null
-                      ? () => _restore(v)
-                      : null,
-                  child: Text(l.historyRestore),
-                ),
-            ],
-          ),
+          version: v,
+          previous: i + 1 < versions!.length ? versions[i + 1] : null,
+          isNewest: i == 0,
+          secrets: _secrets,
+          canReveal: reveal,
+          onReveal: () => _reveal(i),
+          onRestore: restorable && v.meta != null ? () => _restore(v) : null,
         ),
     ];
     if (widget.embedded) {
@@ -251,6 +184,116 @@ class _ItemHistoryPanelState extends State<ItemHistoryPanel> with BusyAction {
         CancelButton(onPressed: () => Navigator.of(context).maybePop()),
       ],
       children: children,
+    );
+  }
+}
+
+class _VersionTile extends StatelessWidget {
+  const _VersionTile({
+    super.key,
+    required this.version,
+    required this.previous,
+    required this.isNewest,
+    required this.secrets,
+    required this.canReveal,
+    required this.onReveal,
+    required this.onRestore,
+  });
+
+  final _Version version;
+  final _Version? previous;
+  final bool isNewest;
+  final Map<int, Map<String, Object?>?> secrets;
+  final bool canReveal;
+  final VoidCallback onReveal;
+  final VoidCallback? onRestore;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    final muted = TextStyle(color: UfColors.of(context).muted, fontSize: 12);
+    final dates = MaterialLocalizations.of(context);
+    final item = version.item;
+    final previous = this.previous;
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        spacing: 4,
+        children: [
+          Text(
+            l.historyVersion(
+              item.revision ?? 0,
+              item.updatedAt == null
+                  ? ''
+                  : dates.formatMediumDate(item.updatedAt!.toLocal()),
+            ),
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+          if (version.meta == null)
+            Text(l.historyUnreadable, style: muted)
+          else if (previous == null)
+            Text(l.historyFirst, style: muted)
+          else
+            _Changes(before: previous.meta, after: version.meta),
+          if (previous != null &&
+              (item.secret != null || previous.item.secret != null)) ...[
+            if (secrets.containsKey(item.revision))
+              _Changes(
+                before: secrets[previous.item.revision],
+                after: secrets[item.revision],
+              )
+            else if (canReveal)
+              TextButton(
+                key: Key('history-reveal-${item.revision}'),
+                onPressed: onReveal,
+                child: Text(l.historyReveal),
+              )
+            else
+              Text(l.historySecretHidden, style: muted),
+          ],
+          if (!isNewest)
+            TextButton(
+              key: Key('history-restore-${item.revision}'),
+              onPressed: onRestore,
+              child: Text(l.historyRestore),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Changes extends StatelessWidget {
+  const _Changes({required this.before, required this.after});
+
+  final Map<String, Object?>? before;
+  final Map<String, Object?>? after;
+
+  static String _show(Object? value) => switch (value) {
+    null => noValue,
+    final List<Object?> list => list.join(', '),
+    final Map<Object?, Object?> map => jsonEncode(map),
+    _ => '$value',
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final muted = TextStyle(color: UfColors.of(context).muted, fontSize: 12);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final c in diffPayloads(before, after))
+          Row(
+            spacing: 8,
+            children: [
+              Text(c.field, style: muted),
+              Flexible(
+                child: Text([_show(c.before), _show(c.after)].join(' → ')),
+              ),
+            ],
+          ),
+      ],
     );
   }
 }

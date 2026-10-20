@@ -21,3 +21,7 @@
 - Editing an item no longer drops fields written by a newer version of the app.
 - Restoring an old version never erases the item's password or key, and is offered only with the right to edit.
 - An exported activity log is verified; a broken chain is still saved, with a warning.
+- An edit of only an item's password or key, made right after a lost server answer, is no longer lost at the next sync.
+- Retrying a failed connection keeps its tab in place.
+- Terminal search highlights the right text after wide (CJK) characters.
+- The password strength meter rates common passwords, keyboard rows and sequences as weak.

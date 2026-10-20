@@ -188,6 +188,13 @@ CREATE TABLE kv (
     [item.id, jsonEncode(item.toJson()), baseRevision],
   );
 
+  /// [enqueue] for each item on its own revision, in one transaction: one commit for a whole rotation.
+  void enqueueAll(Iterable<Item> items) => _transaction(() {
+    for (final item in items) {
+      enqueue(item, baseRevision: item.revision ?? 0);
+    }
+  });
+
   /// Returns the attempt count after this failure.
   int recordOutboxFailure(String itemId, String error) =>
       _db.select(

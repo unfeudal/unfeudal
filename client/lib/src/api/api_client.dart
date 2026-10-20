@@ -11,57 +11,17 @@ import '../debug_trace.dart';
 import '../version.dart';
 import 'admin_models.dart';
 
-/// A non-2xx answer. [code] keeps an unknown wire code; [known] is null for it.
-class ApiException implements Exception {
-  ApiException(
-    this.code,
-    this.status, {
-    this.message = '',
-    this.reason,
-    this.item,
-    this.orgs,
-    this.retryAfter,
-  });
-
-  final String code;
-  final int status;
-  final String message;
-  final String? reason;
-  final Item? item;
-  final List<String>? orgs;
-  final Duration? retryAfter;
-
-  ApiErrorCode? get known => ApiErrorCode.fromWire(code);
-  ConflictReason? get conflictReason => ConflictReason.fromWire(reason);
-  UnauthorizedReason? get unauthorizedReason =>
-      UnauthorizedReason.fromWire(reason);
-
-  @override
-  String toString() =>
-      'ApiException($status $code${reason == null ? '' : ' $reason'})';
-}
-
-/// The server could not be reached: socket, TLS, timeout.
-class NetworkException implements Exception {
-  NetworkException(this.cause);
-  final Object cause;
-
-  @override
-  String toString() => 'NetworkException($cause)';
-}
-
-/// A write refused locally because the client is read-only toward this server.
-class ReadOnlyException implements Exception {
-  const ReadOnlyException();
-}
-
-typedef DeviceInput = ({String name, String platform});
+part 'admin_api.dart';
+part 'api_errors.dart';
+part 'org_api.dart';
 
 class ApiClient {
   ApiClient(this.baseUrl, this._http);
 
   final Uri baseUrl;
   final http.Client _http;
+  late final orgs = OrgApi._(this);
+  late final admin = AdminApi._(this);
   String? accessToken;
   String? refreshToken;
 
@@ -245,7 +205,7 @@ class ApiClient {
         ),
       );
 
-  /// One page of an audit view; [next] is the opaque cursor of the next page, null on the last one.
+  /// One page of an audit view; `next` is the opaque cursor of the next page, null on the last one.
   Future<({List<AuditEvent> events, String? next})> audit({
     String scope = 'me',
     String? after,
@@ -290,186 +250,6 @@ class ApiClient {
 
   Future<void> reportReveal(String itemId) =>
       _send('POST', '/events/reveal', body: {'itemId': itemId});
-
-  /// The server's retention values and the org's own (null = the server's applies), keyed by setting name.
-  Future<({Map<String, int> server, Map<String, int?> org})> orgRetention(
-    String orgId,
-  ) async {
-    final json = await _send('GET', '/orgs/$orgId/settings/retention');
-    if (json case {
-      'server': {
-        'auditDays': final int auditDays,
-        'maxVersions': final int maxVersions,
-        'trashDays': final int trashDays,
-      },
-      'org': {
-        'auditDays': final int? orgAuditDays,
-        'maxVersions': final int? orgMaxVersions,
-        'trashDays': final int? orgTrashDays,
-      },
-    }) {
-      return (
-        server: {
-          'auditDays': auditDays,
-          'maxVersions': maxVersions,
-          'trashDays': trashDays,
-        },
-        org: {
-          'auditDays': orgAuditDays,
-          'maxVersions': orgMaxVersions,
-          'trashDays': orgTrashDays,
-        },
-      );
-    }
-    throw const FormatException('retention: unexpected body');
-  }
-
-  Future<({String id, String name, String role})> createOrg(String name) async {
-    final json = await _send('POST', '/orgs', body: {'name': name});
-    if (json case {
-      'org': {
-        'id': final String id,
-        'name': final String name,
-        'role': final String role,
-      },
-    }) {
-      return (id: id, name: name, role: role);
-    }
-    throw const FormatException('orgs: unexpected body');
-  }
-
-  Future<void> updateOrg(
-    String orgId, {
-    String? name,
-    Map<String, Object?>? settings,
-  }) => _send(
-    'PUT',
-    '/orgs/$orgId',
-    body: {'name': ?name, 'settings': ?settings},
-  );
-
-  Future<void> deleteOrg(String orgId) => _send('DELETE', '/orgs/$orgId');
-
-  Future<void> setMemberRole(String orgId, String userId, OrgRole role) =>
-      _send('PUT', '/orgs/$orgId/members/$userId', body: {'role': role.name});
-
-  Future<void> removeMember(String orgId, String userId) =>
-      _send('DELETE', '/orgs/$orgId/members/$userId');
-
-  Future<void> confirmMember(String orgId, String userId) =>
-      _send('POST', '/orgs/$orgId/members/$userId/confirm');
-
-  Future<InviteCreated> createInvite(
-    String orgId, {
-    required String email,
-    OrgRole role = OrgRole.member,
-  }) async => InviteCreated.fromJson(
-    await _send(
-      'POST',
-      '/orgs/$orgId/invites',
-      body: {'email': email, 'role': role.name},
-    ),
-  );
-
-  Future<List<PendingInvite>> orgInvites(String orgId) =>
-      _list('/orgs/$orgId/invites', 'invites', PendingInvite.fromJson);
-
-  Future<void> revokeInvite(String id) => _send('DELETE', '/invites/$id');
-
-  /// Joins the org of an invite with the signed-in account; returns its id.
-  Future<String> joinInvite(String token) async {
-    final json = await _send('POST', '/invites/join', body: {'token': token});
-    if (json case {'orgId': final String orgId}) return orgId;
-    throw const FormatException('invites/join: unexpected body');
-  }
-
-  Future<OrgTeam> createTeam(
-    String orgId, {
-    required String name,
-    List<String> memberIds = const [],
-  }) async {
-    final json = await _send(
-      'POST',
-      '/orgs/$orgId/teams',
-      body: {'name': name, 'memberIds': memberIds},
-    );
-    if (json case {'team': final Map<String, Object?> team}) {
-      return OrgTeam.fromJson({...team, 'orgId': orgId});
-    }
-    throw const FormatException('teams: unexpected body');
-  }
-
-  Future<void> updateTeam(
-    String orgId,
-    String teamId, {
-    String? name,
-    List<String>? memberIds,
-  }) => _send(
-    'PUT',
-    '/orgs/$orgId/teams/$teamId',
-    body: {'name': ?name, 'memberIds': ?memberIds},
-  );
-
-  Future<void> deleteTeam(String orgId, String teamId) =>
-      _send('DELETE', '/orgs/$orgId/teams/$teamId');
-
-  Future<void> putAcl(String folderId, List<AclEntry> entries) => _send(
-    'PUT',
-    '/folders/$folderId/acl',
-    body: {
-      'entries': [
-        for (final e in entries)
-          {
-            'principalType': e.principalType.name,
-            'principalId': e.principalId,
-            'allow': [for (final p in e.allow) p.name],
-            'deny': [for (final p in e.deny) p.name],
-          },
-      ],
-    },
-  );
-
-  /// Each wrap carries its recipient's `userId`.
-  Future<void> putFolderKeys(
-    String folderId, {
-    required int version,
-    required List<WrappedFolderKeys> wrapped,
-    FolderKeyHistory? history,
-  }) => _send(
-    'PUT',
-    '/folders/$folderId/keys',
-    body: {
-      'version': version,
-      'wrapped': [for (final w in wrapped) w.toJson()],
-      'history': history?.toJson(),
-    },
-  );
-
-  Future<void> rotationDone(String folderId) =>
-      _send('POST', '/folders/$folderId/rotation/done');
-
-  Future<List<AdminUser>> adminUsers() =>
-      _list('/admin/users', 'users', AdminUser.fromJson);
-
-  Future<void> adminSetDisabled(String userId, bool disabled) =>
-      _send('PUT', '/admin/users/$userId', body: {'disabled': disabled});
-
-  Future<void> adminDeleteUser(String userId) =>
-      _send('DELETE', '/admin/users/$userId');
-
-  Future<List<AdminOrg>> adminOrgs() =>
-      _list('/admin/orgs', 'orgs', AdminOrg.fromJson);
-
-  Future<void> adminDeleteOrg(String orgId, String confirmName) =>
-      _send('DELETE', '/admin/orgs/$orgId', body: {'confirmName': confirmName});
-
-  Future<InviteCreated> adminInvite(String email) async =>
-      InviteCreated.fromJson(
-        await _send('POST', '/admin/invites', body: {'email': email}),
-      );
-
-  Future<List<PendingInvite>> adminInvites() =>
-      _list('/admin/invites', 'invites', PendingInvite.fromJson);
 
   /// GET [path], then the list under [key].
   Future<List<T>> _list<T>(
@@ -606,32 +386,6 @@ class ApiClient {
       final what = e is TimeoutException ? 'timeout' : 'network error';
       trace(TraceArea.http, '$method $path → $what');
       throw NetworkException(e);
-    }
-  }
-
-  // 2xx: the JSON body, null when empty. Else an ApiException; a body that is not JSON is a FormatException.
-  static Object? _decode(http.Response res) {
-    if (res.statusCode >= 200 && res.statusCode < 300) {
-      return res.body.isEmpty ? null : jsonDecode(res.body);
-    }
-    final error = ApiErrorBody.fromJson(jsonDecode(res.body));
-    final after = int.tryParse(res.headers['retry-after'] ?? '');
-    return throw ApiException(
-      error.error,
-      res.statusCode,
-      message: error.message,
-      reason: error.reason,
-      item: error.item,
-      orgs: (error.extra['orgs'] as List<Object?>?)?.cast<String>(),
-      retryAfter: after == null ? null : Duration(seconds: after),
-    );
-  }
-
-  static String? _reasonOf(http.Response res) {
-    try {
-      return ApiErrorBody.fromJson(jsonDecode(res.body)).reason;
-    } on FormatException {
-      return null;
     }
   }
 

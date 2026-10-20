@@ -63,7 +63,7 @@ String publicKeyOf(String pem, {String? passphrase}) {
         passphrase == null || passphrase.isEmpty ? null : passphrase,
       ).first,
     );
-  } catch (_) {
+  } on Object catch (_) {
     // The parser throws assorted errors; all mean the same thing to the user.
     throw const InvalidKey();
   }

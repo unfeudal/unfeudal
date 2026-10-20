@@ -98,7 +98,7 @@ void main() {
 
   test('one year with Unfeudal, and the party hat on Loquet day', () {
     memory.firstUnlock = DateTime(2025, 10, 15, 9);
-    final r = e.handle(const Unlocked(displayName: null))!;
+    final r = e.handle(const Unlocked())!;
     expect((r.line, r.important), (LineKey.oneYear, true));
     expect(e.sessionAccessory, LoquetAccessory.partyHat);
     now = DateTime(2026, 10, 16, 12);

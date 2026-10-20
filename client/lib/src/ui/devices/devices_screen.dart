@@ -5,12 +5,12 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
 import '../../design/buttons.dart';
+import '../../design/dialog.dart';
 import '../../design/feedback.dart';
 import '../../design/field.dart';
 import '../../design/icons.dart';
 import '../../design/rows.dart';
 import '../../design/tokens.dart';
-import '../../design/dialog.dart';
 import '../busy_action.dart';
 import '../describe_error.dart';
 
@@ -23,7 +23,7 @@ class DeviceList extends StatefulWidget {
 }
 
 class _DeviceListState extends State<DeviceList> with BusyAction {
-  late Future<List<Device>> _devices = AppScope.read(context).loadDevices();
+  late Future<List<Device>> _devices = AppScope.read(context).api!.devices();
 
   Future<void> _revoke(Device device) async {
     final l = AppLocalizations.of(context);
@@ -41,7 +41,7 @@ class _DeviceListState extends State<DeviceList> with BusyAction {
       if (!mounted || state.stored == null) {
         return; // revoking this device signed out
       }
-      final reloaded = state.loadDevices();
+      final reloaded = state.api!.devices();
       setState(() {
         _devices = reloaded;
       });

@@ -17,6 +17,9 @@ import '../orgs/join_org_dialog.dart';
 import 'shortcuts.dart';
 import 'tree_panel.dart';
 
+part 'vault_selector.dart';
+part 'vault_trigger.dart';
+
 /// A section screen that replaces the sessions while the sidebar stays; all but settings follow the vault.
 enum ShellPage { snippets, keychain, members, activity, trash, settings }
 
@@ -41,25 +44,10 @@ class Sidebar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l = AppLocalizations.of(context);
-    final state = AppScope.of(context);
     final colors = UfColors.of(context);
-    final org = selectedOrg(state);
-    final confirmed = org != null && org.isConfirmed;
-    final vault = state.vault;
-    final empty = !(vault?.entries ?? const []).any(
-      (e) =>
-          e.orgId == org?.id &&
-          e.kind == ItemKind.host &&
-          !vault!.isTrashed(e.id),
+    final divider = BoxDecoration(
+      border: Border(top: BorderSide(color: colors.line)),
     );
-    final pages = [
-      ShellPage.snippets,
-      ShellPage.keychain,
-      if (confirmed) ShellPage.members,
-      if (state.serverHas(Flag.audit)) ShellPage.activity,
-      ShellPage.trash,
-    ];
     return Container(
       key: const Key('sidebar'),
       decoration: BoxDecoration(
@@ -74,72 +62,120 @@ class Sidebar extends StatelessWidget {
           VaultSelector(onPicked: () => onShow(null)),
           Expanded(child: tree),
           DecoratedBox(
-            decoration: BoxDecoration(
-              border: Border(top: BorderSide(color: colors.line)),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                spacing: 1,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(8, 2, 8, 6),
-                    child: Text(
-                      l.sidebarIn(org?.name ?? l.vaultPersonal),
-                      style: Theme.of(context).textTheme.labelSmall!
-                          .copyWith(color: colors.muted),
-                    ),
-                  ),
-                  for (final p in pages)
-                    SidebarEntry(
-                      key: Key('section-${p.name}'),
-                      icon: pageIcon(p),
-                      label: pageTitle(l, p),
-                      current: page == p,
-                      onTap: () => onShow(page == p ? null : p),
-                    ),
-                ],
-              ),
-            ),
+            decoration: divider,
+            child: _SectionEntries(page: page, onShow: onShow),
           ),
           DecoratedBox(
-            decoration: BoxDecoration(
-              border: Border(top: BorderSide(color: colors.line)),
+            decoration: divider,
+            child: _SidebarFooter(page: page, onShow: onShow, onLock: onLock),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// The vault's sections under the vault name; members once the org is confirmed, activity when the server audits.
+class _SectionEntries extends StatelessWidget {
+  const _SectionEntries({required this.page, required this.onShow});
+
+  final ShellPage? page;
+  final ValueChanged<ShellPage?> onShow;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    final state = AppScope.of(context);
+    final colors = UfColors.of(context);
+    final org = selectedOrg(state);
+    final confirmed = org != null && org.isConfirmed;
+    final pages = [
+      ShellPage.snippets,
+      ShellPage.keychain,
+      if (confirmed) ShellPage.members,
+      if (state.serverInfo.has(Flag.audit)) ShellPage.activity,
+      ShellPage.trash,
+    ];
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        spacing: 1,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 2, 8, 6),
+            child: Text(
+              l.sidebarIn(org?.name ?? l.vaultPersonal),
+              style: Theme.of(context).textTheme.labelSmall!
+                  .copyWith(color: colors.muted),
             ),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(2, 8, 0, 0),
-              child: Row(
-                spacing: 2,
-                children: [
-                  Expanded(
-                    child: LoquetSpot(
-                      key: const Key('loquet-spot-sidebar'),
-                      placement: LoquetPlacement.sidebar,
-                      name: state.displayName,
-                      // an empty vault gives him its line
-                      mood: empty ? LoquetMood.idle : null,
-                      line: empty ? LineKey.emptyVault : null,
-                    ),
-                  ),
-                  IconButton(
-                    key: const Key('sidebar-settings'),
-                    tooltip: l.railSettings,
-                    isSelected: page == ShellPage.settings,
-                    onPressed: () => onShow(
-                      page == ShellPage.settings ? null : ShellPage.settings,
-                    ),
-                    icon: const Icon(UfIcons.gear),
-                  ),
-                  IconButton(
-                    key: const Key('sidebar-lock'),
-                    tooltip: l.railLock,
-                    onPressed: onLock,
-                    icon: const Icon(UfIcons.lock),
-                  ),
-                ],
-              ),
+          ),
+          for (final p in pages)
+            SidebarEntry(
+              key: Key('section-${p.name}'),
+              icon: pageIcon(p),
+              label: pageTitle(l, p),
+              current: page == p,
+              onTap: () => onShow(page == p ? null : p),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+// Loquet with the account name, then Settings and Lock.
+class _SidebarFooter extends StatelessWidget {
+  const _SidebarFooter({
+    required this.page,
+    required this.onShow,
+    required this.onLock,
+  });
+
+  final ShellPage? page;
+  final ValueChanged<ShellPage?> onShow;
+  final VoidCallback onLock;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    final state = AppScope.of(context);
+    final org = selectedOrg(state);
+    final vault = state.vault;
+    final empty = !(vault?.entries ?? const []).any(
+      (e) =>
+          e.orgId == org?.id &&
+          e.kind == ItemKind.host &&
+          !vault!.isTrashed(e.id),
+    );
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(2, 8, 0, 0),
+      child: Row(
+        spacing: 2,
+        children: [
+          Expanded(
+            child: LoquetSpot(
+              key: const Key('loquet-spot-sidebar'),
+              placement: LoquetPlacement.sidebar,
+              name: state.displayName,
+              // an empty vault gives him its line
+              mood: empty ? LoquetMood.idle : null,
+              line: empty ? LineKey.emptyVault : null,
+            ),
+          ),
+          IconButton(
+            key: const Key('sidebar-settings'),
+            tooltip: l.railSettings,
+            isSelected: page == ShellPage.settings,
+            onPressed: () =>
+                onShow(page == ShellPage.settings ? null : ShellPage.settings),
+            icon: const Icon(UfIcons.gear),
+          ),
+          IconButton(
+            key: const Key('sidebar-lock'),
+            tooltip: l.railLock,
+            onPressed: onLock,
+            icon: const Icon(UfIcons.lock),
           ),
         ],
       ),
@@ -149,7 +185,7 @@ class Sidebar extends StatelessWidget {
 
 /// The org the sidebar shows, or null for the personal vault.
 OrgSummary? selectedOrg(AppState state) {
-  final orgs = state.serverHas(Flag.orgs) ? state.orgs : null;
+  final orgs = state.serverInfo.has(Flag.orgs) ? state.orgs : null;
   return orgs?.byId(orgs.selected);
 }
 
@@ -224,334 +260,6 @@ class SidebarEntry extends StatelessWidget {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-/// The selected vault with its role or host count; its menu lists every vault, then create and join.
-class VaultSelector extends StatelessWidget {
-  const VaultSelector({super.key, required this.onPicked});
-
-  /// After a vault is picked: the sessions show again.
-  final VoidCallback onPicked;
-
-  @override
-  Widget build(BuildContext context) {
-    final l = AppLocalizations.of(context);
-    final state = AppScope.of(context);
-    final colors = UfColors.of(context);
-    final orgs = state.serverHas(Flag.orgs) ? state.orgs : null;
-    final current = selectedOrg(state);
-    final text = Theme.of(context).textTheme;
-    int hostsIn(String? orgId) => (state.vault?.entries ?? const [])
-        .where(
-          (e) =>
-              e.orgId == orgId &&
-              e.kind == ItemKind.host &&
-              !state.vault!.isTrashed(e.id),
-        )
-        .length;
-    final hosts = hostsIn(null);
-    String role(OrgSummary o) => switch (o.role) {
-      'owner' => l.roleOwner,
-      'admin' => l.roleAdmin,
-      _ => l.roleMember,
-    };
-    void pick(String? orgId) {
-      orgs?.select(orgId);
-      onPicked();
-    }
-
-    // Vault rows hold two lines: 32 px minimum, 4/8 padding over the themed 30 px row.
-    const rowStyle = ButtonStyle(
-      minimumSize: WidgetStatePropertyAll(Size(0, 32)),
-      padding: WidgetStatePropertyAll(
-        EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      ),
-    );
-    // set by the LayoutBuilder below: the menu is as wide as the selector
-    late double menuWidth;
-    Widget row(int index, Widget child) => Padding(
-      padding: EdgeInsets.only(top: index == 0 ? 0 : 1),
-      child: SizedBox(width: menuWidth - 8, child: child),
-    );
-
-    Widget item({
-      required int index,
-      required Key key,
-      required String name,
-      required String subtitle,
-      required bool selected,
-      required VoidCallback? onPressed,
-      required Widget tile,
-      bool dim = false,
-    }) => row(
-      index,
-      MenuItemButton(
-        key: key,
-        onPressed: onPressed,
-        style: rowStyle,
-        overflowAxis: Axis.vertical,
-        leadingIcon: tile,
-        trailingIcon: selected
-            ? Icon(UfIcons.check, size: 14, color: colors.accentText)
-            : index < 9
-            ? Text(
-                UfShortcuts.vaultLabel(index + 1),
-                style: monoStyle.copyWith(fontSize: 11, color: colors.muted),
-              )
-            : null,
-        child: Padding(
-          padding: const EdgeInsetsDirectional.only(start: 2, end: 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(name, style: dim ? TextStyle(color: colors.muted) : null),
-              Text(
-                subtitle,
-                style: text.bodySmall!.copyWith(
-                  fontSize: 12,
-                  color: colors.muted,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-    // An action row keeps its glyph in a 28 px slot, aligned with the vault tiles.
-    Widget action(Key key, IconData icon, String label, VoidCallback onTap) =>
-        row(
-          1,
-          MenuItemButton(
-            key: key,
-            style: rowStyle,
-            leadingIcon: SizedBox.square(
-              dimension: 28,
-              child: Icon(icon, size: 16, color: colors.muted),
-            ),
-            onPressed: onTap,
-            child: Padding(
-              padding: const EdgeInsetsDirectional.only(start: 2),
-              child: Text(label),
-            ),
-          ),
-        );
-
-    final name = current?.name ?? l.vaultPersonal;
-    final subtitle = current == null
-        ? l.vaultPersonalSubtitle(hosts)
-        : current.isConfirmed
-        ? l.vaultOrgSubtitle(role(current))
-        : l.orgAwaiting;
-    final vaults = orgs?.orgs ?? const <OrgSummary>[];
-    return LayoutBuilder(
-      builder: (context, box) => MenuAnchor(
-        alignmentOffset: const Offset(0, 4),
-        style: MenuStyle(
-          minimumSize: WidgetStatePropertyAll(
-            Size(menuWidth = box.maxWidth, 0),
-          ),
-          maximumSize: WidgetStatePropertyAll(Size(box.maxWidth, 480)),
-          shadowColor: WidgetStatePropertyAll(colors.scrim),
-        ),
-        menuChildren: [
-          item(
-            index: 0,
-            key: const Key('vault-personal'),
-            name: l.vaultPersonal,
-            subtitle: l.vaultMenuHosts(hosts),
-            selected: current == null,
-            onPressed: () => pick(null),
-            tile: VaultTile(letter: l.vaultPersonal, personal: true),
-          ),
-          for (final (i, org) in vaults.indexed)
-            item(
-              index: i + 1,
-              key: Key('vault-org-${org.id}'),
-              name: org.name,
-              subtitle: org.isConfirmed
-                  ? l.vaultMenuOrgHosts(role(org), hostsIn(org.id))
-                  : l.orgAwaiting,
-              selected: current?.id == org.id,
-              dim: !org.isConfirmed,
-              onPressed: () => pick(org.id),
-              tile: VaultTile(letter: org.name, awaiting: !org.isConfirmed),
-            ),
-          if (orgs != null) ...[
-            Container(
-              width: menuWidth - 8,
-              height: 1,
-              margin: const EdgeInsets.all(4),
-              color: colors.line,
-            ),
-            action(
-              const Key('vault-new-org'),
-              UfIcons.plus,
-              l.railNewOrg,
-              () => showUfDialog<void>(context, (_) => const CreateOrgDialog()),
-            ),
-            action(
-              const Key('vault-join-org'),
-              UfIcons.signIn,
-              l.railJoinOrg,
-              () => showUfDialog<void>(context, (_) => const JoinOrgDialog()),
-            ),
-          ],
-        ],
-        builder: (context, menu, _) => _VaultTrigger(
-          menu: menu,
-          name: name,
-          subtitle: subtitle,
-          current: current,
-        ),
-      ),
-    );
-  }
-}
-
-// The selector itself: an `edge` border on hover, the outer focus ring while its menu is open or it holds
-// keyboard focus.
-class _VaultTrigger extends StatefulWidget {
-  const _VaultTrigger({
-    required this.menu,
-    required this.name,
-    required this.subtitle,
-    required this.current,
-  });
-
-  final MenuController menu;
-  final String name;
-  final String subtitle;
-  final OrgSummary? current;
-
-  @override
-  State<_VaultTrigger> createState() => _VaultTriggerState();
-}
-
-class _VaultTriggerState extends State<_VaultTrigger> {
-  bool _hover = false, _focus = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final menu = widget.menu;
-    final name = widget.name;
-    final current = widget.current;
-    final keyboardFocus =
-        _focus &&
-        FocusManager.instance.highlightMode == FocusHighlightMode.traditional;
-    final l = AppLocalizations.of(context);
-    final colors = UfColors.of(context);
-    final text = Theme.of(context).textTheme;
-    return Semantics(
-      button: true,
-      label: l.sidebarVaults,
-      child: AnimatedContainer(
-        duration: UfMotion.of(context).fast,
-        decoration: BoxDecoration(
-          borderRadius: UfRadius.card,
-          boxShadow: menu.isOpen || keyboardFocus
-              ? UfElevation.focusRing(colors)
-              : null,
-        ),
-        child: Material(
-          color: colors.panel,
-          shape: RoundedRectangleBorder(
-            borderRadius: UfRadius.card,
-            side: BorderSide(
-              color: menu.isOpen || _hover ? colors.edge : colors.line,
-            ),
-          ),
-          child: InkWell(
-            key: const Key('vault-selector'),
-            borderRadius: UfRadius.card,
-            hoverColor: Colors.transparent,
-            onHover: (hover) => setState(() => _hover = hover),
-            onFocusChange: (focus) => setState(() => _focus = focus),
-            onTap: () => menu.isOpen ? menu.close() : menu.open(),
-            child: SizedBox(
-              height: 44,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: Row(
-                  spacing: 10,
-                  children: [
-                    VaultTile(
-                      letter: name,
-                      personal: current == null,
-                      awaiting: current != null && !current.isConfirmed,
-                    ),
-                    Expanded(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: text.labelLarge!.copyWith(fontSize: 13.5),
-                          ),
-                          Text(
-                            widget.subtitle,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: text.bodySmall!.copyWith(
-                              color: colors.muted,
-                              height: 1.2,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Icon(UfIcons.caretUpDown, size: 14, color: colors.muted),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// A vault's first letter on a 28 px tile: `accent` for an org, `neutral` for the personal vault, an edge only
-/// while the org awaits confirmation.
-class VaultTile extends StatelessWidget {
-  const VaultTile({
-    super.key,
-    required this.letter,
-    this.personal = false,
-    this.awaiting = false,
-  });
-
-  final String letter;
-  final bool personal;
-  final bool awaiting;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = UfColors.of(context);
-    final (fill, ink) = awaiting
-        ? (Colors.transparent, colors.muted)
-        : personal
-        ? (colors.neutral, colors.text)
-        : (colors.accent, colors.accentFg);
-    return AnimatedContainer(
-      duration: UfMotion.of(context).fast,
-      width: 28,
-      height: 28,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: fill,
-        borderRadius: UfRadius.control,
-        border: awaiting ? Border.all(color: colors.edge) : null,
-      ),
-      child: Text(
-        String.fromCharCode(letter.runes.first).toUpperCase(),
-        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: ink),
       ),
     );
   }

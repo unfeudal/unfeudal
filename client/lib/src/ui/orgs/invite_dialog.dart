@@ -51,7 +51,7 @@ class _InviteDialogState extends State<InviteDialog> with BusyAction {
     final email = _email.text.trim();
     if (email.isEmpty) return setState(() => problem = l.fieldRequired);
     await run(() async {
-      final created = await api.createInvite(
+      final created = await api.orgs.createInvite(
         widget.orgId,
         email: email,
         role: _role,

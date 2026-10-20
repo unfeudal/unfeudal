@@ -145,8 +145,8 @@ void main() {
         type: 'host',
         meta: hostJson('web', user: 'root'),
       );
-      await s.vault!.pinHostKey(web, 'ssh-ed25519', 'SHA256:${'A' * 43}');
-      await s.connect(web);
+      await s.vault!.hostKeys.pin(web, 'ssh-ed25519', 'SHA256:${'A' * 43}');
+      await s.connections.connect(web);
       final store = SnippetStore(s.vault!);
       disk = await store.save(
         SnippetMeta(name: 'Disk', command: 'df -h\n', tags: []),

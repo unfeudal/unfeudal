@@ -45,9 +45,7 @@ void main() {
     final fileBacked = await signedInState(t, loquetMemory: memory);
     // in real time: the write the event starts is awaited, not a fixed delay
     await t.runAsync(() async {
-      fileBacked.emit(
-        const ConnectSucceeded(hostId: 'h', user: 'deploy', tags: []),
-      );
+      fileBacked.emit(const ConnectSucceeded(hostId: 'h', user: 'deploy'));
       await memory.save(); // queued behind that write
     });
     await t.pump();
@@ -83,9 +81,9 @@ void main() {
       ),
     );
     final hostId = s.vault!.ofKind(ItemKind.host).single.id;
-    await t.runAsync(() => s.connect(hostId));
+    await t.runAsync(() => s.connections.connect(hostId));
     expect(s.loquet.engine.typing, isFalse);
-    s.tabs.single.onUserInput!();
+    s.connections.tabs.single.onUserInput!();
     expect(s.loquet.engine.typing, isTrue);
   });
 

@@ -36,11 +36,10 @@ void main() {
     await v.trashItem(await v.upsertItem(type: 'host', meta: hostJson('old')));
     final foreign = await sealItem(
       SymmetricCipher.newKey(),
-      type: 'host',
       meta: hostJson('foreign'),
     );
     final org = Item.fromJson({
-      ...(await sealItem(key, type: 'host', meta: hostJson('shared'))).toJson(),
+      ...(await sealItem(key, meta: hostJson('shared'))).toJson(),
       'scope': 'org',
       'orgId': newId(),
       'folderId': newId(),

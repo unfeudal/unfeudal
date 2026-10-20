@@ -134,7 +134,7 @@ class UfNotice extends StatelessWidget {
   final BannerTone tone;
   final String message;
 
-  /// Small buttons ([smallButton]).
+  /// Small buttons (`smallButton`).
   final List<Widget> actions;
   final bool _row;
 

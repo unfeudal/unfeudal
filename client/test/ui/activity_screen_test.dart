@@ -60,7 +60,6 @@ void main() {
       final (f, g) = (newId(), newId());
       await t.runAsync(() async {
         h.orgBlock = orgBlock(
-          role: 'member',
           members: [memberRow(me, status: 'confirmed')],
           folderTree: [node(f), node(g)],
           acl: [
