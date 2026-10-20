@@ -454,12 +454,8 @@ class _VaultTriggerState extends State<_VaultTrigger> {
         duration: UfMotion.of(context).fast,
         decoration: BoxDecoration(
           borderRadius: UfRadius.card,
-          // the 2 px focus ring outside a 2 px gap
           boxShadow: menu.isOpen || keyboardFocus
-              ? [
-                  BoxShadow(color: colors.bg, spreadRadius: 2),
-                  BoxShadow(color: colors.focus, spreadRadius: 4),
-                ]
+              ? UfElevation.focusRing(colors)
               : null,
         ),
         child: Material(

@@ -30,7 +30,7 @@ class VaultExport {
     KdfParams kdf = KdfParams.defaults,
     DateTime? now,
   }) async {
-    if (normalizePassword(passphrase).runes.length < minPassphraseLength) {
+    if (passwordLength(passphrase) < minPassphraseLength) {
       throw const WeakPassword();
     }
     final salt = secureBytes(16);

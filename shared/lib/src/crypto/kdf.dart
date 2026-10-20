@@ -62,6 +62,9 @@ class KdfParams {
 
 String normalizePassword(String password) => unorm.nfc(password);
 
+/// Length in code points as the minimum-length rules count it: after [normalizePassword].
+int passwordLength(String password) => normalizePassword(password).runes.length;
+
 /// Raw Argon2id v1.3 of NFC(password). Always enforces alg, ceiling and the testing floor;
 /// callers holding params from outside also call `ensureAcceptable()` with their own `allowTesting`.
 Future<Uint8List> argon2id(

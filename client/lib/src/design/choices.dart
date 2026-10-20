@@ -68,7 +68,7 @@ class UfSwitch extends StatelessWidget {
               color: track,
               borderRadius: const BorderRadius.all(Radius.circular(9)),
               boxShadow: states.contains(WidgetState.focused)
-                  ? _focusRing(colors)
+                  ? UfElevation.focusRing(colors)
                   : null,
             ),
             foregroundDecoration: BoxDecoration(
@@ -212,7 +212,7 @@ class UfChoiceCard<T> extends StatelessWidget {
                       : colors.line,
                 ),
                 boxShadow: states.contains(WidgetState.focused)
-                    ? _focusRing(colors)
+                    ? UfElevation.focusRing(colors)
                     : null,
               ),
               child: Row(
@@ -523,12 +523,6 @@ class _UfSelectState<T> extends State<UfSelect<T>> {
   }
 }
 
-/// The outer ring of keyboard focus: a 2 px gap in `bg`, then 2 px of `focus`.
-List<BoxShadow> _focusRing(UfColors colors) => [
-  BoxShadow(color: colors.focus, spreadRadius: 4),
-  BoxShadow(color: colors.bg, spreadRadius: 2),
-];
-
 /// A 16 px radio: `field` with a 1 px `edge` ring at rest, `accent` with a 6 px `accentFg` dot when picked.
 class _RadioDot extends StatelessWidget {
   const _RadioDot({required this.selected, required this.states});
@@ -562,7 +556,7 @@ class _RadioDot extends StatelessWidget {
             ? null
             : Border.all(color: active ? colors.muted : colors.edge),
         boxShadow: states.contains(WidgetState.focused)
-            ? _focusRing(colors)
+            ? UfElevation.focusRing(colors)
             : null,
       ),
       child: AnimatedOpacity(

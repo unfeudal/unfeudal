@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:unfeudal_client/src/app_state.dart';
+import 'package:unfeudal_client/src/design/tokens.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../support/fakes.dart';
@@ -98,6 +99,29 @@ void main() {
     await openVaults(t);
     expect(find.byKey(const Key('vault-new-org')), findsNothing);
     expect(find.byKey(const Key('vault-join-org')), findsNothing);
+  });
+
+  testWidgets('the open vault selector shows a focus ring outside a gap', (
+    t,
+  ) async {
+    final s = await signedInState(t);
+    await pumpApp(t, state: s);
+    await openVaults(t);
+    final selector = find.byKey(const Key('vault-selector'));
+    final colors = UfColors.of(t.element(selector));
+    final box = t.widget<AnimatedContainer>(
+      find
+          .ancestor(of: selector, matching: find.byType(AnimatedContainer))
+          .first,
+    );
+    // painted in order: the 4 px focus first, the 2 px gap over it
+    expect(
+      [
+        for (final s in (box.decoration! as BoxDecoration).boxShadow!)
+          (s.color, s.spreadRadius),
+      ],
+      [(colors.focus, 4), (colors.bg, 2)],
+    );
   });
 
   testWidgets('create an org and join one with a link', (t) async {

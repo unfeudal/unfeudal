@@ -271,6 +271,12 @@ abstract final class UfElevation {
     ),
   ];
 
+  /// The outer ring of keyboard focus: a 2 px gap in `bg`, then 2 px of `focus` (painted in list order).
+  static List<BoxShadow> focusRing(UfColors c) => [
+    BoxShadow(color: c.focus, spreadRadius: 4),
+    BoxShadow(color: c.bg, spreadRadius: 2),
+  ];
+
   static List<BoxShadow> dialog(UfColors c) => [
     BoxShadow(color: c.line, spreadRadius: 1),
     BoxShadow(

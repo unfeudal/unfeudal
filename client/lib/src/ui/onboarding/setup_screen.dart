@@ -177,7 +177,7 @@ String? checkNewPassword(
   String password,
   String confirmation,
 ) {
-  if (password.runes.length < AccountCrypto.minPasswordLength) {
+  if (passwordLength(password) < AccountCrypto.minPasswordLength) {
     return l.errorWeakPassword(AccountCrypto.minPasswordLength);
   }
   return password == confirmation ? null : l.passwordsDiffer;

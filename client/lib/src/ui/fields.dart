@@ -52,7 +52,7 @@ Widget keyedField(
 int passwordScore(String password) {
   // ponytail: length and classes only, blind to dictionary words and patterns; zxcvbn-like scoring if
   // users need real guidance
-  final length = password.runes.length;
+  final length = passwordLength(password);
   if (length == 0) return 0;
   if (length < AccountCrypto.minPasswordLength) return 1;
   final classes = [

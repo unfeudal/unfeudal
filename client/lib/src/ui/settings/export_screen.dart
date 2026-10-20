@@ -48,8 +48,7 @@ class _ExportScreenState extends State<ExportScreen> with BusyAction {
     final state = AppScope.read(context);
     if (_plain && !_plainConfirmed) return;
     if (!_plain) {
-      if (normalizePassword(_passphrase.text).runes.length <
-          VaultExport.minPassphraseLength) {
+      if (passwordLength(_passphrase.text) < VaultExport.minPassphraseLength) {
         return setState(() => problem = l.exportPassphraseShort);
       }
       if (_passphrase.text != _confirm.text) {

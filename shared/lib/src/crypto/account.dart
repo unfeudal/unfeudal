@@ -266,7 +266,7 @@ class AccountCrypto {
   }
 
   void _checkPassword(String password) {
-    if (normalizePassword(password).runes.length < minPasswordLength) {
+    if (passwordLength(password) < minPasswordLength) {
       throw const WeakPassword();
     }
   }
