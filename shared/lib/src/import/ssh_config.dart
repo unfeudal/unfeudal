@@ -65,6 +65,15 @@ const _unsupported = {
   'certificatefile',
 };
 
+const _imported = {
+  'hostname',
+  'user',
+  'identityfile',
+  'proxyjump',
+  'port',
+  'localforward',
+};
+
 class _Section {
   _Section(this.patterns);
 
@@ -114,14 +123,7 @@ SshConfigImport parseSshConfig(String text) {
       warnings.add(
         SshConfigWarning(number, SshConfigWarningKind.unsupported, pair[1]),
       );
-    } else if (const {
-      'hostname',
-      'user',
-      'identityfile',
-      'proxyjump',
-      'port',
-      'localforward',
-    }.contains(key)) {
+    } else if (_imported.contains(key)) {
       final parsed = switch (key) {
         'port' => _port(value),
         'localforward' => _forward(value),

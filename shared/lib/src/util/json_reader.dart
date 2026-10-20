@@ -27,11 +27,11 @@ class JsonReader {
   }
 
   int integer(String key, {int min = 0, int? max}) =>
-      _inRange(key, req<int>(key), min, max);
+      _inRange(key, req<int>(key), min: min, max: max);
 
   int? optInteger(String key, {int min = 0, int? max}) {
     final value = opt<int>(key);
-    return value == null ? null : _inRange(key, value, min, max);
+    return value == null ? null : _inRange(key, value, min: min, max: max);
   }
 
   bool flag(String key, {bool? orElse}) =>
@@ -106,7 +106,7 @@ class JsonReader {
       if (!known.contains(entry.key)) entry.key: entry.value,
   };
 
-  int _inRange(String key, int value, int min, int? max) {
+  int _inRange(String key, int value, {required int min, int? max}) {
     if (value < min || (max != null && value > max)) {
       throw _error(key, 'out of range');
     }

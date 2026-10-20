@@ -37,14 +37,14 @@ void main() {
         aad(a),
         {'name': 'a'},
         key,
-        KeyIds.user,
+        keyId: KeyIds.user,
         seq: 1,
       );
       final secret = await PayloadCrypto.seal(
         aad(a, type: 'identity', part: PayloadPart.secret),
         {'password': 'x'},
         key,
-        KeyIds.user,
+        keyId: KeyIds.user,
         seq: 1,
       );
       await expectLater(
@@ -96,7 +96,7 @@ void main() {
   test(
     'a memory-bomb, weak or unknown KDF is refused before any derivation',
     () async {
-      final production = AccountCrypto(kdf: KdfParams.defaults);
+      final production = AccountCrypto();
       for (final (kdf, error) in [
         (
           {'alg': 'argon2id', 'm': 262144 * 4, 't': 3, 'p': 4},

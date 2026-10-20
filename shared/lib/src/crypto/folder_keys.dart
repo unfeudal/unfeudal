@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:cryptography/cryptography.dart';
-import 'package:cryptography/helpers.dart' show constantTimeBytesEquality;
 
 import '../bytes.dart';
 import '../util/json_reader.dart';
@@ -11,7 +10,6 @@ import '../util/secure.dart';
 import 'cipher.dart';
 import 'envelope.dart';
 import 'errors.dart';
-import 'payload_crypto.dart';
 import 'sealed_box.dart';
 
 /// Plaintext keys of one folder version; never on the wire.
@@ -248,11 +246,10 @@ bool continues(FolderKeys held, FolderKeys served, List<FolderKeys> history) {
   final match = served.version == held.version
       ? served
       : history.where((k) => k.version == held.version).firstOrNull;
-  if (match == null ||
-      !constantTimeBytesEquality.equals(match.metaKey, held.metaKey)) {
+  if (match == null || !constantTimeEquals(match.metaKey, held.metaKey)) {
     return false;
   }
   if (held.secretKey == null) return true;
   return match.secretKey != null &&
-      constantTimeBytesEquality.equals(match.secretKey!, held.secretKey!);
+      constantTimeEquals(match.secretKey!, held.secretKey!);
 }

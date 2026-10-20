@@ -16,14 +16,14 @@ String bump(
     throw ArgumentError.value(package, 'package', 'server or client');
   }
   final version = _resolve(_current(root, package), level);
-  _release(root, package, version, date);
+  _release(root, package, version, date: date);
   if (package == 'server') return version;
   final serverPatch = _resolve(_current(root, 'server'), 'patch');
   _release(
     root,
     'server',
     serverPatch,
-    date,
+    date: date,
     note: '### Changed\n- Announces client $version.\n',
   );
   return version;
@@ -93,8 +93,8 @@ String _resolve(String current, String level) {
 void _release(
   Directory root,
   String package,
-  String version,
-  DateTime date, {
+  String version, {
+  required DateTime date,
   String? note,
 }) {
   final day = date.toIso8601String().substring(0, 10);

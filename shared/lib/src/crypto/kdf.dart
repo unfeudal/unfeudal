@@ -85,15 +85,14 @@ Future<Uint8List> argon2id(
 }
 
 Future<Uint8List> hkdf32(List<int> ikm, String info) async {
-  final key = await Hkdf(hmac: Hmac.sha256(), outputLength: 32).deriveKey(
-    secretKey: SecretKey(ikm),
-    nonce: const <int>[],
-    info: utf8.encode(info),
-  );
+  final key = await Hkdf(
+    hmac: Hmac.sha256(),
+    outputLength: 32,
+  ).deriveKey(secretKey: SecretKey(ikm), info: utf8.encode(info));
   return Uint8List.fromList(await key.extractBytes());
 }
 
-/// [authKey] is sent as the login proof; [encKey] never leaves the device.
+/// `authKey` is sent as the login proof; `encKey` never leaves the device.
 Future<({Uint8List authKey, Uint8List encKey})> deriveMasterKeys(
   String password,
   List<int> salt,

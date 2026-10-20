@@ -54,7 +54,7 @@ void main() {
       ledgerAad,
       Ledger.fromJson(json).toJson(),
       key,
-      KeyIds.user,
+      keyId: KeyIds.user,
       seq: 1,
     );
     final back = Ledger.fromJson(
@@ -100,4 +100,19 @@ void main() {
       expect(() => Ledger.fromJson(bad), throwsFormatException, reason: '$bad');
     }
   });
+
+  test(
+    'startupCommandHash is padded base64 of SHA-256 and parses back',
+    () async {
+      final hash = await startupCommandHash('abc');
+      expect(hash, 'ungWv48Bz+pBQUDeXa4iI7ADYaOWF3qctBD/YfIAFa0=');
+      expect(
+        Ledger.fromJson({
+          ...json,
+          'startupApprovals': {h: hash},
+        }).startupApprovals[h],
+        hash,
+      );
+    },
+  );
 }

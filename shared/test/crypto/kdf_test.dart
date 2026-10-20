@@ -9,7 +9,7 @@ import '../support/hex.dart';
 
 void main() {
   final salt = utf8.encode('somesaltsomesalt');
-  const t1 = KdfParams(alg: 'argon2id', m: 1024, t: 1, p: 1);
+  const t1 = KdfParams.testing;
   const t2p4 = KdfParams(alg: 'argon2id', m: 1024, t: 2, p: 4);
 
   test('Argon2id matches the reference vectors (1 and 4 lanes)', () async {

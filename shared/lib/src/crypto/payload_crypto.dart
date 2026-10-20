@@ -7,8 +7,6 @@ import 'cipher.dart';
 import 'envelope.dart';
 import 'errors.dart';
 
-enum PayloadPart { meta, secret }
-
 /// Binds a payload to its item: a server that moves, re-types or re-scopes
 /// the item makes decryption fail.
 class PayloadAad {
@@ -53,8 +51,8 @@ abstract final class PayloadCrypto {
   static Future<Envelope> seal(
     PayloadAad aad,
     Map<String, Object?> json,
-    List<int> key,
-    String keyId, {
+    List<int> key, {
+    required String keyId,
     required int seq,
   }) {
     if (seq < 1) throw ArgumentError.value(seq, 'seq', 'must be >= 1');

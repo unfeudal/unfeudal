@@ -1,9 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
+import 'dart:convert';
+
+import '../crypto/envelope.dart';
 import '../crypto/payload_crypto.dart';
 import '../crypto/safety_code.dart';
 import '../ids.dart';
 import '../protocol/item.dart';
 import '../util/json_reader.dart';
+import '../util/secure.dart';
 import 'known_host.dart';
 
 /// Per-device rollback defence: replay marks, host and member pins and
@@ -115,6 +119,10 @@ class Ledger {
     return value;
   }
 }
+
+/// The [Ledger.startupApprovals] value for [command]: standard, padded base64 of SHA-256(UTF-8).
+Future<String> startupCommandHash(String command) async =>
+    base64Encode(await sha256Digest(utf8.encode(command)));
 
 final ledgerAad = _localAad('local:ledger');
 

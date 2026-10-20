@@ -98,6 +98,24 @@ Set<Permission> _denyClosure(Set<Permission> deny) => {
     },
 };
 
+// Nearest folder first; a stored cycle ends the walk.
+List<String> _ancestry(String folderId, String? Function(String id) parentOf) {
+  final chain = <String>[];
+  final seen = <String>{};
+  for (String? at = folderId; at != null && seen.add(at); at = parentOf(at)) {
+    chain.add(at);
+  }
+  return chain;
+}
+
+ExplanationStep _entryStep(AclEntry entry) => ExplanationStep(
+  StepKind.entry,
+  principalType: entry.principalType,
+  principalId: entry.principalId,
+  folderId: entry.folderId,
+  permissions: entry.allow,
+);
+
 Explanation resolvePermissions({
   required OrgRole? role,
   required MemberStatus? status,
@@ -125,11 +143,7 @@ Explanation resolvePermissions({
       ),
     ]);
   }
-  final chain = <String>[];
-  final seen = <String>{};
-  for (String? at = folderId; at != null && seen.add(at); at = parentOf(at)) {
-    chain.add(at); // nearest first; a stored cycle ends the walk
-  }
+  final chain = _ancestry(folderId, parentOf);
   AclEntry? nearest(PrincipalType type, String id) {
     for (final f in chain) {
       final e = acl.entryAt(type, id, f);
@@ -144,28 +158,12 @@ Explanation resolvePermissions({
     final e = nearest(PrincipalType.team, teamId);
     if (e == null) continue;
     allow.addAll(e.allow); // teams only allow
-    steps.add(
-      ExplanationStep(
-        StepKind.entry,
-        principalType: PrincipalType.team,
-        principalId: teamId,
-        folderId: e.folderId,
-        permissions: e.allow,
-      ),
-    );
+    steps.add(_entryStep(e));
   }
   final mine = nearest(PrincipalType.user, userId);
   if (mine != null) {
     allow.addAll(mine.allow);
-    steps.add(
-      ExplanationStep(
-        StepKind.entry,
-        principalType: PrincipalType.user,
-        principalId: userId,
-        folderId: mine.folderId,
-        permissions: mine.allow,
-      ),
-    );
+    steps.add(_entryStep(mine));
   }
   final granted = _expand(allow);
   final removed = mine == null

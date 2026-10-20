@@ -47,7 +47,7 @@ void main() {
       personal(),
       {'name': 'web'},
       key,
-      KeyIds.user,
+      keyId: KeyIds.user,
       seq: 7,
     );
     final raw = utf8.decode(
@@ -66,7 +66,7 @@ void main() {
         personal(),
         {'a': 1},
         key,
-        KeyIds.user,
+        keyId: KeyIds.user,
         seq: 1,
       );
       for (final aad in [
@@ -92,7 +92,7 @@ void main() {
         orgAad(),
         {'a': 1},
         key,
-        KeyIds.folder(f1, 1, PayloadPart.meta),
+        keyId: KeyIds.folder(f1, 1, PayloadPart.meta),
         seq: 1,
       );
       final otherOrg = const PayloadAad(
@@ -115,16 +115,16 @@ void main() {
       orgAad(),
       {'a': 1},
       key,
-      KeyIds.folder(f1, 1, PayloadPart.meta),
+      keyId: KeyIds.folder(f1, 1, PayloadPart.meta),
       seq: 1,
     );
     expect((await PayloadCrypto.open(orgAad(), good, key)).json, {'a': 1});
-    final folderItem = orgAad(type: 'folder', itemId: f2, folderId: f1);
+    final folderItem = orgAad(type: 'folder', itemId: f2);
     final ownKey = await PayloadCrypto.seal(
       folderItem,
       {'a': 1},
       key,
-      KeyIds.folder(f2, 2, PayloadPart.meta),
+      keyId: KeyIds.folder(f2, 2, PayloadPart.meta),
       seq: 1,
     );
     expect((await PayloadCrypto.open(folderItem, ownKey, key)).seq, 1);
@@ -153,13 +153,13 @@ void main() {
         orgAad(),
         {},
         key,
-        KeyIds.folder(f2, 1, PayloadPart.meta),
+        keyId: KeyIds.folder(f2, 1, PayloadPart.meta),
         seq: 1,
       ),
       throwsArgumentError,
     );
     expect(
-      () => PayloadCrypto.seal(personal(), {}, key, 'master', seq: 1),
+      () => PayloadCrypto.seal(personal(), {}, key, keyId: 'master', seq: 1),
       throwsArgumentError,
     );
   });
@@ -191,11 +191,17 @@ void main() {
 
   test('seal refuses seq < 1 and a caller-supplied _seq', () {
     expect(
-      () => PayloadCrypto.seal(personal(), {}, key, 'user', seq: 0),
+      () => PayloadCrypto.seal(personal(), {}, key, keyId: 'user', seq: 0),
       throwsArgumentError,
     );
     expect(
-      () => PayloadCrypto.seal(personal(), {'_seq': 3}, key, 'user', seq: 1),
+      () => PayloadCrypto.seal(
+        personal(),
+        {'_seq': 3},
+        key,
+        keyId: 'user',
+        seq: 1,
+      ),
       throwsArgumentError,
     );
   });
