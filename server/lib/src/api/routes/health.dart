@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import 'package:shelf/shelf.dart';
 
-import '../app.dart';
+import '../deps.dart';
 import '../json.dart';
 
 /// 200 when the database answers within 2 s, else 503.

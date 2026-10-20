@@ -6,10 +6,11 @@ import '../../audit/audit_log.dart';
 import '../../auth/rate_limit.dart';
 import '../../db/db.dart';
 import '../../orgs/org_access.dart';
-import '../app.dart';
+import '../deps.dart';
 import '../errors.dart';
 import '../json.dart';
 import '../middleware.dart';
+import '../request_audit.dart';
 
 const _ssh = {
   'open': 'ssh.session_opened',

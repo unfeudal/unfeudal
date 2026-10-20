@@ -9,10 +9,11 @@ import '../../db/deletion.dart';
 import '../../orgs/invites.dart';
 import '../../orgs/org_access.dart';
 import '../../orgs/rotations.dart';
-import '../app.dart';
+import '../deps.dart';
 import '../errors.dart';
 import '../json.dart';
 import '../middleware.dart';
+import '../request_audit.dart';
 import '../validate.dart';
 
 // Must be the first line of every admin handler, before the body is read.
@@ -47,7 +48,7 @@ Future<Response> setDisabled(Request request) async {
   final id = parseUuid(request.params['id']!);
   final disabled = (await readJson(request))['disabled'];
   if (disabled is! bool) {
-    throw ApiError(ApiErrorCode.invalidRequest, 'disabled must be a boolean.');
+    throw ApiError.invalid('disabled must be a boolean.');
   }
   await deps.db.transaction((tx) async {
     final user = (await tx.query(
@@ -82,9 +83,9 @@ Future<Response> setDisabled(Request request) async {
       await recordRotations(
         tx,
         o,
-        before[o]!,
-        (await loadOrg(tx, o))!,
-        'user_disabled',
+        before: before[o]!,
+        after: (await loadOrg(tx, o))!,
+        reason: 'user_disabled',
       );
     }
     await bumpOrgSeq(tx);
@@ -113,47 +114,48 @@ Future<Response> deleteUserRoute(Request request) async {
 Future<Response> listOrgs(Request request) async {
   _requireIo(request);
   final deps = depsOf(request);
-  // ponytail: a few queries per org; one grouped query if an instance with many orgs shows up in profiles
   final orgs = await deps.db.transaction(readOnly: true, (tx) async {
-    final out = <Map<String, Object?>>[];
-    for (final o in await tx.query(
-      'SELECT id, name FROM orgs ORDER BY name, id',
+    final owners = <Object?, List<String>>{};
+    for (final r in await tx.query(
+      'SELECT m.org_id, u.email FROM org_members m JOIN users u ON u.id = m.user_id '
+      "WHERE m.role = 'owner'",
     )) {
-      final p = {'o': o['id']};
-      final owners = [
-        for (final r in await tx.query(
-          'SELECT u.email FROM org_members m JOIN users u ON u.id = m.user_id '
-          "WHERE m.org_id = @o AND m.role = 'owner'",
-          p,
-        ))
-          r['email']! as String,
-      ]..sort();
-      final members = (await tx.query(
-        'SELECT count(*) AS n FROM org_members WHERE org_id = @o',
-        p,
-      )).single['n'];
-      final items = (await tx.query(
-        'SELECT CAST(COALESCE(SUM(size), 0) AS BIGINT) AS s, MAX(updated_at) AS at '
-        'FROM items WHERE org_id = @o',
-        p,
-      )).single;
-      final revisions =
-          (await tx.query(
-                'SELECT CAST(COALESCE(SUM(r.size), 0) AS BIGINT) AS s FROM item_revisions r '
-                'JOIN items i ON i.id = r.item_id WHERE i.org_id = @o',
-                p,
-              )).single['s']!
-              as int;
-      out.add({
-        'id': o['id'],
-        'name': o['name'],
-        'owners': owners,
-        'memberCount': members,
-        'storageBytes': (items['s']! as int) + revisions,
-        'lastActivityAt': items['at'],
-      });
+      owners.putIfAbsent(r['org_id'], () => []).add(r['email']! as String);
     }
-    return out;
+    final members = {
+      for (final r in await tx.query(
+        'SELECT org_id, count(*) AS n FROM org_members GROUP BY org_id',
+      ))
+        r['org_id']: r['n'],
+    };
+    final items = {
+      for (final r in await tx.query(
+        'SELECT org_id, CAST(COALESCE(SUM(size), 0) AS BIGINT) AS s, MAX(updated_at) AS at '
+        'FROM items WHERE org_id IS NOT NULL GROUP BY org_id',
+      ))
+        r['org_id']: r,
+    };
+    final revisions = {
+      for (final r in await tx.query(
+        'SELECT i.org_id, CAST(COALESCE(SUM(r.size), 0) AS BIGINT) AS s FROM item_revisions r '
+        'JOIN items i ON i.id = r.item_id WHERE i.org_id IS NOT NULL GROUP BY i.org_id',
+      ))
+        r['org_id']: r['s']! as int,
+    };
+    return [
+      for (final o in await tx.query(
+        'SELECT id, name FROM orgs ORDER BY name, id',
+      ))
+        {
+          'id': o['id'],
+          'name': o['name'],
+          'owners': (owners[o['id']] ?? [])..sort(),
+          'memberCount': members[o['id']] ?? 0,
+          'storageBytes':
+              ((items[o['id']]?['s'] as int?) ?? 0) + (revisions[o['id']] ?? 0),
+          'lastActivityAt': items[o['id']]?['at'],
+        },
+    ];
   });
   return jsonResponse({'orgs': orgs});
 }
@@ -165,10 +167,7 @@ Future<Response> adminDeleteOrg(Request request) async {
   final id = parseUuid(request.params['id']!);
   final confirmName = (await readJson(request))['confirmName'];
   if (confirmName is! String) {
-    throw ApiError(
-      ApiErrorCode.invalidRequest,
-      'confirmName must be a string.',
-    );
+    throw ApiError.invalid('confirmName must be a string.');
   }
   await deps.db.transaction((tx) async {
     final org = (await tx.query('SELECT name FROM orgs WHERE id = @o', {
@@ -176,8 +175,7 @@ Future<Response> adminDeleteOrg(Request request) async {
     })).firstOrNull;
     if (org == null) throw ApiError.notFound();
     if (org['name'] != confirmName) {
-      throw ApiError(
-        ApiErrorCode.invalidRequest,
+      throw ApiError.invalid(
         'confirmName must be the exact organization name.',
       );
     }

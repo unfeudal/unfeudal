@@ -2,8 +2,9 @@
 import 'package:shelf/shelf.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
-import 'app.dart';
+import 'deps.dart';
 import 'errors.dart';
+import 'json.dart';
 
 const _headers = {
   'x-content-type-options': 'nosniff',
@@ -61,10 +62,7 @@ Middleware clientVersionGate() =>
       try {
         version = canonicalVersion(request.headers['x-unfeudal-client'] ?? '');
       } on FormatException {
-        throw ApiError(
-          ApiErrorCode.invalidRequest,
-          'Header X-Unfeudal-Client: X.Y.Z is required.',
-        );
+        throw ApiError.invalid('Header X-Unfeudal-Client: X.Y.Z is required.');
       }
       final write = request.method != 'GET' && request.method != 'HEAD';
       final path = request.requestedUri.path;
@@ -85,12 +83,12 @@ Middleware clientVersionGate() =>
     };
 
 class AuthContext {
-  const AuthContext(
-    this.userId,
-    this.deviceId,
-    this.isInstanceOwner,
-    this.lastSeenAt,
-  );
+  const AuthContext({
+    required this.userId,
+    required this.deviceId,
+    required this.isInstanceOwner,
+    required this.lastSeenAt,
+  });
 
   final String userId;
   final String deviceId;
@@ -131,10 +129,10 @@ Handler requireAuth(Handler inner) => (request) async {
     request.change(
       context: {
         _authKey: AuthContext(
-          claims.userId,
-          claims.deviceId,
-          rows.single['is_instance_owner'] == 1,
-          rows.single['last_seen_at']! as String,
+          userId: claims.userId,
+          deviceId: claims.deviceId,
+          isInstanceOwner: rows.single['is_instance_owner'] == 1,
+          lastSeenAt: rows.single['last_seen_at']! as String,
         ),
       },
     ),
@@ -144,10 +142,31 @@ Handler requireAuth(Handler inner) => (request) async {
 Middleware requireFeature(Flag flag) =>
     (inner) => (request) {
       if (!depsOf(request).features.enabled(flag)) {
-        throw ApiError(
-          ApiErrorCode.featureDisabled,
-          'This feature is off on this server.',
-        );
+        throw ApiError.featureOff();
       }
       return inner(request);
     };
+
+/// Maps an ApiError to its JSON body and status; anything else gives a 500,
+/// logging only the path and the type.
+Middleware errorMapper() =>
+    (inner) => (request) async {
+      try {
+        return await inner(request);
+      } on ApiError catch (e) {
+        return _respond(e);
+      } on Object catch (e) {
+        // Top-level guard: any unexpected failure becomes a 500 without leaking details.
+        depsOf(request).log.error('internal', {
+          'path': request.url.path,
+          'type': '${e.runtimeType}',
+        });
+        return _respond(ApiError(ApiErrorCode.internal, 'Internal error.'));
+      }
+    };
+
+Response _respond(ApiError e) => jsonResponse(
+  {'error': e.code.wire, 'message': e.message, ...e.extra},
+  status: e.code.status,
+  headers: {if (e.retryAfter != null) 'retry-after': '${e.retryAfter}'},
+);

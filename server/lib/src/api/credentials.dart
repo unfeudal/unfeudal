@@ -4,13 +4,17 @@ import 'package:shelf/shelf.dart';
 import '../auth/rate_limit.dart';
 import '../auth/secret_hash.dart';
 import '../net/client_ip.dart';
-import 'app.dart';
+import 'deps.dart';
+
+/// A route that checks a credential: admitted by the Argon2 gate before anything is counted, its place kept
+/// until the response, so a full queue is a 429 that never counts an attempt.
+Middleware credentialCheck(HashPriority priority) =>
+    (inner) =>
+        (request) => admitCredentialCheck(priority, () async => inner(request));
 
 /// Rate-limit step of a credential check: count ip, acct|ip and acct before
 /// any credential is checked; an attempt inside the account delay is 429.
 Future<void> limitCredentials(Request request, String email) async {
-  // ponytail: checked, not reserved; a queue that fills between here and the hash still counts that attempt
-  refuseIfArgon2Busy();
   final deps = depsOf(request);
   final net = netOf(clientIpOf(request));
   await deps.limiter.hit([ipKey(net), acctIpKey(email, net), acctKey(email)]);

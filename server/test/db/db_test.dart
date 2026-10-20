@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import 'package:test/test.dart';
 import 'package:unfeudal_server/src/db/db.dart';
+import 'package:unfeudal_server/src/db/open_db.dart';
 
 import '../support/test_db.dart';
 

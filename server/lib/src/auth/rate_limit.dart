@@ -80,6 +80,44 @@ class RateLimiter {
     retryAfter: max(1, (until.difference(now).inMilliseconds / 1000).ceil()),
   );
 
+  static Future<void> _refuseLockedIpKeys(
+    Tx tx,
+    List<String> keys,
+    DateTime now,
+  ) async {
+    for (final k in keys.where(
+      (k) => k.startsWith('ip:') || k.startsWith('invite-ip:'),
+    )) {
+      final r = (await tx.query(
+        'SELECT locked_until FROM login_attempts WHERE key = @k',
+        {'k': k},
+      )).firstOrNull;
+      final until = _lockedUntil(r, now);
+      if (until != null) _limited(until, now);
+    }
+  }
+
+  static Future<Map<String, Map<String, Object?>>> _lockRows(
+    Tx tx,
+    List<String> keys,
+    DateTime now,
+  ) async {
+    final rows = <String, Map<String, Object?>>{};
+    for (final k in keys) {
+      // The no-op upsert takes the row lock.
+      await tx.execute(
+        'INSERT INTO login_attempts (key, count, window_start) VALUES (@k, 0, @now) '
+        'ON CONFLICT (key) DO UPDATE SET count = login_attempts.count',
+        {'k': k, 'now': iso(now)},
+      );
+      rows[k] = (await tx.query(
+        'SELECT count, window_start, locked_until FROM login_attempts WHERE key = @k',
+        {'k': k},
+      )).single;
+    }
+    return rows;
+  }
+
   /// One transaction: a locked ip key is refused before any insert; rows locked in sorted key order;
   /// any locked key throws 429 and the transaction rolls back (nothing counted); else each count + 1,
   /// the count reaching the max locks the key for its lock time, and an acct: key is locked for its delay.
@@ -88,29 +126,8 @@ class RateLimiter {
     final sorted = {...keys}.toList()..sort();
     final lockedKeys = <String>[];
     await db.transaction((tx) async {
-      for (final k in sorted.where(
-        (k) => k.startsWith('ip:') || k.startsWith('invite-ip:'),
-      )) {
-        final r = (await tx.query(
-          'SELECT locked_until FROM login_attempts WHERE key = @k',
-          {'k': k},
-        )).firstOrNull;
-        final until = _lockedUntil(r, now);
-        if (until != null) _limited(until, now);
-      }
-      final rows = <String, Map<String, Object?>>{};
-      for (final k in sorted) {
-        // The no-op upsert takes the row lock.
-        await tx.execute(
-          'INSERT INTO login_attempts (key, count, window_start) VALUES (@k, 0, @now) '
-          'ON CONFLICT (key) DO UPDATE SET count = login_attempts.count',
-          {'k': k, 'now': iso(now)},
-        );
-        rows[k] = (await tx.query(
-          'SELECT count, window_start, locked_until FROM login_attempts WHERE key = @k',
-          {'k': k},
-        )).single;
-      }
+      await _refuseLockedIpKeys(tx, sorted, now);
+      final rows = await _lockRows(tx, sorted, now);
       final locked = rows.values
           .map((r) => _lockedUntil(r, now))
           .whereType<DateTime>()

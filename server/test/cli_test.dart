@@ -10,8 +10,8 @@ library;
 import 'dart:io';
 
 import 'package:test/test.dart';
-import 'package:unfeudal_server/src/db/db.dart';
 import 'package:unfeudal_server/src/db/migrate.dart';
+import 'package:unfeudal_server/src/db/open_db.dart';
 
 /// The parent environment without any UNFEUDAL_* variable, plus [env].
 Future<ProcessResult> cli(List<String> args, Map<String, String> env) =>

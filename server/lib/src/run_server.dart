@@ -8,9 +8,9 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 import 'api/app.dart';
 import 'audit/retention.dart';
 import 'config/config.dart';
-import 'db/db.dart';
 import 'db/maintenance.dart';
 import 'db/migrate.dart';
+import 'db/open_db.dart';
 import 'db/postgres_db.dart';
 import 'log/logger.dart';
 import 'mail/mailer.dart';
@@ -55,11 +55,13 @@ Future<RunningServer> runServer(
     Completer<void>? idle;
     server.listen((req) {
       inFlight++; // counted until the response is written, not only until the handler returns
-      shelf_io.handleRequest(req, handler).whenComplete(() {
-        if (--inFlight == 0 && idle != null && !idle!.isCompleted) {
-          idle!.complete();
-        }
-      });
+      unawaited(
+        shelf_io.handleRequest(req, handler).whenComplete(() {
+          if (--inFlight == 0 && idle != null && !idle!.isCompleted) {
+            idle!.complete();
+          }
+        }),
+      );
     });
     log.info('listening', {'host': config.listen.host, 'port': server.port});
     final retention = startRetentionTimer(deps);

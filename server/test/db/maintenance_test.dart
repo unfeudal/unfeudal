@@ -6,6 +6,7 @@ import 'package:unfeudal_server/src/auth/tokens.dart';
 import 'package:unfeudal_server/src/db/db.dart';
 import 'package:unfeudal_server/src/db/maintenance.dart';
 import 'package:unfeudal_server/src/db/migrate.dart';
+import 'package:unfeudal_server/src/db/open_db.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../support/test_db.dart';
@@ -88,7 +89,7 @@ void main() {
     if (db.engine == DbEngine.postgres) {
       await expectLater(
         backupDatabase(db, '${dir.path}/b.db'),
-        throwsUnsupportedError,
+        throwsA(isA<MaintenanceError>()),
       );
       return;
     }

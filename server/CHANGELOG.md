@@ -10,8 +10,10 @@
 
 ### Changed
 - The container image runs on Debian 13 (trixie), the release its build stage uses.
+- Sync and the admin list of organizations read an organization's data in a few queries instead of one per folder or per organization.
 
 ### Fixed
 - A configuration file with broken YAML stops the server with exit code 2 and never prints its content.
 - A sign-in refused because the server is busy no longer counts as a failed attempt.
+- A sign-in waiting for the password check goes before other password hashing, and an admitted check is never turned away once its attempt is counted.
 - Deleting an account removes every raw IP address of its actions, in every activity chain.

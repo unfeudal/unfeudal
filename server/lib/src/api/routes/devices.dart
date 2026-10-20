@@ -5,10 +5,11 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../../audit/audit_log.dart';
 import '../../auth/tokens.dart';
-import '../app.dart';
+import '../deps.dart';
 import '../errors.dart';
 import '../json.dart';
 import '../middleware.dart';
+import '../request_audit.dart';
 import '../validate.dart';
 
 /// Own devices, revoked included, oldest first; the caller's device is `current`.

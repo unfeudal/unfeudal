@@ -3,7 +3,7 @@ import 'package:shelf/shelf.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../../version.dart';
-import '../app.dart';
+import '../deps.dart';
 import '../json.dart';
 
 /// Public form for anyone; the full form with a valid access token (MAC and

@@ -4,12 +4,12 @@ import 'dart:convert';
 import 'package:shelf/shelf.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
+import '../../db/device_touch.dart';
 import '../../orgs/org_block.dart';
-import '../app.dart';
+import '../deps.dart';
 import '../errors.dart';
 import '../json.dart';
 import '../middleware.dart';
-import '../session.dart';
 
 final _cursor = RegExp(r'^\d{1,15}$');
 
@@ -17,10 +17,7 @@ int _cursorParam(Request request, String name) {
   final v = request.url.queryParameters[name];
   if (v == null) return 0;
   if (!_cursor.hasMatch(v)) {
-    throw ApiError(
-      ApiErrorCode.invalidRequest,
-      '$name must be an integer ≥ 0.',
-    );
+    throw ApiError.invalid('$name must be an integer ≥ 0.');
   }
   return int.parse(v);
 }

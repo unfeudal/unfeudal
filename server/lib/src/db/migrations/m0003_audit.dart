@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import '../migrations.dart';
+import '../migration.dart';
 
 const auditMigration = Migration(3, [
   r"""CREATE TABLE audit_events (

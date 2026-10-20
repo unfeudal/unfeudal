@@ -5,7 +5,7 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 import '../../audit/audit_log.dart';
 import '../../audit/visibility.dart';
 import '../../db/db.dart';
-import '../app.dart';
+import '../deps.dart';
 import '../errors.dart';
 import '../json.dart';
 import '../middleware.dart';
@@ -20,14 +20,14 @@ Future<Response> getAudit(Request request) async {
   final rawLimit = params['limit'] ?? '100';
   final limit = _limit.hasMatch(rawLimit) ? int.parse(rawLimit) : 0;
   if (limit < 1 || limit > 500) {
-    throw ApiError(ApiErrorCode.invalidRequest, 'limit must be 1 to 500.');
+    throw ApiError.invalid('limit must be 1 to 500.');
   }
   AuditCursor? after;
   if (params['after'] case final text?) {
     try {
       after = AuditCursor.decode(text);
     } on FormatException {
-      throw ApiError(ApiErrorCode.invalidRequest, 'after is not a cursor.');
+      throw ApiError.invalid('after is not a cursor.');
     }
   }
   final page = await deps.db.transaction(readOnly: true, (tx) async {

@@ -102,21 +102,64 @@ void main() {
     await gate.run(work);
   });
 
-  test('Argon2Gate.refuseIfFull: the same 429 before any work, nothing when a place is free', () async {
+  test('Argon2Gate.admit: a full gate refuses before the check runs', () async {
     final gate = Argon2Gate(1);
     final release = Completer<void>();
-    expect(gate.refuseIfFull, returnsNormally);
-    final admitted = [
-      for (var i = 0; i < 5; i++) gate.run(() => release.future),
-    ];
-    expect(
-      gate.refuseIfFull,
+    final queued = [for (var i = 0; i < 5; i++) gate.run(() => release.future)];
+    var ran = false;
+    await expectLater(
+      gate.admit(HashPriority.other, () async => ran = true),
       throwsA(
         isA<ApiError>().having((e) => e.code, 'code', ApiErrorCode.rateLimited),
       ),
     );
+    expect(ran, isFalse);
     release.complete();
-    await Future.wait(admitted);
-    expect(gate.refuseIfFull, returnsNormally);
+    await Future.wait(queued);
+  });
+
+  test('an admitted check keeps its place: the queue filling meanwhile never refuses its hash', () async {
+    final gate = Argon2Gate(1);
+    final go = Completer<void>(), release = Completer<void>();
+    final check = gate.admit(HashPriority.other, () async {
+      await go.future;
+      return gate.run(() async => 'hashed');
+    });
+    final others = [for (var i = 0; i < 4; i++) gate.run(() => release.future)];
+    await expectLater(gate.run(() async {}), throwsA(isA<ApiError>()));
+    go.complete();
+    await pumpEventQueue();
+    release.complete();
+    expect(await check, 'hashed');
+    await Future.wait(others);
+  });
+
+  test('a check that fails before its hash gives its place back', () async {
+    final gate = Argon2Gate(1);
+    final release = Completer<void>();
+    final queued = [for (var i = 0; i < 4; i++) gate.run(() => release.future)];
+    await expectLater(
+      gate.admit(HashPriority.other, () async => throw StateError('429')),
+      throwsStateError,
+    );
+    final last = gate.run(() => release.future);
+    release.complete();
+    await Future.wait([...queued, last]);
+  });
+
+  test('a waiting sign-in goes before the other waiting hashes', () async {
+    final gate = Argon2Gate(1);
+    final release = Completer<void>();
+    final order = <String>[];
+    final first = gate.run(() => release.future);
+    final other = gate.run(() async => order.add('other'));
+    final signIn = gate.admit(
+      HashPriority.signIn,
+      () => gate.run(() async => order.add('sign-in')),
+    );
+    await pumpEventQueue();
+    release.complete();
+    await Future.wait([first, other, signIn]);
+    expect(order, ['sign-in', 'other']);
   });
 }

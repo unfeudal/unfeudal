@@ -30,12 +30,18 @@ Future<Map<String, Object?>> testItem(
       folderId: folderId,
     );
     return itemScope == ItemScope.personal
-        ? PayloadCrypto.seal(aad, json, s.account.userKey, KeyIds.user, seq: 1)
+        ? PayloadCrypto.seal(
+            aad,
+            json,
+            s.account.userKey,
+            keyId: KeyIds.user,
+            seq: 1,
+          )
         : PayloadCrypto.seal(
             aad,
             json,
             SymmetricCipher.newKey(),
-            KeyIds.folder(
+            keyId: KeyIds.folder(
               type == 'folder' ? itemId : folderId!,
               keyVersion,
               part,

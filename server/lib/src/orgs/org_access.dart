@@ -246,10 +246,10 @@ Future<void> requireItemAccess(
 /// The meta, and the secret when there is one, sealed with [folderId]'s keys at [version].
 bool sealedWithFolderKeys(
   Object? metaKeyId,
-  Object? secretKeyId,
-  String folderId,
-  int version,
-) =>
+  Object? secretKeyId, {
+  required String folderId,
+  required int version,
+}) =>
     metaKeyId == KeyIds.folder(folderId, version, PayloadPart.meta) &&
     (secretKeyId == null ||
         secretKeyId == KeyIds.folder(folderId, version, PayloadPart.secret));
@@ -272,7 +272,7 @@ Future<MemberRow> requireMember(
       ? null
       : MemberStatus.values.byName(rows.single['status']! as String);
   if (status == null || (confirmed && status == MemberStatus.accepted)) {
-    throw ApiError(ApiErrorCode.notFound, 'No such organization.');
+    throw ApiError.notFound('No such organization.');
   }
   final row = MemberRow.fromRow(rows.single);
   if ((admin && row.role == OrgRole.member) ||

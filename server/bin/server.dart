@@ -3,9 +3,9 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:unfeudal_server/src/config/config.dart';
-import 'package:unfeudal_server/src/db/db.dart';
 import 'package:unfeudal_server/src/db/maintenance.dart';
 import 'package:unfeudal_server/src/db/migrate.dart';
+import 'package:unfeudal_server/src/db/open_db.dart';
 import 'package:unfeudal_server/src/mail/mailer.dart';
 import 'package:unfeudal_server/src/mail/smtp_mailer.dart';
 import 'package:unfeudal_server/src/run_server.dart';
@@ -89,8 +89,8 @@ Future<int> _backup(Config config, String path) async {
       'Backup written to $path. Keep secret_file with it, and run new-epoch after a restore.',
     );
     return 0;
-  } on UnsupportedError {
-    stderr.writeln('use pg_dump');
+  } on MaintenanceError catch (e) {
+    stderr.writeln(e.message);
     return 1;
   } on FileSystemException catch (e) {
     stderr.writeln('backup failed: ${e.message}');
@@ -107,7 +107,7 @@ Future<int> _transferOwner(Config config, String email) async {
     await transferOwner(db, email);
     stdout.writeln('Instance Owner is now $email.');
     return 0;
-  } on StateError catch (e) {
+  } on MaintenanceError catch (e) {
     stderr.writeln(e.message);
     return 1;
   } finally {

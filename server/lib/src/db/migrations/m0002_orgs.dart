@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import '../migrations.dart';
+import '../migration.dart';
 
 const orgsMigration = Migration(2, [
   r"""CREATE TABLE org_members (

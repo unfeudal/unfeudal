@@ -3,7 +3,7 @@ import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
 
 import '../../items/item_write.dart';
-import '../app.dart';
+import '../deps.dart';
 import '../json.dart';
 import '../middleware.dart';
 import '../validate.dart';
@@ -18,9 +18,9 @@ Future<Response> putItem(Request request) async {
     (tx) => writeItem(
       deps,
       tx,
-      authOf(request),
       input,
-      ifMatch,
+      auth: authOf(request),
+      ifMatch: ifMatch,
       ip: clientIpOf(request).address,
     ),
   );

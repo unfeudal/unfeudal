@@ -8,10 +8,11 @@ import '../../db/db.dart';
 import '../../db/deletion.dart';
 import '../../orgs/org_access.dart';
 import '../../orgs/rotations.dart';
-import '../app.dart';
+import '../deps.dart';
 import '../errors.dart';
 import '../json.dart';
 import '../middleware.dart';
+import '../request_audit.dart';
 import '../validate.dart';
 
 // Absent gives an empty list; otherwise at most 500 distinct members of the org
@@ -19,17 +20,13 @@ import '../validate.dart';
 List<String> _memberIds(Object? v, OrgSnapshot org) {
   if (v == null) return const [];
   if (v is! List || v.length > 500) {
-    throw ApiError(
-      ApiErrorCode.invalidRequest,
-      'memberIds must be a list of at most 500 ids.',
-    );
+    throw ApiError.invalid('memberIds must be a list of at most 500 ids.');
   }
   final ids = <String>{};
   for (final id in v) {
     final member = id is String ? org.members[id] : null;
     if (member == null || member.disabled || !ids.add(id as String)) {
-      throw ApiError(
-        ApiErrorCode.invalidRequest,
+      throw ApiError.invalid(
         'memberIds must name distinct, enabled members of the organization.',
       );
     }
@@ -47,7 +44,12 @@ Future<void> _nameFree(Tx tx, String org, String name, {String? except}) async {
   }
 }
 
-Future<void> _seat(Tx tx, String org, String team, List<String> ids) async {
+Future<void> _seat(
+  Tx tx,
+  List<String> ids, {
+  required String org,
+  required String team,
+}) async {
   for (final userId in ids) {
     await tx.execute(
       'INSERT INTO team_members (org_id, team_id, user_id) VALUES (@o, @t, @u)',
@@ -78,7 +80,7 @@ Future<Response> createTeam(Request request) async {
       'INSERT INTO teams (id, org_id, name) VALUES (@t, @o, @n)',
       {'t': teamId, 'o': org, 'n': name},
     );
-    await _seat(tx, org, teamId, ids);
+    await _seat(tx, ids, org: org, team: teamId);
     await bumpOrgSeq(tx);
     await auditWriter(request, tx)(AuditScope.org(org), 'team.created', [
       teamId,
@@ -98,7 +100,7 @@ Future<Response> updateTeam(Request request) async {
   await deps.db.transaction((tx) async {
     await requireMember(tx, org, auth.userId, admin: true);
     await _requireTeam(tx, org, team);
-    await changeOrg(tx, org, 'team_change', (before) async {
+    await changeOrg(tx, org, reason: 'team_change', (before) async {
       if (body.containsKey('name')) {
         final name = parseName(body['name']);
         await _nameFree(tx, org, name, except: team);
@@ -112,7 +114,7 @@ Future<Response> updateTeam(Request request) async {
         await tx.execute('DELETE FROM team_members WHERE team_id = @t', {
           't': team,
         });
-        await _seat(tx, org, team, ids);
+        await _seat(tx, ids, org: org, team: team);
       }
     });
     await auditWriter(request, tx)(AuditScope.org(org), 'team.updated', [team]);

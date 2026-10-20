@@ -35,9 +35,9 @@ void main() {
     (tx) async => recordRotations(
       tx,
       w.orgId,
-      before,
-      (await loadOrg(tx, w.orgId))!,
-      reason,
+      before: before,
+      after: (await loadOrg(tx, w.orgId))!,
+      reason: reason,
     ),
   );
   Future<Map<String, Map<String, Object?>>> pending() async => {

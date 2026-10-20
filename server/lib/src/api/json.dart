@@ -27,10 +27,10 @@ Future<Map<String, Object?>> readJson(Request request) async {
   try {
     json = jsonDecode(utf8.decode(bytes.takeBytes()));
   } on FormatException {
-    throw ApiError(ApiErrorCode.invalidRequest, 'Body is not valid JSON.');
+    throw ApiError.invalid('Body is not valid JSON.');
   }
   if (json is! Map<String, Object?>) {
-    throw ApiError(ApiErrorCode.invalidRequest, 'Body must be a JSON object.');
+    throw ApiError.invalid('Body must be a JSON object.');
   }
   return json;
 }

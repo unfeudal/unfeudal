@@ -4,9 +4,9 @@ import 'dart:convert';
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
 
-import '../../audit/retention.dart';
+import '../../audit/retention_policy.dart';
 import '../../orgs/org_access.dart';
-import '../app.dart';
+import '../deps.dart';
 import '../json.dart';
 import '../middleware.dart';
 import '../validate.dart';

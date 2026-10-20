@@ -31,7 +31,7 @@ void main() {
 
   test('removeMember: seats, user ACL, keys, a pending rotation, then the membership', () async {
     await s.db.transaction(
-      (tx) => removeMember(tx, w.orgId, w.id('mia'), 'member_removed'),
+      (tx) => removeMember(tx, w.orgId, w.id('mia'), reason: 'member_removed'),
     );
     final mia = {'u': w.id('mia')};
     expect(await w.count('team_members', 'user_id = @u', mia), 0);

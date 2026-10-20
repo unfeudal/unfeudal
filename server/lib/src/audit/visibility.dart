@@ -37,7 +37,7 @@ Future<AuditQuery> resolveAuditQuery(
   }
   final m = RegExp(r'^(org|folder):(.*)$').firstMatch(scope);
   if (m == null || !isUuid(m[2]!)) {
-    throw ApiError(ApiErrorCode.invalidRequest, 'Unknown scope.');
+    throw ApiError.invalid('Unknown scope.');
   }
   final id = m[2]!;
   if (m[1] == 'org') {

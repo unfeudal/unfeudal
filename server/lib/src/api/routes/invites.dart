@@ -11,10 +11,11 @@ import '../../db/db.dart';
 import '../../net/client_ip.dart';
 import '../../orgs/invites.dart';
 import '../../orgs/org_access.dart';
-import '../app.dart';
+import '../deps.dart';
 import '../errors.dart';
 import '../json.dart';
 import '../middleware.dart';
+import '../request_audit.dart';
 import '../session.dart';
 import '../validate.dart';
 
@@ -129,10 +130,10 @@ const _invalid = 'This invitation is not valid.';
 // the same 404.
 Future<Map<String, Object?>> _usable(
   Tx tx,
-  String token,
-  String email,
-  DateTime now,
-) async {
+  String token, {
+  required String email,
+  required DateTime now,
+}) async {
   final r = (await tx.query(
     'SELECT i.id, i.email, i.org_id, i.role, i.accepted_at, i.revoked_at, i.expires_at, '
     'COALESCE(u.is_instance_owner, 0) AS by_io FROM invites i LEFT JOIN users u ON u.id = i.created_by '
@@ -144,7 +145,7 @@ Future<Map<String, Object?>> _usable(
       r['revoked_at'] != null ||
       !parseIso(r['expires_at']! as String).isAfter(now) ||
       r['email'] != email) {
-    throw ApiError(ApiErrorCode.notFound, _invalid);
+    throw ApiError.notFound(_invalid);
   }
   return r;
 }
@@ -156,7 +157,7 @@ Future<void> _claim(Tx tx, Map<String, Object?> inv, DateTime now) async {
     'UPDATE invites SET accepted_at = @t WHERE id = @i AND accepted_at IS NULL',
     {'t': iso(now), 'i': inv['id']},
   );
-  if (n == 0) throw ApiError(ApiErrorCode.notFound, _invalid);
+  if (n == 0) throw ApiError.notFound(_invalid);
 }
 
 void _orgGates(AppDeps deps, Map<String, Object?> inv) {
@@ -165,8 +166,55 @@ void _orgGates(AppDeps deps, Map<String, Object?> inv) {
     throw ApiError.orgsOff();
   }
   if (!deps.features.enabled(Flag.invitesFromOrgs) && inv['by_io'] != 1) {
-    throw ApiError(ApiErrorCode.notFound, _invalid);
+    throw ApiError.notFound(_invalid);
   }
+}
+
+Future<void> _requireNoAccount(Tx tx, String email) async {
+  if ((await tx.query('SELECT 1 AS x FROM users WHERE email = @e', {
+    'e': email,
+  })).isNotEmpty) {
+    throw ApiError(
+      ApiErrorCode.conflict,
+      'An account already uses this email.',
+      extra: {'reason': ConflictReason.accountExists.wire},
+    );
+  }
+}
+
+Future<String?> _joinInvitedOrg(
+  Tx tx,
+  AppDeps deps, {
+  required Map<String, Object?> invite,
+  required String userId,
+}) async {
+  final orgId = invite['org_id'] as String?;
+  if (orgId != null) {
+    await checkMembershipCap(tx, deps.config, userId);
+    await tx.execute(
+      "INSERT INTO org_members (org_id, user_id, role, status) VALUES (@o, @u, @r, 'accepted')",
+      {'o': orgId, 'u': userId, 'r': invite['role']},
+    );
+    await bumpOrgSeq(tx);
+  }
+  return orgId;
+}
+
+Future<void> _requireAcceptable(
+  AppDeps deps,
+  String token,
+  String email,
+) async {
+  final now = deps.clock.now();
+  final inv = await deps.db.transaction(
+    readOnly: true,
+    (tx) => _usable(tx, token, email: email, now: now),
+  );
+  _orgGates(deps, inv);
+  await deps.db.transaction(
+    readOnly: true,
+    (tx) => _requireNoAccount(tx, email),
+  );
 }
 
 Future<Response> acceptInvite(Request request) async {
@@ -176,25 +224,7 @@ Future<Response> acceptInvite(Request request) async {
   final body = await readJson(request);
   final token = reqString(body, 'token', max: 200);
   final email = normalizeEmail(body['email']);
-  final now = deps.clock.now();
-  final inv = await deps.db.transaction(
-    readOnly: true,
-    (tx) => _usable(tx, token, email, now),
-  );
-  _orgGates(deps, inv);
-  Future<void> noAccount(Tx tx) async {
-    if ((await tx.query('SELECT 1 AS x FROM users WHERE email = @e', {
-      'e': email,
-    })).isNotEmpty) {
-      throw ApiError(
-        ApiErrorCode.conflict,
-        'An account already uses this email.',
-        extra: {'reason': ConflictReason.accountExists.wire},
-      );
-    }
-  }
-
-  await deps.db.transaction(readOnly: true, noAccount);
+  await _requireAcceptable(deps, token, email);
   final bundle = parseBundle(body['bundle'], kdfFloor: deps.kdfFloor);
   final device = parseDevice(body['device']);
   // Argon2 is slow, so both hashes run before the write transaction opens.
@@ -209,9 +239,9 @@ Future<Response> acceptInvite(Request request) async {
   final session = await deps.db.transaction((tx) async {
     // Checks again inside the write transaction: the invite may have changed
     // since the read-only check.
-    final again = await _usable(tx, token, email, deps.clock.now());
+    final again = await _usable(tx, token, email: email, now: deps.clock.now());
     await _claim(tx, again, deps.clock.now());
-    await noAccount(tx);
+    await _requireNoAccount(tx, email);
     final userId = await insertUser(
       tx,
       deps,
@@ -222,15 +252,12 @@ Future<Response> acceptInvite(Request request) async {
       locale: locale,
       isInstanceOwner: false,
     );
-    final orgId = again['org_id'] as String?;
-    if (orgId != null) {
-      await checkMembershipCap(tx, deps.config, userId);
-      await tx.execute(
-        "INSERT INTO org_members (org_id, user_id, role, status) VALUES (@o, @u, @r, 'accepted')",
-        {'o': orgId, 'u': userId, 'r': again['role']},
-      );
-      await bumpOrgSeq(tx);
-    }
+    final orgId = await _joinInvitedOrg(
+      tx,
+      deps,
+      invite: again,
+      userId: userId,
+    );
     final session = await createSession(
       request,
       tx,
@@ -267,7 +294,7 @@ Future<Response> joinInvite(Request request) async {
               'u': auth.userId,
             })).single['email']!
             as String;
-    final inv = await _usable(tx, token, email, deps.clock.now());
+    final inv = await _usable(tx, token, email: email, now: deps.clock.now());
     final orgId = inv['org_id'] as String?;
     if (orgId == null) {
       throw ApiError(

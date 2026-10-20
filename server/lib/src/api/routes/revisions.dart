@@ -6,7 +6,7 @@ import 'package:shelf_router/shelf_router.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../../orgs/org_access.dart';
-import '../app.dart';
+import '../deps.dart';
 import '../errors.dart';
 import '../json.dart';
 import '../middleware.dart';

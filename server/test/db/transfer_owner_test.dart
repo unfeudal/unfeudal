@@ -43,11 +43,11 @@ void main() {
       });
       await expectLater(
         transferOwner(s.db, 'ghost@example.org'),
-        throwsStateError,
+        throwsA(isA<MaintenanceError>()),
       );
       await expectLater(
         transferOwner(s.db, 'bob@example.org'),
-        throwsStateError,
+        throwsA(isA<MaintenanceError>()),
       );
       await transferOwner(s.db, 'owner@example.org');
       expect(await owners(), ['owner@example.org']);

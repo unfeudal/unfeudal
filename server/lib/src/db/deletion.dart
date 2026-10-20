@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../api/errors.dart';
+import '../api/request_audit.dart';
 import '../audit/audit_log.dart';
 import '../auth/rate_limit.dart';
 import '../orgs/org_access.dart';
@@ -15,8 +16,8 @@ import 'db.dart';
 Future<void> removeMember(
   Tx tx,
   String orgId,
-  String userId,
-  String reason, {
+  String userId, {
+  required String reason,
   OrgSnapshot? before,
 }) async {
   final org = before ?? (await loadOrg(tx, orgId))!;
@@ -33,7 +34,13 @@ Future<void> removeMember(
     'DELETE FROM folder_keys WHERE org_id = @o AND user_id = @u',
     p,
   );
-  await recordRotations(tx, orgId, org, org.without(userId), reason);
+  await recordRotations(
+    tx,
+    orgId,
+    before: org,
+    after: org.without(userId),
+    reason: reason,
+  );
   await tx.execute(
     'DELETE FROM org_members WHERE org_id = @o AND user_id = @u',
     p,
@@ -42,7 +49,7 @@ Future<void> removeMember(
 }
 
 Future<void> deleteTeam(Tx tx, String orgId, String teamId) =>
-    changeOrg(tx, orgId, 'team_deleted', (_) async {
+    changeOrg(tx, orgId, reason: 'team_deleted', (_) async {
       final p = {'o': orgId, 't': teamId};
       await tx.execute(
         "DELETE FROM acl_entries WHERE org_id = @o AND principal_type = 'team' AND principal_id = @t",
@@ -104,7 +111,7 @@ Future<void> deleteUser(Tx tx, String userId, {AuditWrite? audit}) async {
   final snapshots = {for (final o in orgIds) o: (await loadOrg(tx, o))!};
   for (final MapEntry(key: orgId, value: org) in snapshots.entries) {
     await audit?.call(AuditScope.org(orgId), 'member.removed', [userId]);
-    await removeMember(tx, orgId, userId, 'user_deleted', before: org);
+    await removeMember(tx, orgId, userId, reason: 'user_deleted', before: org);
   }
   final p = {'u': userId};
   await tx.execute(

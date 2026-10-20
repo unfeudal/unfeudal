@@ -4,8 +4,8 @@ import 'dart:io';
 
 import 'package:test/test.dart';
 import 'package:unfeudal_server/src/config/config.dart';
-import 'package:unfeudal_server/src/db/db.dart';
 import 'package:unfeudal_server/src/db/migrate.dart';
+import 'package:unfeudal_server/src/db/open_db.dart';
 import 'package:unfeudal_server/src/log/logger.dart';
 import 'package:unfeudal_server/src/run_server.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
@@ -43,8 +43,7 @@ void main() {
     final token = printed.single.substring('Setup token: '.length);
     expect(token, matches(RegExp(r'^([A-Z2-7]{4}-){6}[A-Z2-7]{2}$')));
     expect(await healthcheck(config), 0);
-    final acc = await AccountCrypto(kdf: KdfParams.defaults)
-        .create('correct horse battery');
+    final acc = await AccountCrypto().create('correct horse battery');
     final client = HttpClient();
     final req = await client.post('127.0.0.1', server.port, '/api/v1/setup');
     req.headers

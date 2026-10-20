@@ -8,6 +8,16 @@ import '../auth/tokens.dart';
 import '../config/config.dart';
 import 'db.dart';
 
+/// A maintenance command the operator asked for cannot run; [message] is shown as is.
+class MaintenanceError implements Exception {
+  const MaintenanceError(this.message);
+
+  final String message;
+
+  @override
+  String toString() => 'maintenance: $message';
+}
+
 // Creates the file empty and owner-only before anything secret is written to it.
 Future<void> _createPrivate(String path) async {
   await File(path).create(exclusive: true);
@@ -83,7 +93,9 @@ Future<String?> ensureSetupToken(Db db, String? configured) =>
 /// A consistent SQLite copy through `VACUUM INTO`, owner-only (it holds hashes
 /// and bundles); never over an existing file.
 Future<void> backupDatabase(Db db, String path) async {
-  if (db.engine == DbEngine.postgres) throw UnsupportedError('use pg_dump');
+  if (db.engine == DbEngine.postgres) {
+    throw const MaintenanceError('use pg_dump');
+  }
   if (File(path).existsSync()) {
     throw FileSystemException('backup target exists', path);
   }
@@ -116,10 +128,12 @@ Future<void> transferOwner(Db db, String email) => db.transaction((tx) async {
     'SELECT id, is_instance_owner, disabled FROM users WHERE email = @e',
     {'e': email},
   )).firstOrNull;
-  if (target == null) throw StateError('No account with this email.');
+  if (target == null) {
+    throw const MaintenanceError('No account with this email.');
+  }
   if (target['is_instance_owner'] == 1) return;
   if (target['disabled'] != 0) {
-    throw StateError('This account is disabled: enable it first.');
+    throw const MaintenanceError('This account is disabled: enable it first.');
   }
   await tx.execute(
     'UPDATE users SET is_instance_owner = 0 WHERE is_instance_owner = 1',

@@ -159,6 +159,32 @@ void main() {
     );
   });
 
+  test('a malformed body is 400 before any folder lookup', () async {
+    Future<Object?> message(Map<String, Object?> body) async => (await s.put(
+      '/api/v1/folders/${w.folder('prod')}/keys',
+      token: w['adam'].accessToken,
+      body: body,
+    )).body['message'];
+    final noUser = {...w.wrap('mia', 'prod', 1)}..remove('userId');
+    expect(await message({'version': 1}), 'version and wrapped are required.');
+    expect(
+      await message({
+        'version': 1,
+        'wrapped': [
+          {'version': 1},
+        ],
+      }),
+      startsWith('invalid wrap: '),
+    );
+    expect(
+      await message({
+        'version': 1,
+        'wrapped': [noUser],
+      }),
+      'one wrap per user, userId required.',
+    );
+  });
+
   Future<void> queueKimRemoval() async {
     await w.keys('prod', 1, ['olivia', 'adam', 'mia', 'vic', 'kim']);
     await s.db.execute(

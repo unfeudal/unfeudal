@@ -5,6 +5,7 @@ import 'package:sqlite3/sqlite3.dart';
 import 'package:test/test.dart';
 import 'package:unfeudal_server/src/db/db.dart';
 import 'package:unfeudal_server/src/db/migrate.dart';
+import 'package:unfeudal_server/src/db/open_db.dart';
 import 'package:unfeudal_server/src/db/postgres_db.dart';
 
 import '../support/test_db.dart';

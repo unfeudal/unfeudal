@@ -4,17 +4,18 @@ import 'dart:convert';
 import 'package:shelf/shelf.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
-import '../../auth/secret_hash.dart';
 import '../../audit/audit_log.dart';
+import '../../auth/secret_hash.dart';
 import '../../auth/tokens.dart';
 import '../../db/db.dart';
 import '../../db/deletion.dart';
 import '../../mail/mailer.dart';
-import '../app.dart';
 import '../credentials.dart';
+import '../deps.dart';
 import '../errors.dart';
 import '../json.dart';
 import '../middleware.dart';
+import '../request_audit.dart';
 import '../validate.dart';
 
 typedef _User = ({
@@ -56,10 +57,7 @@ Future<_User?> _userByEmail(Db db, String email) async {
 int _bundleVersion(Map<String, Object?> body) {
   final v = body['bundleVersion'];
   if (v is! int || v < 0) {
-    throw ApiError(
-      ApiErrorCode.invalidRequest,
-      'bundleVersion: must be an integer >= 0',
-    );
+    throw ApiError.invalid('bundleVersion: must be an integer >= 0');
   }
   return v;
 }
@@ -93,9 +91,9 @@ Future<void> _requireCurrentAuthKey(
 // A concurrent change gives a 409, never a silent overwrite.
 Future<void> _casBundle(
   Tx tx,
-  String userId,
-  int version,
-  Map<String, Object?> bundle, {
+  String userId, {
+  required int version,
+  required Map<String, Object?> bundle,
   String? authHash,
   String? recoveryHash,
 }) async {
@@ -154,7 +152,13 @@ Future<Response> changePassword(Request request) async {
   _requireVersion(user, version);
   final authHash = await hashSecret(authKey, deps.secretHash);
   await deps.db.transaction((tx) async {
-    await _casBundle(tx, user.id, version, bundle, authHash: authHash);
+    await _casBundle(
+      tx,
+      user.id,
+      version: version,
+      bundle: bundle,
+      authHash: authHash,
+    );
     await _revokeAll(
       tx,
       user.id,
@@ -222,8 +226,8 @@ Future<Response> recover(Request request) async {
     await _casBundle(
       tx,
       user.id,
-      user.bundleVersion,
-      bundle,
+      version: user.bundleVersion,
+      bundle: bundle,
       authHash: authHash,
       recoveryHash: recoveryHash,
     );
@@ -255,7 +259,13 @@ Future<Response> recoveryKit(Request request) async {
   _requireVersion(user, version);
   final recoveryHash = await hashSecret(recoveryAuthKey, deps.secretHash);
   await deps.db.transaction((tx) async {
-    await _casBundle(tx, user.id, version, bundle, recoveryHash: recoveryHash);
+    await _casBundle(
+      tx,
+      user.id,
+      version: version,
+      bundle: bundle,
+      recoveryHash: recoveryHash,
+    );
     await auditWriter(request, tx)(
       AuditScope.user(auth.userId),
       'account.recovery_kit_changed',

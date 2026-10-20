@@ -1,28 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import 'dart:io';
-import 'dart:typed_data';
-
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
-import '../audit/audit_log.dart';
-import '../auth/rate_limit.dart';
 import '../auth/secret_hash.dart';
-import '../auth/tokens.dart';
-import '../config/config.dart';
-import '../config/features.dart';
-import '../db/db.dart';
-import '../db/maintenance.dart';
-import '../log/logger.dart';
-import '../mail/mailer.dart';
-import '../mail/notifier.dart';
-import '../net/client_ip.dart';
-import '../util/clock.dart';
+import 'credentials.dart';
+import 'deps.dart';
 import 'errors.dart';
 import 'middleware.dart';
 import 'routes/account.dart';
-import 'routes/revisions.dart';
 import 'routes/admin.dart';
 import 'routes/audit.dart';
 import 'routes/auth.dart';
@@ -35,99 +21,12 @@ import 'routes/invites.dart';
 import 'routes/items.dart';
 import 'routes/orgs.dart';
 import 'routes/retention.dart';
+import 'routes/revisions.dart';
 import 'routes/setup.dart';
 import 'routes/sync.dart';
 import 'routes/teams.dart';
 
-/// Everything a request handler needs, built once at start.
-class AppDeps {
-  AppDeps._({
-    required this.config,
-    required this.db,
-    required this.clock,
-    required this.log,
-    required this.serverSecret,
-    required this.instanceEpoch,
-    required this.audit,
-    required this.access,
-    required this.refresh,
-    required this.limiter,
-    required this.secretHash,
-    required this.kdfFloor,
-    required this.mailer,
-  });
-
-  static Future<AppDeps> create(
-    Config config,
-    Db db, {
-    Clock clock = const SystemClock(),
-    required Logger log,
-    SecretHashParams secretHash = SecretHashParams.server,
-    KdfParams kdfFloor = KdfParams.defaults,
-    Mailer mailer = const NoMailer(),
-  }) async {
-    final serverSecret = await loadServerSecret(config.secretFile);
-    final audit = AuditLog(clock, config.features, serverSecret);
-    final deps = AppDeps._(
-      config: config,
-      db: db,
-      clock: clock,
-      log: log,
-      serverSecret: serverSecret,
-      instanceEpoch: await ensureInstanceEpoch(db),
-      audit: audit,
-      access: AccessTokens(serverSecret, clock, config.accessTokenTtl),
-      refresh: RefreshTokens(
-        db,
-        clock,
-        config.refreshTokenTtl,
-        serverSecret,
-        audit: audit,
-      ),
-      limiter: RateLimiter(db, clock, config),
-      secretHash: secretHash,
-      kdfFloor: kdfFloor,
-      mailer: mailer,
-    );
-    deps.limiter.onLockout = deps.notifier.lockout;
-    return deps;
-  }
-
-  final Config config;
-  final Db db;
-  final Clock clock;
-  final Logger log;
-  final Uint8List serverSecret;
-
-  /// Cached for `/api/info`.
-  final String instanceEpoch;
-  final AuditLog audit;
-  final AccessTokens access;
-  final RefreshTokens refresh;
-  final RateLimiter limiter;
-  final SecretHashParams secretHash;
-  final Mailer mailer;
-  late final SecurityNotifier notifier = SecurityNotifier(this);
-
-  /// The weakest bundle KDF accepted; lowered by tests only.
-  final KdfParams kdfFloor;
-
-  /// One trusted_proxies warning per process.
-  bool proxyWarned = false;
-
-  Features get features => config.features;
-}
-
-const _depsKey = 'unfeudal.deps';
-
-Middleware withDeps(AppDeps deps) =>
-    (inner) =>
-        (request) => inner(request.change(context: {_depsKey: deps}));
-
-AppDeps depsOf(Request request) => request.context[_depsKey]! as AppDeps;
-
-InternetAddress clientIpOf(Request request) =>
-    clientIp(request, depsOf(request).config.trustedProxies);
+export 'deps.dart';
 
 Never _notFound(Request _) => throw ApiError.notFound();
 
@@ -135,28 +34,36 @@ Handler _org(Handler inner) => requireAuth(requireFeature(Flag.orgs)(inner));
 
 Handler _team(Handler inner) => _org(requireFeature(Flag.teams)(inner));
 
-/// Middleware order, outermost first: withDeps, requestLog, securityHeaders,
-/// errorMapper, then the routes.
-Handler buildHandler(AppDeps deps) {
-  final api = Router(notFoundHandler: _notFound)
+Handler _credentials(Handler inner) =>
+    credentialCheck(HashPriority.other)(inner);
+
+void _addAccountRoutes(Router api) {
+  api
     ..post('/setup', setup)
     ..post('/prelogin', prelogin)
-    ..post('/login', login)
+    ..post('/login', credentialCheck(HashPriority.signIn)(login))
     ..post('/token/refresh', refreshToken)
-    ..post('/account/password', requireAuth(changePassword))
+    ..post('/account/password', requireAuth(_credentials(changePassword)))
     ..post(
       '/account/recover/start',
-      requireFeature(Flag.recoveryKit)(recoverStart),
+      requireFeature(Flag.recoveryKit)(_credentials(recoverStart)),
     )
-    ..post('/account/recover', requireFeature(Flag.recoveryKit)(recover))
+    ..post(
+      '/account/recover',
+      requireFeature(Flag.recoveryKit)(_credentials(recover)),
+    )
     ..post(
       '/account/recovery-kit',
-      requireAuth(requireFeature(Flag.recoveryKit)(recoveryKit)),
+      requireAuth(requireFeature(Flag.recoveryKit)(_credentials(recoveryKit))),
     )
     ..put('/account/locale', requireAuth(setLocale))
-    ..delete('/account', requireAuth(deleteAccount))
+    ..delete('/account', requireAuth(_credentials(deleteAccount)))
     ..get('/devices', requireAuth(listDevices))
-    ..delete('/devices/<id>', requireAuth(deleteDevice))
+    ..delete('/devices/<id>', requireAuth(deleteDevice));
+}
+
+void _addItemAndOrgRoutes(Router api) {
+  api
     ..put('/items/<id>', requireAuth(putItem))
     ..get('/sync', requireAuth(sync))
     ..post('/orgs', _org(createOrg))
@@ -175,7 +82,11 @@ Handler buildHandler(AppDeps deps) {
     ..delete('/orgs/<org>/teams/<team>', _team(deleteTeamRoute))
     ..put('/folders/<folder>/acl', _org(putAcl))
     ..put('/folders/<folder>/keys', _org(putFolderKeys))
-    ..post('/folders/<folder>/rotation/done', _org(rotationDone))
+    ..post('/folders/<folder>/rotation/done', _org(rotationDone));
+}
+
+void _addAdminAndEventRoutes(Router api) {
+  api
     ..get('/admin/users', requireAuth(listUsers))
     ..put('/admin/users/<id>', requireAuth(setDisabled))
     ..delete('/admin/users/<id>', requireAuth(deleteUserRoute))
@@ -197,6 +108,15 @@ Handler buildHandler(AppDeps deps) {
       '/items/<id>/revisions',
       requireAuth(requireFeature(Flag.itemHistory)(listRevisions)),
     );
+}
+
+/// Middleware order, outermost first: withDeps, requestLog, securityHeaders,
+/// errorMapper, then the routes.
+Handler buildHandler(AppDeps deps) {
+  final api = Router(notFoundHandler: _notFound);
+  _addAccountRoutes(api);
+  _addItemAndOrgRoutes(api);
+  _addAdminAndEventRoutes(api);
   final root = Router(notFoundHandler: _notFound)
     ..get('/healthz', healthz)
     ..get('/api/info', info)

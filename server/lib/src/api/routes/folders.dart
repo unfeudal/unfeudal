@@ -8,12 +8,14 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../../audit/audit_log.dart';
 import '../../config/features.dart';
+import '../../db/db.dart';
 import '../../orgs/org_access.dart';
 import '../../orgs/rotations.dart';
-import '../app.dart';
+import '../deps.dart';
 import '../errors.dart';
 import '../json.dart';
 import '../middleware.dart';
+import '../request_audit.dart';
 import '../validate.dart';
 
 Set<Permission> _permissionList(Object? v) {
@@ -26,11 +28,11 @@ Set<Permission> _permissionList(Object? v) {
 }
 
 List<AclEntry> _parseEntries(
-  List<Map<String, Object?>> raw,
-  String folder,
-  OrgSnapshot org,
-  Features features,
-) {
+  List<Map<String, Object?>> raw, {
+  required String folder,
+  required OrgSnapshot org,
+  required Features features,
+}) {
   final seen = <(PrincipalType, String)>{};
   final out = <AclEntry>[];
   for (final e in raw) {
@@ -71,6 +73,31 @@ List<AclEntry> _parseEntries(
   return out;
 }
 
+Future<void> _replaceAcl(
+  Tx tx, {
+  required String orgId,
+  required String folder,
+  required List<AclEntry> entries,
+}) async {
+  await tx.execute('DELETE FROM acl_entries WHERE folder_id = @f', {
+    'f': folder,
+  });
+  for (final e in entries) {
+    await tx.execute(
+      'INSERT INTO acl_entries (org_id, folder_id, principal_type, principal_id, allow, deny) '
+      'VALUES (@o, @f, @t, @p, @a, @d)',
+      {
+        'o': orgId,
+        'f': folder,
+        't': e.principalType.name,
+        'p': e.principalId,
+        'a': jsonEncode([for (final p in e.allow) p.name]),
+        'd': jsonEncode([for (final p in e.deny) p.name]),
+      },
+    );
+  }
+}
+
 Future<Response> putAcl(Request request) async {
   final deps = depsOf(request), auth = authOf(request);
   final folder = parseUuid(request.params['folder']!);
@@ -78,10 +105,7 @@ Future<Response> putAcl(Request request) async {
   if (raw is! List ||
       raw.length > 200 ||
       raw.any((e) => e is! Map<String, Object?>)) {
-    throw ApiError(
-      ApiErrorCode.invalidRequest,
-      'entries must be a list of at most 200 objects.',
-    );
+    throw ApiError.invalid('entries must be a list of at most 200 objects.');
   }
   await deps.db.transaction((tx) async {
     final orgId = await liveOrgFolder(tx, folder);
@@ -98,27 +122,11 @@ Future<Response> putAcl(Request request) async {
     }
     final entries = _parseEntries(
       raw.cast<Map<String, Object?>>(),
-      folder,
-      before,
-      deps.features,
+      folder: folder,
+      org: before,
+      features: deps.features,
     );
-    await tx.execute('DELETE FROM acl_entries WHERE folder_id = @f', {
-      'f': folder,
-    });
-    for (final e in entries) {
-      await tx.execute(
-        'INSERT INTO acl_entries (org_id, folder_id, principal_type, principal_id, allow, deny) '
-        'VALUES (@o, @f, @t, @p, @a, @d)',
-        {
-          'o': orgId,
-          'f': folder,
-          't': e.principalType.name,
-          'p': e.principalId,
-          'a': jsonEncode([for (final p in e.allow) p.name]),
-          'd': jsonEncode([for (final p in e.deny) p.name]),
-        },
-      );
-    }
+    await _replaceAcl(tx, orgId: orgId, folder: folder, entries: entries);
     final after = (await loadOrg(tx, orgId))!;
     // A non-admin manager cannot grant more than they hold, nor lock
     // themselves out of the folder.
@@ -129,13 +137,16 @@ Future<Response> putAcl(Request request) async {
         auth.userId,
         folder,
       ).contains(Permission.manage)) {
-        throw ApiError(
-          ApiErrorCode.invalidRequest,
-          'You cannot remove your own manage.',
-        );
+        throw ApiError.invalid('You cannot remove your own manage.');
       }
     }
-    await recordRotations(tx, orgId, before, after, 'acl_change');
+    await recordRotations(
+      tx,
+      orgId,
+      before: before,
+      after: after,
+      reason: 'acl_change',
+    );
     await bumpOrgSeq(tx);
     await auditWriter(request, tx)(AuditScope.org(orgId), 'acl.changed', [
       folder,
@@ -144,17 +155,17 @@ Future<Response> putAcl(Request request) async {
   return noContent();
 }
 
-Future<Response> putFolderKeys(Request request) async {
-  final deps = depsOf(request), auth = authOf(request);
-  final folder = parseUuid(request.params['folder']!);
-  final body = await readJson(request);
+typedef _FolderKeysInput = ({
+  int version,
+  List<WrappedFolderKeys> wraps,
+  FolderKeyHistory? history,
+});
+
+_FolderKeysInput _parseFolderKeys(Map<String, Object?> body) {
   final version = body['version'];
   final rawWraps = body['wrapped'];
   if (version is! int || rawWraps is! List || rawWraps.length > 1000) {
-    throw ApiError(
-      ApiErrorCode.invalidRequest,
-      'version and wrapped are required.',
-    );
+    throw ApiError.invalid('version and wrapped are required.');
   }
   final List<WrappedFolderKeys> wraps;
   final FolderKeyHistory? history;
@@ -164,15 +175,100 @@ Future<Response> putFolderKeys(Request request) async {
         ? null
         : FolderKeyHistory.fromJson(body['history']);
   } on FormatException catch (e) {
-    throw ApiError(ApiErrorCode.invalidRequest, 'invalid wrap: ${e.message}');
+    throw ApiError.invalid('invalid wrap: ${e.message}');
   }
-  final users = wraps.map((w) => w.userId).toSet();
-  if (wraps.any((w) => w.userId == null) || users.length != wraps.length) {
-    throw ApiError(
-      ApiErrorCode.invalidRequest,
-      'one wrap per user, userId required.',
+  if (wraps.any((w) => w.userId == null) ||
+      _wrappedUsers(wraps).length != wraps.length) {
+    throw ApiError.invalid('one wrap per user, userId required.');
+  }
+  return (version: version, wraps: wraps, history: history);
+}
+
+Set<String?> _wrappedUsers(List<WrappedFolderKeys> wraps) =>
+    wraps.map((w) => w.userId).toSet();
+
+// Each user gets only the key parts their permissions on the folder allow.
+void _checkWraps(OrgSnapshot org, String folder, _FolderKeysInput input) {
+  String label(PayloadPart p) =>
+      KeyIds.sealed(KeyIds.folder(folder, input.version, p));
+  for (final w in input.wraps) {
+    final access = FolderKeyAccess.of(permissionsOf(org, w.userId!, folder));
+    if (w.version != input.version ||
+        !access.hasMeta ||
+        (w.secret != null && !access.hasSecret) ||
+        w.meta.keyId != label(PayloadPart.meta) ||
+        (w.secret != null && w.secret!.keyId != label(PayloadPart.secret))) {
+      throw ApiError.invalid('invalid wrap for ${w.userId}.');
+    }
+  }
+}
+
+// A rotation replaces every wrap, so no reader may be left without the new keys.
+Future<void> _rotateKeys(
+  Tx tx,
+  _FolderKeysInput input, {
+  required OrgSnapshot org,
+  required String folder,
+}) async {
+  final history = input.history;
+  final readers = org.members.keys.where(
+    (u) => permissionsOf(org, u, folder).contains(Permission.view),
+  );
+  if (history == null ||
+      history.version != input.version ||
+      !_wrappedUsers(input.wraps).containsAll(readers)) {
+    throw ApiError.invalid(
+      'a rotation needs its history and a wrap for every reader.',
     );
   }
+  await tx.execute('DELETE FROM folder_keys WHERE folder_id = @f', {
+    'f': folder,
+  });
+  await tx.execute('DELETE FROM folder_key_history WHERE folder_id = @f', {
+    'f': folder,
+  });
+  await tx.execute(
+    'INSERT INTO folder_key_history (org_id, folder_id, version, body) VALUES (@o, @f, @v, @b)',
+    {
+      'o': org.orgId,
+      'f': folder,
+      'v': input.version,
+      'b': jsonEncode(history.toJson()),
+    },
+  );
+  await tx.execute(
+    'UPDATE pending_rotations SET rotated_version = @v WHERE folder_id = @f',
+    {'v': input.version, 'f': folder},
+  );
+}
+
+Future<void> _saveWraps(
+  Tx tx,
+  _FolderKeysInput input, {
+  required String orgId,
+  required String folder,
+}) async {
+  for (final w in input.wraps) {
+    await tx.execute(
+      'INSERT INTO folder_keys (org_id, folder_id, user_id, version, meta_wrapped, secret_wrapped) VALUES (@o, @f, @u, @v, @m, @s) '
+      'ON CONFLICT (folder_id, user_id) DO UPDATE SET version = @v, meta_wrapped = @m, secret_wrapped = @s',
+      {
+        'o': orgId,
+        'f': folder,
+        'u': w.userId,
+        'v': input.version,
+        'm': jsonEncode(w.meta.toJson()),
+        's': w.secret == null ? null : jsonEncode(w.secret!.toJson()),
+      },
+    );
+  }
+}
+
+Future<Response> putFolderKeys(Request request) async {
+  final deps = depsOf(request), auth = authOf(request);
+  final folder = parseUuid(request.params['folder']!);
+  final input = _parseFolderKeys(await readJson(request));
+  final version = input.version;
   await deps.db.transaction((tx) async {
     final orgId = await liveOrgFolder(tx, folder);
     final caller = await requireMember(tx, orgId, auth.userId);
@@ -193,75 +289,13 @@ Future<Response> putFolderKeys(Request request) async {
     }
     final rotation = current >= 1 && version == current + 1;
     if (version != max(current, 1) && !rotation) {
-      throw ApiError(
-        ApiErrorCode.invalidRequest,
+      throw ApiError.invalid(
         'version must be ${max(current, 1)} or ${current + 1}.',
       );
     }
-    String label(PayloadPart p) =>
-        KeyIds.sealed(KeyIds.folder(folder, version, p));
-    // Each user gets only the key parts their permissions on the folder allow.
-    for (final w in wraps) {
-      final access = FolderKeyAccess.of(permissionsOf(org, w.userId!, folder));
-      if (w.version != version ||
-          !access.hasMeta ||
-          (w.secret != null && !access.hasSecret) ||
-          w.meta.keyId != label(PayloadPart.meta) ||
-          (w.secret != null && w.secret!.keyId != label(PayloadPart.secret))) {
-        throw ApiError(
-          ApiErrorCode.invalidRequest,
-          'invalid wrap for ${w.userId}.',
-        );
-      }
-    }
-    // A rotation replaces every wrap, so no reader may be left without the new keys.
-    if (rotation) {
-      final readers = org.members.keys.where(
-        (u) => permissionsOf(org, u, folder).contains(Permission.view),
-      );
-      if (history == null ||
-          history.version != version ||
-          !users.containsAll(readers)) {
-        throw ApiError(
-          ApiErrorCode.invalidRequest,
-          'a rotation needs its history and a wrap for every reader.',
-        );
-      }
-      await tx.execute('DELETE FROM folder_keys WHERE folder_id = @f', {
-        'f': folder,
-      });
-      await tx.execute('DELETE FROM folder_key_history WHERE folder_id = @f', {
-        'f': folder,
-      });
-      // history is checked non-null above; the awaits in between stop type promotion.
-      await tx.execute(
-        'INSERT INTO folder_key_history (org_id, folder_id, version, body) VALUES (@o, @f, @v, @b)',
-        {
-          'o': orgId,
-          'f': folder,
-          'v': version,
-          'b': jsonEncode(history!.toJson()),
-        },
-      );
-      await tx.execute(
-        'UPDATE pending_rotations SET rotated_version = @v WHERE folder_id = @f',
-        {'v': version, 'f': folder},
-      );
-    }
-    for (final w in wraps) {
-      await tx.execute(
-        'INSERT INTO folder_keys (org_id, folder_id, user_id, version, meta_wrapped, secret_wrapped) VALUES (@o, @f, @u, @v, @m, @s) '
-        'ON CONFLICT (folder_id, user_id) DO UPDATE SET version = @v, meta_wrapped = @m, secret_wrapped = @s',
-        {
-          'o': orgId,
-          'f': folder,
-          'u': w.userId,
-          'v': version,
-          'm': jsonEncode(w.meta.toJson()),
-          's': w.secret == null ? null : jsonEncode(w.secret!.toJson()),
-        },
-      );
-    }
+    _checkWraps(org, folder, input);
+    if (rotation) await _rotateKeys(tx, input, org: org, folder: folder);
+    await _saveWraps(tx, input, orgId: orgId, folder: folder);
     await bumpOrgSeq(tx);
     await auditWriter(request, tx)(
       AuditScope.org(orgId),
@@ -300,8 +334,8 @@ Future<Response> rotationDone(Request request) async {
       if (!sealedWithFolderKeys(
         (item['meta'] as Map?)?['keyId'],
         (item['secret'] as Map?)?['keyId'],
-        folder,
-        current,
+        folderId: folder,
+        version: current,
       )) {
         throw stale;
       }

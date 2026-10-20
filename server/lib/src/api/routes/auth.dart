@@ -4,14 +4,16 @@ import 'dart:convert';
 import 'package:shelf/shelf.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
-import '../../auth/secret_hash.dart';
 import '../../audit/audit_log.dart';
+import '../../auth/secret_hash.dart';
 import '../../auth/tokens.dart';
+import '../../db/db.dart';
 import '../../mail/mailer.dart';
-import '../app.dart';
 import '../credentials.dart';
+import '../deps.dart';
 import '../errors.dart';
 import '../json.dart';
+import '../request_audit.dart';
 import '../session.dart';
 import '../validate.dart';
 
@@ -75,21 +77,7 @@ Future<Response> login(Request request) async {
   // The key is right, whatever follows.
   await clearCredentials(request, email);
   final session = await deps.db.transaction((tx) async {
-    final max = deps.config.maxDevicesPerUser;
-    if (max > 0) {
-      final active =
-          (await tx.query(
-                'SELECT count(*) AS n FROM devices WHERE user_id = @u AND revoked_at IS NULL',
-                {'u': userId},
-              )).single['n']!
-              as int;
-      if (active >= max) {
-        throw ApiError(
-          ApiErrorCode.forbidden,
-          'Device limit reached. Revoke a device first.',
-        );
-      }
-    }
+    await _requireDeviceSlot(tx, userId, deps.config.maxDevicesPerUser);
     return createSession(
       request,
       tx,
@@ -105,6 +93,22 @@ Future<Response> login(Request request) async {
     'platform': device.platform,
   });
   return jsonResponse(session.toJson());
+}
+
+Future<void> _requireDeviceSlot(Tx tx, String userId, int max) async {
+  if (max <= 0) return;
+  final active =
+      (await tx.query(
+            'SELECT count(*) AS n FROM devices WHERE user_id = @u AND revoked_at IS NULL',
+            {'u': userId},
+          )).single['n']!
+          as int;
+  if (active >= max) {
+    throw ApiError(
+      ApiErrorCode.forbidden,
+      'Device limit reached. Revoke a device first.',
+    );
+  }
 }
 
 /// A fresh access token and the refresh successor; a replay revokes the device.

@@ -12,11 +12,11 @@ import 'org_access.dart';
 /// is skipped: nobody holds a key to rotate.
 Future<void> recordRotations(
   Tx tx,
-  String orgId,
-  OrgSnapshot before,
-  OrgSnapshot after,
-  String reason,
-) async {
+  String orgId, {
+  required OrgSnapshot before,
+  required OrgSnapshot after,
+  required String reason,
+}) async {
   for (final folderId in before.folders.keys.where(after.folders.containsKey)) {
     final lost = {
       for (final userId in before.members.keys)
@@ -57,12 +57,18 @@ Future<void> recordRotations(
 Future<void> changeOrg(
   Tx tx,
   String orgId,
-  String reason,
-  Future<void> Function(OrgSnapshot before) change,
-) async {
+  Future<void> Function(OrgSnapshot before) change, {
+  required String reason,
+}) async {
   final before = (await loadOrg(tx, orgId))!;
   await change(before);
-  await recordRotations(tx, orgId, before, (await loadOrg(tx, orgId))!, reason);
+  await recordRotations(
+    tx,
+    orgId,
+    before: before,
+    after: (await loadOrg(tx, orgId))!,
+    reason: reason,
+  );
   await bumpOrgSeq(tx);
 }
 

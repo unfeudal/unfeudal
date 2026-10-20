@@ -3,11 +3,8 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
-import 'package:shelf/shelf.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
-import '../api/app.dart';
-import '../api/middleware.dart';
 import '../config/features.dart';
 import '../db/db.dart';
 import '../util/clock.dart';
@@ -113,30 +110,3 @@ AuditEvent eventOfRow(Map<String, Object?> row, {String? ipAddress}) =>
       hash: row['hash']! as String,
       ipAddress: ipAddress,
     );
-
-typedef AuditWrite = Future<void> Function(
-  AuditScope scope,
-  String action,
-  List<String> targetIds,
-);
-
-/// An append bound to [tx], the actor (by default the token's user and device) and the client address.
-AuditWrite auditWriter(
-  Request request,
-  Tx tx, {
-  ({String? user, String? device})? actor,
-}) {
-  final deps = depsOf(request);
-  final who =
-      actor ?? (user: authOf(request).userId, device: authOf(request).deviceId);
-  final ip = clientIpOf(request).address;
-  return (scope, action, targetIds) => deps.audit.append(
-    tx,
-    scope: scope,
-    action: action,
-    actorUser: who.user,
-    actorDevice: who.device,
-    ip: ip,
-    targetIds: targetIds,
-  );
-}

@@ -100,10 +100,7 @@ String parseUuid(String v) {
 
 OrgRole parseRole(Object? v) =>
     OrgRole.values.asNameMap()[v] ??
-    (throw ApiError(
-      ApiErrorCode.invalidRequest,
-      'role must be owner, admin or member.',
-    ));
+    (throw ApiError.invalid('role must be owner, admin or member.'));
 
 String parseLocale(Object? v) {
   if (v != 'en' && v != 'fr') badField('locale', 'must be en or fr');

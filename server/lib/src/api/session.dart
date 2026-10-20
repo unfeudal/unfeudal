@@ -6,7 +6,8 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../audit/audit_log.dart';
 import '../db/db.dart';
-import 'app.dart';
+import 'deps.dart';
+import 'request_audit.dart';
 import 'validate.dart';
 
 /// The new user's id; the secrets arrive already hashed (Argon2 runs before the transaction).
@@ -80,15 +81,3 @@ Future<Session> createSession(
     isInstanceOwner: isInstanceOwner,
   );
 }
-
-const _touchEvery = Duration(minutes: 5);
-
-/// [lastSeenAt] (ISO, as stored) is old enough for [touchDevice] to write.
-bool isTouchDue(String lastSeenAt, DateTime now) =>
-    lastSeenAt.compareTo(iso(now.subtract(_touchEvery))) < 0;
-
-/// Writes `last_seen_at` at most every 5 minutes per device.
-Future<void> touchDevice(Tx tx, String deviceId, DateTime now) => tx.execute(
-  'UPDATE devices SET last_seen_at = @now WHERE id = @d AND last_seen_at < @cutoff',
-  {'now': iso(now), 'd': deviceId, 'cutoff': iso(now.subtract(_touchEvery))},
-);

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import '../migrations.dart';
+import '../migration.dart';
 
 const coreMigration = Migration(1, [
   r"""CREATE TABLE meta (

@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import 'dart:convert';
 
-import 'package:cryptography/helpers.dart' show constantTimeBytesEquality;
 import 'package:shelf/shelf.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
@@ -9,15 +8,36 @@ import '../../audit/audit_log.dart';
 import '../../auth/rate_limit.dart';
 import '../../auth/secret_hash.dart';
 import '../../auth/tokens.dart';
+import '../../db/db.dart';
 import '../../net/client_ip.dart';
-import '../app.dart';
+import '../deps.dart';
 import '../errors.dart';
 import '../json.dart';
+import '../request_audit.dart';
 import '../session.dart';
 import '../validate.dart';
 
 ApiError _setupDone() =>
     ApiError(ApiErrorCode.setupDone, 'This server is already set up.');
+
+Future<bool> _hasUser(Db db) async =>
+    (await db.query('SELECT id FROM users LIMIT 1')).isNotEmpty;
+
+Future<void> _requireSetupToken(Db db, String tokenHash) async {
+  final stored = await db.query(
+    "SELECT value FROM meta WHERE key = 'setup_token_hash'",
+  );
+  if (stored.isEmpty ||
+      !constantTimeEquals(
+        utf8.encode(stored.single['value']! as String),
+        utf8.encode(tokenHash),
+      )) {
+    // A concurrent setup may have committed since the first check.
+    if (await _hasUser(db)) throw _setupDone();
+    // No reason on setup: one message for every failure.
+    throw ApiError(ApiErrorCode.unauthorized, 'Invalid setup token.');
+  }
+}
 
 /// Creates the Instance Owner with the one-time setup token, and its first session.
 Future<Response> setup(Request request) async {
@@ -35,23 +55,9 @@ Future<Response> setup(Request request) async {
   final locale = body.containsKey('locale')
       ? parseLocale(body['locale'])
       : 'en';
-  Future<bool> hasUser() async =>
-      (await deps.db.query('SELECT id FROM users LIMIT 1')).isNotEmpty;
-  if (await hasUser()) throw _setupDone();
+  if (await _hasUser(deps.db)) throw _setupDone();
   final h = hashToken(token);
-  final stored = await deps.db.query(
-    "SELECT value FROM meta WHERE key = 'setup_token_hash'",
-  );
-  if (stored.isEmpty ||
-      !constantTimeBytesEquality.equals(
-        utf8.encode(stored.single['value']! as String),
-        utf8.encode(h),
-      )) {
-    // A concurrent setup may have committed since the first check.
-    if (await hasUser()) throw _setupDone();
-    // No reason on setup: one message for every failure.
-    throw ApiError(ApiErrorCode.unauthorized, 'Invalid setup token.');
-  }
+  await _requireSetupToken(deps.db, h);
   // Argon2 before the transaction.
   final authHash = await hashSecret(authKey, deps.secretHash);
   final recoveryHash = await hashSecret(recoveryAuthKey, deps.secretHash);

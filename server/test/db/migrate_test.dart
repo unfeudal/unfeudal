@@ -4,7 +4,9 @@ import 'dart:io';
 import 'package:test/test.dart';
 import 'package:unfeudal_server/src/db/db.dart';
 import 'package:unfeudal_server/src/db/migrate.dart';
+import 'package:unfeudal_server/src/db/migration.dart';
 import 'package:unfeudal_server/src/db/migrations.dart';
+import 'package:unfeudal_server/src/db/open_db.dart';
 
 import '../support/test_db.dart';
 
