@@ -5,7 +5,7 @@ import 'payload.dart';
 
 class MemberPinMeta extends Payload {
   MemberPinMeta({
-    super.schemaVersion = 1,
+    super.schemaVersion = Payload.knownSchemaVersion,
     required this.userId,
     required this.fingerprint,
     this.verified = false,

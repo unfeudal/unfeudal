@@ -27,7 +27,7 @@ class AutoLock {
     _idle?.cancel();
   }
 
-  void activity() {
+  void recordActivity() {
     if (_running) _arm();
   }
 

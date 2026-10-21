@@ -2,7 +2,7 @@
 part of 'settings_screen.dart';
 
 extension _AppearanceGroup on _SettingsScreenState {
-  /// A segmented control: one segment per option, each label keyed `$prefix-$key`.
+  // A segmented control: one segment per option, each label keyed `$prefix-$key`.
   Widget _choices<T>({
     required String prefix,
     required List<(T, String, String)> options,
@@ -51,8 +51,7 @@ extension _AppearanceGroup on _SettingsScreenState {
             ('fr', 'fr', l.languageFrench),
           ],
           selected: settings.locale,
-          pick: (v) =>
-              update(Settings.fromJson({...settings.toJson(), 'locale': v})),
+          pick: (v) => update(settings.withLocale(v)),
         ),
       ),
       SettingRow(

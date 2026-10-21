@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-import 'dart:io';
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
@@ -71,7 +70,8 @@ class _UnlockScreenState extends State<UnlockScreen> with BusyAction {
 
   @override
   void failed(Object error) {
-    _machine.fail(); // AppState already failed the machine on a wrong password; this covers the rest
+    // AppState already failed the machine on a wrong password; this covers the rest.
+    _machine.fail();
     setState(() => _shakes++);
   }
 
@@ -143,7 +143,7 @@ class _UnlockScreenState extends State<UnlockScreen> with BusyAction {
               key: const Key('unlock-biometric'),
               onPressed: busy ? null : _state.unlockWithBiometrics,
               child: Text(
-                Platform.isMacOS
+                defaultTargetPlatform == TargetPlatform.macOS
                     ? l.unlockBiometricMac
                     : l.unlockBiometricWindows,
               ),

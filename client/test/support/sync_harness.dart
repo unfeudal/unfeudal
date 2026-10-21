@@ -11,12 +11,12 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 import 'fakes.dart';
 
 class HarnessAccount {
-  HarnessAccount(
-    this.userId,
-    this.email,
-    this.bundle,
-    this.authKey,
-    this.recoveryAuthKey, {
+  HarnessAccount({
+    required this.userId,
+    required this.email,
+    required this.bundle,
+    required this.authKey,
+    required this.recoveryAuthKey,
     this.account,
     this.isOwner = false,
   });
@@ -31,7 +31,12 @@ class HarnessAccount {
 }
 
 class HarnessDevice {
-  HarnessDevice(this.id, this.userId, this.name, this.platform);
+  HarnessDevice({
+    required this.id,
+    required this.userId,
+    required this.name,
+    required this.platform,
+  });
   final String id, userId, name, platform;
   String access = '', refresh = '';
   final used = <String>{};
@@ -136,11 +141,11 @@ class SyncHarness {
       kdfFloor: KdfParams.testing,
     ).create(password);
     return accounts[email] = HarnessAccount(
-      newId(),
-      email,
-      acc.bundle,
-      b64(acc.authKey),
-      b64(acc.recoveryAuthKey),
+      userId: newId(),
+      email: email,
+      bundle: acc.bundle,
+      authKey: b64(acc.authKey),
+      recoveryAuthKey: b64(acc.recoveryAuthKey),
       account: acc,
       isOwner: owner || accounts.isEmpty,
     );
@@ -313,7 +318,12 @@ class SyncHarness {
   }
 
   HarnessDevice _newDevice(HarnessAccount a, String name, String platform) {
-    final d = HarnessDevice(newId(), a.userId, name, platform);
+    final d = HarnessDevice(
+      id: newId(),
+      userId: a.userId,
+      name: name,
+      platform: platform,
+    );
     _rotate(d);
     return devices[d.id] = d;
   }
@@ -442,11 +452,11 @@ class SyncHarness {
           return _error(401, 'unauthorized');
         }
         final a = accounts[s('email')!] = HarnessAccount(
-          newId(),
-          s('email')!,
-          AccountBundle.fromJson(body['bundle']),
-          s('authKey')!,
-          s('recoveryAuthKey')!,
+          userId: newId(),
+          email: s('email')!,
+          bundle: AccountBundle.fromJson(body['bundle']),
+          authKey: s('authKey')!,
+          recoveryAuthKey: s('recoveryAuthKey')!,
           isOwner: true,
         );
         return _json(_session(a, _newDevice(a, dev.name, dev.platform)), 201);
@@ -457,11 +467,11 @@ class SyncHarness {
         }
         final dev = device()!;
         final a = accounts[s('email')!] = HarnessAccount(
-          newId(),
-          s('email')!,
-          AccountBundle.fromJson(body['bundle']),
-          s('authKey')!,
-          s('recoveryAuthKey')!,
+          userId: newId(),
+          email: s('email')!,
+          bundle: AccountBundle.fromJson(body['bundle']),
+          authKey: s('authKey')!,
+          recoveryAuthKey: s('recoveryAuthKey')!,
         );
         invites.remove(s('token'));
         return _json(_session(a, _newDevice(a, dev.name, dev.platform)), 201);

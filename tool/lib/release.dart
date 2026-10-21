@@ -3,6 +3,8 @@ import 'dart:io';
 
 final _semver = RegExp(r'^\d+\.\d+\.\d+$');
 final _pubspecVersion = RegExp(r'^version: (\S+)$', multiLine: true);
+const _serverVersionFile = 'server/lib/src/version.dart';
+const _clientVersionFile = 'client/lib/src/version.dart';
 
 /// Releases [package] (`server` or `client`) at [level] (`patch`, `minor`, `major` or `X.Y.Z`); returns its
 /// released version. A client release also releases a server patch announcing it.
@@ -15,10 +17,10 @@ String bump(
   if (package != 'server' && package != 'client') {
     throw ArgumentError.value(package, 'package', 'server or client');
   }
-  final version = _resolve(_current(root, package), level);
+  final version = _nextVersion(_currentVersion(root, package), level);
   _release(root, package, version, date: date);
   if (package == 'server') return version;
-  final serverPatch = _resolve(_current(root, 'server'), 'patch');
+  final serverPatch = _nextVersion(_currentVersion(root, 'server'), 'patch');
   _release(
     root,
     'server',
@@ -31,61 +33,56 @@ String bump(
 
 /// What stops [tag] from being released: versions, constants, changelog section and fixtures must all match it.
 List<String> checkTag(Directory root, String tag) {
-  final m = RegExp(r'^(server|client)-v(\d+\.\d+\.\d+)$').firstMatch(tag);
-  if (m == null) return ['tag $tag is not server-vX.Y.Z or client-vX.Y.Z'];
-  final (pkg, v) = (m[1]!, m[2]!);
+  final match = RegExp(r'^(server|client)-v(\d+\.\d+\.\d+)$').firstMatch(tag);
+  if (match == null) return ['tag $tag is not server-vX.Y.Z or client-vX.Y.Z'];
+  final (package, version) = (match[1]!, match[2]!);
   String read(String path) => File('${root.path}/$path').readAsStringSync();
   final problems = <String>[];
-  if (!RegExp(
-    '^version: ${RegExp.escape(v)}\$',
-    multiLine: true,
-  ).hasMatch(read('$pkg/pubspec.yaml'))) {
-    problems.add('$pkg/pubspec.yaml version is not $v');
+  if (_pubspecVersion.firstMatch(read('$package/pubspec.yaml'))?[1] !=
+      version) {
+    problems.add('$package/pubspec.yaml version is not $version');
   }
-  final constants = pkg == 'server'
-      ? [('server/lib/src/version.dart', 'serverVersion')]
+  final constants = package == 'server'
+      ? [(_serverVersionFile, 'serverVersion')]
       : [
-          ('client/lib/src/version.dart', 'clientVersion'),
-          ('server/lib/src/version.dart', 'latestClientVersion'),
+          (_clientVersionFile, 'clientVersion'),
+          (_serverVersionFile, 'latestClientVersion'),
         ];
   for (final (file, name) in constants) {
-    if (!read(file).contains("const $name = '$v';")) {
-      problems.add('$file $name is not $v');
+    if (!read(file).contains("const $name = '$version';")) {
+      problems.add('$file $name is not $version');
     }
   }
-  if (pkg == 'client' &&
-      read('client/lib/src/version.dart')
-          .contains('firstPublicRelease = null')) {
-    problems.add('client/lib/src/version.dart firstPublicRelease is not set');
+  if (package == 'client' &&
+      read(_clientVersionFile).contains('firstPublicRelease = null')) {
+    problems.add('$_clientVersionFile firstPublicRelease is not set');
   }
-  if (!read('$pkg/CHANGELOG.md').contains('## [$v] - ')) {
-    problems.add('$pkg/CHANGELOG.md has no [$v] section');
+  if (!read('$package/CHANGELOG.md').contains('## [$version] - ')) {
+    problems.add('$package/CHANGELOG.md has no [$version] section');
   }
-  if (!Directory('${root.path}/shared/test/fixtures/v$v').existsSync()) {
-    problems.add('no fixtures v$v');
+  if (!Directory('${root.path}/shared/test/fixtures/v$version').existsSync()) {
+    problems.add('no fixtures v$version');
   }
   return problems;
 }
 
 // The pubspec version without its `+build` part.
-String _current(Directory root, String package) => _pubspecVersion
+String _currentVersion(Directory root, String package) => _pubspecVersion
     .firstMatch(
       File('${root.path}/$package/pubspec.yaml').readAsStringSync(),
     )![1]!
     .split('+')
     .first;
 
-String _resolve(String current, String level) {
+String _nextVersion(String current, String level) {
   final [major, minor, patch] = current.split('.').map(int.parse).toList();
   return switch (level) {
     'patch' => '$major.$minor.${patch + 1}',
     'minor' => '$major.${minor + 1}.0',
     'major' => '${major + 1}.0.0',
     _ when _semver.hasMatch(level) => level,
-    _ => throw ArgumentError.value(
-      level,
-      'level',
-      'patch, minor, major or X.Y.Z',
+    _ => throw FormatException(
+      'version $level is not patch, minor, major or X.Y.Z',
     ),
   };
 }
@@ -113,20 +110,17 @@ void _release(
     (t) => t.replaceFirst(_pubspecVersion, 'version: $version'),
   );
   if (package == 'server') {
-    edit(
-      'server/lib/src/version.dart',
-      (t) => constant(t, 'serverVersion', version),
-    );
+    edit(_serverVersionFile, (t) => constant(t, 'serverVersion', version));
   } else {
     edit(
-      'client/lib/src/version.dart',
+      _clientVersionFile,
       (t) => constant(t, 'clientVersion', version).replaceFirst(
         'const String? firstPublicRelease = null;',
         "const String? firstPublicRelease = '$day';",
       ),
     );
     edit(
-      'server/lib/src/version.dart',
+      _serverVersionFile,
       (t) => constant(t, 'latestClientVersion', version),
     );
   }

@@ -32,7 +32,8 @@ class AuditEvent {
     }
 
     final ts = r.text('ts', max: 24);
-    parseIso(ts); // kept as sent: the hash covers the text
+    // Kept as sent: the hash covers the text.
+    parseIso(ts);
     return AuditEvent(
       scope: nonEmpty('scope'),
       seq: r.integer('seq', min: 1),
@@ -100,6 +101,16 @@ class AuditEvent {
     'ipAddress': ?ipAddress,
   };
 }
+
+const _forwardPrefix = 'forward:';
+
+/// The audit target id of a port forward on [localPort].
+String forwardTarget(int localPort) => '$_forwardPrefix$localPort';
+
+/// The port text of a [forwardTarget] id, or null when [targetId] is not one.
+String? forwardPortOf(String targetId) => targetId.startsWith(_forwardPrefix)
+    ? targetId.substring(_forwardPrefix.length)
+    : null;
 
 /// Keyset position in an audit listing: `b64(utf8(json{t, s, q}))`.
 class AuditCursor {

@@ -47,7 +47,7 @@ class _OrgSettingsScreenState extends State<OrgSettingsScreen> with BusyAction {
     final org = _org;
     _saved = {
       'name': org?.name ?? '',
-      'mascot': org?.mascot ?? true,
+      'mascot': org?.isMascotEnabled ?? true,
       for (final k in _retention) k: org?.settings[k],
     };
     _name.text = _saved['name']! as String;

@@ -18,7 +18,7 @@ import '../middleware.dart';
 import '../request_audit.dart';
 import '../validate.dart';
 
-Set<Permission> _permissionList(Object? v) {
+Set<Permission> _parsePermissions(Object? v) {
   if (v is! List) badField('entries', 'allow and deny must be lists');
   return {
     for (final name in v)
@@ -43,8 +43,8 @@ List<AclEntry> _parseEntries(
     if (id is! String || !isUuid(id)) {
       badField('entries', 'principalId must be a UUID');
     }
-    final allow = _permissionList(e['allow']);
-    final deny = _permissionList(e['deny']);
+    final allow = _parsePermissions(e['allow']);
+    final deny = _parsePermissions(e['deny']);
     if (type == PrincipalType.team && deny.isNotEmpty) {
       badField('entries', 'a team entry cannot deny');
     }
@@ -68,7 +68,15 @@ List<AclEntry> _parseEntries(
         );
       }
     }
-    out.add(AclEntry(folder, type, id, allow, deny));
+    out.add(
+      AclEntry(
+        folderId: folder,
+        principalType: type,
+        principalId: id,
+        allow: allow,
+        deny: deny,
+      ),
+    );
   }
   return out;
 }
@@ -111,8 +119,8 @@ Future<Response> putAcl(Request request) async {
     final orgId = await liveOrgFolder(tx, folder);
     await requireMember(tx, orgId, auth.userId);
     final before = (await loadOrg(tx, orgId))!;
-    final admin = before.members[auth.userId]!.isAdmin;
-    if (!admin &&
+    final isAdmin = before.members[auth.userId]!.isAdmin;
+    if (!isAdmin &&
         !permissionsOf(
           before,
           auth.userId,
@@ -130,7 +138,7 @@ Future<Response> putAcl(Request request) async {
     final after = (await loadOrg(tx, orgId))!;
     // A non-admin manager cannot grant more than they hold, nor lock
     // themselves out of the folder.
-    if (!admin) {
+    if (!isAdmin) {
       checkNoEscalation(before, after, auth.userId);
       if (!permissionsOf(
         after,
@@ -278,28 +286,28 @@ Future<Response> putFolderKeys(Request request) async {
       'SELECT revision, body FROM items WHERE id = @f',
       {'f': folder},
     )).single;
-    final firstUpload =
+    final isFirstUpload =
         current == 0 &&
         item['revision'] == 1 &&
         (jsonDecode(item['body']! as String) as Map)['updatedBy'] ==
             auth.userId &&
         permissionsOf(org, auth.userId, folder).contains(Permission.edit);
-    if (!caller.isAdmin && !firstUpload) {
+    if (!caller.isAdmin && !isFirstUpload) {
       throw ApiError(ApiErrorCode.forbidden, 'Admins hand off folder keys.');
     }
-    final rotation = current >= 1 && version == current + 1;
-    if (version != max(current, 1) && !rotation) {
+    final isRotation = current >= 1 && version == current + 1;
+    if (version != max(current, 1) && !isRotation) {
       throw ApiError.invalid(
         'version must be ${max(current, 1)} or ${current + 1}.',
       );
     }
     _checkWraps(org, folder, input);
-    if (rotation) await _rotateKeys(tx, input, org: org, folder: folder);
+    if (isRotation) await _rotateKeys(tx, input, org: org, folder: folder);
     await _saveWraps(tx, input, orgId: orgId, folder: folder);
     await bumpOrgSeq(tx);
     await auditWriter(request, tx)(
       AuditScope.org(orgId),
-      rotation ? 'folder.keys_rotated' : 'folder.keys_shared',
+      isRotation ? 'folder.keys_rotated' : 'folder.keys_shared',
       [folder],
     );
   });

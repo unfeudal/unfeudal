@@ -14,11 +14,11 @@ class _PersonalScope implements WriteScope {
     required String? folderId,
   }) {
     _vault._requireKey();
-    if (current != null) _rewritable(current);
+    if (current != null) _requireRewritable(current);
   }
 
   @override
-  void checkDelete(VaultEntry current) => _rewritable(current);
+  void checkDelete(VaultEntry current) => _requireRewritable(current);
 
   @override
   Future<Map<String, Object?>> openPart(

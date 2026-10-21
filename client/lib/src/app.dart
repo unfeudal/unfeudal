@@ -68,7 +68,7 @@ class _UnfeudalAppState extends State<UnfeudalApp> {
   void _onState() {
     final stage = widget.state.stage;
     if (stage != _stage) {
-      trace(TraceArea.ui, 'screen ${_stage.name} → ${stage.name}');
+      trace(TraceArea.ui, 'screen ${_stage.name} -> ${stage.name}');
     }
     if (_stage == AppStage.home && stage != AppStage.home) {
       _navigator.currentState?.popUntil((route) => route.isFirst);
@@ -132,10 +132,10 @@ class _UnfeudalAppState extends State<UnfeudalApp> {
           child: AppScope(
             state: widget.state,
             child: Listener(
-              onPointerDown: (_) => widget.state.activity(),
+              onPointerDown: (_) => widget.state.recordActivity(),
               child: Focus(
                 onKeyEvent: (_, _) {
-                  widget.state.activity();
+                  widget.state.recordActivity();
                   return KeyEventResult.ignored;
                 },
                 child: _framed(context, child!),

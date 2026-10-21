@@ -16,7 +16,7 @@ import 'restore_gate.dart';
 
 /// The ApiInfo the last sync round stored in [mirror].
 ApiInfo? storedApiInfo(LocalMirror mirror) =>
-    switch (mirror.getKv(KvKey.apiInfo)) {
+    switch (mirror.kv(KvKey.apiInfo)) {
       final raw? => ApiInfo.fromJson(jsonDecode(raw)),
       null => null,
     };
@@ -55,7 +55,7 @@ class SyncEngine extends ChangeNotifier {
   /// Called with each block that arrives, after its pages and the itemIds rule are applied.
   Future<void> Function(OrgBlock block)? onOrgBlock;
 
-  bool online = true;
+  bool isOnline = true;
   Object? lastError;
   DateTime? lastSyncAt;
   Compat? compat;
@@ -100,12 +100,21 @@ class SyncEngine extends ChangeNotifier {
   // A round still in flight when the engine is disposed ends without notifying.
   bool _disposed = false;
 
-  bool get readOnly => compat?.mode == CompatMode.readOnly || restoreRefused;
+  bool get isReadOnly =>
+      compat?.mode == CompatMode.readOnly || isRestoreRefused;
 
-  bool get restoreRefused => _restore.restoreRefused;
-  bool get restorePending => _restore.restorePending;
+  bool get isRestoreRefused => _restore.isRestoreRefused;
+  bool get isRestorePending => _restore.isRestorePending;
 
-  /// Writes the server refused 3 times; they wait for retry, keep a personal copy, or discard.
+  /// Online with no round finished, failed or paused yet: a first sync is still bringing the items.
+  bool get isFirstSyncPending =>
+      isOnline &&
+      lastSyncAt == null &&
+      lastError == null &&
+      !isRestorePending &&
+      (compat == null || compat!.api != null);
+
+  /// Writes the server refused [maxAttempts] times; they wait for retry, keep a personal copy, or discard.
   List<OutboxEntry> get rejected => [
     for (final e in mirror.outbox())
       if (e.state == OutboxState.rejected) e,
@@ -136,7 +145,7 @@ class SyncEngine extends ChangeNotifier {
 
   /// Queues every item at once, then one round pushes them.
   Future<void> writeAll(List<Item> items) async {
-    if (readOnly) throw const ReadOnlyException();
+    if (isReadOnly) throw const ReadOnlyException();
     mirror.enqueueAll(items);
     unawaited(syncNow());
   }
@@ -210,20 +219,20 @@ class SyncEngine extends ChangeNotifier {
     trace(TraceArea.sync, restoring ? 'round (restore)' : 'round');
     try {
       final info = await api.info();
-      online = true;
+      isOnline = true;
       if (!_negotiate(info)) {
         trace(TraceArea.sync, 'no common API: nothing pushed or pulled');
         return;
       }
       trace(
         TraceArea.sync,
-        'compat ${compat!.mode.name}${compat!.reason == null ? '' : ' (${compat!.reason})'}',
+        'compat ${compat!.mode.name}${compat!.reason == null ? '' : ' (${compat!.reason!.name})'}',
       );
       if (!restoring && _restore.mustPause(info, storedEpoch: _storedEpoch)) {
         trace(TraceArea.sync, 'paused: server restored or restore refused');
         return;
       }
-      if (restoring) await _puller.pull(full: true, acceptOlder: true);
+      if (restoring) await _puller.pull(PullMode.restore);
       // A client too old to write (read-only mode) only pulls.
       if (compat!.mode == CompatMode.full) {
         await _pusher.push();
@@ -236,7 +245,7 @@ class SyncEngine extends ChangeNotifier {
       trace(TraceArea.sync, 'round done, outbox ${mirror.outboxIds().length}');
     } on NetworkException catch (e) {
       trace(TraceArea.sync, 'offline');
-      online = false;
+      isOnline = false;
       lastError = e;
     } on ApiException catch (e) {
       trace(
@@ -293,7 +302,11 @@ class SyncEngine extends ChangeNotifier {
 
   // A write answered 409 `client_too_old` although the info said compatible: read-only, stop pushing.
   void _tooOld() {
-    compat = Compat(CompatMode.readOnly, compat?.api, 'client-too-old');
+    compat = Compat(
+      CompatMode.readOnly,
+      compat?.api,
+      CompatReason.clientTooOld,
+    );
   }
 
   void _storeInfo(ApiInfo info) {

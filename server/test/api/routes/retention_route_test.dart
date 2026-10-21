@@ -45,6 +45,7 @@ void main() {
 
   test('orgs off → 404 feature_disabled', () async {
     final off = await TestServer.start(env: {'UNFEUDAL_FEATURE_ORGS': 'false'});
+    addTearDown(off.close);
     final o = await off.setupOwner();
     expect(
       (await off.get(
@@ -53,6 +54,5 @@ void main() {
       )).error,
       'feature_disabled',
     );
-    await off.close();
   });
 }

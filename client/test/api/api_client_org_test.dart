@@ -42,7 +42,13 @@ void main() {
       await api.orgs.updateTeam(o, t, memberIds: const []);
       await api.orgs.deleteTeam(o, t);
       await api.orgs.putAcl(f, [
-        AclEntry(f, PrincipalType.team, t, const {Permission.view}, const {}),
+        AclEntry(
+          folderId: f,
+          principalType: PrincipalType.team,
+          principalId: t,
+          allow: const {Permission.view},
+          deny: const {},
+        ),
       ]);
       final keys = FolderKeys.generate(1), me = await memberKeys();
       wrap = await WrappedFolderKeys.wrap(

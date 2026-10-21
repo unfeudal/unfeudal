@@ -53,9 +53,13 @@ void main() {
     h.serverPut(wireItem(id));
     h.serverPut(wireItem(id));
     expect((await api.revisions(id)).map((i) => i.revision).toList(), [2, 1]);
-    await api.reportSsh(event: 'open', hostItemId: id, jumpHostItemIds: [id]);
     await api.reportSsh(
-      event: 'forward_start',
+      event: SshEvent.open,
+      hostItemId: id,
+      jumpHostItemIds: [id],
+    );
+    await api.reportSsh(
+      event: SshEvent.forwardStart,
       hostItemId: id,
       localPort: 5432,
     );

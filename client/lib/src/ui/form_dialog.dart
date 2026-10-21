@@ -5,6 +5,7 @@ import '../../l10n/app_localizations.dart';
 import '../design/buttons.dart';
 import '../design/dialog.dart';
 import '../design/field.dart';
+import '../design/icons.dart';
 import '../design/segmented.dart';
 import 'busy_action.dart';
 import 'fields.dart';
@@ -24,6 +25,7 @@ class FormDialogField {
     this.maxLength,
     this.isRequired = false,
     this.submitOnEnter = false,
+    this.fromFile,
   });
 
   final String key;
@@ -41,6 +43,9 @@ class FormDialogField {
   /// A text left blank or only spaces stops the save with "required".
   final bool isRequired;
   final bool submitOnEnter;
+
+  /// A button under the field that fills it with a file's text; `open` gives null when no file was picked.
+  final ({String label, Future<String?> Function() open})? fromFile;
 }
 
 /// A small form in a dialog. [onSave] gets the values by field key (a toggle is "true" or "false");
@@ -104,6 +109,11 @@ class _FormDialogState extends State<FormDialog> with BusyAction {
     });
   }
 
+  Future<void> _fill(String key, Future<String?> Function() open) async {
+    final text = await open();
+    if (text != null && mounted) _text[key]!.text = text;
+  }
+
   @override
   Widget build(BuildContext context) {
     return UfDialog(
@@ -118,7 +128,7 @@ class _FormDialogState extends State<FormDialog> with BusyAction {
         ),
       ],
       children: [
-        for (final f in widget.fields)
+        for (final f in widget.fields) ...[
           if (f.kind == FormFieldKind.toggle)
             UfSegmented<bool>(
               key: Key(f.key),
@@ -142,6 +152,17 @@ class _FormDialogState extends State<FormDialog> with BusyAction {
               autofocus: f.autofocus,
               onSubmitted: f.submitOnEnter ? (_) => _save() : null,
             ),
+          if (f.fromFile case final source?)
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: TextButton.icon(
+                key: Key('${f.key}-file'),
+                icon: const Icon(UfIcons.fileArrowUp),
+                label: Text(source.label),
+                onPressed: () => _fill(f.key, source.open),
+              ),
+            ),
+        ],
         if (problem case final error?) UfErrorLine(error),
       ],
     );

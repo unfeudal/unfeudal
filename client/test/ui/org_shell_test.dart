@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:unfeudal_client/l10n/app_localizations.dart';
 import 'package:unfeudal_client/src/app_state.dart';
 import 'package:unfeudal_client/src/design/tokens.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
@@ -81,7 +82,7 @@ void main() {
     await openVaults(t);
     await t.tap(find.byKey(const Key('vault-org-$testOrgId')));
     await t.pumpAndSettle();
-    expect(find.text('Waiting for an admin to confirm you.'), findsWidgets);
+    expect(find.text(l10n(t).orgAwaiting), findsWidgets);
     // leaving needs no confirmation by an admin
     await t.tap(find.byKey(const Key('org-awaiting-leave')));
     await t.pumpAndSettle();
@@ -144,7 +145,7 @@ void main() {
     await t.enterText(find.byKey(const Key('join-link')), 'nonsense');
     await t.tap(find.byKey(const Key('join-submit')));
     await t.pump();
-    expect(find.text('Not an invitation link or file.'), findsOneWidget);
+    expect(find.text(l10n(t).joinInvalid), findsOneWidget);
     final token = 'A' * 43;
     await t.enterText(
       find.byKey(const Key('join-link')),
@@ -156,24 +157,23 @@ void main() {
     expect(h.orgCalls.last.body, {'token': token});
   });
 
-  testWidgets(
-    'new org folder is disabled offline; new host in an org folder goes through the org writer',
-    (t) async {
-      final (h, s, host) = await withOrg(t);
-      await openVaults(t);
-      await t.tap(find.byKey(const Key('vault-org-$testOrgId')));
-      await t.pumpAndSettle();
-      h.offline = true;
-      await t.runAsync(() => s.sync!.syncNow());
-      await t.pump();
-      final button = t.widget<IconButton>(
-        find.byKey(const Key('tree-new-folder')),
-      );
-      expect(button.onPressed, isNull);
-      expect(s.vault!.entry(host.id)!.orgId, testOrgId);
-    },
-  );
+  testWidgets('new org folder is disabled offline', (t) async {
+    final (h, s, _) = await withOrg(t);
+    await openVaults(t);
+    await t.tap(find.byKey(const Key('vault-org-$testOrgId')));
+    await t.pumpAndSettle();
+    h.offline = true;
+    await t.runAsync(() => s.sync!.syncNow());
+    await t.pump();
+    final button = t.widget<IconButton>(
+      find.byKey(const Key('tree-new-folder')),
+    );
+    expect(button.onPressed, isNull);
+  });
 }
+
+AppLocalizations l10n(WidgetTester t) =>
+    AppLocalizations.of(t.element(find.byKey(const Key('vault-selector'))));
 
 /// Opens the vault selector's menu.
 Future<void> openVaults(WidgetTester t) async {

@@ -34,15 +34,16 @@ class RotationService {
   final LocalMirror mirror;
   final String userId;
   final void Function(AppEvent) emit;
-  Set<String> _blocked = {};
 
   Future<RotationReport> run(OrgBlock block) async {
     final done = <String>{};
-    final blocked = _blocked = {};
+    final blocked = <String>{};
     for (final p in block.pendingRotations) {
       if (!block.isAdminOf(p.orgId)) continue;
       try {
-        if (await rotate(block, p.orgId, p.folderId)) done.add(p.folderId);
+        if (await rotate(block, p.orgId, p.folderId, blocked: blocked)) {
+          done.add(p.folderId);
+        }
       } on ApiException {
         // stays pending: retried on the next block
       } on NetworkException {
@@ -52,12 +53,19 @@ class RotationService {
     return (done: done, blocked: blocked);
   }
 
-  Future<bool> rotate(OrgBlock block, String orgId, String folderId) async {
+  /// Adds the readers to confirm before [folderId] can rotate to [blocked].
+  Future<bool> rotate(
+    OrgBlock block,
+    String orgId,
+    String folderId, {
+    Set<String>? blocked,
+  }) async {
     final pending = block.pendingRotations
         .where((p) => p.folderId == folderId)
         .firstOrNull;
     final held = keyring.current(folderId);
-    if (held == null) return false; // this device cannot read the folder: another admin device rotates
+    // This device cannot read the folder: another admin device rotates it.
+    if (held == null) return false;
     var keys = held;
     if (pending?.rotatedVersion == null ||
         held.version < pending!.rotatedVersion!) {
@@ -66,7 +74,7 @@ class RotationService {
         orgId,
         folderId: folderId,
         held: held,
-        removed: {...?pending?.removedUserIds},
+        blocked: blocked,
       );
       if (next == null) return false;
       keys = next;
@@ -98,41 +106,43 @@ class RotationService {
     String orgId, {
     required String folderId,
     required FolderKeys held,
-    required Set<String> removed,
+    Set<String>? blocked,
   }) async {
+    final unconfirmed = <String>{};
     final wraps = <WrappedFolderKeys>[];
     final next = FolderKeys.generate(held.version + 1);
-    for (final m in block.members.where(
-      (m) =>
-          m.orgId == orgId && !removed.contains(m.userId) && m.disabled != true,
+    // Readers come from current permissions, as the server checks: a removed member who regained access counts.
+    for (final member in block.members.where(
+      (m) => m.orgId == orgId && m.disabled != true,
     )) {
       final access = FolderKeyAccess.of(
         explainFromBlock(
           block,
           orgId,
-          userId: m.userId,
+          userId: member.userId,
           folderId: folderId,
         ).effective,
       );
-      if (!access.hasMeta || m.publicKey == null) continue;
-      if (m.userId != userId &&
-          pins.check(m.userId, m.publicKey!) != PinCheck.matches) {
-        _blocked.add(m.userId); // unpinned: the admin confirms them first; changed: alert. Never pinned here.
+      if (!access.hasMeta || member.publicKey == null) continue;
+      if (member.userId != userId &&
+          pins.check(member.userId, member.publicKey!) != PinCheck.matches) {
+        // Unpinned: the admin confirms them first; changed: alert. Never pinned here.
+        unconfirmed.add(member.userId);
         continue;
       }
       wraps.add(
         await WrappedFolderKeys.wrap(
           next,
           folderId: folderId,
-          recipientPublicKey: m.publicKey!,
-          userId: m.userId,
+          recipientPublicKey: member.publicKey!,
+          userId: member.userId,
           withSecret: access.hasSecret,
         ),
       );
     }
-    if (_blocked.isNotEmpty) {
-      return null; // the server would refuse an incomplete rotation
-    }
+    blocked?.addAll(unconfirmed);
+    // The server would refuse an incomplete rotation.
+    if (unconfirmed.isNotEmpty) return null;
     final previous = [
       for (var v = 1; v <= held.version; v++) ?keyring.keyFor(folderId, v),
     ];

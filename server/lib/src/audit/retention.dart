@@ -70,6 +70,10 @@ Future<void> _audit(AppDeps deps) async {
         p,
       );
       await tx.execute(
+        'DELETE FROM audit_targets WHERE scope = @s AND seq <= @n',
+        p,
+      );
+      await tx.execute(
         'DELETE FROM audit_events WHERE scope = @s AND seq <= @n',
         p,
       );

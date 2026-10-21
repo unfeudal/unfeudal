@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:unfeudal_client/l10n/app_localizations.dart';
+import 'package:unfeudal_client/src/app_state.dart';
 import 'package:unfeudal_client/src/design/seal.dart';
 import 'package:unfeudal_client/src/loquet/loquet.dart';
 import 'package:unfeudal_client/src/loquet/loquet_pose.dart';
@@ -20,21 +21,7 @@ void main() {
       final ssh = FakeSshConnector()
         ..keyType = 'ssh-ed25519'
         ..fingerprint = 'SHA256:${'C' * 43}';
-      final s = await signedInState(t, ssh: ssh);
-      late String id;
-      await t.runAsync(
-        () async => id = await s.vault!.upsertItem(
-          type: 'host',
-          meta: hostJson('web', user: 'root'),
-        ),
-      );
-      await pumpApp(t, state: s);
-      await pumpReal(t, rounds: 5);
-      final l = AppLocalizations.of(t.element(find.byType(HomeShell)));
-      expect(find.text(l.tabsEmpty), findsOneWidget);
-      await t.tap(find.byKey(Key('host-$id')));
-      await t.sendKeyEvent(LogicalKeyboardKey.enter);
-      await pumpReal(t, rounds: 5);
+      final s = await connectFromTree(t, ssh);
       expect(find.byType(HostKeyUnknownDialog), findsOneWidget);
       await t.tap(find.byKey(const Key('hostkey-trust')));
       await pumpReal(t, rounds: 10);
@@ -49,19 +36,7 @@ void main() {
     final ssh = FakeSshConnector()
       ..keyType = 'ssh-ed25519'
       ..fingerprint = 'SHA256:${'C' * 43}';
-    final s = await signedInState(t, ssh: ssh);
-    late String id;
-    await t.runAsync(
-      () async => id = await s.vault!.upsertItem(
-        type: 'host',
-        meta: hostJson('web', user: 'root'),
-      ),
-    );
-    await pumpApp(t, state: s);
-    await pumpReal(t, rounds: 5);
-    await t.tap(find.byKey(Key('host-$id')));
-    await t.sendKeyEvent(LogicalKeyboardKey.enter);
-    await pumpReal(t, rounds: 5);
+    final s = await connectFromTree(t, ssh);
     await t.tap(find.byKey(const Key('hostkey-cancel')));
     await pumpReal(t, rounds: 5);
     final l = AppLocalizations.of(t.element(find.byType(HomeShell)));
@@ -76,19 +51,7 @@ void main() {
     t,
   ) async {
     final ssh = FakeSshConnector()..failWith = const SshAuthFailed();
-    final s = await signedInState(t, ssh: ssh);
-    late String id;
-    await t.runAsync(
-      () async => id = await s.vault!.upsertItem(
-        type: 'host',
-        meta: hostJson('web', user: 'root'),
-      ),
-    );
-    await pumpApp(t, state: s);
-    await pumpReal(t, rounds: 5);
-    await t.tap(find.byKey(Key('host-$id')));
-    await t.sendKeyEvent(LogicalKeyboardKey.enter);
-    await pumpReal(t, rounds: 5);
+    final s = await connectFromTree(t, ssh);
     final l = AppLocalizations.of(t.element(find.byType(HomeShell)));
     expect(find.text(l.errorSshAuth), findsOneWidget);
     expect(find.text(l.tabErrorTitle('web')), findsOneWidget);
@@ -150,19 +113,7 @@ void main() {
   ) async {
     final ssh = FakeSshConnector()
       ..failWith = const HostKeyRejected(HostKeyDecision.changed);
-    final s = await signedInState(t, ssh: ssh);
-    late String id;
-    await t.runAsync(
-      () async => id = await s.vault!.upsertItem(
-        type: 'host',
-        meta: hostJson('web', user: 'root'),
-      ),
-    );
-    await pumpApp(t, state: s);
-    await pumpReal(t, rounds: 5);
-    await t.tap(find.byKey(Key('host-$id')));
-    await t.sendKeyEvent(LogicalKeyboardKey.enter);
-    await pumpReal(t, rounds: 5);
+    await connectFromTree(t, ssh);
     final face = t.widget<Loquet>(
       find.descendant(
         of: find.byKey(const Key('tab-error-card')),
@@ -171,4 +122,21 @@ void main() {
     );
     expect(face.mood, LoquetMood.alert);
   });
+}
+
+Future<AppState> connectFromTree(WidgetTester t, FakeSshConnector ssh) async {
+  final s = await signedInState(t, ssh: ssh);
+  late String id;
+  await t.runAsync(
+    () async => id = await s.vault!.upsertItem(
+      type: 'host',
+      meta: hostJson('web', user: 'root'),
+    ),
+  );
+  await pumpApp(t, state: s);
+  await pumpReal(t, rounds: 5);
+  await t.tap(find.byKey(Key('host-$id')));
+  await t.sendKeyEvent(LogicalKeyboardKey.enter);
+  await pumpReal(t, rounds: 5);
+  return s;
 }

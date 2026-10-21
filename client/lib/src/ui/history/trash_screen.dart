@@ -62,7 +62,7 @@ class _TrashScreenState extends State<TrashScreen> with BusyAction {
     );
   }
 
-  /// Restores and syncs change the vault: the list follows it.
+  // Restores and syncs change the vault: the list follows it.
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: AppScope.of(context).vault!,
@@ -73,7 +73,7 @@ class _TrashScreenState extends State<TrashScreen> with BusyAction {
     final l = AppLocalizations.of(context);
     final state = AppScope.of(context);
     final vault = state.vault!;
-    final readOnly = state.sync?.readOnly ?? true;
+    final readOnly = state.sync?.isReadOnly ?? true;
     final days = state.serverInfo.trashDays;
     final dates = MaterialLocalizations.of(context);
     final orgId = state.orgs?.selected;
@@ -93,7 +93,7 @@ class _TrashScreenState extends State<TrashScreen> with BusyAction {
                   deletedAt(e).add(Duration(days: days)).toLocal(),
                 ),
               ),
-    ].join(' · ');
+    ].join(l.listSeparator);
     bool blocked(VaultEntry e) =>
         readOnly || e.state != EntryState.ok || !state.orgs!.canEditEntry(e);
     return ManageFrame(

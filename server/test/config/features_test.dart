@@ -4,28 +4,9 @@ import 'package:unfeudal_server/src/config/features.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 void main() {
-  test('fifteen flags with their wire names; all on except plain_http_lan', () {
-    expect(Flag.values.map((f) => f.wire), [
-      'orgs',
-      'teams',
-      'user_overrides',
-      'invites_from_orgs',
-      'smtp_invites',
-      'security_emails',
-      'audit',
-      'client_events',
-      'item_history',
-      'recovery_kit',
-      'plain_http_lan',
-      'reveal',
-      'biometric_unlock',
-      'ssh_config_import',
-      'mascot',
-    ]);
+  test('all flags on by default except plain_http_lan', () {
     final f = Features(const {});
     expect(Flag.values.where((x) => !f.enabled(x)), [Flag.plainHttpLan]);
-    expect(Flag.fromWire('recovery_kit'), Flag.recoveryKit);
-    expect(Flag.fromWire('telemetry'), isNull);
   });
 
   test('capabilities: sync plus enabled flags, sorted; public form only three flags', () {

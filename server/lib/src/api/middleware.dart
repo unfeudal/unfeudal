@@ -25,16 +25,7 @@ Middleware requestLog() =>
       final response = await inner(request);
       final deps = depsOf(request);
       final ip = clientIpOf(request);
-      if (deps.config.trustedProxies.isEmpty &&
-          !deps.proxyWarned &&
-          isLanHost(Uri(host: ip.address))) {
-        // Behind a reverse proxy every client would share this address.
-        deps.proxyWarned = true;
-        deps.log.warn(
-          'requests come from ${ip.address} and trusted_proxies is empty: '
-          'set it to the reverse proxy address',
-        );
-      }
+      deps.warnIfUnproxiedLanPeer(ip);
       deps.log.request(
         method: request.method,
         path: request.requestedUri.path,

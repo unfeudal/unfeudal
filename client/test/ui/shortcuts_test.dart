@@ -15,6 +15,7 @@ void main() {
     'Windows: Ctrl+Shift everywhere, plain Ctrl+B/K only outside the terminal',
     () {
       debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
       expect(
         UfShortcuts.resolve(
           down(LogicalKeyboardKey.keyB),
@@ -66,12 +67,12 @@ void main() {
         UfShortcut.closeTab,
       );
       expect(UfShortcuts.label(UfShortcut.focusSearch), 'Ctrl+Shift+K');
-      debugDefaultTargetPlatformOverride = null;
     },
   );
 
   test('macOS: Cmd everywhere', () {
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
     for (final (k, s) in [
       (LogicalKeyboardKey.keyB, UfShortcut.toggleTree),
       (LogicalKeyboardKey.keyK, UfShortcut.focusSearch),
@@ -90,11 +91,11 @@ void main() {
       );
     }
     expect(UfShortcuts.label(UfShortcut.focusSearch), '⌘K');
-    debugDefaultTargetPlatformOverride = null;
   });
 
   test('terminal shortcuts: Ctrl+Shift or Cmd only; plain Ctrl+C/V/F/R stay the shell\'s', () {
     debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
     for (final (k, s) in [
       (LogicalKeyboardKey.keyC, UfShortcut.copy),
       (LogicalKeyboardKey.keyV, UfShortcut.paste),
@@ -143,6 +144,21 @@ void main() {
       ),
       isNull,
     );
-    debugDefaultTargetPlatformOverride = null;
+  });
+
+  test('Ctrl+digit picks a vault outside the terminal, not with Shift', () {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    int? index({bool shift = false, bool inTerminal = false}) =>
+        UfShortcuts.vaultIndex(
+          down(LogicalKeyboardKey.digit3),
+          ctrl: true,
+          shift: shift,
+          meta: false,
+          inTerminal: inTerminal,
+        );
+    expect(index(), 2);
+    expect(index(shift: true), isNull);
+    expect(index(inTerminal: true), isNull);
   });
 }

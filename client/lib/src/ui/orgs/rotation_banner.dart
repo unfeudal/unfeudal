@@ -15,11 +15,11 @@ import '../../design/tokens.dart';
 /// Folder keys to change in the orgs the caller administers, readers to confirm first, refused keys: full-width
 /// banners over the sessions, or [RotationBanner.row] notices at the top of a section.
 class RotationBanner extends StatelessWidget {
-  const RotationBanner({super.key}) : _row = false;
+  const RotationBanner({super.key}) : _isRow = false;
 
-  const RotationBanner.row({super.key}) : _row = true;
+  const RotationBanner.row({super.key}) : _isRow = true;
 
-  final bool _row;
+  final bool _isRow;
 
   static List<PendingRotation> _pending(AppState state) {
     final orgs = state.orgs;
@@ -53,7 +53,7 @@ class RotationBanner extends StatelessWidget {
       spacing: 4,
       children: [
         if (pending.isNotEmpty) ...[
-          if (_row)
+          if (_isRow)
             UfNotice.row(
               tone: BannerTone.warn,
               message: l.rotationPending(pending.length),
@@ -81,7 +81,7 @@ class RotationBanner extends StatelessWidget {
             ),
         ],
         if (orgs.alerts.isNotEmpty)
-          if (_row)
+          if (_isRow)
             UfNotice.row(
               tone: BannerTone.danger,
               message: l.keyAlert(orgs.alerts.length),

@@ -7,31 +7,6 @@ class ItemSealer {
 
   final Vault _vault;
 
-  /// One seq for both parts, keyId `user`, the AAD of the new placement.
-  Future<Item> seal({
-    required String id,
-    required String type,
-    String? folderId,
-    bool deleted = false,
-    int revision = 0,
-    required Map<String, Object?> meta,
-    Map<String, Object?>? secret,
-  }) => sealItem(
-    id: id,
-    type: type,
-    folderId: folderId,
-    deleted: deleted,
-    revision: revision,
-    meta: meta,
-    secret: secret,
-    keyFor: _vault._personal.sealKeys(
-      type: type,
-      id: id,
-      folderId: folderId,
-      withSecret: secret != null,
-    ),
-  );
-
   /// Both parts sealed by [keyFor] with the next seq of [id], keeping what the current item carries.
   Future<Item> sealItem({
     required String id,

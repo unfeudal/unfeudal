@@ -33,24 +33,31 @@ void main() {
     },
   );
 
-  test(
-    'unknown or disabled target, and the current owner, change nothing',
-    () async {
-      await s.setupOwner();
-      final bob = await s.createUser('bob@example.org');
-      await s.db.execute('UPDATE users SET disabled = 1 WHERE id = @u', {
-        'u': bob.userId,
-      });
-      await expectLater(
-        transferOwner(s.db, 'ghost@example.org'),
-        throwsA(isA<MaintenanceError>()),
-      );
-      await expectLater(
-        transferOwner(s.db, 'bob@example.org'),
-        throwsA(isA<MaintenanceError>()),
-      );
-      await transferOwner(s.db, 'owner@example.org');
-      expect(await owners(), ['owner@example.org']);
-    },
-  );
+  test('an unknown target is refused', () async {
+    await s.setupOwner();
+    await expectLater(
+      transferOwner(s.db, 'ghost@example.org'),
+      throwsA(isA<MaintenanceError>()),
+    );
+    expect(await owners(), ['owner@example.org']);
+  });
+
+  test('a disabled target is refused', () async {
+    await s.setupOwner();
+    final bob = await s.createUser('bob@example.org');
+    await s.db.execute('UPDATE users SET disabled = 1 WHERE id = @u', {
+      'u': bob.userId,
+    });
+    await expectLater(
+      transferOwner(s.db, 'bob@example.org'),
+      throwsA(isA<MaintenanceError>()),
+    );
+    expect(await owners(), ['owner@example.org']);
+  });
+
+  test('the current owner as target is a no-op', () async {
+    await s.setupOwner();
+    await transferOwner(s.db, 'owner@example.org');
+    expect(await owners(), ['owner@example.org']);
+  });
 }

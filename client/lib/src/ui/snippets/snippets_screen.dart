@@ -11,6 +11,7 @@ import '../../design/icons.dart';
 import '../../design/motion.dart';
 import '../../design/rows.dart';
 import '../../design/seal.dart';
+import '../../design/toast.dart';
 import '../../design/tokens.dart';
 import '../../terminal/snippet_insertion.dart';
 import '../../terminal/terminal_session.dart';
@@ -51,7 +52,7 @@ class _SnippetsScreenState extends State<SnippetsScreen> {
     final store = SnippetStore(vault, writer: state.orgs?.writer);
     final orgId = state.orgs?.selected;
     final vaultName = vaultNameOf(l, state, orgId);
-    final readOnly = state.sync?.readOnly ?? true;
+    final readOnly = state.sync?.isReadOnly ?? true;
     final tab = state.connections.activeSession;
     final canInsert = tab?.state == SealState.connected;
     final snippets = [
@@ -68,7 +69,7 @@ class _SnippetsScreenState extends State<SnippetsScreen> {
         FilledButton.icon(
           key: const Key('snippet-new'),
           icon: const Icon(UfIcons.plus),
-          onPressed: readOnly ? null : () => _edit(context, store, orgId),
+          onPressed: readOnly ? null : () => _edit(store, orgId),
           label: Text(l.snippetNew),
         ),
       ],
@@ -86,7 +87,7 @@ class _SnippetsScreenState extends State<SnippetsScreen> {
                     body: l.snippetsEmpty,
                     primary: readOnly
                         ? null
-                        : (l.snippetNew, () => _edit(context, store, orgId)),
+                        : (l.snippetNew, () => _edit(store, orgId)),
                   )
                 : _snippetList(
                     store,
@@ -124,7 +125,7 @@ class _SnippetsScreenState extends State<SnippetsScreen> {
                 null => null,
               },
               onEdit: editable
-                  ? () => _edit(context, store, orgId, id: id, meta: meta)
+                  ? () => _edit(store, orgId, id: id, meta: meta)
                   : null,
               onDelete: editable ? () => _delete(store, id, meta) : null,
             ),
@@ -147,11 +148,17 @@ class _SnippetsScreenState extends State<SnippetsScreen> {
       question: l.snippetDeleteConfirm(meta.name),
       action: l.snippetDelete,
     );
-    if (yes) await store.delete(id);
+    if (!yes) return;
+    try {
+      await store.delete(id);
+    } on Exception catch (e) {
+      if (mounted) {
+        showUfToast(context, describeError(l, e), tone: UfToastTone.warn);
+      }
+    }
   }
 
   Future<void> _edit(
-    BuildContext context,
     SnippetStore store,
     String? orgId, {
     String? id,
@@ -235,10 +242,7 @@ class _SnippetEditorState extends State<_SnippetEditor> {
         ),
         id: widget.id,
         target: switch (_folderId) {
-          final folder? => OrgTarget(
-            widget.store.vault.entry(folder)!.orgId!,
-            folder,
-          ),
+          final folder? => OrgTarget(widget.orgId!, folder),
           null => null,
         },
       );

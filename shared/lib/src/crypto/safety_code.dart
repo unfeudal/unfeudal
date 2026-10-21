@@ -25,6 +25,6 @@ String keyFingerprint(List<int> publicKey) {
 }
 
 /// Text shaped like a [keyFingerprint].
-bool isKeyFingerprint(String s) => _keyFingerprint.hasMatch(s);
+bool isKeyFingerprint(String text) => _keyFingerprint.hasMatch(text);
 
 final _keyFingerprint = RegExp(r'^[0-9a-f]{40}$');

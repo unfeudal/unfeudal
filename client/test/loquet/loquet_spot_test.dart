@@ -97,7 +97,8 @@ void main() {
         .data!;
     final first = bubble();
     for (var i = 0; i < 3; i++) {
-      s.loquet.watch(i / 3); // the controller notifies, the spot rebuilds
+      // The controller notifies, the spot rebuilds.
+      s.loquet.watch(i / 3);
       await t.pump();
       expect(bubble(), first);
     }

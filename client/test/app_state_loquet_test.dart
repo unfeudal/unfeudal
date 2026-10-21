@@ -65,9 +65,7 @@ void main() {
     ]) {
       s.emit(e);
     }
-    await t.runAsync(
-      () => Future<void>.delayed(const Duration(milliseconds: 50)),
-    );
+    await t.runAsync(pumpEventQueue);
     expect(s.mirror!.outbox().length, before);
   });
 
@@ -82,9 +80,9 @@ void main() {
     );
     final hostId = s.vault!.ofKind(ItemKind.host).single.id;
     await t.runAsync(() => s.connections.connect(hostId));
-    expect(s.loquet.engine.typing, isFalse);
+    expect(s.loquet.engine.isTyping, isFalse);
     s.connections.tabs.single.onUserInput!();
-    expect(s.loquet.engine.typing, isTrue);
+    expect(s.loquet.engine.isTyping, isTrue);
   });
 
   testWidgets('activity wakes a dozing Loquet', (t) async {
@@ -92,7 +90,7 @@ void main() {
     s.emit(const UserIdle());
     await t.pump();
     expect(s.loquet.mood, LoquetMood.sleep);
-    s.activity();
+    s.recordActivity();
     expect(s.loquet.mood, isNot(LoquetMood.sleep));
   });
 }

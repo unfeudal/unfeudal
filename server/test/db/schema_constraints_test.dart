@@ -3,6 +3,7 @@ import 'package:test/test.dart';
 import 'package:unfeudal_server/src/db/db.dart';
 import 'package:unfeudal_server/src/db/migrate.dart';
 
+import '../support/matchers.dart';
 import '../support/schema_world.dart';
 import '../support/test_db.dart';
 
@@ -99,14 +100,14 @@ void main() {
     test('$table.$column must be 24 characters', () async {
       await expectLater(
         db.execute("UPDATE $table SET $column = '2026-10-13T12:00:00Z'"),
-        throwsA(anything),
+        throwsConstraintViolation,
       );
     });
   }
 
   for (final MapEntry(key: name, value: sql) in refused.entries) {
     test(name, () async {
-      await expectLater(db.execute(sql), throwsA(anything));
+      await expectLater(db.execute(sql), throwsConstraintViolation);
     });
   }
 }

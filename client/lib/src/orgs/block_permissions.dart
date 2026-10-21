@@ -3,7 +3,8 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 extension OrgAdmin on OrgSummary {
   /// A confirmed owner or admin: rotates, hands keys out and writes at the org root.
-  bool get isAdmin => isConfirmed && (role == 'owner' || role == 'admin');
+  bool get isAdmin =>
+      isConfirmed && (knownRole == OrgRole.owner || knownRole == OrgRole.admin);
 }
 
 extension OrgBlockAdmin on OrgBlock {
@@ -23,15 +24,15 @@ Explanation explainFromBlock(
     () => _OrgIndex(block, orgId),
   );
   final org = index.org;
-  final m = index.members[userId];
-  if (org == null || m == null || !index.parents.containsKey(folderId)) {
+  final member = index.members[userId];
+  if (org == null || member == null || !index.parents.containsKey(folderId)) {
     return const Explanation({}, []);
   }
   return resolvePermissions(
-    role: OrgRole.values.asNameMap()[m.role],
-    status: MemberStatus.values.asNameMap()[m.status ?? org.status],
+    role: member.knownRole,
+    status: MemberStatus.values.asNameMap()[member.status ?? org.status],
     // Admins see the flag; a member's own row never says disabled, since a disabled user gets 401.
-    disabled: m.disabled ?? false,
+    disabled: member.disabled ?? false,
     userId: userId,
     teamIds: {
       for (final t in index.teams)

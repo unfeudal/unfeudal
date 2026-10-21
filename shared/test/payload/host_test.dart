@@ -73,12 +73,16 @@ void main() {
     expect(jsonEncode(h.toJson()), jsonEncode(host()));
   });
 
-  test('required strings are trimmed; schemaVersion is kept', () {
-    final h = HostMeta.fromJson(host({'name': '  web  ', 'schemaVersion': 2}));
-    expect(
-      (h.name, h.schemaVersion, Payload.knownSchemaVersion),
-      ('web', 2, 1),
-    );
+  test('required strings are trimmed', () {
+    expect(HostMeta.fromJson(host({'name': '  web  '})).name, 'web');
+  });
+
+  test('a newer schemaVersion is kept', () {
+    expect(HostMeta.fromJson(host({'schemaVersion': 2})).schemaVersion, 2);
+  });
+
+  test('the schema version and payload limits are pinned', () {
+    expect(Payload.knownSchemaVersion, 1);
     expect(
       (
         PayloadLimits.name,
@@ -88,6 +92,9 @@ void main() {
       ),
       (100, 253, 10000, 32),
     );
+  });
+
+  test('the name limit counts code points', () {
     expect(
       HostMeta.fromJson(host({'name': '\u{1F600}' * 100})).name.runes.length,
       100,

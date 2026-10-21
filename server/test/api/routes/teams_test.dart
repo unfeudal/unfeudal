@@ -97,6 +97,10 @@ void main() {
     )).single;
     expect(row['reason'], 'team_change');
     expect(jsonDecode(row['removed_user_ids']! as String), [w.id('mia')]);
+  });
+
+  test('update refusals: name taken, members, admin, unknown team', () async {
+    final path = '${teams()}/${w.teams['Ops']}';
     await create('adam', {'name': 'Dev'});
     expect(
       (await s.put(

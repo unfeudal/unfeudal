@@ -26,14 +26,14 @@ class _EventList extends StatelessWidget {
           final ts = DateTime.parse(e.ts).toLocal();
           return UfStaggerItem(
             index: i,
-            child: EventRow(
+            child: _EventRow(
               when:
                   '${dates.formatShortDate(ts)} ${dates.formatTimeOfDay(TimeOfDay.fromDateTime(ts))}',
               text: describeEvent(l, e, nameOf),
               who: [
                 if (e.actorUser case final actor?) nameOf(actor),
                 ?e.ipAddress,
-              ].join(' · '),
+              ].join(l.listSeparator),
               trailing:
                   e.action == 'org.deleted' &&
                       canOpenDeletedOrgs &&
@@ -53,10 +53,8 @@ class _EventList extends StatelessWidget {
   }
 }
 
-/// One audit event: when, what, who; the same row for every chain.
-class EventRow extends StatelessWidget {
-  const EventRow({
-    super.key,
+class _EventRow extends StatelessWidget {
+  const _EventRow({
     required this.when,
     required this.text,
     required this.who,

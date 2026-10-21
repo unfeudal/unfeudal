@@ -10,7 +10,7 @@ IdentityKind _readKind(JsonReader r) =>
 
 class IdentityMeta extends Payload {
   IdentityMeta({
-    super.schemaVersion = 1,
+    super.schemaVersion = Payload.knownSchemaVersion,
     required this.name,
     required this.kind,
     this.publicKey,
@@ -25,7 +25,7 @@ class IdentityMeta extends Payload {
     }
     return IdentityMeta(
       schemaVersion: r.integer('schemaVersion', min: 1),
-      name: r.text('name', max: PayloadLimits.name, required: true),
+      name: r.trimmedText('name', max: PayloadLimits.name),
       kind: _readKind(r),
       publicKey: publicKey,
       extra: r.extra(const {'schemaVersion', 'name', 'kind', 'publicKey'}),
@@ -52,7 +52,7 @@ class IdentityMeta extends Payload {
 /// Meta and secret `kind` equality is checked by the caller that opened both.
 class IdentitySecret extends Payload {
   IdentitySecret({
-    super.schemaVersion = 1,
+    super.schemaVersion = Payload.knownSchemaVersion,
     required this.kind,
     this.privateKeyPem,
     this.passphrase,

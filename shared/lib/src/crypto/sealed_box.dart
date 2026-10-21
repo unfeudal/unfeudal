@@ -23,13 +23,13 @@ abstract final class SealedBox {
     if (recipientPublicKey.length != 32) {
       throw ArgumentError('recipient public key must be 32 bytes');
     }
-    final eph = await _x25519.newKeyPairFromSeed(secureBytes(32));
-    final ephPub = (await eph.extractPublicKey()).bytes;
+    final ephemeral = await _x25519.newKeyPairFromSeed(secureBytes(32));
+    final ephemeralPublicKey = (await ephemeral.extractPublicKey()).bytes;
     final key = await _key(
-      eph,
+      ephemeral,
       recipientPublicKey,
-      ephPub: ephPub,
-      recipientPub: recipientPublicKey,
+      ephemeralPublicKey: ephemeralPublicKey,
+      recipientPublicKey: recipientPublicKey,
       purpose: purpose,
     );
     final inner = await SymmetricCipher.encrypt(
@@ -42,7 +42,7 @@ abstract final class SealedBox {
       alg: Envelope.xchacha,
       keyId: inner.keyId,
       nonce: inner.nonce,
-      ct: Uint8List.fromList([...ephPub, ...inner.ct]),
+      ct: Uint8List.fromList([...ephemeralPublicKey, ...inner.ct]),
     );
   }
 
@@ -57,14 +57,16 @@ abstract final class SealedBox {
     if (!envelope.isSupported) {
       throw UnsupportedEnvelope('envelope v${envelope.v} ${envelope.alg}');
     }
-    if (envelope.ct.length < 48) throw const DecryptionFailed();
-    final ephPub = envelope.ct.sublist(0, 32);
-    final myPub = (await keyPair.extractPublicKey()).bytes;
+    if (envelope.ct.length < 32 + Envelope.tagLength) {
+      throw const DecryptionFailed();
+    }
+    final ephemeralPublicKey = envelope.ct.sublist(0, 32);
+    final ownPublicKey = (await keyPair.extractPublicKey()).bytes;
     final key = await _key(
       keyPair,
-      ephPub,
-      ephPub: ephPub,
-      recipientPub: myPub,
+      ephemeralPublicKey,
+      ephemeralPublicKey: ephemeralPublicKey,
+      recipientPublicKey: ownPublicKey,
       purpose: purpose,
     );
     return SymmetricCipher.decrypt(
@@ -79,12 +81,12 @@ abstract final class SealedBox {
     );
   }
 
-  // key = hkdf32(X25519, `unfeudal/sealed/v1|<purpose>|<b64 ephPub>|<b64 recipientPub>`); all-zero X25519 refused.
+  // key = hkdf32(X25519, `unfeudal/sealed/v1|<purpose>|<b64 ephemeralPublicKey>|<b64 recipientPublicKey>`); all-zero X25519 refused.
   static Future<Uint8List> _key(
     SimpleKeyPair mine,
     List<int> theirs, {
-    required List<int> ephPub,
-    required List<int> recipientPub,
+    required List<int> ephemeralPublicKey,
+    required List<int> recipientPublicKey,
     required String purpose,
   }) async {
     final shared = await (await _x25519.sharedSecretKey(
@@ -94,7 +96,7 @@ abstract final class SealedBox {
     if (shared.every((b) => b == 0)) throw const DecryptionFailed();
     return hkdf32(
       shared,
-      'unfeudal/sealed/v1|$purpose|${b64(ephPub)}|${b64(recipientPub)}',
+      'unfeudal/sealed/v1|$purpose|${b64(ephemeralPublicKey)}|${b64(recipientPublicKey)}',
     );
   }
 }

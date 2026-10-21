@@ -37,7 +37,7 @@ void main() {
     final v1 = FolderKeys.generate(1);
     expect(await serve([await wrappedRow(v1, f, me.publicKey)]), isEmpty);
     expect(same(ring.current(f), v1), isTrue);
-    expect(m.getKv(KvKey.keyring), isNot(contains(b64(v1.metaKey))));
+    expect(m.kv(KvKey.keyring), isNot(contains(b64(v1.metaKey))));
     final again = FolderKeyring(m);
     await again.load(userKey);
     expect(same(again.keyFor(f, 1), v1), isTrue);

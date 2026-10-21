@@ -16,7 +16,7 @@ class AuditAnchors {
   final LocalMirror mirror;
 
   Map<String, ({int seq, String hash})> _load() {
-    final raw = mirror.getKv(KvKey.anchors);
+    final raw = mirror.kv(KvKey.anchors);
     if (raw == null) return {};
     try {
       return {
@@ -28,14 +28,18 @@ class AuditAnchors {
           ),
       };
     } on Object {
-      return {}; // unreadable: start over (it holds no secret)
+      // jsonDecode and the casts throw on a malformed value: start over, it holds no secret.
+      return {};
     }
   }
 
   ({int seq, String hash})? anchorOf(String scope) => _load()[scope];
 
   /// [events] from any view. [completeScope]: [events] hold that whole chain from its first remaining event.
-  List<AnchorAlert> check(List<AuditEvent> events, {String? completeScope}) {
+  List<AnchorAlert> checkAndAdvance(
+    List<AuditEvent> events, {
+    String? completeScope,
+  }) {
     final anchors = _load();
     final alerts = <AnchorAlert>[];
     final byScope = <String, List<AuditEvent>>{?completeScope: []};
@@ -43,10 +47,10 @@ class AuditAnchors {
       (byScope[e.scope] ??= []).add(e);
     }
     for (final MapEntry(key: scope, value: list) in byScope.entries) {
-      final a = anchors[scope];
+      final anchor = anchors[scope];
       var alert = false;
-      if (a != null) {
-        final same = list.where((e) => e.seq == a.seq).firstOrNull;
+      if (anchor != null) {
+        final same = list.where((e) => e.seq == anchor.seq).firstOrNull;
         final checkpoints = [
           for (final e in list)
             if (e.action == 'audit.checkpoint' &&
@@ -57,20 +61,22 @@ class AuditAnchors {
                 hash: e.targetIds[1].replaceFirst('hash:', ''),
               ),
         ];
-        if ((same != null && same.hash != a.hash) ||
-            checkpoints.any((c) => c.seq == a.seq && c.hash != a.hash)) {
+        if ((same != null && same.hash != anchor.hash) ||
+            checkpoints.any(
+              (c) => c.seq == anchor.seq && c.hash != anchor.hash,
+            )) {
           alerts.add((
             scope: scope,
-            seq: a.seq,
+            seq: anchor.seq,
             kind: AnchorAlertKind.rewritten,
           ));
           alert = true;
         } else if (same == null &&
             scope == completeScope &&
-            !checkpoints.any((c) => c.seq >= a.seq)) {
+            !checkpoints.any((c) => c.seq >= anchor.seq)) {
           alerts.add((
             scope: scope,
-            seq: a.seq,
+            seq: anchor.seq,
             kind: AnchorAlertKind.vanished,
           ));
           alert = true;
@@ -78,7 +84,7 @@ class AuditAnchors {
       }
       if (!alert && list.isNotEmpty) {
         final newest = list.reduce((x, y) => x.seq >= y.seq ? x : y);
-        if (a == null || newest.seq > a.seq) {
+        if (anchor == null || newest.seq > anchor.seq) {
           anchors[scope] = (seq: newest.seq, hash: newest.hash);
         }
       }

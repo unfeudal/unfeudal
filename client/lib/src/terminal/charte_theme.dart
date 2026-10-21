@@ -6,9 +6,9 @@ import '../design/tokens.dart';
 import '../settings/settings.dart';
 
 /// Charte: the token hues on `term`, each adjusted until it reads at 4.5:1 on it.
-final charteLight = _charte(UfColors.light, background: UfColors.light.term);
+final charteLight = _charte(UfColors.light);
 
-final charteDark = _charte(UfColors.dark, background: UfColors.dark.term);
+final charteDark = _charte(UfColors.dark);
 
 /// Published Solarized Dark palette.
 const solarizedDark = TerminalTheme(
@@ -73,35 +73,35 @@ TerminalTheme terminalThemeFor(TerminalThemeId id, Brightness brightness) =>
       TerminalThemeId.dracula => dracula,
     };
 
-TerminalTheme _charte(UfColors c, {required Color background}) {
-  Color read(Color hue) => _readable(hue, background);
+TerminalTheme _charte(UfColors colors) {
+  Color read(Color hue) => _readable(hue, colors.term);
   // magenta and cyan have no token: a plum and a teal between garance, vert-de-gris and lichen
-  final magenta = read(Color.lerp(c.danger, c.accent, 0.5)!);
-  final cyan = read(Color.lerp(c.ok, c.accent, 0.5)!);
+  final magenta = read(Color.lerp(colors.danger, colors.accent, 0.5)!);
+  final cyan = read(Color.lerp(colors.ok, colors.accent, 0.5)!);
   return TerminalTheme(
-    cursor: c.accent,
-    selection: c.select,
-    foreground: read(c.text),
-    background: background,
-    black: read(c.muted),
-    red: read(c.danger),
-    green: read(c.ok),
-    yellow: read(c.warn),
-    blue: read(c.accent),
+    cursor: colors.accent,
+    selection: colors.select,
+    foreground: read(colors.text),
+    background: colors.term,
+    black: read(colors.muted),
+    red: read(colors.danger),
+    green: read(colors.ok),
+    yellow: read(colors.warn),
+    blue: read(colors.accent),
     magenta: magenta,
     cyan: cyan,
-    white: read(c.text),
-    brightBlack: read(c.muted),
-    brightRed: read(c.danger),
-    brightGreen: read(c.ok),
-    brightYellow: read(c.warn),
-    brightBlue: read(c.accent),
+    white: read(colors.text),
+    brightBlack: read(colors.muted),
+    brightRed: read(colors.danger),
+    brightGreen: read(colors.ok),
+    brightYellow: read(colors.warn),
+    brightBlue: read(colors.accent),
     brightMagenta: magenta,
     brightCyan: cyan,
-    brightWhite: read(c.text),
-    searchHitBackground: c.warn,
-    searchHitBackgroundCurrent: c.accent,
-    searchHitForeground: c.accentFg,
+    brightWhite: read(colors.text),
+    searchHitBackground: colors.warn,
+    searchHitBackgroundCurrent: colors.accent,
+    searchHitForeground: colors.accentFg,
   );
 }
 

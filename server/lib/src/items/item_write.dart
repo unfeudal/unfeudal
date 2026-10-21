@@ -53,7 +53,7 @@ Future<Item> writeItem(
   required int ifMatch,
   String? ip,
 }) async {
-  // first statement: one seq space, commit order = seq order
+  // Taking the seq first makes commit order match seq order.
   final seq = await nextItemSeq(tx);
   final rows = await tx.query(
     'SELECT owner_user_id, org_id, folder_id, type, revision, deleted, purged, size, created_at, body FROM items WHERE id = @id',
@@ -86,9 +86,8 @@ Future<Item> writeItem(
       newSize: addsRevision ? change.size + size : size,
     );
   }
-  if (change.movesOrgTree) {
-    await bumpOrgSeq(tx); // the org block lists folders and where items live
-  }
+  // The org block lists folders and where items live.
+  if (change.movesOrgTree) await bumpOrgSeq(tx);
   await _saveRow(tx, change, {
     'id': input.id,
     'owner': input.scope == ItemScope.personal ? auth.userId : null,

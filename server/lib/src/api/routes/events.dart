@@ -12,25 +12,25 @@ import '../json.dart';
 import '../middleware.dart';
 import '../request_audit.dart';
 
-const _ssh = {
-  'open': 'ssh.session_opened',
-  'close': 'ssh.session_closed',
-  'forward_start': 'ssh.forward_started',
-  'forward_stop': 'ssh.forward_stopped',
+const _sshActions = {
+  SshEvent.open: 'ssh.session_opened',
+  SshEvent.close: 'ssh.session_closed',
+  SshEvent.forwardStart: 'ssh.forward_started',
+  SshEvent.forwardStop: 'ssh.forward_stopped',
 };
-String _id(Object? v) =>
+String _parseId(Object? v) =>
     v is String && isUuid(v) ? v : throw ApiError.invalid('Malformed id.');
 
 // Returns the audit scope and folder of a live item the caller holds [need]
 // on. Anything else is 404, never 403, so item ids do not leak.
-Future<(AuditScope, String?)> _usable(
+Future<(AuditScope, String?)> _requireUsableItem(
   Tx tx,
-  AppDeps deps,
-  AuthContext auth,
-  String id,
-  Permission need,
-  Map<String, OrgSnapshot?> orgs,
-) async {
+  String id, {
+  required AppDeps deps,
+  required AuthContext auth,
+  required Permission need,
+  required Map<String, OrgSnapshot?> orgs,
+}) async {
   final r =
       (await tx.query(
         'SELECT owner_user_id, org_id, folder_id, type FROM items WHERE id = @i AND deleted = 0 AND purged = 0',
@@ -61,46 +61,48 @@ Future<Response> sshEvent(Request request) async {
   await deps.limiter.hit([eventsKey(auth.userId)]);
   final body = await readJson(request);
   final action =
-      _ssh[body['event']] ?? (throw ApiError.invalid('Unknown event.'));
-  final host = _id(body['hostItemId']);
+      _sshActions[SshEvent.fromWire(body['event'])] ??
+      (throw ApiError.invalid('Unknown event.'));
+  final host = _parseId(body['hostItemId']);
   final rawJumps = body['jumpHostItemIds'] ?? const [];
-  if (rawJumps is! List || rawJumps.length > 8) {
-    throw ApiError.invalid('At most 8 jump hosts.');
+  if (rawJumps is! List || rawJumps.length > maxJumpHosts) {
+    throw ApiError.invalid('At most $maxJumpHosts jump hosts.');
   }
-  final jumps = [for (final j in rawJumps) _id(j)];
-  final forward =
+  final jumps = [for (final j in rawJumps) _parseId(j)];
+  final isForward =
       action == 'ssh.forward_started' || action == 'ssh.forward_stopped';
   final port = body['localPort'];
-  if (forward && (port is! int || port < 1 || port > 65535)) {
+  if (isForward && (port is! int || port < 1 || port > 65535)) {
     throw ApiError.invalid('localPort must be 1-65535.');
   }
   await deps.db.transaction((tx) async {
     final orgs = <String, OrgSnapshot?>{};
-    final (scope, _) = await _usable(
+    final (scope, _) = await _requireUsableItem(
       tx,
-      deps,
-      auth,
       host,
-      Permission.connect,
-      orgs,
+      deps: deps,
+      auth: auth,
+      need: Permission.connect,
+      orgs: orgs,
     );
     final targets = [host];
     for (final j in jumps) {
-      final (jumpScope, _) = await _usable(
+      final (jumpScope, _) = await _requireUsableItem(
         tx,
-        deps,
-        auth,
         j,
-        Permission.connect,
-        orgs,
+        deps: deps,
+        auth: auth,
+        need: Permission.connect,
+        orgs: orgs,
       );
+      // A jump host of another scope is checked, not recorded.
       if (jumpScope.wire == scope.wire) {
-        targets.add(j); // a jump host of another scope is checked, not recorded
+        targets.add(j);
       }
     }
     await auditWriter(request, tx)(scope, action, [
       ...targets,
-      if (forward) 'forward:$port',
+      if (isForward && port is int) forwardTarget(port),
     ]);
   });
   return noContent();
@@ -109,15 +111,15 @@ Future<Response> sshEvent(Request request) async {
 Future<Response> revealEvent(Request request) async {
   final deps = depsOf(request), auth = authOf(request);
   await deps.limiter.hit([eventsKey(auth.userId)]);
-  final id = _id((await readJson(request))['itemId']);
+  final id = _parseId((await readJson(request))['itemId']);
   await deps.db.transaction((tx) async {
-    final (scope, folderId) = await _usable(
+    final (scope, folderId) = await _requireUsableItem(
       tx,
-      deps,
-      auth,
       id,
-      Permission.reveal,
-      {},
+      deps: deps,
+      auth: auth,
+      need: Permission.reveal,
+      orgs: {},
     );
     await auditWriter(request, tx)(scope, 'item.revealed', [id, ?folderId]);
   });

@@ -10,6 +10,7 @@
 
 ### Changed
 - The container image runs on Debian 13 (trixie), the release its build stage uses.
+- A folder's activity view reads through an index of each event's targets (migration 5 builds it from the existing events) instead of scanning the whole organization chain.
 - Sync and the admin list of organizations read an organization's data in a few queries instead of one per folder or per organization.
 
 ### Fixed

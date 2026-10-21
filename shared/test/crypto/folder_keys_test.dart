@@ -25,37 +25,45 @@ void main() {
     expect(() => FolderKeys.generate(0), throwsArgumentError);
   });
 
-  test(
-    'wrap and unwrap, with and without the secret key; wire form omits userId',
-    () async {
-      final k = FolderKeys.generate(2);
-      final w = await WrappedFolderKeys.wrap(
-        k,
-        folderId: fA,
-        recipientPublicKey: myPub,
-        userId: user,
-      );
-      expect(
-        (w.meta.keyId, w.secret!.keyId),
-        ('sealed:folder:$fA:v2:meta', 'sealed:folder:$fA:v2:secret'),
-      );
-      final back = await WrappedFolderKeys.fromJson(
-        jsonDecode(jsonEncode(w.toJson())),
-      ).unwrap(fA, me);
-      expect(back.version, 2);
-      expect(back.metaKey, k.metaKey);
-      expect(back.secretKey, k.secretKey);
-      final wire = await WrappedFolderKeys.wrap(
-        k,
-        folderId: fA,
-        recipientPublicKey: myPub,
-        withSecret: false,
-      );
-      expect(wire.toJson().containsKey('userId'), isFalse);
-      expect(wire.toJson()['secret'], isNull);
-      expect((await wire.unwrap(fA, me)).secretKey, isNull);
-    },
-  );
+  test('wrap labels both parts and unwrap round-trips through JSON', () async {
+    final k = FolderKeys.generate(2);
+    final w = await WrappedFolderKeys.wrap(
+      k,
+      folderId: fA,
+      recipientPublicKey: myPub,
+      userId: user,
+    );
+    expect(
+      (w.meta.keyId, w.secret!.keyId),
+      ('sealed:folder:$fA:v2:meta', 'sealed:folder:$fA:v2:secret'),
+    );
+    final back = await WrappedFolderKeys.fromJson(
+      jsonDecode(jsonEncode(w.toJson())),
+    ).unwrap(fA, me);
+    expect(back.version, 2);
+    expect(back.metaKey, k.metaKey);
+    expect(back.secretKey, k.secretKey);
+  });
+
+  test('withSecret: false wraps no secret part', () async {
+    final w = await WrappedFolderKeys.wrap(
+      FolderKeys.generate(2),
+      folderId: fA,
+      recipientPublicKey: myPub,
+      withSecret: false,
+    );
+    expect(w.toJson()['secret'], isNull);
+    expect((await w.unwrap(fA, me)).secretKey, isNull);
+  });
+
+  test('toJson omits a null userId', () async {
+    final w = await WrappedFolderKeys.wrap(
+      FolderKeys.generate(2),
+      folderId: fA,
+      recipientPublicKey: myPub,
+    );
+    expect(w.toJson().containsKey('userId'), isFalse);
+  });
 
   test('a wrapped key under another label throws KeyLabelMismatch', () async {
     final w = await WrappedFolderKeys.wrap(
@@ -68,17 +76,36 @@ void main() {
     await expectLater(bumped.unwrap(fA, me), throwsA(isA<KeyLabelMismatch>()));
   });
 
-  test(
-    'history seals previous versions and checks keyIds and version on open',
-    () async {
-      final v1 = FolderKeys.generate(1),
-          v2 = FolderKeys.generate(2),
-          v3 = FolderKeys.generate(3);
-      final h = await FolderKeyHistory.seal(v3, [v1, v2], folderId: fA);
+  test('a wrapped key of the wrong length throws FormatException', () async {
+    final w = WrappedFolderKeys(
+      version: 1,
+      meta: await SealedBox.seal(
+        List.filled(16, 7),
+        myPub,
+        KeyIds.folder(fA, 1, PayloadPart.meta),
+      ),
+    );
+    await expectLater(w.unwrap(fA, me), throwsFormatException);
+  });
+
+  group('history', () {
+    late FolderKeys v1, v2, v3;
+    late FolderKeyHistory h;
+    setUpAll(() async {
+      v1 = FolderKeys.generate(1);
+      v2 = FolderKeys.generate(2);
+      v3 = FolderKeys.generate(3);
+      h = await FolderKeyHistory.seal(v3, [v1, v2], folderId: fA);
+    });
+
+    test('is labelled with the current version', () {
       expect(
         (h.version, h.meta.keyId, h.secret!.keyId),
         (3, 'folder:$fA:v3:meta', 'folder:$fA:v3:secret'),
       );
+    });
+
+    test('round-trips through JSON and opens in version order', () async {
       final opened = await FolderKeyHistory.fromJson(
         jsonDecode(jsonEncode(h.toJson())),
       ).open(v3, folderId: fA);
@@ -92,26 +119,41 @@ void main() {
         ],
         [v1.metaKey, v1.secretKey, v2.metaKey, v2.secretKey],
       );
+    });
+
+    test('a meta-only holder opens no secret keys', () async {
       final metaView = await h.open(metaOnly(v3), folderId: fA);
       expect(metaView.map((k) => k.secretKey), [null, null]);
-      await expectLater(
-        h.open(v3, folderId: fB),
-        throwsA(isA<KeyLabelMismatch>()),
-      );
-      await expectLater(
-        h.open(FolderKeys(4, v3.metaKey, v3.secretKey), folderId: fA),
-        throwsA(isA<KeyLabelMismatch>()),
-      );
+    });
+
+    test(
+      'open refuses another folder or version with KeyLabelMismatch',
+      () async {
+        await expectLater(
+          h.open(v3, folderId: fB),
+          throwsA(isA<KeyLabelMismatch>()),
+        );
+        await expectLater(
+          h.open(FolderKeys(4, v3.metaKey, v3.secretKey), folderId: fA),
+          throwsA(isA<KeyLabelMismatch>()),
+        );
+      },
+    );
+
+    test('open with another key fails to decrypt', () async {
       await expectLater(
         h.open(FolderKeys.generate(3), folderId: fA),
         throwsA(isA<DecryptionFailed>()),
       );
+    });
+
+    test('seal refuses a previous version not older than current', () {
       expect(
         () => FolderKeyHistory.seal(v2, [v3], folderId: fA),
         throwsArgumentError,
       );
-    },
-  );
+    });
+  });
 
   test(
     'continues accepts the same key or a history that leads to it',

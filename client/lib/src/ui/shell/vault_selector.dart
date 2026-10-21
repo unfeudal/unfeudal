@@ -18,7 +18,7 @@ class VaultSelector extends StatelessWidget {
     final subtitle = current == null
         ? l.vaultPersonalSubtitle(_hostsIn(state, null))
         : current.isConfirmed
-        ? l.vaultOrgSubtitle(_roleLabel(l, current))
+        ? l.vaultOrgSubtitle(roleLabel(l, current.knownRole ?? OrgRole.member))
         : l.orgAwaiting;
     return LayoutBuilder(
       builder: (context, box) => MenuAnchor(
@@ -47,8 +47,7 @@ class VaultSelector extends StatelessWidget {
     required double rowWidth,
   }) {
     final l = AppLocalizations.of(context);
-    final colors = UfColors.of(context);
-    final orgs = state.serverInfo.has(Flag.orgs) ? state.orgs : null;
+    final orgs = availableOrgs(state);
     final current = selectedOrg(state);
     void pick(String? orgId) {
       orgs?.select(orgId);
@@ -73,39 +72,46 @@ class VaultSelector extends StatelessWidget {
           buttonKey: Key('vault-org-${org.id}'),
           name: org.name,
           subtitle: org.isConfirmed
-              ? l.vaultMenuOrgHosts(_roleLabel(l, org), _hostsIn(state, org.id))
+              ? l.vaultMenuOrgHosts(
+                  roleLabel(l, org.knownRole ?? OrgRole.member),
+                  _hostsIn(state, org.id),
+                )
               : l.orgAwaiting,
           selected: current?.id == org.id,
           dim: !org.isConfirmed,
           onPressed: () => pick(org.id),
           tile: VaultTile(letter: org.name, awaiting: !org.isConfirmed),
         ),
-      if (orgs != null) ...[
-        Container(
-          width: rowWidth,
-          height: 1,
-          margin: const EdgeInsets.all(4),
-          color: colors.line,
-        ),
-        _VaultMenuAction(
-          width: rowWidth,
-          buttonKey: const Key('vault-new-org'),
-          icon: UfIcons.plus,
-          label: l.railNewOrg,
-          onTap: () =>
-              showUfDialog<void>(context, (_) => const CreateOrgDialog()),
-        ),
-        _VaultMenuAction(
-          width: rowWidth,
-          buttonKey: const Key('vault-join-org'),
-          icon: UfIcons.signIn,
-          label: l.railJoinOrg,
-          onTap: () =>
-              showUfDialog<void>(context, (_) => const JoinOrgDialog()),
-        ),
-      ],
+      if (orgs != null) ..._orgActionRows(context, rowWidth),
     ];
   }
+}
+
+List<Widget> _orgActionRows(BuildContext context, double rowWidth) {
+  final l = AppLocalizations.of(context);
+  final colors = UfColors.of(context);
+  return [
+    Container(
+      width: rowWidth,
+      height: 1,
+      margin: const EdgeInsets.all(4),
+      color: colors.line,
+    ),
+    _VaultMenuAction(
+      width: rowWidth,
+      buttonKey: const Key('vault-new-org'),
+      icon: UfIcons.plus,
+      label: l.railNewOrg,
+      onTap: () => showUfDialog<void>(context, (_) => const CreateOrgDialog()),
+    ),
+    _VaultMenuAction(
+      width: rowWidth,
+      buttonKey: const Key('vault-join-org'),
+      icon: UfIcons.signIn,
+      label: l.railJoinOrg,
+      onTap: () => showUfDialog<void>(context, (_) => const JoinOrgDialog()),
+    ),
+  ];
 }
 
 int _hostsIn(AppState state, String? orgId) =>
@@ -117,12 +123,6 @@ int _hostsIn(AppState state, String? orgId) =>
               !state.vault!.isTrashed(e.id),
         )
         .length;
-
-String _roleLabel(AppLocalizations l, OrgSummary org) => switch (org.role) {
-  'owner' => l.roleOwner,
-  'admin' => l.roleAdmin,
-  _ => l.roleMember,
-};
 
 // Vault rows hold two lines: 32 px minimum, 4/8 padding over the themed 30 px row.
 const _menuRowStyle = ButtonStyle(

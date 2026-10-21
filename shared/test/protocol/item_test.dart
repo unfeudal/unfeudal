@@ -62,11 +62,14 @@ void main() {
     expect(jsonEncode(Item.fromJson(json).toJson()), jsonEncode(json));
   });
 
-  test('org item and tombstone', () {
+  test('org item reads its org and folder', () {
     final o = Item.fromJson(
       item({'scope': 'org', 'orgId': org, 'folderId': folder}),
     );
     expect((o.scope, o.orgId, o.folderId), (ItemScope.org, org, folder));
+  });
+
+  test('tombstone round-trips with purged after deleted', () {
     final tomb = {
       for (final e in item({'deleted': true, 'meta': null}).entries) ...{
         e.key: e.value,
@@ -86,6 +89,9 @@ void main() {
   test('unknown type is kept as ItemKind.unknown', () {
     final u = Item.fromJson(item({'type': 'futureThing'}));
     expect((u.type, u.kind), ('futureThing', ItemKind.unknown));
+  });
+
+  test('personal-only types', () {
     expect(
       ItemKind.values.map((k) => k.name),
       containsAll(['knownHost', 'hostBinding', 'memberPin', 'profile']),

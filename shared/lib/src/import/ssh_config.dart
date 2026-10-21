@@ -202,7 +202,8 @@ bool _matches(String alias, List<String> patterns) {
   for (final p in patterns) {
     final negated = p.startsWith('!');
     if (_glob(negated ? p.substring(1) : p).hasMatch(alias)) {
-      if (negated) return false; // a negated match excludes the section whatever else matches
+      // A negated match excludes the section whatever else matches.
+      if (negated) return false;
       hit = true;
     }
   }

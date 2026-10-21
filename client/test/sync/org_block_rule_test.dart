@@ -78,7 +78,8 @@ void main() {
     () async {
       h.pageSize = 1;
       final a = await serverOrgItem();
-      final later = await serverOrgItem(); // written after the block snapshot: page 2, seq above page 1's cursor
+      // Written after the block snapshot: page 2, seq above page 1's cursor.
+      final later = await serverOrgItem();
       h.orgBlock = orgBlock(itemIds: [a.id]);
       await e.syncNow();
       expect((m.item(a.id)?.id, m.item(later.id)?.id), (a.id, later.id));

@@ -3,7 +3,7 @@ import 'package:dartssh2/dartssh2.dart';
 
 import 'ssh_connector.dart';
 
-/// [over]: the previous hop's forwarded channel; null = direct TCP.
+/// [over] is the previous hop's forwarded channel, or null for direct TCP.
 typedef HopOpener = Future<HopClient> Function(
   ConnectTarget target, {
   SSHSocket? over,
@@ -13,7 +13,9 @@ class JumpChainFailed implements Exception {
   JumpChainFailed(this.hostId, this.hostName, this.hopIndex, this.cause);
   final String hostId;
   final String hostName;
-  final int hopIndex; // position in [...hops, target]
+
+  /// The failing hop's position in the hops followed by the target.
+  final int hopIndex;
   final Object cause;
   @override
   String toString() => 'JumpChainFailed($hostId at $hopIndex: $cause)';

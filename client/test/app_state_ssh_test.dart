@@ -97,38 +97,49 @@ void main() {
       expect(tab.state, SealState.offline);
     });
 
-    test(
-      'loop, missing and too-deep chains fail before any connection',
-      () async {
-        final (s, ssh, _) = await home();
-        final a = await host(s, 'a');
-        final b = await host(s, 'b', jump: a);
-        await s.vault!.upsertItem(
-          id: a,
-          type: 'host',
-          meta: {
-            ...hostJson('a', address: 'a.lan', user: 'root'),
-            'jumpHostId': b,
-          },
-        );
-        expect((await s.connections.connect(a)).error, isA<JumpLoop>());
-        final gone = await host(s, 'gone');
-        final c = await host(s, 'c', jump: gone);
-        await s.vault!.trashItem(gone);
-        expect((await s.connections.connect(c)).error, isA<JumpHostMissing>());
-        expect(
-          (await s.connections.connect(await host(s, 'd', jump: newId())))
-              .error,
-          isA<JumpHostMissing>(),
-        );
-        var prev = await host(s, 'h0');
-        for (var i = 1; i <= 9; i++) {
-          prev = await host(s, 'h$i', jump: prev);
-        }
-        expect((await s.connections.connect(prev)).error, isA<JumpTooDeep>());
-        expect(ssh.targets, isEmpty);
-      },
-    );
+    test('a jump loop fails before any connection', () async {
+      final (s, ssh, _) = await home();
+      final a = await host(s, 'a');
+      final b = await host(s, 'b', jump: a);
+      await s.vault!.upsertItem(
+        id: a,
+        type: 'host',
+        meta: {
+          ...hostJson('a', address: 'a.lan', user: 'root'),
+          'jumpHostId': b,
+        },
+      );
+      expect((await s.connections.connect(a)).error, isA<JumpLoop>());
+      expect(ssh.targets, isEmpty);
+    });
+
+    test('a trashed jump host fails before any connection', () async {
+      final (s, ssh, _) = await home();
+      final gone = await host(s, 'gone');
+      final c = await host(s, 'c', jump: gone);
+      await s.vault!.trashItem(gone);
+      expect((await s.connections.connect(c)).error, isA<JumpHostMissing>());
+      expect(ssh.targets, isEmpty);
+    });
+
+    test('an unknown jump host id fails before any connection', () async {
+      final (s, ssh, _) = await home();
+      expect(
+        (await s.connections.connect(await host(s, 'd', jump: newId()))).error,
+        isA<JumpHostMissing>(),
+      );
+      expect(ssh.targets, isEmpty);
+    });
+
+    test('a too-deep jump chain fails before any connection', () async {
+      final (s, ssh, _) = await home();
+      var prev = await host(s, 'h0');
+      for (var i = 1; i <= 9; i++) {
+        prev = await host(s, 'h$i', jump: prev);
+      }
+      expect((await s.connections.connect(prev)).error, isA<JumpTooDeep>());
+      expect(ssh.targets, isEmpty);
+    });
 
     test('a bastion without a user fails as that hop', () async {
       final (s, ssh, _) = await home();
@@ -179,7 +190,7 @@ void main() {
       final tab = await s.connections.connect(web);
       expect(tab.forwarder!.active.keys, [port1]);
       final client = await Socket.connect(InternetAddress.loopbackIPv4, port1);
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await ssh.hops.single.firstForward.timeout(const Duration(seconds: 5));
       expect(ssh.hops.single.forwarded, ['db.internal:5432']);
       client.destroy();
       await s.connections.startForward(
@@ -254,4 +265,55 @@ void main() {
       expect(ssh.hops.first.closed, isTrue);
     },
   );
+
+  test(
+    'moving a tab reorders the tabs and keeps the shown one shown',
+    () async {
+      final (s, _, _) = await home();
+      final a = await s.connections.connect(await host(s, 'a'));
+      final b = await s.connections.connect(await host(s, 'b'));
+      final c = await s.connections.connect(await host(s, 'c'));
+      s.connections.selectTab(1);
+      s.connections.moveTab(2, 0);
+      expect(s.connections.tabs, [c, a, b]);
+      expect(s.connections.activeSession, b);
+    },
+  );
+
+  test('AppState emits SessionClosed once per connected tab: closed, ended by the host, or locked', () async {
+    final h = SyncHarness(capabilities: ['client_events', 'sync']);
+    await h.createAccount('camille@example.org', 'password-123');
+    final ssh = FakeSshConnector()
+      ..keyType = 'ssh-ed25519'
+      ..fingerprint = 'SHA256:${'A' * 43}';
+    final AppState s = testAppState(harness: h, ssh: ssh)
+      ..connections.dialogs = (FakeDialogs()..accept = true);
+    await s.boot();
+    await s.login(
+      server: h.baseUrl,
+      email: 'camille@example.org',
+      password: 'password-123',
+    );
+    final closed = <String>[];
+    s.events.listen((e) {
+      if (e is SessionClosed) closed.add(e.hostId);
+    });
+    final [a, b, c] = [
+      for (final n in ['a', 'b', 'c'])
+        await s.vault!.upsertItem(
+          type: 'host',
+          meta: hostJson(n, user: 'root'),
+        ),
+    ];
+    await s.sync!.syncNow();
+    await s.connections.closeTab(await s.connections.connect(a));
+    await s.connections.connect(b);
+    ssh.shells.last.hangUp();
+    await Future<void>.delayed(Duration.zero);
+    await s.connections.connect(c);
+    await Future.sync(s.lock);
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    expect(closed, [a, b, c]);
+    expect(h.reported.where((r) => r.body['event'] == 'close'), hasLength(3));
+  });
 }

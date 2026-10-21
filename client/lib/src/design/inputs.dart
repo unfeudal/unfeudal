@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: Apache-2.0
-import 'dart:ui' show PathMetric;
-
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -110,7 +108,7 @@ class UfDashedEdge extends CustomPainter {
       ..style = PaintingStyle.stroke;
     final edge = Path()
       ..addRRect(UfRadius.control.toRRect(Offset.zero & size).deflate(0.5));
-    for (final PathMetric metric in edge.computeMetrics()) {
+    for (final metric in edge.computeMetrics()) {
       for (var at = 0.0; at < metric.length; at += 7) {
         canvas.drawPath(metric.extractPath(at, at + 4), paint);
       }

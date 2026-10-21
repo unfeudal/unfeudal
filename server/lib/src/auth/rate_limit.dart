@@ -16,6 +16,11 @@ String eventsKey(String userId) => 'events:$userId';
 String inviteCreateKey(String userId) => 'invite-create:$userId';
 String mailKey(String userId) => 'mail:$userId';
 
+bool _isIpKey(String key) =>
+    key.startsWith('ip:') || key.startsWith('invite-ip:');
+bool _isAcctIpKey(String key) =>
+    key.startsWith('acct:') && key.contains('|ip:');
+
 // max is null for `acct:`, barred after each attempt by its delay instead.
 typedef _Limit = ({int? max, Duration window, Duration lock});
 
@@ -35,9 +40,7 @@ class RateLimiter {
       window: config.loginLockout,
       lock: config.loginLockout,
     );
-    if (key.startsWith('ip:') ||
-        key.startsWith('invite-ip:') ||
-        (key.startsWith('acct:') && key.contains('|ip:'))) {
+    if (_isIpKey(key) || _isAcctIpKey(key)) {
       return login;
     }
     if (key.startsWith('acct:')) {
@@ -74,7 +77,7 @@ class RateLimiter {
         : null;
   }
 
-  static Never _limited(DateTime until, DateTime now) => throw ApiError(
+  static Never _throwLimited(DateTime until, DateTime now) => throw ApiError(
     ApiErrorCode.rateLimited,
     'Too many attempts.',
     retryAfter: max(1, (until.difference(now).inMilliseconds / 1000).ceil()),
@@ -85,15 +88,13 @@ class RateLimiter {
     List<String> keys,
     DateTime now,
   ) async {
-    for (final k in keys.where(
-      (k) => k.startsWith('ip:') || k.startsWith('invite-ip:'),
-    )) {
+    for (final k in keys.where(_isIpKey)) {
       final r = (await tx.query(
         'SELECT locked_until FROM login_attempts WHERE key = @k',
         {'k': k},
       )).firstOrNull;
       final until = _lockedUntil(r, now);
-      if (until != null) _limited(until, now);
+      if (until != null) _throwLimited(until, now);
     }
   }
 
@@ -118,6 +119,15 @@ class RateLimiter {
     return rows;
   }
 
+  static String? _lockUntil(_Limit limit, int count, DateTime now) {
+    final maxCount = limit.max;
+    // acct: the next attempt waits 1, 2, 4 and so on, up to 30 seconds.
+    if (maxCount == null) {
+      return iso(now.add(Duration(seconds: min(30, 1 << min(count - 1, 5)))));
+    }
+    return count >= maxCount ? iso(now.add(limit.lock)) : null;
+  }
+
   /// One transaction: a locked ip key is refused before any insert; rows locked in sorted key order;
   /// any locked key throws 429 and the transaction rolls back (nothing counted); else each count + 1,
   /// the count reaching the max locks the key for its lock time, and an acct: key is locked for its delay.
@@ -133,7 +143,7 @@ class RateLimiter {
           .whereType<DateTime>()
           .toList();
       if (locked.isNotEmpty) {
-        _limited(locked.reduce((a, b) => a.isAfter(b) ? a : b), now);
+        _throwLimited(locked.reduce((a, b) => a.isAfter(b) ? a : b), now);
       }
       for (final k in sorted) {
         final limit = _limitOf(k);
@@ -142,12 +152,7 @@ class RateLimiter {
             .add(limit.window)
             .isAfter(now);
         final count = fresh ? 1 : (r['count']! as int) + 1;
-        final lock = limit.max == null
-            // acct: the next attempt waits 1, 2, 4 and so on, up to 30 seconds.
-            ? iso(now.add(Duration(seconds: min(30, 1 << min(count - 1, 5)))))
-            : count >= limit.max!
-            ? iso(now.add(limit.lock))
-            : null;
+        final lock = _lockUntil(limit, count, now);
         if (lock != null) lockedKeys.add(k);
         await tx.execute(
           'UPDATE login_attempts SET count = @c, window_start = @ws, locked_until = @lu WHERE key = @k',
@@ -161,8 +166,8 @@ class RateLimiter {
       }
     });
     for (final k in lockedKeys) {
-      if (k.startsWith('acct:') && k.contains('|ip:')) {
-        onLockout?.call(k.substring(5, k.indexOf('|ip:')));
+      if (_isAcctIpKey(k)) {
+        onLockout?.call(k.substring('acct:'.length, k.indexOf('|ip:')));
       }
     }
   }

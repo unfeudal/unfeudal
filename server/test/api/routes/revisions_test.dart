@@ -102,6 +102,7 @@ void main() {
     final off = await TestServer.start(
       env: {'UNFEUDAL_FEATURE_ITEM_HISTORY': 'false'},
     );
+    addTearDown(off.close);
     final o = await off.setupOwner();
     expect(
       (await off.get(
@@ -110,6 +111,5 @@ void main() {
       )).error,
       'feature_disabled',
     );
-    await off.close();
   });
 }

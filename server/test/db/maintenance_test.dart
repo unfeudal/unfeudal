@@ -39,13 +39,17 @@ void main() {
           .map((r) => r['value'])
           .join();
       expect(values, isNot(contains(b64(s))));
-      File(path).writeAsBytesSync([1, 2, 3]);
-      await expectLater(
-        loadServerSecret(path),
-        throwsA(isA<FileSystemException>()),
-      );
     },
   );
+
+  test('a secret file that is not 32 bytes is refused', () async {
+    final path = '${dir.path}/secret.key';
+    File(path).writeAsBytesSync([1, 2, 3]);
+    await expectLater(
+      loadServerSecret(path),
+      throwsA(isA<FileSystemException>()),
+    );
+  });
 
   test(
     'instance epoch: 22 base64url chars, stable, replaced by new-epoch',
@@ -59,30 +63,35 @@ void main() {
     },
   );
 
-  test('setup token: generated once, configured one wins, nothing after the first user', () async {
+  group('setup token', () {
     Future<String?> stored() async =>
         (await db.query(
               "SELECT value FROM meta WHERE key = 'setup_token_hash'",
             )).firstOrNull?['value']
             as String?;
-    final t = await ensureSetupToken(db, null);
-    expect(t, matches(RegExp(r'^[A-Z2-7]{26}$')));
-    expect(await stored(), hashToken(t!));
-    expect(
-      await ensureSetupToken(db, null),
-      isNull,
-      reason: 'already pending: not printed again',
-    );
-    expect(await stored(), hashToken(t));
-    expect(await ensureSetupToken(db, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'), isNull);
-    expect(await stored(), hashToken('ABCDEFGHIJKLMNOPQRSTUVWXYZ'));
-    await db.execute("DELETE FROM meta WHERE key = 'setup_token_hash'");
-    await db.execute(
-      "INSERT INTO users (id, email, bundle, auth_hash, created_at) "
-      "VALUES ('u', 'a@b.c', '{}', 'h', '2026-10-13T12:00:00.000Z')",
-    );
-    expect(await ensureSetupToken(db, null), isNull);
-    expect(await stored(), isNull);
+
+    test('generated once, not printed again', () async {
+      final t = await ensureSetupToken(db, null);
+      expect(t, matches(RegExp(r'^[A-Z2-7]{26}$')));
+      expect(await stored(), hashToken(t!));
+      expect(await ensureSetupToken(db, null), isNull);
+      expect(await stored(), hashToken(t));
+    });
+
+    test('a configured token replaces it', () async {
+      await ensureSetupToken(db, null);
+      expect(await ensureSetupToken(db, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'), isNull);
+      expect(await stored(), hashToken('ABCDEFGHIJKLMNOPQRSTUVWXYZ'));
+    });
+
+    test('nothing once a user exists', () async {
+      await db.execute(
+        "INSERT INTO users (id, email, bundle, auth_hash, created_at) "
+        "VALUES ('u', 'a@b.c', '{}', 'h', '2026-10-13T12:00:00.000Z')",
+      );
+      expect(await ensureSetupToken(db, null), isNull);
+      expect(await stored(), isNull);
+    });
   });
 
   test('backup: a consistent SQLite copy, never over an existing file; PostgreSQL uses pg_dump', () async {

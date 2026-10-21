@@ -16,10 +16,9 @@ class PortForward {
 
   factory PortForward.fromJson(Object? json) {
     final r = JsonReader(json, 'forward');
-    final remoteHost = r.text(
+    final remoteHost = r.trimmedText(
       'remoteHost',
       max: PayloadLimits.remoteHost,
-      required: true,
     );
     if (RegExp(r'\s').hasMatch(remoteHost)) {
       throw const FormatException('forward.remoteHost: contains whitespace');
@@ -85,7 +84,7 @@ List<({int index, ForwardIssueKind kind})> validateForwards(
 /// from the folder chain.
 class HostMeta extends Payload {
   HostMeta({
-    super.schemaVersion = 1,
+    super.schemaVersion = Payload.knownSchemaVersion,
     required this.name,
     required this.address,
     this.port,
@@ -119,8 +118,8 @@ class HostMeta extends Payload {
     final mode = r.opt<String>('identityMode');
     return HostMeta(
       schemaVersion: r.integer('schemaVersion', min: 1),
-      name: r.text('name', max: PayloadLimits.name, required: true),
-      address: r.text('address', max: PayloadLimits.address, required: true),
+      name: r.trimmedText('name', max: PayloadLimits.name),
+      address: r.trimmedText('address', max: PayloadLimits.address),
       port: r.optInteger('port', min: 1, max: 65535),
       user: r.optText('user', max: PayloadLimits.user),
       identityId: r.optUuid('identityId'),

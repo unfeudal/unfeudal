@@ -98,6 +98,12 @@ void main() {
         'path': 'api/v1/x',
         'type': 'StateError',
       });
+    },
+  );
+
+  test(
+    'an ApiError maps to its status, retry-after and extra fields',
+    () async {
       final api = await call(
         (_) => throw ApiError(
           ApiErrorCode.rateLimited,

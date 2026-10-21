@@ -4,31 +4,35 @@ import 'dart:convert';
 import 'package:test/test.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
-const h = '6f1c2b9a-3d4e-4f50-8a61-7b8c9d0e1f20';
-const u = '5d1e9a7c-2b3f-4c8d-9e0a-1b2c3d4e5f60';
+const hostId = '6f1c2b9a-3d4e-4f50-8a61-7b8c9d0e1f20';
+const userId = '5d1e9a7c-2b3f-4c8d-9e0a-1b2c3d4e5f60';
 
 void main() {
   final json = {
     'future': 1,
-    'seq': {'$h/meta': 4, '$h/secret': 4},
+    'seq': {'$hostId/meta': 4, '$hostId/secret': 4},
     'hostPins': {
-      h: {
+      hostId: {
         'schemaVersion': 1,
-        'hostItemId': h,
+        'hostItemId': hostId,
         'keyType': 'ssh-ed25519',
         'sha256Fingerprint': 'SHA256:${'B' * 43}',
       },
     },
     'memberPins': {
-      u: {'fingerprint': 'a' * 40, 'verified': true},
+      userId: {'fingerprint': 'a' * 40, 'verified': true},
     },
-    'startupApprovals': {h: 'C' * 43 + '='},
+    'startupApprovals': {hostId: 'C' * 43 + '='},
   };
 
   test('round-trips; empty ledger has four empty maps', () {
     final l = Ledger.fromJson(json);
     expect(
-      (l.seq['$h/meta'], l.hostPins[h]!.keyType, l.memberPins[u]!.verified),
+      (
+        l.seq['$hostId/meta'],
+        l.hostPins[hostId]!.keyType,
+        l.memberPins[userId]!.verified,
+      ),
       (4, 'ssh-ed25519', true),
     );
     expect(jsonEncode(l.toJson()), jsonEncode(json));
@@ -71,7 +75,7 @@ void main() {
     for (final bad in [
       {
         ...json,
-        'seq': {'$h/other': 1},
+        'seq': {'$hostId/other': 1},
       },
       {
         ...json,
@@ -79,16 +83,16 @@ void main() {
       },
       {
         ...json,
-        'seq': {'$h/meta': 0},
+        'seq': {'$hostId/meta': 0},
       },
       {
         ...json,
-        'hostPins': {'h1': (json['hostPins'] as Map)[h]},
+        'hostPins': {'h1': (json['hostPins'] as Map)[hostId]},
       },
       {
         ...json,
         'memberPins': {
-          u: {'fingerprint': 'x'},
+          userId: {'fingerprint': 'x'},
         },
       },
       {
@@ -109,8 +113,8 @@ void main() {
       expect(
         Ledger.fromJson({
           ...json,
-          'startupApprovals': {h: hash},
-        }).startupApprovals[h],
+          'startupApprovals': {hostId: hash},
+        }).startupApprovals[hostId],
         hash,
       );
     },

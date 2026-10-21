@@ -199,42 +199,6 @@ class UfColors extends ThemeExtension<UfColors> {
     fieldHover, fieldPress,
   ];
 
-  static UfColors _fromList(List<Color> c) => UfColors(
-    bg: c[0],
-    side: c[1],
-    panel: c[2],
-    panelHover: c[3],
-    field: c[4],
-    term: c[5],
-    line: c[6],
-    edge: c[7],
-    text: c[8],
-    muted: c[9],
-    disabledBg: c[10],
-    disabledFg: c[11],
-    neutral: c[12],
-    neutralHover: c[13],
-    neutralPress: c[14],
-    accent: c[15],
-    accentHover: c[16],
-    accentPress: c[17],
-    accentFg: c[18],
-    accentText: c[19],
-    select: c[20],
-    focus: c[21],
-    danger: c[22],
-    dangerHover: c[23],
-    onDanger: c[24],
-    dangerSoft: c[25],
-    ok: c[26],
-    okSoft: c[27],
-    warn: c[28],
-    warnSoft: c[29],
-    scrim: c[30],
-    fieldHover: c[31],
-    fieldPress: c[32],
-  );
-
   // ThemeExtension asks for it; the two palettes are fixed, so there is nothing to override.
   @override
   UfColors copyWith() => this;
@@ -242,10 +206,41 @@ class UfColors extends ThemeExtension<UfColors> {
   @override
   UfColors lerp(UfColors? other, double t) {
     if (other == null) return this;
-    final a = _all, b = other._all;
-    return _fromList([
-      for (var i = 0; i < a.length; i++) Color.lerp(a[i], b[i], t)!,
-    ]);
+    return UfColors(
+      bg: Color.lerp(bg, other.bg, t)!,
+      side: Color.lerp(side, other.side, t)!,
+      panel: Color.lerp(panel, other.panel, t)!,
+      panelHover: Color.lerp(panelHover, other.panelHover, t)!,
+      field: Color.lerp(field, other.field, t)!,
+      fieldHover: Color.lerp(fieldHover, other.fieldHover, t)!,
+      fieldPress: Color.lerp(fieldPress, other.fieldPress, t)!,
+      term: Color.lerp(term, other.term, t)!,
+      line: Color.lerp(line, other.line, t)!,
+      edge: Color.lerp(edge, other.edge, t)!,
+      text: Color.lerp(text, other.text, t)!,
+      muted: Color.lerp(muted, other.muted, t)!,
+      disabledBg: Color.lerp(disabledBg, other.disabledBg, t)!,
+      disabledFg: Color.lerp(disabledFg, other.disabledFg, t)!,
+      neutral: Color.lerp(neutral, other.neutral, t)!,
+      neutralHover: Color.lerp(neutralHover, other.neutralHover, t)!,
+      neutralPress: Color.lerp(neutralPress, other.neutralPress, t)!,
+      accent: Color.lerp(accent, other.accent, t)!,
+      accentHover: Color.lerp(accentHover, other.accentHover, t)!,
+      accentPress: Color.lerp(accentPress, other.accentPress, t)!,
+      accentFg: Color.lerp(accentFg, other.accentFg, t)!,
+      accentText: Color.lerp(accentText, other.accentText, t)!,
+      select: Color.lerp(select, other.select, t)!,
+      focus: Color.lerp(focus, other.focus, t)!,
+      danger: Color.lerp(danger, other.danger, t)!,
+      dangerHover: Color.lerp(dangerHover, other.dangerHover, t)!,
+      onDanger: Color.lerp(onDanger, other.onDanger, t)!,
+      dangerSoft: Color.lerp(dangerSoft, other.dangerSoft, t)!,
+      ok: Color.lerp(ok, other.ok, t)!,
+      okSoft: Color.lerp(okSoft, other.okSoft, t)!,
+      warn: Color.lerp(warn, other.warn, t)!,
+      warnSoft: Color.lerp(warnSoft, other.warnSoft, t)!,
+      scrim: Color.lerp(scrim, other.scrim, t)!,
+    );
   }
 
   @override
@@ -262,27 +257,30 @@ class UfColors extends ThemeExtension<UfColors> {
   int get hashCode => Object.hashAll(_all);
 }
 
+Color _floatingShadow(UfColors colors) =>
+    Color(colors.isDark ? 0x73000000 : 0x1A18201C);
+
 /// Elevation 1 (seated), 2 (floating: menus, notifications) and 3 (dialogs): a `line` edge, then a shadow from 2 up.
 abstract final class UfElevation {
-  static List<BoxShadow> floating(UfColors c) => [
-    BoxShadow(color: c.line, spreadRadius: 1),
+  static List<BoxShadow> floating(UfColors colors) => [
+    BoxShadow(color: colors.line, spreadRadius: 1),
     BoxShadow(
-      color: Color(c.isDark ? 0x73000000 : 0x1A18201C),
+      color: _floatingShadow(colors),
       blurRadius: 20,
       offset: const Offset(0, 8),
     ),
   ];
 
   /// The outer ring of keyboard focus: a 2 px gap in `bg`, then 2 px of `focus` (painted in list order).
-  static List<BoxShadow> focusRing(UfColors c) => [
-    BoxShadow(color: c.focus, spreadRadius: 4),
-    BoxShadow(color: c.bg, spreadRadius: 2),
+  static List<BoxShadow> focusRing(UfColors colors) => [
+    BoxShadow(color: colors.focus, spreadRadius: 4),
+    BoxShadow(color: colors.bg, spreadRadius: 2),
   ];
 
-  static List<BoxShadow> dialog(UfColors c) => [
-    BoxShadow(color: c.line, spreadRadius: 1),
+  static List<BoxShadow> dialog(UfColors colors) => [
+    BoxShadow(color: colors.line, spreadRadius: 1),
     BoxShadow(
-      color: Color(c.isDark ? 0x80000000 : 0x2918201C),
+      color: Color(colors.isDark ? 0x80000000 : 0x2918201C),
       blurRadius: 40,
       offset: const Offset(0, 16),
     ),

@@ -13,28 +13,35 @@ void main() {
         onIdle: () => idles++,
       )..start();
       async.elapse(const Duration(minutes: 10));
-      a.activity();
+      a.recordActivity();
       async.elapse(const Duration(minutes: 14));
       expect((locks, idles), (0, 2));
       async.elapse(const Duration(minutes: 1));
       expect(locks, 1);
-      a.activity(); // the lock stopped it: activity no longer re-arms it
+      // The lock stopped it: activity no longer re-arms it.
+      a.recordActivity();
       async.elapse(const Duration(hours: 1));
       expect(locks, 1);
     });
   });
 
-  test('zero never locks; stop cancels', () {
+  test('a zero timeout never locks', () {
     fakeAsync((async) {
       var locks = 0;
       AutoLock(timeout: () => Duration.zero, onLock: () => locks++).start();
       async.elapse(const Duration(hours: 5));
       expect(locks, 0);
-      final b = AutoLock(
+    });
+  });
+
+  test('stop cancels the pending lock', () {
+    fakeAsync((async) {
+      var locks = 0;
+      final autoLock = AutoLock(
         timeout: () => const Duration(minutes: 5),
         onLock: () => locks++,
       )..start();
-      b.stop();
+      autoLock.stop();
       async.elapse(const Duration(hours: 1));
       expect(locks, 0);
     });

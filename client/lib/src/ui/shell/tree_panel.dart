@@ -17,17 +17,20 @@ import '../../design/motion.dart';
 import '../../design/palette.dart';
 import '../../design/rows.dart';
 import '../../design/seal.dart';
+import '../../design/toast.dart';
 import '../../design/tokens.dart';
 import '../../orgs/org_controller.dart';
 import '../../terminal/snippet_insertion.dart';
 import '../../vault/snippet_store.dart';
 import '../../vault/vault.dart';
+import '../describe_error.dart';
 import '../hosts/editor_frame.dart' show vaultNameOf;
 import '../orgs/members_screen.dart' show confirmAndLeaveOrg;
 import '../orgs/why_rights_view.dart';
 import '../terminal/multiline_dialog.dart';
 import 'shortcuts.dart';
 
+part 'tree_drag.dart';
 part 'tree_entries.dart';
 part 'tree_palette.dart';
 part 'tree_rows.dart';
@@ -47,8 +50,9 @@ class TreePanel extends StatefulWidget {
   /// Focusing it (a click, Ctrl K) opens the palette.
   final FocusNode searchFocus;
 
-  /// Null keeps the button disabled; both are disabled while the server is read-only.
-  final VoidCallback? onNewHost;
+  /// Null keeps the button disabled; both are disabled while the server is read-only. A new host goes to the
+  /// selected folder, or the selected host's folder.
+  final void Function(String? folderId)? onNewHost;
   final VoidCallback? onNewFolder;
 
   /// Opens the editor of a host or folder (the pencil of its row).
@@ -116,10 +120,11 @@ class _TreePanelState extends State<TreePanel> {
     final awaiting = org != null && !org.isConfirmed;
     final visible = _visibleEntries(state);
     // an org vault's folders need the server
-    final newFolderBlocked = org != null && !(state.sync?.online ?? false);
+    final newFolderBlocked = org != null && !(state.sync?.isOnline ?? false);
     final canNewHost =
-        !(state.sync?.readOnly ?? true) && _canEditIn(orgs, org) && !awaiting;
+        !(state.sync?.isReadOnly ?? true) && _canEditIn(orgs, org) && !awaiting;
     final canNewFolder = canNewHost && !newFolderBlocked;
+    final newHost = canNewHost ? _newHost(state) : null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       spacing: 6,
@@ -132,7 +137,7 @@ class _TreePanelState extends State<TreePanel> {
             groups: _paletteGroups(
               context,
               state,
-              newHost: canNewHost ? widget.onNewHost : null,
+              newHost: newHost,
               newFolder: canNewFolder ? widget.onNewFolder : null,
             ),
             onQueryChanged: (q) {
@@ -151,10 +156,14 @@ class _TreePanelState extends State<TreePanel> {
             ),
           ),
         ),
-        _TreeHeader(
-          onNewHost: canNewHost ? widget.onNewHost : null,
-          onNewFolder: canNewFolder ? widget.onNewFolder : null,
-          newFolderBlocked: newFolderBlocked,
+        _dropTarget(
+          state,
+          null,
+          _TreeHeader(
+            onNewHost: newHost,
+            onNewFolder: canNewFolder ? widget.onNewFolder : null,
+            newFolderBlocked: newFolderBlocked,
+          ),
         ),
         Expanded(
           child: _TreeBody(
@@ -194,13 +203,21 @@ class _TreePanelState extends State<TreePanel> {
         final hosts = (children[e.id] ?? const <VaultEntry>[])
             .where((c) => c.kind == ItemKind.host)
             .length;
-        out.add(_folderRow(context, e, depth: depth, open: open, hosts: hosts));
+        final row = _folderRow(
+          context,
+          e,
+          depth: depth,
+          open: open,
+          hosts: hosts,
+        );
+        out.add(_movable(state, e, row, into: e.id));
         if (open) walk(e.id, depth + 1);
       }
       for (final e in items.where(
         (e) => !(e.kind == ItemKind.folder && folders.containsKey(e.id)),
       )) {
-        out.add(_row(context, state, e, depth: depth));
+        final row = _row(context, state, e, depth: depth);
+        out.add(_movable(state, e, row, into: parent));
       }
     }
 

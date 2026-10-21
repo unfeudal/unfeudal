@@ -41,7 +41,7 @@ Future<GeneratedKey> generateEd25519({
 }
 
 /// e = 65537; generated in a background isolate (several seconds at 4096 bits).
-Future<GeneratedKey> generateRsa4096({
+Future<GeneratedKey> generateRsa({
   String comment = '',
   String? passphrase,
   int bits = rsaBits,

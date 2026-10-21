@@ -44,7 +44,7 @@ Future<Response> login(Request request) async {
   final email = normalizeEmail(body['email']);
   // Counted even if the rest of the body is malformed.
   await limitCredentials(request, email);
-  final authKey = reqKey32(body, 'authKey');
+  final authKey = parseKey32(body, 'authKey');
   final device = parseDevice(body['device']);
   final rows = await deps.db.query(
     'SELECT id, is_instance_owner, disabled, bundle, bundle_version, auth_hash '
@@ -116,7 +116,7 @@ Future<Response> refreshToken(Request request) async {
   final deps = depsOf(request);
   final body = await readJson(request);
   final rotated = await deps.refresh.rotate(
-    reqString(body, 'refreshToken', max: 200),
+    parseRequiredString(body, 'refreshToken', max: 200),
     ip: clientIpOf(request).address,
   );
   return jsonResponse(

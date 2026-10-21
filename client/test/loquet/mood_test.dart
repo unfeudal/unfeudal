@@ -9,21 +9,15 @@ import '../support/fakes.dart';
 
 void main() {
   test('cheerful with nothing pending, idle with pending work, concerned past the thresholds', () {
-    expect(computeMood(VaultHealth.none), LoquetMood.cheerful);
-    expect(computeMood(const VaultHealth(hostsToVerify: 1)), LoquetMood.idle);
-    expect(computeMood(const VaultHealth(conflicts: 1)), LoquetMood.concerned);
+    expect(VaultHealth.none.mood, LoquetMood.cheerful);
+    expect(const VaultHealth(hostsToVerify: 1).mood, LoquetMood.idle);
+    expect(const VaultHealth(conflicts: 1).mood, LoquetMood.concerned);
     expect(
-      computeMood(const VaultHealth(hostsToVerify: 2, verifyOver7Days: 1)),
+      const VaultHealth(hostsToVerify: 2, verifyOver7Days: 1).mood,
       LoquetMood.concerned,
     );
-    expect(
-      computeMood(const VaultHealth(keysOver5Years: 1)),
-      LoquetMood.concerned,
-    );
-    expect(
-      computeMood(const VaultHealth(syncOver7Days: true)),
-      LoquetMood.concerned,
-    );
+    expect(const VaultHealth(keysOver5Years: 1).mood, LoquetMood.concerned);
+    expect(const VaultHealth(syncOver7Days: true).mood, LoquetMood.concerned);
   });
 
   test('reasons in a fixed order', () {

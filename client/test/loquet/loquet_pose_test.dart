@@ -13,7 +13,7 @@ void main() {
     expect(poses, hasLength(16));
   });
 
-  test('RFC faces', () {
+  test('covering, peeking, alert, sleep, search and dizzy faces', () {
     expect(LoquetPose.of(LoquetMood.covering).hands, LoquetHands.cover);
     expect(LoquetPose.of(LoquetMood.peeking).hands, LoquetHands.peek);
     expect(LoquetPose.of(LoquetMood.peeking).eyes, LoquetEyes.oneOpen);
@@ -40,7 +40,7 @@ void main() {
   });
 
   test('serious moods and body tones', () {
-    expect(LoquetMood.values.where((m) => m.serious).toSet(), {
+    expect(LoquetMood.values.where((m) => m.isSerious).toSet(), {
       LoquetMood.alert,
       LoquetMood.sad,
       LoquetMood.offline,

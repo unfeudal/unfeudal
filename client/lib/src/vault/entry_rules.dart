@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 part of 'vault.dart';
 
-void _rewritable(VaultEntry e) {
+void _requireRewritable(VaultEntry e) {
   if (e.orgId != null) throw StateError('org items go through OrgWriter');
   if (e.state != EntryState.ok) {
     throw StateError('${e.state.name} item is not rewritten');
@@ -58,7 +58,8 @@ VaultEntry _entryOf(
   if (schema is int && schema > Payload.knownSchemaVersion) {
     return VaultEntry(item, EntryState.readOnly, meta: json, pending: pending);
   }
-  _parseMeta(item.kind, json); // typed model: FormatException on a bad payload
+  // The typed model throws FormatException on a bad payload.
+  _parseMeta(item.kind, json);
   return VaultEntry(item, EntryState.ok, meta: json, pending: pending);
 }
 

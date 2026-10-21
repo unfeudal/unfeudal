@@ -49,22 +49,26 @@ void main() {
         (await bio.unlock(reason: 'r'), await bio.isEnabled()),
         (null, true),
       );
+      // A new fingerprint enrolled: the old secret is gone.
       hw
         ..cancel = false
-        ..secretBytes = SymmetricCipher.newKey(); // new fingerprint enrolled: the old secret is gone
+        ..secretBytes = SymmetricCipher.newKey();
       expect(await bio.unlock(reason: 'r'), isNull);
       expect((await bio.isEnabled(), hw.deleted), (false, 1));
     },
   );
 
-  test('no hardware: never enabled; disable wipes the keystore entry and the hardware secret', () async {
+  test('without hardware enable refuses', () async {
     expect(
       await BiometricUnlock(
         FakeSecureKv(),
-        FakeBiometricBackend(isAvailable: false),
+        FakeBiometricBackend(hasHardware: false),
       ).enable(userKey, reason: 'r'),
       isFalse,
     );
+  });
+
+  test('disable wipes the keystore entry and the hardware secret', () async {
     await bio.enable(userKey, reason: 'r');
     await bio.disable();
     expect(

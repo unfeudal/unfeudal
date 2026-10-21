@@ -30,7 +30,7 @@ abstract final class SymmetricCipher {
     if (key.length != 32) {
       throw ArgumentError.value(key.length, 'key', 'must be 32 bytes');
     }
-    final nonce = secureBytes(24);
+    final nonce = secureBytes(Envelope.nonceLength);
     final box = await _aead.encrypt(
       plaintext,
       secretKey: SecretKey(key),
@@ -55,13 +55,15 @@ abstract final class SymmetricCipher {
       throw UnsupportedEnvelope('envelope v${envelope.v} ${envelope.alg}');
     }
     final ct = envelope.ct;
-    if (key.length != 32 || envelope.nonce.length != 24 || ct.length < 16) {
+    if (key.length != 32 ||
+        envelope.nonce.length != Envelope.nonceLength ||
+        ct.length < Envelope.tagLength) {
       throw const DecryptionFailed();
     }
     final box = SecretBox(
-      ct.sublist(0, ct.length - 16),
+      ct.sublist(0, ct.length - Envelope.tagLength),
       nonce: envelope.nonce,
-      mac: Mac(ct.sublist(ct.length - 16)),
+      mac: Mac(ct.sublist(ct.length - Envelope.tagLength)),
     );
     try {
       return Uint8List.fromList(

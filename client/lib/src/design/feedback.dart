@@ -45,9 +45,9 @@ class _UfSkeletonState extends State<UfSkeleton>
     child: AnimatedBuilder(
       animation: _pulse,
       builder: (context, child) {
-        final there = 1 - (2 * _pulse.value - 1).abs();
+        final triangle = 1 - (2 * _pulse.value - 1).abs();
         return Opacity(
-          opacity: 1 - 0.5 * Curves.easeInOut.transform(there),
+          opacity: 1 - 0.5 * Curves.easeInOut.transform(triangle),
           child: child,
         );
       },
@@ -121,7 +121,7 @@ class UfTreeSkeleton extends StatelessWidget {
 /// [UfNotice.row] lays it on one line with small [actions] on the right, at the top of a section.
 class UfNotice extends StatelessWidget {
   const UfNotice({super.key, required this.tone, required this.message})
-    : _row = false,
+    : _isRow = false,
       actions = const [];
 
   const UfNotice.row({
@@ -129,14 +129,14 @@ class UfNotice extends StatelessWidget {
     required this.tone,
     required this.message,
     this.actions = const [],
-  }) : _row = true;
+  }) : _isRow = true;
 
   final BannerTone tone;
   final String message;
 
   /// Small buttons (`smallButton`).
   final List<Widget> actions;
-  final bool _row;
+  final bool _isRow;
 
   @override
   Widget build(BuildContext context) {
@@ -146,14 +146,14 @@ class UfNotice extends StatelessWidget {
       style: Theme.of(context).textTheme.bodyMedium!.copyWith(fontSize: 13.5),
     );
     return Container(
-      padding: _row
+      padding: _isRow
           ? const EdgeInsets.fromLTRB(12, 8, 8, 8)
           : const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: fill,
-        borderRadius: _row ? UfRadius.control : UfRadius.card,
+        borderRadius: _isRow ? UfRadius.control : UfRadius.card,
       ),
-      child: _row
+      child: _isRow
           ? Row(
               spacing: 12,
               children: [

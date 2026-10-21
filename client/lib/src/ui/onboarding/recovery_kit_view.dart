@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
@@ -13,7 +14,9 @@ import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
 import '../../design/choices.dart';
 import '../../design/inputs.dart';
+import '../../design/toast.dart';
 import '../../design/tokens.dart';
+import '../describe_error.dart';
 import '../lock/lock_frame.dart';
 import '../save_file.dart';
 import '../secret_clipboard.dart';
@@ -98,7 +101,7 @@ Future<Uint8List> buildRecoveryKitPdf(RecoveryKit kit, {String? title}) async {
   return doc.save();
 }
 
-// brand/logo/logo.svg
+// The logo mark, inlined so the PDF needs no asset.
 const _logoSvg =
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path fill-rule="evenodd" fill="#23466E" '
     'd="M20 8 H80 A4 4 0 0 1 84 12 V58 A34 34 0 0 1 16 58 V12 A4 4 0 0 1 20 8 Z M44.5 8 H55.5 V47.34 A12 12 0 1 1 44.5 47.34 Z"/></svg>';
@@ -163,13 +166,28 @@ class _RecoveryKitViewState extends State<RecoveryKitView> {
     final bytes = path.toLowerCase().endsWith('.txt')
         ? utf8.encode(recoveryKitText(_kit()))
         : await _pdf();
-    await (widget.writeFile ?? writeFileBytes)(path, bytes);
+    try {
+      await (widget.writeFile ?? writeFileBytes)(path, bytes);
+    } on FileSystemException catch (e) {
+      _warn(e);
+    }
   }
 
   Future<void> _print() async {
     final bytes = await _pdf();
-    await (widget.printPdf ??
-        (b) => Printing.layoutPdf(onLayout: (_) async => b))(bytes);
+    try {
+      await (widget.printPdf ??
+          (b) => Printing.layoutPdf(onLayout: (_) async => b))(bytes);
+    } on Exception catch (e) {
+      _warn(e);
+    }
+  }
+
+  // The user must not tick the confirmation believing an unsaved kit is safe.
+  void _warn(Exception e) {
+    if (!mounted) return;
+    final l = AppLocalizations.of(context);
+    showUfToast(context, describeError(l, e), tone: UfToastTone.warn);
   }
 
   static Future<String?> _pickSaveLocation(String suggestedName) =>

@@ -37,17 +37,17 @@ Future<void> recordRotations(
         ...(jsonDecode(row['removed_user_ids']! as String) as List)
             .cast<String>(),
     }.toList()..sort();
-    final p = {'f': folderId, 'r': reason, 'ids': jsonEncode(merged)};
+    final params = {'f': folderId, 'r': reason, 'ids': jsonEncode(merged)};
     if (row == null) {
       await tx.execute(
         'INSERT INTO pending_rotations (org_id, folder_id, reason, removed_user_ids, rotated_version) '
         'VALUES (@o, @f, @r, @ids, NULL)',
-        {...p, 'o': orgId},
+        {...params, 'o': orgId},
       );
     } else {
       await tx.execute(
         'UPDATE pending_rotations SET reason = @r, removed_user_ids = @ids, rotated_version = NULL WHERE folder_id = @f',
-        p,
+        params,
       );
     }
   }

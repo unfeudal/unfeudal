@@ -141,7 +141,8 @@ void main() {
   test('list: pending only, by expiresAt', () async {
     await start();
     final a = (await invite('adam', 'a@example.org')).body['invite']! as Map;
-    s.clock.advance(const Duration(minutes: 1)); // within the access token TTL
+    // Within the access token TTL.
+    s.clock.advance(const Duration(minutes: 1));
     final b = (await invite('adam', 'b@example.org')).body['invite']! as Map;
     final c = (await invite('adam', 'c@example.org')).body['invite']! as Map;
     await s.db.execute('UPDATE invites SET revoked_at = @t WHERE id = @i', {
@@ -198,7 +199,8 @@ void main() {
     final admin =
         (await invite('olivia', 'b@example.org', 'admin')).body['invite']!
             as Map;
-    final instanceId = newId(); // instance invite row
+    // An instance invite row.
+    final instanceId = newId();
     await s.db.execute(
       'INSERT INTO invites (id, token_hash, email, org_id, role, created_by, created_at, expires_at) '
       "VALUES (@id, 'h-instance', 'c@example.org', NULL, NULL, @u, @t, @x)",

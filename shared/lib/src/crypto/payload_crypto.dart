@@ -43,8 +43,11 @@ class PayloadAad {
 class OpenedPayload {
   const OpenedPayload(this.json, this.seq);
 
-  final Map<String, Object?> json; // without _seq
-  final int? seq; // null = no mark yet
+  /// The payload without its _seq mark.
+  final Map<String, Object?> json;
+
+  /// Null when the payload has no mark yet.
+  final int? seq;
 }
 
 abstract final class PayloadCrypto {
@@ -93,12 +96,14 @@ abstract final class PayloadCrypto {
   // or of the item's folderId, for the same part.
   static bool _keyIdFits(PayloadAad aad, String keyId) {
     if (aad.scope == ItemScope.personal) return keyId == KeyIds.user;
-    final f = KeyIds.parseFolder(keyId);
+    final folderLabel = KeyIds.parseFolder(keyId);
     final expected = keyFolderIdOf(
       type: aad.type,
       id: aad.itemId,
       folderId: aad.folderId,
     );
-    return f != null && f.part == aad.part && f.folderId == expected;
+    return folderLabel != null &&
+        folderLabel.part == aad.part &&
+        folderLabel.folderId == expected;
   }
 }

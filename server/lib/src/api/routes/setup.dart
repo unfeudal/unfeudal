@@ -9,6 +9,7 @@ import '../../auth/rate_limit.dart';
 import '../../auth/secret_hash.dart';
 import '../../auth/tokens.dart';
 import '../../db/db.dart';
+import '../../mail/templates.dart';
 import '../../net/client_ip.dart';
 import '../deps.dart';
 import '../errors.dart';
@@ -46,18 +47,20 @@ Future<Response> setup(Request request) async {
   // Never refunded: setup happens once.
   await deps.limiter.hit([ipKey(net)]);
   final body = await readJson(request);
-  final token = normalizeSetupToken(reqString(body, 'token', max: 200));
+  final token = normalizeSetupToken(
+    parseRequiredString(body, 'token', max: 200),
+  );
   final email = normalizeEmail(body['email']);
   final bundle = parseBundle(body['bundle'], kdfFloor: deps.kdfFloor);
-  final authKey = reqKey32(body, 'authKey');
-  final recoveryAuthKey = reqKey32(body, 'recoveryAuthKey');
+  final authKey = parseKey32(body, 'authKey');
+  final recoveryAuthKey = parseKey32(body, 'recoveryAuthKey');
   final device = parseDevice(body['device']);
   final locale = body.containsKey('locale')
       ? parseLocale(body['locale'])
-      : 'en';
+      : defaultLocale;
   if (await _hasUser(deps.db)) throw _setupDone();
-  final h = hashToken(token);
-  await _requireSetupToken(deps.db, h);
+  final tokenHash = hashToken(token);
+  await _requireSetupToken(deps.db, tokenHash);
   // Argon2 before the transaction.
   final authHash = await hashSecret(authKey, deps.secretHash);
   final recoveryHash = await hashSecret(recoveryAuthKey, deps.secretHash);
@@ -65,7 +68,7 @@ Future<Response> setup(Request request) async {
     // The DELETE decides a race between concurrent setups.
     final claimed = await tx.execute(
       "DELETE FROM meta WHERE key = 'setup_token_hash' AND value = @h",
-      {'h': h},
+      {'h': tokenHash},
     );
     if (claimed == 0) throw _setupDone();
     final userId = await insertUser(

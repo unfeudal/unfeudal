@@ -215,7 +215,7 @@ void main() {
     },
   );
 
-  test('devices: list, revoke another, revoking this one signs out', () async {
+  test('revoking another device marks it revoked', () async {
     final (h, s, _) = await home();
     final other = await h.signIn();
     expect(
@@ -224,6 +224,10 @@ void main() {
     );
     await s.revokeDevice(other.deviceId);
     expect(h.devices[other.deviceId]!.revokedAt, isNotNull);
+  });
+
+  test('revoking this device signs out with deviceRevoked', () async {
+    final (_, s, _) = await home();
     await s.revokeDevice(s.stored!.deviceId);
     expect(
       (s.stage, s.signedOutBecause, await s.sessions.load()),

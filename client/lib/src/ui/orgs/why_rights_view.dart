@@ -62,7 +62,7 @@ class _WhyRightsViewState extends State<WhyRightsView> {
     AppLocalizations l,
     ExplanationStep s, {
     required List<OrgMember> members,
-    required String? role,
+    required OrgRole? role,
   }) {
     final state = AppScope.read(context);
     String principal(ExplanationStep s) => switch (s.principalType) {
@@ -78,15 +78,7 @@ class _WhyRightsViewState extends State<WhyRightsView> {
     };
     String folder(String? id) => state.vault?.entry(id ?? '')?.name ?? '';
     return switch (s.kind) {
-      StepKind.role => l.whyRole(
-        roleLabel(
-          l,
-          OrgRole.values.firstWhere(
-            (r) => r.name == role,
-            orElse: () => OrgRole.admin,
-          ),
-        ),
-      ),
+      StepKind.role => l.whyRole(roleLabel(l, role ?? OrgRole.admin)),
       StepKind.entry => l.whyEntry(
         principal(s),
         folder(s.folderId),
@@ -105,7 +97,10 @@ class _WhyRightsViewState extends State<WhyRightsView> {
     final orgs = state.orgs!;
     final members = orgs.membersOf(widget.orgId);
     final why = orgs.explain(widget.orgId, widget.folderId, _userId);
-    final role = members.where((m) => m.userId == _userId).firstOrNull?.role;
+    final role = members
+        .where((m) => m.userId == _userId)
+        .firstOrNull
+        ?.knownRole;
     final lines = [
       for (final s in why.steps) _describe(l, s, members: members, role: role),
     ].nonNulls;

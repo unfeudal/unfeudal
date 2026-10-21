@@ -33,7 +33,7 @@ Future<Response> listDevices(Request request) async {
           revokedAt: r['revoked_at'] == null
               ? null
               : parseIso(r['revoked_at']! as String),
-          current: r['id'] == auth.deviceId,
+          isCurrent: r['id'] == auth.deviceId,
         ).toJson(),
     ],
   });

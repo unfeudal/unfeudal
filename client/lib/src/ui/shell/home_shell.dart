@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
@@ -227,30 +226,7 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
       body: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (_treeVisible) ...[
-            Focus(
-              key: const Key('loquet-keys'),
-              focusNode: _loquetKeys,
-              onKeyEvent: (_, e) => _onLoquetKey(state, e),
-              child: GestureDetector(
-                behavior: HitTestBehavior.translucent,
-                onTap: _loquetKeys.requestFocus,
-                child: AnimatedContainer(
-                  key: const Key('tree-panel'),
-                  duration: UfMotion.of(context).base,
-                  curve: UfMotion.standard,
-                  width: _treeWidth,
-                  child: Sidebar(
-                    tree: _treePanel(),
-                    page: page,
-                    onShow: _show,
-                    onLock: state.lock,
-                  ),
-                ),
-              ),
-            ),
-            _resizer(),
-          ],
+          if (_treeVisible) _sidebar(context, state, page),
           Expanded(
             child: switch (page) {
               ShellPage.snippets => SnippetsScreen(onBack: back),
@@ -276,6 +252,35 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
     );
   }
 
+  // The resize handle lies over the sidebar's right edge, so the sessions start right at its border.
+  Widget _sidebar(BuildContext context, AppState state, ShellPage? page) =>
+      Stack(
+        children: [
+          Focus(
+            key: const Key('loquet-keys'),
+            focusNode: _loquetKeys,
+            onKeyEvent: (_, e) => _onLoquetKey(state, e),
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTap: _loquetKeys.requestFocus,
+              child: AnimatedContainer(
+                key: const Key('tree-panel'),
+                duration: UfMotion.of(context).base,
+                curve: UfMotion.standard,
+                width: _treeWidth,
+                child: Sidebar(
+                  tree: _treePanel(),
+                  page: page,
+                  onShow: _show,
+                  onLock: state.lock,
+                ),
+              ),
+            ),
+          ),
+          Positioned(top: 0, right: 0, bottom: 0, child: _resizer()),
+        ],
+      );
+
   // The title bar reads the sidebar width and the window title: the vault, then the section or session.
   void _publishChrome(BuildContext context, AppState state, ShellPage? page) {
     final chrome = ShellChromeScope.maybeOf(context);
@@ -285,8 +290,8 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
     final tab = state.connections.activeSession?.title ?? l.statusNoSession;
     final title = switch (page) {
       ShellPage.settings => l.railSettings,
-      final page? => '$vault \u2014 ${pageTitle(l, page)}',
-      null => '$vault \u2014 $tab',
+      final page? => l.windowTitle(vault, pageTitle(l, page)),
+      null => l.windowTitle(vault, tab),
     };
     final width = _treeVisible ? _treeWidth : null;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -303,8 +308,12 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
   TreePanel _treePanel() => TreePanel(
     searchFocus: _searchFocus,
     onSettings: () => _show(ShellPage.settings),
-    onNewHost: () => _openEditor(
-      (close) => HostEditorPanel(orgId: _state.orgs?.selected, onClose: close),
+    onNewHost: (folderId) => _openEditor(
+      (close) => HostEditorPanel(
+        orgId: _state.orgs?.selected,
+        folderId: folderId,
+        onClose: close,
+      ),
     ),
     onNewFolder: () => _openEditor(
       (close) =>
@@ -337,20 +346,20 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
           tone: BannerTone.danger,
           message: l.bannerPlainHttp,
         ),
-      if (sync != null && sync.restorePending)
+      if (sync != null && sync.isRestorePending)
         StatusBanner(
           tone: BannerTone.warn,
-          message: sync.restoreRefused
+          message: sync.isRestoreRefused
               ? l.bannerRestoreRefused
               : l.bannerRestore,
           action: (l.restoreAccept, () => unawaited(sync.acceptRestore())),
-          secondAction: sync.restoreRefused
+          secondAction: sync.isRestoreRefused
               ? null
               : (l.restoreRefuse, () => unawaited(sync.refuseRestore())),
           actionKey: const Key('sync-restore-accept'),
           secondActionKey: const Key('sync-restore-refuse'),
         )
-      else if (sync != null && sync.readOnly)
+      else if (sync != null && sync.isReadOnly)
         StatusBanner(
           key: const Key('banner-read-only'),
           tone: BannerTone.danger,
@@ -358,7 +367,7 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
           action: download,
           actionKey: const Key('update-download'),
         ),
-      if (sync?.updateVersion case final version? when !(sync!.readOnly))
+      if (sync?.updateVersion case final version? when !(sync!.isReadOnly))
         StatusBanner(
           tone: BannerTone.info,
           message: l.bannerUpdate(version),
@@ -367,7 +376,7 @@ class _HomeShellState extends State<HomeShell> implements SshDialogs {
         ),
       if (sync != null)
         for (final entry in sync.rejected) _rejectedBanner(l, state, entry),
-      if (sync != null && !sync.online)
+      if (sync != null && !sync.isOnline)
         StatusBanner(tone: BannerTone.warn, message: l.bannerOffline),
       if (sync?.lastError is FormatException)
         StatusBanner(tone: BannerTone.warn, message: l.bannerProtocol),

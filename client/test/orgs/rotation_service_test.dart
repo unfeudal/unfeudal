@@ -170,6 +170,35 @@ void main() {
   );
 
   test(
+    'a removed member who reads the folder again gets the new keys',
+    () async {
+      await c.pins.pin(
+        kim,
+        block.members.firstWhere((m) => m.userId == kim).publicKey!,
+        verified: true,
+      );
+      final reEnabled = OrgBlock.fromJson({
+        ...block.toJson(),
+        'acl': [
+          ...block.toJson()['acl']! as List,
+          aclRow(f, kim, allow: ['view']),
+        ],
+      });
+      expect((await rotation.run(reEnabled)).done, {f});
+      final keysCall = c.h.orgCalls
+          .singleWhere((x) => x.route == 'PUT /folders/$f/keys')
+          .body;
+      expect(
+        {
+          for (final w in keysCall['wrapped']! as List)
+            WrappedFolderKeys.fromJson(w).userId,
+        },
+        {c.userId, miaId, kim},
+      );
+    },
+  );
+
+  test(
     'after rotation the removed member\'s old keys open nothing new',
     () async {
       await rotation.run(block);
@@ -237,6 +266,48 @@ void main() {
     expect(c.pins.pinOf(ana), isNull);
     expect(c.h.orgCalls, isEmpty);
   });
+
+  test(
+    'a folder blocked by an unpinned reader does not stop the next folder',
+    () async {
+      final ana = newId(), g = newId(), json = block.toJson();
+      await c.keyring.put(g, v1);
+      final second = c.h.serverPutOrg(
+        await sealOrgItem(v1, id: g, type: 'folder', meta: folderJson('Dev')),
+      );
+      final twoFolders = OrgBlock.fromJson({
+        ...json,
+        'members': [
+          ...json['members']! as List,
+          memberRow(
+            ana,
+            status: 'confirmed',
+            publicKey: (await memberKeys()).publicKey,
+          ),
+        ],
+        'folderTree': [node(f), node(g)],
+        'acl': [
+          ...json['acl']! as List,
+          aclRow(f, ana, allow: ['view']),
+        ],
+        'pendingRotations': [
+          ...json['pendingRotations']! as List,
+          {
+            'orgId': testOrgId,
+            'folderId': g,
+            'reason': 'member_removed',
+            'removedUserIds': [kim],
+            'rotatedVersion': null,
+          },
+        ],
+        'itemIds': [...json['itemIds']! as List, second.id],
+      });
+      block = c.h.orgBlock = twoFolders;
+      final report = await rotation.run(twoFolders);
+      expect(report.done, {g});
+      expect(report.blocked, {ana});
+    },
+  );
 
   test(
     'a 409 on rotation/done leaves the rotation pending; a member does nothing',

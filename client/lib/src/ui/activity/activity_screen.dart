@@ -93,7 +93,6 @@ class _ActivityScreenState extends State<ActivityScreen> {
   // org's chain or the folders this account manages.
   List<(String, String)> _scopes(AppLocalizations l, AppState state) {
     final block = state.orgs?.block;
-    final orgId = state.orgs?.selected;
     return [
       if (_fromSettings) ...[
         if (widget.scope == 'user') ...[
@@ -101,26 +100,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
           ('user', l.activityScopeAccount),
         ],
         if (widget.scope == 'instance') ('instance', l.activityScopeInstance),
-      ] else ...[
-        ('me', l.activityScopeMe),
-        for (final org in block?.orgs ?? const <OrgSummary>[])
-          if (org.id == orgId)
-            if (state.orgs!.isAdmin(org.id))
-              ('org:${org.id}', org.name)
-            else
-              for (final n in block!.folderTree)
-                if (n.orgId == org.id &&
-                    state.orgs!
-                        .permissions(org.id, n.folderId)
-                        .contains(Permission.manage))
-                  (
-                    'folder:${n.folderId}',
-                    l.activityScopeFolder(
-                      state.vault?.entry(n.folderId)?.name ??
-                          shortId(n.folderId),
-                    ),
-                  ),
-      ],
+      ] else
+        for (final scope in ActivityModel.vaultScopes(state.orgs))
+          (scope, _vaultScopeLabel(l, state, scope)),
       // a deleted org's chain, opened from its org.deleted event: the Instance Owner only
       if (_scope.startsWith('org:') &&
           !(block?.orgs.any((o) => 'org:${o.id}' == _scope) ?? false))
@@ -128,12 +110,24 @@ class _ActivityScreenState extends State<ActivityScreen> {
     ];
   }
 
+  String _vaultScopeLabel(AppLocalizations l, AppState state, String scope) =>
+      switch (scope) {
+        _ when scope.startsWith('org:') =>
+          state.orgs!.byId(scope.substring(4))!.name,
+        _ when scope.startsWith('folder:') => l.activityScopeFolder(
+          state.vault?.entry(scope.substring(7))?.name ??
+              shortId(scope.substring(7)),
+        ),
+        _ => l.activityScopeMe,
+      };
+
   /// Ids only travel: items, members and orgs are named from what this device holds.
   String Function(String) _resolver(AppLocalizations l, AppState state) {
     final block = state.orgs?.block;
     return (id) {
       if (id == 'root') return l.activityRoot;
-      if (id.startsWith('forward:')) return id.substring(8);
+      final port = forwardPortOf(id);
+      if (port != null) return port;
       if (id == state.stored!.userId) return l.activityYou;
       return state.vault?.entry(id)?.name ??
           block?.members.where((m) => m.userId == id).firstOrNull?.email ??
@@ -145,7 +139,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
   Future<void> _verify() async {
     final l = AppLocalizations.of(context);
     try {
-      final chain = await _model.wholeChain();
+      final chain = await _model.loadWholeChain();
       final brokenAt = verifyChain(chain);
       final count = chain.length;
       if (!mounted) return;
@@ -270,7 +264,7 @@ class _LoadMoreButton extends StatelessWidget {
     return Align(
       child: TextButton(
         key: const Key('activity-more'),
-        onPressed: model.loading ? null : model.more,
+        onPressed: model.loading ? null : model.loadMore,
         child: BusyLabel(
           busy: model.loading,
           label: AppLocalizations.of(context).activityMore,

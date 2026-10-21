@@ -63,9 +63,7 @@ String _api(AppLocalizations l, ApiException e) => switch (e.known) {
   ApiErrorCode.conflict => switch (e.conflictReason) {
     ConflictReason.cursorAhead => l.errorCursorAhead,
     ConflictReason.clientTooOld => l.errorClientTooOld,
-    ConflictReason.lastOwner => l.errorLastOwner(
-      (e.orgs ?? const []).join(', '),
-    ),
+    ConflictReason.lastOwner => l.errorLastOwner(e.orgs.join(', ')),
     ConflictReason.accountExists => l.errorAccountExists,
     null => l.errorConflict,
   },

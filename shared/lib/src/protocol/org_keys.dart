@@ -12,7 +12,8 @@ class WrappedKeyRow {
   );
 
   final String folderId;
-  final WrappedFolderKeys keys; // its extra keeps folderId and unknown fields
+  // Its extra keeps folderId and the unknown fields.
+  final WrappedFolderKeys keys;
 
   FolderKeyHistory get history => FolderKeyHistory(
     version: keys.version,
@@ -23,14 +24,14 @@ class WrappedKeyRow {
   Map<String, Object?> toJson() => {'folderId': folderId, ...keys.toJson()};
 }
 
-/// A member waiting for folder keys; [secret] means they need the secret key.
+/// A member waiting for folder keys.
 class KeyRequest {
   KeyRequest({
     required this.orgId,
     required this.folderId,
     required this.userId,
     required this.version,
-    required this.secret,
+    required this.needsSecret,
     this.extra = const {},
   });
 
@@ -41,7 +42,7 @@ class KeyRequest {
       folderId: r.uuid('folderId'),
       userId: r.uuid('userId'),
       version: r.integer('version'),
-      secret: r.flag('secret'),
+      needsSecret: r.flag('secret'),
       extra: r.extra(const {
         'orgId',
         'folderId',
@@ -56,7 +57,7 @@ class KeyRequest {
   final String folderId;
   final String userId;
   final int version;
-  final bool secret;
+  final bool needsSecret;
   final Map<String, Object?> extra;
 
   Map<String, Object?> toJson() => {
@@ -65,7 +66,7 @@ class KeyRequest {
     'folderId': folderId,
     'userId': userId,
     'version': version,
-    'secret': secret,
+    'secret': needsSecret,
   };
 }
 

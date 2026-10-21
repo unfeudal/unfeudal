@@ -97,9 +97,9 @@ void main() {
     final id = newId();
     m.upsertItems([await sealItem(key, id: id, meta: hostJson('web'), seq: 3)]);
     final v = await testVault(key, m);
-    final sealed = m.getKv(KvKey.ledger);
+    final sealed = m.kv(KvKey.ledger);
     await v.reload();
-    expect(m.getKv(KvKey.ledger), sealed);
+    expect(m.kv(KvKey.ledger), sealed);
     await v.ledger.reset();
     await v.reload();
     expect(v.ledger.mark(id, PayloadPart.meta), 3);
@@ -131,6 +131,43 @@ void main() {
     final bytes = String.fromCharCodes(File(path).readAsBytesSync());
     expect(bytes.contains('prod-db'), isFalse);
     expect(bytes.contains('db.internal.example'), isFalse);
+  });
+
+  test('usableOfKind lists the ok entries of a kind in one vault', () async {
+    final m = LocalMirror.inMemory();
+    final ok = await sealItem(key, meta: hostJson('web'));
+    final unreadable = await sealItem(
+      SymmetricCipher.newKey(),
+      meta: hostJson('x'),
+    );
+    m.upsertItems([ok, unreadable]);
+    final v = await testVault(key, m);
+    expect(v.usableOfKind(ItemKind.host, orgId: null).map((e) => e.id), [
+      ok.id,
+    ]);
+    expect(v.usableOfKind(ItemKind.host, orgId: newId()), isEmpty);
+  });
+
+  group('jumpKeepsChainsValid', () {
+    late Vault v;
+    final a = newId(), b = newId(), c = newId();
+    setUp(() async {
+      final m = LocalMirror.inMemory();
+      m.upsertItems([
+        await sealItem(key, id: a, meta: {...hostJson('a'), 'jumpHostId': b}),
+        await sealItem(key, id: b, meta: hostJson('b')),
+        await sealItem(key, id: c, meta: hostJson('c')),
+      ]);
+      v = await testVault(key, m);
+    });
+
+    test('refuses a candidate that closes a loop', () {
+      expect(v.jumpKeepsChainsValid(hostId: b, candidate: a), isFalse);
+    });
+
+    test('accepts a candidate with a clean chain', () {
+      expect(v.jumpKeepsChainsValid(hostId: b, candidate: c), isTrue);
+    });
   });
 
   test('lock destroys the key and the entries', () async {

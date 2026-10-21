@@ -35,7 +35,7 @@ void main() {
       final client = HttpClient();
       addTearDown(client.close);
 
-      /// Sends half of the body, waits for [between], then the rest.
+      // Sends half of the body, waits for between, then the rest.
       Future<int> login(
         String email, [
         Future<void> Function()? between,

@@ -19,39 +19,41 @@ class KeyHandoff {
   Future<HandoffReport> run(OrgBlock block) async {
     final HandoffReport report = (unconfirmed: {}, alerts: {});
     final byFolder = <String, List<WrappedFolderKeys>>{};
-    for (final r in block.keyRequests) {
-      if (!block.isAdminOf(r.orgId)) continue;
-      final keys = keyring.current(r.folderId);
-      if (keys == null || keys.version != r.version) {
-        continue; // not held here: another admin device answers
+    for (final request in block.keyRequests) {
+      if (!block.isAdminOf(request.orgId)) continue;
+      final keys = keyring.current(request.folderId);
+      // Not held here: another admin device answers.
+      if (keys == null || keys.version != request.version) {
+        continue;
       }
       final member = block.members
-          .where((m) => m.orgId == r.orgId && m.userId == r.userId)
+          .where((m) => m.orgId == request.orgId && m.userId == request.userId)
           .firstOrNull;
       final publicKey = member?.publicKey;
+      // Never a wrap for a disabled member.
       if (publicKey == null || member!.disabled == true) {
-        continue; // never a wrap for a disabled member
+        continue;
       }
-      switch (pins.check(r.userId, publicKey)) {
+      switch (pins.check(request.userId, publicKey)) {
         case PinCheck.changed:
-          report.alerts.add(r.userId);
+          report.alerts.add(request.userId);
           continue;
         case PinCheck.unpinned:
           // A member the server lists is never trusted without a human.
-          report.unconfirmed.add(r.userId);
+          report.unconfirmed.add(request.userId);
           continue;
         case PinCheck.matches:
           break;
       }
       byFolder
-          .putIfAbsent(r.folderId, () => [])
+          .putIfAbsent(request.folderId, () => [])
           .add(
             await WrappedFolderKeys.wrap(
               keys,
-              folderId: r.folderId,
+              folderId: request.folderId,
               recipientPublicKey: publicKey,
-              userId: r.userId,
-              withSecret: r.secret,
+              userId: request.userId,
+              withSecret: request.needsSecret,
             ),
           );
     }

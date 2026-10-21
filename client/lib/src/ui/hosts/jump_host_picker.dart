@@ -42,7 +42,13 @@ class JumpHostPicker extends StatelessWidget {
         if (e.state == EntryState.ok && e.id != hostId)
           (
             entry: e,
-            refused: e.id == value || _isClean(vault, e.id)
+            refused:
+                e.id == value ||
+                    vault.jumpKeepsChainsValid(
+                      hostId: hostId,
+                      folderId: folderId,
+                      candidate: e.id,
+                    )
                 ? null
                 : l.jumpBreaksChain,
           ),
@@ -86,82 +92,5 @@ class JumpHostPicker extends StatelessWidget {
               onChanged: change,
             ),
     );
-  }
-
-  bool _isClean(Vault vault, String candidate) {
-    try {
-      if (hostId case final host?) {
-        resolveJumpChain(
-          host,
-          (id) => id == host
-              ? _withJump(vault, host, candidate)
-              : _lookup(vault, id),
-        );
-        return true;
-      }
-      final folder = folderId;
-      if (folder == null) {
-        return true; // a new folder: no host inherits from it yet
-      }
-      final draft = _draftFolder(vault, folder, candidate);
-      ResolvedHost? lookup(String id) {
-        final e = vault.entry(id);
-        if (e == null || vault.isTrashed(id) || vault.hostLookup(id) == null) {
-          return null;
-        }
-        return resolveHost(
-          HostMeta.fromJson(e.meta),
-          e.folderId,
-          (f) => f == folder ? draft : _folderMeta(vault, f),
-          hostId: id,
-          parentOf: (f) => vault.entry(f)?.folderId,
-        );
-      }
-
-      for (final e in vault.ofKind(ItemKind.host)) {
-        if (lookup(e.id)?.sources['jumpHostId'] == folder) {
-          resolveJumpChain(e.id, lookup);
-        }
-      }
-      return true;
-    } on Exception {
-      return false; // JumpLoop, JumpTooDeep or JumpHostMissing
-    }
-  }
-
-  static ResolvedHost? _lookup(Vault vault, String id) =>
-      vault.isTrashed(id) ? null : vault.hostLookup(id)?.resolved;
-
-  static ResolvedHost? _withJump(Vault vault, String id, String jump) {
-    final r = _lookup(vault, id);
-    return r == null
-        ? null
-        : ResolvedHost(
-            port: r.port,
-            user: r.user,
-            identityId: r.identityId,
-            jumpHostId: jump,
-            sources: {...r.sources, 'jumpHostId': 'host'},
-          );
-  }
-
-  static FolderMeta? _folderMeta(Vault vault, String id) {
-    final e = vault.entry(id);
-    return e != null && e.state == EntryState.ok && e.kind == ItemKind.folder
-        ? FolderMeta.fromJson(e.meta)
-        : null;
-  }
-
-  static FolderMeta? _draftFolder(Vault vault, String id, String jump) {
-    final e = vault.entry(id);
-    if (e == null || e.state != EntryState.ok) return null;
-    final defaults = switch (e.meta?['defaults']) {
-      final Map<String, Object?> d => d,
-      _ => const <String, Object?>{},
-    };
-    return FolderMeta.fromJson({
-      ...?e.meta,
-      'defaults': {...defaults, 'jumpHostId': jump},
-    });
   }
 }

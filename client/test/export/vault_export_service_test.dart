@@ -4,12 +4,14 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:unfeudal_client/src/export/vault_export_service.dart';
 import 'package:unfeudal_client/src/storage/local_mirror.dart';
+import 'package:unfeudal_client/src/vault/vault.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../support/fakes.dart';
 
 void main() {
-  test('personal readable items only: no org item, no trashed one, unreadable ones counted', () async {
+  // A personal host and identity, a trashed host, an unreadable item and an org item.
+  Future<({Vault vault, String host, String ident})> seededVault() async {
     final key = SymmetricCipher.newKey();
     final m = LocalMirror.inMemory();
     final v = await testVault(key, m);
@@ -46,23 +48,42 @@ void main() {
     });
     m.upsertItems([foreign, org]);
     await v.reload();
-    final out = await exportVault(
-      v,
+    return (vault: v, host: host, ident: ident);
+  }
+
+  Map<String, Object?> decode(String text) =>
+      jsonDecode(text) as Map<String, Object?>;
+  List<Map<String, Object?>> itemsOf(Map<String, Object?> export) =>
+      (export['items']! as List).cast<Map<String, Object?>>();
+
+  test('personal readable items only: no org item, no trashed one, unreadable ones counted', () async {
+    final seeded = await seededVault();
+    final out = await exportVault(seeded.vault);
+    expect((out.count, out.unreadable), (2, 1));
+    expect(
+      itemsOf(decode(out.text)).map((i) => i['id']),
+      unorderedEquals([seeded.host, seeded.ident]),
+    );
+  });
+
+  test('a passphrase seals the export; without one it is plain, with a warning and the decrypted items', () async {
+    final seeded = await seededVault();
+    final sealed = await exportVault(
+      seeded.vault,
       passphrase: 'twelve chars!',
       kdf: KdfParams.testing,
       now: DateTime.utc(2026, 10, 15),
     );
-    expect((out.count, out.unreadable), (2, 1));
-    expect(jsonDecode(out.text), containsPair('format', 'unfeudal-export'));
-    final plain =
-        jsonDecode((await exportVault(v)).text) as Map<String, Object?>;
+    final plain = decode((await exportVault(seeded.vault)).text);
     expect(
-      (plain['format'], plain.containsKey('warning')),
-      ('unfeudal-export-plain', true),
+      (
+        decode(sealed.text)['format'],
+        plain['format'],
+        plain.containsKey('warning'),
+      ),
+      ('unfeudal-export', 'unfeudal-export-plain', true),
     );
-    final items = (plain['items']! as List).cast<Map<String, Object?>>();
-    expect(items.map((i) => i['id']), unorderedEquals([host, ident]));
-    final id = items.firstWhere((i) => i['id'] == ident);
+    final id = itemsOf(plain).firstWhere((i) => i['id'] == seeded.ident);
     expect(
       (id['type'], id['folderId'], (id['secret']! as Map)['password']),
       ('identity', null, 'hunter2-hunter2'),

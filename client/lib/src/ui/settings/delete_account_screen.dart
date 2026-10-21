@@ -51,9 +51,7 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen>
       } on ApiException catch (e) {
         if (e.conflictReason != ConflictReason.lastOwner) rethrow;
         if (mounted) {
-          setState(
-            () => problem = l.deleteLastOwner((e.orgs ?? const []).join(', ')),
-          );
+          setState(() => problem = l.deleteLastOwner(e.orgs.join(', ')));
         }
       }
     });

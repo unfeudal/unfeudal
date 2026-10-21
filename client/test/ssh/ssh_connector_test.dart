@@ -10,12 +10,13 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 import '../support/fakes.dart';
 
 final host = newId();
-KnownHostMeta pin(String type, String c) => KnownHostMeta.fromJson({
-  'schemaVersion': 1,
-  'hostItemId': host,
-  'keyType': type,
-  'sha256Fingerprint': 'SHA256:${c * 43}',
-});
+KnownHostMeta pin(String type, String fingerprintChar) =>
+    KnownHostMeta.fromJson({
+      'schemaVersion': 1,
+      'hostItemId': host,
+      'keyType': type,
+      'sha256Fingerprint': 'SHA256:${fingerprintChar * 43}',
+    });
 
 /// A server that hangs up before saying anything.
 class ClosedSocket implements SSHSocket {
@@ -34,19 +35,19 @@ class ClosedSocket implements SSHSocket {
 }
 
 Future<bool> verify(
-  FakeSshCallbacks r, {
+  FakeSshCallbacks callbacks, {
   String type = 'ssh-ed25519',
-  String c = 'A',
+  String fingerprintChar = 'A',
 }) async => (await SshConnector.verifyHostKey(
   hostId: host,
   hostName: 'web',
   keyType: type,
-  fingerprint: 'SHA256:${c * 43}',
-  callbacks: r,
+  fingerprint: 'SHA256:${fingerprintChar * 43}',
+  callbacks: callbacks,
 )).accepted;
 
 void main() {
-  test('decideHostKey', () {
+  test('no pin is unknown, the same type and fingerprint trusted, anything else changed', () {
     expect(
       decideHostKey(null, 'ssh-ed25519', 'SHA256:${'A' * 43}'),
       HostKeyDecision.unknown,
@@ -89,14 +90,18 @@ void main() {
   test(
     'changed key: refused when declined, pin untouched; re-pinned only on yes',
     () async {
-      final r = FakeSshCallbacks()..pins[host] = pin('ssh-ed25519', 'A');
-      expect(await verify(r, c: 'B'), isFalse);
-      expect(r.asked.single.decision, HostKeyDecision.changed);
-      expect(r.asked.single.pinned!.sha256Fingerprint, 'SHA256:${'A' * 43}');
-      expect(r.pins[host]!.sha256Fingerprint, 'SHA256:${'A' * 43}');
-      r.answer = true;
-      expect(await verify(r, c: 'B'), isTrue);
-      expect(r.pins[host]!.sha256Fingerprint, endsWith('B' * 43));
+      final callbacks = FakeSshCallbacks()
+        ..pins[host] = pin('ssh-ed25519', 'A');
+      expect(await verify(callbacks, fingerprintChar: 'B'), isFalse);
+      expect(callbacks.asked.single.decision, HostKeyDecision.changed);
+      expect(
+        callbacks.asked.single.pinned!.sha256Fingerprint,
+        'SHA256:${'A' * 43}',
+      );
+      expect(callbacks.pins[host]!.sha256Fingerprint, 'SHA256:${'A' * 43}');
+      callbacks.answer = true;
+      expect(await verify(callbacks, fingerprintChar: 'B'), isTrue);
+      expect(callbacks.pins[host]!.sha256Fingerprint, endsWith('B' * 43));
     },
   );
 
@@ -121,8 +126,8 @@ void main() {
   );
 
   test('trusted key never asks', () async {
-    final r = FakeSshCallbacks()..pins[host] = pin('ssh-ed25519', 'A');
-    expect(await verify(r), isTrue);
-    expect(r.asked, isEmpty);
+    final callbacks = FakeSshCallbacks()..pins[host] = pin('ssh-ed25519', 'A');
+    expect(await verify(callbacks), isTrue);
+    expect(callbacks.asked, isEmpty);
   });
 }

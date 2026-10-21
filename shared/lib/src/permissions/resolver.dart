@@ -1,7 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 enum Permission { view, connect, reveal, edit, manage }
 
-enum OrgRole { owner, admin, member }
+enum OrgRole {
+  owner,
+  admin,
+  member;
+
+  /// Admin and owner roles are an owner's to grant, change or revoke.
+  bool get isOwnerManaged => this != member;
+}
 
 enum MemberStatus { accepted, confirmed }
 
@@ -26,18 +33,20 @@ enum FolderKeyAccess {
 }
 
 class AclEntry {
-  const AclEntry(
-    this.folderId,
-    this.principalType,
-    this.principalId,
-    this.allow,
-    this.deny,
-  );
+  const AclEntry({
+    required this.folderId,
+    required this.principalType,
+    required this.principalId,
+    required this.allow,
+    required this.deny,
+  });
   final String folderId;
   final PrincipalType principalType;
   final String principalId;
   final Set<Permission> allow;
-  final Set<Permission> deny; // ignored for teams (refused at write time)
+
+  /// Ignored for teams, which are refused a deny at write time.
+  final Set<Permission> deny;
 }
 
 /// ACL entries keyed by principal and folder, built once for many [resolvePermissions] calls;
@@ -69,7 +78,10 @@ class ExplanationStep {
   final StepKind kind;
   final PrincipalType? principalType;
   final String? principalId;
-  final String? folderId; // folder where the applied entry sits
+
+  /// The folder where the applied entry sits.
+  final String? folderId;
+
   /// For an entry step its allow set, for a role step all permissions, for a
   /// denied step what the deny removed.
   final Set<Permission> permissions;
@@ -157,7 +169,8 @@ Explanation resolvePermissions({
   for (final teamId in teamIds.toList()..sort()) {
     final e = nearest(PrincipalType.team, teamId);
     if (e == null) continue;
-    allow.addAll(e.allow); // teams only allow
+    // Teams only allow.
+    allow.addAll(e.allow);
     steps.add(_entryStep(e));
   }
   final mine = nearest(PrincipalType.user, userId);

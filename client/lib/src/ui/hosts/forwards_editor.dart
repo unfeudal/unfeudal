@@ -195,7 +195,7 @@ class _ForwardEndpoints extends StatelessWidget {
           width: 80,
           child: input('forward-local-$index', row.local, l.forwardLocalPort),
         ),
-        Text('→', style: monoField.copyWith(color: colors.muted)),
+        Icon(UfIcons.caretRight, size: 14, color: colors.muted),
         Expanded(
           child: input('forward-host-$index', row.host, l.forwardRemoteHost),
         ),

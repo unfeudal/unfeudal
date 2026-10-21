@@ -4,7 +4,7 @@ import 'payload.dart';
 
 class SnippetMeta extends Payload {
   SnippetMeta({
-    super.schemaVersion = 1,
+    super.schemaVersion = Payload.knownSchemaVersion,
     required this.name,
     required this.command,
     this.tags = const [],
@@ -23,7 +23,7 @@ class SnippetMeta extends Payload {
     }
     return SnippetMeta(
       schemaVersion: r.integer('schemaVersion', min: 1),
-      name: r.text('name', max: PayloadLimits.snippetName, required: true),
+      name: r.trimmedText('name', max: PayloadLimits.snippetName),
       command: command,
       tags: tags,
       extra: r.extra(const {'schemaVersion', 'name', 'command', 'tags'}),

@@ -5,6 +5,7 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
 import '../../app_state.dart';
+import '../../design/buttons.dart';
 import '../../design/choices.dart';
 import '../../design/feedback.dart';
 import '../../design/field.dart';
@@ -14,6 +15,7 @@ import '../../events/app_events.dart';
 import '../../vault/vault.dart';
 import '../busy_action.dart';
 import '../history/item_history_panel.dart';
+import '../keychain/identity_forms.dart';
 import 'access_tab.dart';
 import 'editor_frame.dart';
 import 'forwards_editor.dart';
@@ -22,15 +24,25 @@ import 'jump_host_picker.dart';
 
 part 'host_form_fields.dart';
 
-/// Edits a host; empty port, user and key show the inherited value and where it comes from.
+/// Edits a host; empty port, user and key show the inherited value and where it comes from. A host moves
+/// between folders by dragging it in the tree.
 class HostEditorPanel extends StatefulWidget {
-  const HostEditorPanel({super.key, this.hostId, this.orgId, this.onClose});
+  const HostEditorPanel({
+    super.key,
+    this.hostId,
+    this.orgId,
+    this.folderId,
+    this.onClose,
+  });
 
   /// Null for a new host.
   final String? hostId;
 
   /// Org of a new host; null for the personal vault.
   final String? orgId;
+
+  /// Folder of a new host; null for the vault's root.
+  final String? folderId;
   final VoidCallback? onClose;
 
   @override
@@ -67,7 +79,7 @@ class _HostEditorPanelState extends State<HostEditorPanel>
     _notes.text = text('notes');
     _startup.text = text('startupCommand');
     _identityId = meta['identityId'] as String?;
-    _folderId = _entry?.folderId;
+    _folderId = _entry?.folderId ?? widget.folderId;
     _jumpHostId = meta['jumpHostId'] as String?;
     if (meta['identityMode'] == IdentityMode.perMember.name) {
       _identityMode = IdentityMode.perMember;
@@ -120,7 +132,7 @@ class _HostEditorPanelState extends State<HostEditorPanel>
     // written only when set
     if (_forwards?.isEmpty ?? true) meta.remove('forwards');
     if (_jumpHostId == null) meta.remove('jumpHostId');
-    if (port == null) meta.remove('port'); // inherited
+    if (port == null) meta.remove('port');
     if (_orgId == null || _identityMode == IdentityMode.shared) {
       meta.remove('identityMode');
     }
@@ -152,8 +164,10 @@ class _HostEditorPanelState extends State<HostEditorPanel>
 
   Future<void> _trash() async {
     final state = AppScope.read(context);
-    await state.orgs!.trashItem(widget.hostId!);
-    widget.onClose?.call();
+    await run(() async {
+      await state.orgs!.trashItem(widget.hostId!);
+      widget.onClose?.call();
+    });
   }
 
   @override
@@ -172,7 +186,7 @@ class _HostEditorPanelState extends State<HostEditorPanel>
         ? null
         : vault.hostLookup(entry.id)?.resolved;
     final folderName = vault.entry(_folderId ?? '')?.name;
-    final readOnly = state.sync?.readOnly ?? true;
+    final readOnly = state.sync?.isReadOnly ?? true;
     return UfShake(
       shakes: _shakes,
       child: EditorFrame(
@@ -203,7 +217,7 @@ class _HostEditorPanelState extends State<HostEditorPanel>
         children: [
           _addressFields(l, editable: editable, resolved: resolved),
           ..._identityFields(l, editable: editable, resolved: resolved),
-          ..._placementFields(l, editable: editable, resolved: resolved),
+          ..._placementFields(editable: editable, resolved: resolved),
           ..._detailFields(l, editable: editable),
           if (problem case final error?) UfErrorLine(error),
         ],

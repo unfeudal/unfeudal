@@ -41,16 +41,19 @@ void main() {
         (await verifySecret(a, key), await verifySecret(a, List.filled(32, 8))),
         (true, false),
       );
-      expect(
-        (
-          SecretHashParams.server.m,
-          SecretHashParams.server.t,
-          SecretHashParams.server.p,
-        ),
-        (19456, 2, 1),
-      );
     },
   );
+
+  test('the server hashes with 19 MiB, 2 iterations and 1 lane', () {
+    expect(
+      (
+        SecretHashParams.server.memoryKib,
+        SecretHashParams.server.iterations,
+        SecretHashParams.server.parallelism,
+      ),
+      (19456, 2, 1),
+    );
+  });
 
   test('a malformed or oversized stored hash never verifies', () async {
     for (final s in [

@@ -287,6 +287,7 @@
   "keyPassword": "Add a password",
   "keyName": "Name",
   "keyPem": "Private key (OpenSSH or PEM)",
+  "keyPemFromFile": "Open a key file",
   "keyPassphrase": "Passphrase (optional)",
   "keyTypeEd25519": "Ed25519 (recommended)",
   "keyTypeRsa": "RSA 4096",
@@ -774,7 +775,7 @@
       }
     }
   },
-  "rotationPending": "Keys of {count} folders must change.",
+  "rotationPending": "Keys of {count, plural, =1{1 folder} other{{count} folders}} must change.",
   "@rotationPending": {
     "placeholders": {
       "count": {
@@ -783,7 +784,7 @@
     }
   },
   "rotationNow": "Rotate now",
-  "rotationBlocked": "Confirm these {count} members first: {emails}",
+  "rotationBlocked": "Confirm {count, plural, =1{1 member} other{{count} members}} first: {emails}",
   "@rotationBlocked": {
     "placeholders": {
       "count": {
@@ -795,7 +796,7 @@
     }
   },
   "rotationCredentials": "Removed members may have copied secrets from these folders: change those passwords and keys.",
-  "keyAlert": "{count} keys did not match what this device knows. Nothing was shared.",
+  "keyAlert": "{count, plural, =1{1 key did not match} other{{count} keys did not match}} what this device knows. Nothing was shared.",
   "@keyAlert": {
     "placeholders": {
       "count": {
@@ -818,7 +819,7 @@
       }
     }
   },
-  "adminOrgMembers": "{count} members",
+  "adminOrgMembers": "{count, plural, =1{1 member} other{{count} members}}",
   "@adminOrgMembers": {
     "placeholders": {
       "count": {
@@ -1105,7 +1106,7 @@
   "activityYou": "You",
   "activityMore": "Load more",
   "activityVerify": "Verify the chain",
-  "activityVerified": "Chain verified: {count} events.",
+  "activityVerified": "Chain verified: {count, plural, =1{1 event} other{{count} events}}.",
   "@activityVerified": {
     "placeholders": {
       "count": {
@@ -1245,7 +1246,7 @@
   "exportPlainWarning": "Every password and key will be readable by anyone who gets this file.",
   "exportPlainConfirm": "I understand the file is not encrypted",
   "exportSubmit": "Export",
-  "exportDone": "{count} items exported.",
+  "exportDone": "{count, plural, =1{1 item exported.} other{{count} items exported.}}",
   "@exportDone": {
     "placeholders": {
       "count": {
@@ -1253,7 +1254,7 @@
       }
     }
   },
-  "exportSkipped": "{count} unreadable items were left out.",
+  "exportSkipped": "{count, plural, =1{1 unreadable item was left out.} other{{count} unreadable items were left out.}}",
   "@exportSkipped": {
     "placeholders": {
       "count": {
@@ -1355,7 +1356,7 @@
   },
   "activityOpenDeletedOrg": "Open its activity",
   "trashMoveOut": "Move out",
-  "trashMoveOutTitle": "Move « {name} » out of the trashed folder",
+  "trashMoveOutTitle": "Move \"{name}\" out of the trashed folder",
   "@trashMoveOutTitle": {
     "placeholders": {
       "name": {
@@ -1375,7 +1376,7 @@
   },
   "sidebarHosts": "Hosts",
   "sidebarVaults": "Vaults",
-  "vaultPersonalSubtitle": "Personal · {count} hosts",
+  "vaultPersonalSubtitle": "Personal · {count, plural, =1{1 host} other{{count} hosts}}",
   "@vaultPersonalSubtitle": {
     "placeholders": {
       "count": {
@@ -1392,7 +1393,7 @@
     }
   },
   "searchSnippets": "Snippets",
-  "searchNoMatch": "Nothing matches “{query}”.",
+  "searchNoMatch": "Nothing matches \"{query}\".",
   "@searchNoMatch": {
     "placeholders": {
       "query": {
@@ -1428,14 +1429,6 @@
       },
       "jump": {
         "type": "String"
-      }
-    }
-  },
-  "statusForwards": "{count} active forwards",
-  "@statusForwards": {
-    "placeholders": {
-      "count": {
-        "type": "int"
       }
     }
   },
@@ -1515,5 +1508,39 @@
   },
   "paletteActions": "Actions",
   "paletteConnect": "Enter: connect",
-  "paletteInsert": "Insert"
+  "paletteInsert": "Insert",
+  "listSeparator": " · ",
+  "windowTitle": "{vault} — {view}",
+  "@windowTitle": {
+    "placeholders": {
+      "vault": {
+        "type": "String"
+      },
+      "view": {
+        "type": "String"
+      }
+    }
+  },
+  "historyChange": "{before} → {after}",
+  "@historyChange": {
+    "placeholders": {
+      "before": {
+        "type": "String"
+      },
+      "after": {
+        "type": "String"
+      }
+    }
+  },
+  "forwardRoute": "{local} → {remote}",
+  "@forwardRoute": {
+    "placeholders": {
+      "local": {
+        "type": "String"
+      },
+      "remote": {
+        "type": "String"
+      }
+    }
+  }
 }

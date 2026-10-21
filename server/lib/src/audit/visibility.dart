@@ -11,14 +11,15 @@ class AuditQuery {
   const AuditQuery({
     this.scope,
     this.actor,
-    this.targets,
+    this.folders,
     required this.rawIps,
   });
   final String? scope; // one chain, or the org chain a folder view filters
   final String? actor; // `me`
-  final Set<String>? targets; // folder view: subtree folders and their items
+  // Folder view: the subtree, whose folders and items are the targets.
+  final Set<String>? folders;
   final bool rawIps; // Instance Owner only
-  bool get chainOrder => actor == null && targets == null;
+  bool get chainOrder => actor == null && folders == null;
 }
 
 Future<AuditQuery> resolveAuditQuery(
@@ -58,18 +59,9 @@ Future<AuditQuery> resolveAuditQuery(
   if (!permissionsOf(org, auth.userId, id).contains(Permission.manage)) {
     throw ApiError(ApiErrorCode.forbidden, 'You need manage on this folder.');
   }
-  final folders = org.subtree(id).toSet();
-  final items = await tx.query(
-    'SELECT id, folder_id FROM items WHERE org_id = @o',
-    {'o': orgId},
-  );
   return AuditQuery(
     scope: AuditScope.org(orgId).wire,
     rawIps: io,
-    targets: {
-      ...folders,
-      for (final r in items)
-        if (folders.contains(r['folder_id'])) r['id']! as String,
-    },
+    folders: org.subtree(id).toSet(),
   );
 }

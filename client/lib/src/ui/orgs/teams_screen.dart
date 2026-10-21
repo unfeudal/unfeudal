@@ -26,7 +26,7 @@ class TeamsScreen extends StatefulWidget {
 }
 
 class _TeamsScreenState extends State<TeamsScreen> with BusyAction {
-  /// The team being edited: null id for a new one; null while none is open.
+  // The team being edited: null id for a new one; null while none is open.
   ({String? id, TextEditingController name, Set<String> memberIds})? _editing;
 
   @override

@@ -41,22 +41,22 @@ class SyncWatch {
 
   void _roundDone() {
     final engine = _engine!;
-    if (engine.online != _wasOnline) {
-      _wasOnline = engine.online;
-      _emit(engine.online ? const CameOnline() : const WentOffline());
+    if (engine.isOnline != _wasOnline) {
+      _wasOnline = engine.isOnline;
+      _emit(engine.isOnline ? const CameOnline() : const WentOffline());
     }
     _onRound();
     final shown = (
-      engine.online,
+      engine.isOnline,
       engine.lastSyncAt == null,
       '${engine.lastError}',
       engine.compat?.mode,
       engine.compat?.api,
       engine.compat?.reason,
-      engine.readOnly,
-      engine.restorePending,
+      engine.isReadOnly,
+      engine.isRestorePending,
       engine.updateVersion,
-      _mirror?.getKv(KvKey.apiInfo),
+      _mirror?.kv(KvKey.apiInfo),
       engine.rejectedIds.join(' '),
     );
     if (!_entriesChanged && shown == _shown) return;

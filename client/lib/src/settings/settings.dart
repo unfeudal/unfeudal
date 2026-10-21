@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import 'dart:convert';
 import 'dart:io';
-import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter/material.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
@@ -31,38 +30,40 @@ class Settings {
   /// Each field is parsed on its own: an invalid value falls back to its default.
   factory Settings.fromJson(Object? json) {
     if (json is! Map<String, Object?>) return const Settings();
-    const d = Settings();
+    const defaults = Settings();
     T? byName<T extends Enum>(List<T> values, Object? v) =>
         values.asNameMap()[v];
     return Settings(
-      themeMode: byName(ThemeMode.values, json['themeMode']) ?? d.themeMode,
+      themeMode:
+          byName(ThemeMode.values, json['themeMode']) ?? defaults.themeMode,
       terminalTheme:
           byName(TerminalThemeId.values, json['terminalTheme']) ??
-          d.terminalTheme,
-      loquetMode: byName(LoquetMode.values, json['loquetMode']) ?? d.loquetMode,
+          defaults.terminalTheme,
+      loquetMode:
+          byName(LoquetMode.values, json['loquetMode']) ?? defaults.loquetMode,
       locale: switch (json['locale']) {
         final String l when _locales.contains(l) => l,
         _ => null,
       },
       terminalFont: switch (json['terminalFont']) {
         final String f when f.isNotEmpty && f.runes.length <= 64 => f,
-        _ => d.terminalFont,
+        _ => defaults.terminalFont,
       },
       terminalFontSize: switch (json['terminalFontSize']) {
         final int s when s >= 10 && s <= 24 => s,
-        _ => d.terminalFontSize,
+        _ => defaults.terminalFontSize,
       },
       performanceMode: switch (json['performanceMode']) {
         final bool p => p,
-        _ => d.performanceMode,
+        _ => defaults.performanceMode,
       },
       treeWidth: switch (json['treeWidth']) {
         final num w when w >= 220 && w <= 400 => w.toDouble(),
-        _ => d.treeWidth,
+        _ => defaults.treeWidth,
       },
       autoLockMinutes: switch (json['autoLockMinutes']) {
         final int m when autoLockChoices.contains(m) => m,
-        _ => d.autoLockMinutes,
+        _ => defaults.autoLockMinutes,
       },
       extra: {
         for (final MapEntry(:key, :value) in json.entries)
@@ -100,6 +101,16 @@ class Settings {
     'treeWidth': treeWidth,
     'autoLockMinutes': autoLockMinutes,
   };
+
+  /// The synced prefs to write after [previous]: every current pref, and each removed one as null.
+  Map<String, Object?> prefChangesSince(Settings previous) {
+    final prefs = toPrefs();
+    return {
+      for (final key in previous.toPrefs().keys)
+        if (!prefs.containsKey(key)) key: null,
+      ...prefs,
+    };
+  }
 
   Map<String, Object?> toPrefs() => {
     'themeMode': themeMode.name,
@@ -143,14 +154,27 @@ class Settings {
     extra: extra,
   );
 
-  /// The chosen language, else the system's when the app has it; null otherwise.
-  String? get uiLocale {
+  /// The same settings with [locale], which may be null to follow the system again.
+  Settings withLocale(String? locale) => Settings(
+    themeMode: themeMode,
+    terminalTheme: terminalTheme,
+    loquetMode: loquetMode,
+    locale: locale,
+    terminalFont: terminalFont,
+    terminalFontSize: terminalFontSize,
+    performanceMode: performanceMode,
+    treeWidth: treeWidth,
+    autoLockMinutes: autoLockMinutes,
+    extra: extra,
+  );
+
+  /// The chosen language, else [systemLanguage] when the app has it; null otherwise.
+  String? uiLocale(String systemLanguage) {
     if (locale case final chosen?) return chosen;
-    final system = PlatformDispatcher.instance.locale.languageCode;
     return AppLocalizations.supportedLocales.any(
-          (l) => l.languageCode == system,
+          (l) => l.languageCode == systemLanguage,
         )
-        ? system
+        ? systemLanguage
         : null;
   }
 

@@ -155,7 +155,10 @@ void main() {
   });
 
   test('SQLite: incremental_vacuum hands freed pages back', () async {
-    if (s.db.engine != DbEngine.sqlite) return;
+    if (s.db.engine != DbEngine.sqlite) {
+      markTestSkipped('SQLite only');
+      return;
+    }
     await s.db.execute(
       "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 5000) "
       "INSERT INTO login_attempts (key, count, window_start) SELECT 'x:' || i, 1, @w FROM n",

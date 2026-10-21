@@ -30,7 +30,10 @@ class KdfParams {
   }
 
   final String alg;
-  final int m; // KiB
+
+  /// Memory cost in KiB.
+  final int m;
+
   final int t;
   final int p;
   final Map<String, Object?> extra;
@@ -62,6 +65,8 @@ class KdfParams {
 /// Length in code points as the minimum-length rules count it: after NFC normalization.
 int passwordLength(String password) => unorm.nfc(password).runes.length;
 
+const kdfSaltLength = 16;
+
 /// Raw Argon2id v1.3 of NFC(password). Always enforces alg, ceiling and the testing floor;
 /// callers holding params from outside also call `ensureAcceptable()` with their own floor.
 Future<Uint8List> argon2id(
@@ -70,7 +75,9 @@ Future<Uint8List> argon2id(
   KdfParams kdf,
 ) async {
   kdf.ensureAcceptable(floor: KdfParams.testing);
-  if (salt.length != 16) throw const FormatException('salt must be 16 bytes');
+  if (salt.length != kdfSaltLength) {
+    throw const FormatException('salt must be $kdfSaltLength bytes');
+  }
   final secret = utf8.encode(unorm.nfc(password));
   // seconds of CPU and up to the memory ceiling: off the caller's isolate, so a UI thread keeps painting
   return Isolate.run(() async {

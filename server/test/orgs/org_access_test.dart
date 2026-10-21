@@ -94,6 +94,10 @@ void main() {
       isEmpty,
       reason: 'purged folder',
     );
+  });
+
+  test('viewable and subtree: a folder with its descendants', () async {
+    final o = await snap();
     expect(o.viewable(w.id('mia')), {w.folder('prod'), w.folder('db')});
     expect(o.subtree(w.folder('prod')).toSet(), {
       w.folder('prod'),
@@ -101,7 +105,7 @@ void main() {
     });
   });
 
-  test('tree: viewable folders and their ancestors; without() drops a member everywhere', () async {
+  test('tree: viewable folders and their ancestors', () async {
     await w.acl('db', 'user:ana', allow: ['view']);
     await s.db.execute(
       "UPDATE org_members SET status = 'confirmed' WHERE user_id = @u",
@@ -110,6 +114,11 @@ void main() {
     final o = await snap();
     expect(o.viewable(w.id('ana')), {w.folder('db')});
     expect(o.tree(w.id('ana')), {w.folder('db'), w.folder('prod')});
+  });
+
+  test('without: drops a member from members, teams and ACL', () async {
+    await w.acl('db', 'user:ana', allow: ['view']);
+    final o = await snap();
     final gone = o.without(w.id('mia'));
     expect(gone.members.containsKey(w.id('mia')), false);
     expect(gone.teams[w.teams['Ops']]!.memberIds, isEmpty);
@@ -170,14 +179,17 @@ void main() {
         isEmpty,
       );
       expect(isLastOwner(await snap(), w.id('olivia')), isFalse);
-      final e = lastOwnerError(['Beta', 'Acme']);
-      expect(e.code, ApiErrorCode.conflict);
-      expect(e.extra, {
-        'reason': 'last_owner',
-        'orgs': ['Acme', 'Beta'],
-      });
     },
   );
+
+  test('lastOwnerError: a 409 listing the orgs sorted', () {
+    final e = lastOwnerError(['Beta', 'Acme']);
+    expect(e.code, ApiErrorCode.conflict);
+    expect(e.extra, {
+      'reason': 'last_owner',
+      'orgs': ['Acme', 'Beta'],
+    });
+  });
 
   test(
     'currentKeyVersion: history version, else MAX(folder_keys.version), else 0',
@@ -196,21 +208,21 @@ void main() {
     },
   );
 
-  test(
-    'bumpOrgSeq adds one; checkMembershipCap refuses at max_orgs_per_user',
-    () async {
-      final before = await w.orgSeq();
-      await s.db.transaction(bumpOrgSeq);
-      expect(await w.orgSeq(), before + 1);
-      await expectLater(
-        s.db.transaction(
-          (tx) => checkMembershipCap(tx, s.deps.config, w.id('mia')),
-        ),
-        throwsApi(ApiErrorCode.forbidden),
-      );
-      await s.db.transaction(
-        (tx) => checkMembershipCap(tx, s.deps.config, w.io.userId),
-      );
-    },
-  );
+  test('bumpOrgSeq adds one', () async {
+    final before = await w.orgSeq();
+    await s.db.transaction(bumpOrgSeq);
+    expect(await w.orgSeq(), before + 1);
+  });
+
+  test('checkMembershipCap refuses at max_orgs_per_user', () async {
+    await expectLater(
+      s.db.transaction(
+        (tx) => checkMembershipCap(tx, s.deps.config, w.id('mia')),
+      ),
+      throwsApi(ApiErrorCode.forbidden),
+    );
+    await s.db.transaction(
+      (tx) => checkMembershipCap(tx, s.deps.config, w.io.userId),
+    );
+  });
 }

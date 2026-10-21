@@ -36,7 +36,9 @@ class InviteCreated {
 
   final String id;
   final String email;
-  final OrgRole? role; // null for an instance invite
+
+  /// Null for an instance invite.
+  final OrgRole? role;
   final DateTime expiresAt;
   final String link;
   final String file;
@@ -44,24 +46,24 @@ class InviteCreated {
 }
 
 class PendingInvite {
-  PendingInvite(
-    this.id,
-    this.email,
-    this.role,
-    this.createdBy,
-    this.createdAt,
-    this.expiresAt,
-  );
+  PendingInvite({
+    required this.id,
+    required this.email,
+    required this.role,
+    required this.createdBy,
+    required this.createdAt,
+    required this.expiresAt,
+  });
 
   factory PendingInvite.fromJson(Object? json) {
     final r = JsonReader(json, 'pending invite');
     return PendingInvite(
-      r.uuid('id'),
-      r.req<String>('email'),
-      _role(r),
-      r.uuid('createdBy'),
-      r.time('createdAt'),
-      r.time('expiresAt'),
+      id: r.uuid('id'),
+      email: r.req<String>('email'),
+      role: _role(r),
+      createdBy: r.uuid('createdBy'),
+      createdAt: r.time('createdAt'),
+      expiresAt: r.time('expiresAt'),
     );
   }
 
@@ -101,14 +103,14 @@ class AdminUser {
 }
 
 class AdminOrg {
-  AdminOrg(
-    this.id,
-    this.name,
-    this.owners,
-    this.memberCount,
-    this.storageBytes,
-    this.lastActivityAt,
-  );
+  AdminOrg({
+    required this.id,
+    required this.name,
+    required this.owners,
+    required this.memberCount,
+    required this.storageBytes,
+    required this.lastActivityAt,
+  });
 
   factory AdminOrg.fromJson(Object? json) {
     final r = JsonReader(json, 'admin org');
@@ -117,12 +119,12 @@ class AdminOrg {
       throw const FormatException('admin org.owners: not strings');
     }
     return AdminOrg(
-      r.uuid('id'),
-      r.req<String>('name'),
-      owners.cast<String>(),
-      r.req<int>('memberCount'),
-      r.req<int>('storageBytes'),
-      r.optTime('lastActivityAt'),
+      id: r.uuid('id'),
+      name: r.req<String>('name'),
+      owners: owners.cast<String>(),
+      memberCount: r.req<int>('memberCount'),
+      storageBytes: r.req<int>('storageBytes'),
+      lastActivityAt: r.optTime('lastActivityAt'),
     );
   }
 

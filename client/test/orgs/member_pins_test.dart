@@ -4,6 +4,7 @@ import 'package:unfeudal_client/src/orgs/block_permissions.dart';
 import 'package:unfeudal_client/src/orgs/member_pins.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
+import '../support/fakes.dart';
 import '../support/org_fixtures.dart';
 
 void main() {
@@ -57,14 +58,17 @@ void main() {
         fingerprint: keyFingerprint(k.publicKey),
         verified: true,
       ));
-      final forged = await c.vault.sealer.seal(
+      final forged = await sealItem(
+        c.userKey,
         id: pinItem.id,
         type: 'memberPin',
+        seq: c.vault.ledger.nextSeq(pinItem.id),
         revision: 5,
         meta: pinMeta('b' * 40),
       );
       c.mirror.upsertItems([forged]);
       await c.vault.reload();
+      expect(c.vault.entry(pinItem.id)!.meta!['fingerprint'], 'b' * 40);
       expect(c.pins.check(mia, k.publicKey), PinCheck.matches);
     },
   );
@@ -72,15 +76,15 @@ void main() {
   test('a pin made on another device seeds the ledger', () async {
     final k = await memberKeys();
     c.mirror.upsertItems([
-      await c.vault.sealer.seal(
+      await sealItem(
+        c.userKey,
         id: newId(),
         type: 'memberPin',
-        revision: 1,
         meta: pinMeta(keyFingerprint(k.publicKey), verified: true),
       ),
     ]);
     await c.vault.reload();
-    c.pins.seed();
+    await c.pins.seed();
     expect(c.pins.pinOf(mia)!.verified, isTrue);
     expect(
       c.vault.ledger.memberPin(mia)!.fingerprint,

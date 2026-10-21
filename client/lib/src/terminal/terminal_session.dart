@@ -19,8 +19,10 @@ class TerminalSession extends ChangeNotifier {
   final String title;
   final terminal = Terminal(maxLines: 10000);
   final controller = TerminalController();
-  SealState state = SealState.connecting;
-  Object? error;
+  SealState _state = SealState.connecting;
+  Object? _error;
+  SealState get state => _state;
+  Object? get error => _error;
   VoidCallback? onUserInput;
 
   /// The hops and the target behind [_shell].
@@ -47,7 +49,7 @@ class TerminalSession extends ChangeNotifier {
       }
       ..onResize = (cols, rows, _, _) => shell.resize(cols, rows);
     if (startupCommand != null) shell.write(utf8.encode('$startupCommand\n'));
-    state = SealState.connected;
+    _state = SealState.connected;
     notifyListeners();
     unawaited(
       shell.done.then((_) {
@@ -58,8 +60,8 @@ class TerminalSession extends ChangeNotifier {
   }
 
   void fail(Object? error, {SealState state = SealState.offline}) {
-    this.error = error;
-    this.state = state;
+    _error = error;
+    _state = state;
     notifyListeners();
   }
 

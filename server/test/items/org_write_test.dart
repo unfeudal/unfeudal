@@ -269,7 +269,7 @@ void main() {
     expect((await w.put(w['ed'], host, 1)).status, 409);
   });
 
-  test('a key version change without the secret is 400 (check 7)', () async {
+  test('a key version change without the secret is 400', () async {
     final host = await w.item(w['ed'], folder: 'prod', secret: true);
     await w.put(w['ed'], host, 0);
     await w.keys('prod', 2, ['olivia']);

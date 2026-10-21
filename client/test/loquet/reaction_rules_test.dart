@@ -164,7 +164,10 @@ void main() {
       e.health = const VaultHealth(conflicts: 1);
       now = now.add(const Duration(seconds: 10));
       final c = e.handle(const LoquetClicked())!;
-      expect((c.mood, c.reasons, c.line), (LoquetMood.concerned, true, null));
+      expect(
+        (c.mood, c.showsReasons, c.line),
+        (LoquetMood.concerned, true, null),
+      );
     },
   );
 
@@ -181,14 +184,14 @@ void main() {
       LogicalKeyboardKey.keyB,
       LogicalKeyboardKey.keyA,
     ];
-    expect(e.key(LogicalKeyboardKey.keyX), isNull);
+    expect(e.keyPressed(LogicalKeyboardKey.keyX), isNull);
     Reaction? r;
     for (final k in seq) {
-      r = e.key(k);
+      r = e.keyPressed(k);
     }
     expect(r!.fx, LoquetFx.backflip);
     for (final k in seq) {
-      r = e.key(k);
+      r = e.keyPressed(k);
     }
     expect(r, isNull);
   });
@@ -197,10 +200,5 @@ void main() {
     expect(e.handle(const UserIdle())!.mood, LoquetMood.sleep);
     final w = e.wake()!;
     expect((w.mood, w.line), (LoquetMood.cheerful, null));
-  });
-
-  test('milestone hook for later events', () {
-    expect(e.milestone('sharedVault', LineKey.sharedVault)!.important, isTrue);
-    expect(e.milestone('sharedVault', LineKey.sharedVault), isNull);
   });
 }

@@ -8,7 +8,7 @@ class SyncPage {
   SyncPage({
     required this.items,
     required this.cursor,
-    required this.more,
+    required this.hasMore,
     this.org,
   });
 
@@ -21,14 +21,14 @@ class SyncPage {
           Item.fromJson(item),
       ],
       cursor: r.integer('cursor'),
-      more: r.flag('more'),
+      hasMore: r.flag('more'),
       org: org == null ? null : OrgBlock.fromJson(org),
     );
   }
 
   final List<Item> items;
   final int cursor;
-  final bool more;
+  final bool hasMore;
 
   /// Present only when the org block changed since the request's orgCursor.
   final OrgBlock? org;

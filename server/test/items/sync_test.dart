@@ -46,7 +46,7 @@ void main() {
       }
       final all = await sync(owner);
       expect(all.items.map((i) => i.id), items.map((i) => i['id']));
-      expect((all.cursor, all.more), (3, false));
+      expect((all.cursor, all.hasMore), (3, false));
       expect(
         (await sync(owner, '?cursor=2')).items.single.id,
         items.last['id'],
@@ -83,9 +83,12 @@ void main() {
       "UPDATE counters SET value = 501 WHERE name = 'items_seq'",
     );
     final first = await sync(owner);
-    expect((first.items.length, first.cursor, first.more), (500, 500, true));
+    expect((first.items.length, first.cursor, first.hasMore), (500, 500, true));
     final second = await sync(owner, '?cursor=500');
-    expect((second.items.length, second.cursor, second.more), (1, 501, false));
+    expect(
+      (second.items.length, second.cursor, second.hasMore),
+      (1, 501, false),
+    );
   });
 
   test(
@@ -137,7 +140,7 @@ void main() {
     );
   });
 
-  test('cursors must be ints ≥ 0; the route needs a token', () async {
+  test('cursors must be ints >= 0; the route needs a token', () async {
     for (final q in [
       '?cursor=-1',
       '?cursor=x',

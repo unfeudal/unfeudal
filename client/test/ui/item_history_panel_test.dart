@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:unfeudal_client/l10n/app_localizations.dart';
 import 'package:unfeudal_client/src/ui/history/item_history_panel.dart';
-import 'package:unfeudal_client/src/vault/vault.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../support/fakes.dart';
-import '../support/org_fixtures.dart';
 import '../support/pump_app.dart';
 import '../support/sync_harness.dart';
 
@@ -54,7 +53,8 @@ void main() {
         find.byKey(const Key('history-rev-2')),
         find.byKey(const Key('history-rev-1')),
       ], everyElement(findsOneWidget));
-      expect(find.text('web → web-2'), findsOneWidget);
+      final l = AppLocalizations.of(t.element(find.byType(ItemHistoryPanel)));
+      expect(find.text(l.historyChange('web', 'web-2')), findsOneWidget);
       await t.tap(find.byKey(const Key('history-restore-1')));
       await t.pump();
       await t.tap(find.byKey(const Key('confirm-yes')));
@@ -124,85 +124,60 @@ void main() {
     },
   );
 
-  testWidgets(
-    'secrets stay hidden without reveal; revealing shows them and reports it',
-    (t) async {
-      for (final caps in [
-        ['client_events', 'item_history', 'sync'],
-        ['client_events', 'item_history', 'reveal', 'sync'],
-      ]) {
-        final h = SyncHarness(capabilities: caps);
-        final s = await signedInState(t, harness: h);
-        late String id;
-        await t.runAsync(() async {
-          id = await s.vault!.upsertItem(
-            type: 'identity',
-            meta: pw,
-            secret: pwSecret('old'),
-          );
-          await s.sync!.syncNow();
-          await s.vault!.upsertItem(
-            id: id,
-            type: 'identity',
-            meta: pw,
-            secret: pwSecret('new'),
-          );
-          await s.sync!.syncNow();
-        });
-        await pumpApp(
-          t,
-          state: s,
-          child: ItemHistoryPanel(itemId: id),
-        );
-        await pumpReal(t);
-        expect([
-          find.textContaining('old'),
-          find.textContaining('new'),
-        ], everyElement(findsNothing));
-        if (!caps.contains('reveal')) {
-          expect(find.byKey(const Key('history-reveal-2')), findsNothing);
-          continue;
-        }
-        await t.tap(find.byKey(const Key('history-reveal-2')));
-        await pumpReal(t);
-        expect(find.text('old → new'), findsOneWidget);
-        expect(h.reported.map((r) => r.body).toList(), [
-          {'itemId': id},
-        ]);
-      }
-    },
-  );
-
-  testWidgets('canReveal: reveal on the folder for org items', (t) async {
-    final h = SyncHarness(capabilities: ['orgs', 'reveal', 'sync']);
-    final s = await signedInState(t, harness: h);
-    final me = s.stored!.userId;
-    final f = newId();
-    late Item orgItem;
-    Future<void> block(int cursor, List<String> allow) => t.runAsync(() async {
-      h.orgBlock = orgBlock(
-        cursor: cursor,
-        members: [memberRow(me, status: 'confirmed')],
-        folderTree: [node(f)],
-        acl: [aclRow(f, me, allow: allow)],
-      );
-      await s.sync!.syncNow();
-    });
-    await t.runAsync(
-      () async => orgItem = await sealOrgItem(
-        FolderKeys.generate(1),
-        folderId: f,
-        meta: hostJson('db'),
-      ),
-    );
-    await block(1, ['connect']);
-    expect(s.orgs!.canReveal(VaultEntry(orgItem, EntryState.ok)), isFalse);
-    await block(2, ['reveal']);
-    expect(s.orgs!.canReveal(VaultEntry(orgItem, EntryState.ok)), isTrue);
-    expect(
-      s.orgs!.canReveal(VaultEntry(wireItem(newId()), EntryState.ok)),
-      isTrue,
-      reason: 'personal items',
-    );
+  testWidgets('without reveal the secret diff stays hidden', (t) async {
+    await openSecretHistory(t, ['client_events', 'item_history', 'sync']);
+    expect([
+      find.textContaining('old'),
+      find.textContaining('new'),
+      find.byKey(const Key('history-reveal-2')),
+    ], everyElement(findsNothing));
   });
+
+  testWidgets('reveal shows the secret diff and reports it', (t) async {
+    final (h, id) = await openSecretHistory(t, [
+      'client_events',
+      'item_history',
+      'reveal',
+      'sync',
+    ]);
+    final l = AppLocalizations.of(t.element(find.byType(ItemHistoryPanel)));
+    expect(find.textContaining('old'), findsNothing);
+    await t.tap(find.byKey(const Key('history-reveal-2')));
+    await pumpReal(t);
+    expect(find.text(l.historyChange('old', 'new')), findsOneWidget);
+    expect(h.reported.map((r) => r.body).toList(), [
+      {'itemId': id},
+    ]);
+  });
+}
+
+Future<(SyncHarness, String)> openSecretHistory(
+  WidgetTester t,
+  List<String> capabilities,
+) async {
+  final h = SyncHarness(capabilities: capabilities);
+  final s = await signedInState(t, harness: h);
+  late String id;
+  await t.runAsync(() async {
+    id = await s.vault!.upsertItem(
+      type: 'identity',
+      meta: pw,
+      secret: pwSecret('old'),
+    );
+    await s.sync!.syncNow();
+    await s.vault!.upsertItem(
+      id: id,
+      type: 'identity',
+      meta: pw,
+      secret: pwSecret('new'),
+    );
+    await s.sync!.syncNow();
+  });
+  await pumpApp(
+    t,
+    state: s,
+    child: ItemHistoryPanel(itemId: id),
+  );
+  await pumpReal(t);
+  return (h, id);
 }

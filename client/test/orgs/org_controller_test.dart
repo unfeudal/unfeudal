@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:unfeudal_client/src/app_state.dart';
 import 'package:unfeudal_client/src/settings/settings.dart';
 import 'package:unfeudal_client/src/storage/local_mirror.dart';
+import 'package:unfeudal_client/src/vault/vault.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../support/fakes.dart';
@@ -70,11 +71,18 @@ void main() {
     expect(s.vault!.entry(host.id)!.name, 'db');
   });
 
-  test('an org with mascot off turns Loquet off for its members', () async {
-    h.orgBlock = await block(settings: {'mascot': false});
-    await s.sync!.syncNow();
-    expect(s.loquet.mode, LoquetMode.off);
-  });
+  test(
+    'an org with mascot off turns Loquet off only while it is shown',
+    () async {
+      h.orgBlock = await block(settings: {'mascot': false});
+      await s.sync!.syncNow();
+      expect(s.loquet.mode, isNot(LoquetMode.off));
+      s.orgs!.select(testOrgId);
+      expect(s.loquet.mode, LoquetMode.off);
+      s.orgs!.select(null);
+      expect(s.loquet.mode, isNot(LoquetMode.off));
+    },
+  );
 
   test('the cached block and keyring work offline after unlock', () async {
     h.orgBlock = await block();
@@ -132,9 +140,70 @@ void main() {
     await s.lock();
     expect(s.vault!.keyring, isNull);
     expect(
-      s.mirror!.getKv(KvKey.keyring),
+      s.mirror!.kv(KvKey.keyring),
       isNotNull,
       reason: 'sealed copy stays for the next unlock',
     );
+  });
+
+  test('saveFolder without an org writes a personal folder', () async {
+    final id = await s.orgs!.saveFolder(FolderMeta(name: 'ops'));
+    expect(
+      (s.vault!.entry(id)!.name, s.vault!.entry(id)!.orgId),
+      ('ops', null),
+    );
+  });
+
+  test(
+    'verifying a changed member key rotates the folders they view',
+    () async {
+      final mia = newId(), old = await memberKeys(), k = await memberKeys();
+      await s.orgs!.pins.pin(mia, old.publicKey, verified: true);
+      h.orgBlock = orgBlock(
+        role: 'admin',
+        members: [
+          memberRow(me, role: 'admin', status: 'confirmed', publicKey: myKey),
+          memberRow(mia, status: 'confirmed', publicKey: k.publicKey),
+        ],
+        folderTree: [node(f)],
+        acl: [
+          aclRow(f, me, allow: ['view']),
+          aclRow(f, mia, allow: ['view']),
+        ],
+        wrappedKeys: [await wrappedRow(keys, f, myKey, secret: false)],
+        itemIds: [host.id],
+      );
+      await s.sync!.syncNow();
+      h.orgCalls.clear();
+      final member = s.orgs!
+          .membersOf(testOrgId)
+          .singleWhere((m) => m.userId == mia);
+      await s.orgs!.verifyMember(member, verified: true);
+      expect(h.orgCalls.map((c) => c.route), contains('PUT /folders/$f/keys'));
+    },
+  );
+
+  test('canReveal: a personal item always', () {
+    expect(
+      s.orgs!.canReveal(VaultEntry(wireItem(newId()), EntryState.ok)),
+      isTrue,
+    );
+  });
+
+  test('canReveal: an org item needs reveal on its key folder', () async {
+    Future<void> syncAcl(int cursor, List<String> allow) async {
+      h.orgBlock = orgBlock(
+        cursor: cursor,
+        members: [memberRow(me, status: 'confirmed')],
+        folderTree: [node(f)],
+        acl: [aclRow(f, me, allow: allow)],
+      );
+      await s.sync!.syncNow();
+    }
+
+    await syncAcl(1, ['connect']);
+    expect(s.orgs!.canReveal(VaultEntry(host, EntryState.ok)), isFalse);
+    await syncAcl(2, ['reveal']);
+    expect(s.orgs!.canReveal(VaultEntry(host, EntryState.ok)), isTrue);
   });
 }

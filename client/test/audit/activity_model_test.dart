@@ -41,7 +41,7 @@ void main() {
       );
       await m.load();
       expect([m.events.length, m.hasMore], [100, true]);
-      await m.more();
+      await m.loadMore();
       expect([m.events.length, m.hasMore], [150, false]);
       expect(await m.verify(), isNull);
       expect(

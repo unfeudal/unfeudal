@@ -63,9 +63,9 @@ void main() {
     l.confirm(h, PayloadPart.meta, 4);
     await l.setHostPin(h, pin('A'));
     await l.save();
-    final env = Envelope.fromJson(jsonDecode(m.getKv(KvKey.ledger)!));
+    final env = Envelope.fromJson(jsonDecode(m.kv(KvKey.ledger)!));
     expect(env.keyId, 'user');
-    expect(m.getKv(KvKey.ledger), isNot(contains('SHA256')));
+    expect(m.kv(KvKey.ledger), isNot(contains('SHA256')));
     final again = LedgerStore(m);
     expect(await again.load(key), isTrue);
     expect(
@@ -89,22 +89,34 @@ void main() {
     },
   );
 
-  test('member pins and startup approvals; reset empties marks and keeps pins and approvals', () async {
-    final m = LocalMirror.inMemory();
-    final l = LedgerStore(m);
+  test('member pins and startup approvals are stored', () async {
+    final l = LedgerStore(LocalMirror.inMemory());
     await l.load(key);
     final u = newId();
     // A SHA-256 in base64, as the ledger requires.
     final approved = '${'h' * 43}=';
     await l.setMemberPin(u, (fingerprint: 'a' * 40, verified: true));
-    await l.setHostPin(h, pin('A'));
     await l.approveStartup(h, approved);
     expect(
-      (l.startupApproval(h), l.startupApproval(newId())),
-      (approved, null),
+      (
+        l.memberPin(u)!.verified,
+        l.startupApproval(h),
+        l.startupApproval(newId()),
+      ),
+      (true, approved, null),
     );
+  });
+
+  test('reset empties marks and keeps pins and approvals', () async {
+    final m = LocalMirror.inMemory();
+    final l = LedgerStore(m);
+    await l.load(key);
+    final u = newId();
+    final approved = '${'h' * 43}=';
+    await l.setMemberPin(u, (fingerprint: 'a' * 40, verified: true));
+    await l.setHostPin(h, pin('A'));
+    await l.approveStartup(h, approved);
     l.confirm(h, PayloadPart.meta, 4);
-    expect(l.memberPin(u)!.verified, isTrue);
     await l.reset();
     expect(
       (
@@ -122,9 +134,9 @@ void main() {
         again.memberPin(u)!.verified,
         again.hostPin(h)!.sha256Fingerprint,
         again.mark(h, PayloadPart.meta),
+        again.startupApproval(h),
       ),
-      (true, 'SHA256:${'A' * 43}', 0),
+      (true, 'SHA256:${'A' * 43}', 0, approved),
     );
-    expect(again.startupApproval(h), approved);
   });
 }

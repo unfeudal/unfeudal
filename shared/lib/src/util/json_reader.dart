@@ -37,14 +37,15 @@ class JsonReader {
   bool flag(String key, {bool? orElse}) =>
       opt<bool>(key) ?? orElse ?? (throw _error(key, 'missing'));
 
-  /// [max] counts code points. Required text is trimmed, non-empty and
-  /// returned trimmed.
-  String text(String key, {required int max, bool required = false}) {
-    final raw = req<String>(key);
-    final value = required ? raw.trim() : raw;
-    if (required && value.isEmpty) throw _error(key, 'empty');
-    if (value.runes.length > max) throw _error(key, 'longer than $max');
-    return value;
+  /// [max] counts code points.
+  String text(String key, {required int max}) =>
+      _bounded(key, req<String>(key), max: max);
+
+  /// [text] trimmed, rejected when nothing is left.
+  String trimmedText(String key, {required int max}) {
+    final value = req<String>(key).trim();
+    if (value.isEmpty) throw _error(key, 'empty');
+    return _bounded(key, value, max: max);
   }
 
   String? optText(String key, {required int max}) =>
@@ -105,6 +106,11 @@ class JsonReader {
     for (final entry in map.entries)
       if (!known.contains(entry.key)) entry.key: entry.value,
   };
+
+  String _bounded(String key, String value, {required int max}) {
+    if (value.runes.length > max) throw _error(key, 'longer than $max');
+    return value;
+  }
 
   int _inRange(String key, int value, {required int min, int? max}) {
     if (value < min || (max != null && value > max)) {

@@ -148,20 +148,6 @@ void main() {
       PayloadCrypto.open(orgAad(), wrongPart, key),
       throwsA(isA<DecryptionFailed>()),
     );
-    expect(
-      () => PayloadCrypto.seal(
-        orgAad(),
-        {},
-        key,
-        keyId: KeyIds.folder(f2, 1, PayloadPart.meta),
-        seq: 1,
-      ),
-      throwsArgumentError,
-    );
-    expect(
-      () => PayloadCrypto.seal(personal(), {}, key, keyId: 'master', seq: 1),
-      throwsArgumentError,
-    );
   });
 
   test('invalid _seq is a FormatException; absent means no mark', () async {
@@ -202,6 +188,23 @@ void main() {
         keyId: 'user',
         seq: 1,
       ),
+      throwsArgumentError,
+    );
+  });
+
+  test('seal refuses a keyId that does not fit the item', () {
+    expect(
+      () => PayloadCrypto.seal(
+        orgAad(),
+        {},
+        key,
+        keyId: KeyIds.folder(f2, 1, PayloadPart.meta),
+        seq: 1,
+      ),
+      throwsArgumentError,
+    );
+    expect(
+      () => PayloadCrypto.seal(personal(), {}, key, keyId: 'master', seq: 1),
       throwsArgumentError,
     );
   });

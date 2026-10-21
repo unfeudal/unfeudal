@@ -10,7 +10,7 @@ import 'errors.dart';
 import 'kdf.dart';
 
 /// The vault export file: sealed with a passphrase (at least [minPassphraseLength] code points), or plaintext.
-class VaultExport {
+abstract final class VaultExport {
   static const minPassphraseLength = 12;
   static const _info = 'unfeudal/export/v1';
   static final _aad = utf8.encode('unfeudal-export/v1');
@@ -31,7 +31,7 @@ class VaultExport {
     if (passwordLength(passphrase) < minPassphraseLength) {
       throw const WeakPassword();
     }
-    final salt = secureBytes(16);
+    final salt = secureBytes(kdfSaltLength);
     final key = await hkdf32(await argon2id(passphrase, salt, kdf), _info);
     final data = await SymmetricCipher.encrypt(
       key,

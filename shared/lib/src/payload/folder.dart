@@ -40,7 +40,7 @@ class FolderDefaults {
 
 class FolderMeta extends Payload {
   FolderMeta({
-    super.schemaVersion = 1,
+    super.schemaVersion = Payload.knownSchemaVersion,
     required this.name,
     this.defaults = const FolderDefaults(),
     super.extra = const {},
@@ -50,7 +50,7 @@ class FolderMeta extends Payload {
     final r = JsonReader(json, 'folder');
     return FolderMeta(
       schemaVersion: r.integer('schemaVersion', min: 1),
-      name: r.text('name', max: PayloadLimits.name, required: true),
+      name: r.trimmedText('name', max: PayloadLimits.name),
       defaults: FolderDefaults.fromJson(r.object('defaults')),
       extra: r.extra(const {'schemaVersion', 'name', 'defaults'}),
     );

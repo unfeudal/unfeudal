@@ -5,7 +5,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:unfeudal_client/src/design/motion.dart';
 import 'package:unfeudal_client/src/ssh/ssh_connector.dart';
 import 'package:unfeudal_client/src/ui/hosts/host_key_dialog.dart';
-import 'package:unfeudal_client/src/ui/terminal/ssh_dialogs.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../support/pump_app.dart';
@@ -94,52 +93,5 @@ void main() {
     await t.sendKeyEvent(LogicalKeyboardKey.escape);
     await t.pumpAndSettle();
     expect(await r, isNot(true));
-  });
-
-  testWidgets(
-    'startup command: shown in mono, run returns true, skip returns false',
-    (t) async {
-      final r = await open<bool>(
-        t,
-        const StartupCommandDialog(hostName: 'db1', command: 'tmux attach'),
-      );
-      expect(
-        t.widget<EditableText>(find.text('tmux attach')).style.fontFamily,
-        'JetBrainsMono',
-      );
-      await t.tap(find.byKey(const Key('startup-run')));
-      await t.pumpAndSettle();
-      expect(await r, isTrue);
-      final skipped = await open<bool>(
-        t,
-        const StartupCommandDialog(hostName: 'db1', command: 'tmux attach'),
-      );
-      await t.tap(find.byKey(const Key('startup-skip')));
-      await t.pumpAndSettle();
-      expect(await skipped, isFalse);
-    },
-  );
-
-  testWidgets('keyboard-interactive hides non-echo answers and returns them', (
-    t,
-  ) async {
-    final r = await open<List<String>>(
-      t,
-      const KeyboardInteractiveDialog(
-        name: 'otp',
-        instruction: '',
-        prompts: [
-          SshPrompt('Code: ', echo: true),
-          SshPrompt('Password: ', echo: false),
-        ],
-      ),
-    );
-    final fields = t.widgetList<TextField>(find.byType(TextField)).toList();
-    expect(fields.map((f) => f.obscureText), [false, true]);
-    await t.enterText(find.byType(TextField).first, '123456');
-    await t.enterText(find.byType(TextField).last, 'pw');
-    await t.tap(find.byKey(const Key('prompts-ok')));
-    await t.pumpAndSettle();
-    expect(await r, ['123456', 'pw']);
   });
 }

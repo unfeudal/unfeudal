@@ -58,7 +58,13 @@ class _AclEditorState extends State<AclEditor> with BusyAction {
         for (final MapEntry(key: id, value: (type, allow, deny))
             in _entries.entries)
           if (allow.isNotEmpty || deny.isNotEmpty)
-            AclEntry(widget.folderId, type, id, allow, deny),
+            AclEntry(
+              folderId: widget.folderId,
+              principalType: type,
+              principalId: id,
+              allow: allow,
+              deny: deny,
+            ),
       ]);
       await state.sync!.syncNow();
     });

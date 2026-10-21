@@ -29,23 +29,23 @@ class OrgWriteRefused implements Exception {
 /// Org writes: checked against the cached block, sealed with the folder keys at their current version.
 class OrgWriter implements WriteScope {
   OrgWriter({
-    required this.vault,
-    required this.mirror,
-    required this.keyring,
-    required this.api,
+    required this._vault,
+    required this._mirror,
+    required this._keyring,
+    required this._api,
     required this._block,
-    required this.userId,
-    required this.publicKey,
+    required this._userId,
+    required this._publicKey,
     required this._online,
     required this._emit,
   });
 
-  final Vault vault;
-  final LocalMirror mirror;
-  final FolderKeyring keyring;
-  final ApiClient api;
-  final String userId;
-  final List<int> publicKey;
+  final Vault _vault;
+  final LocalMirror _mirror;
+  final FolderKeyring _keyring;
+  final ApiClient _api;
+  final String _userId;
+  final List<int> _publicKey;
   final OrgBlock? Function() _block;
   final bool Function() _online;
   final void Function(AppEvent) _emit;
@@ -56,7 +56,7 @@ class OrgWriter implements WriteScope {
     required OrgTarget target,
     required Map<String, Object?> meta,
     Map<String, Object?>? secret,
-  }) => vault.rewrite(
+  }) => _vault.rewrite(
     this,
     type: type,
     id: id,
@@ -78,7 +78,7 @@ class OrgWriter implements WriteScope {
     }
     final id = newId();
     final keys = FolderKeys.generate(1);
-    final item = await vault.sealer.sealItem(
+    final item = await _vault.sealer.sealItem(
       id: id,
       type: 'folder',
       orgId: orgId,
@@ -86,28 +86,29 @@ class OrgWriter implements WriteScope {
       meta: meta.toJson(),
       keyFor: _keysOf(id, keys),
     );
-    mirror.upsertItems([await api.putItem(item, ifMatch: 0)]);
-    await api.orgs.putFolderKeys(
+    _mirror.upsertItems([await _api.putItem(item, ifMatch: 0)]);
+    await _api.orgs.putFolderKeys(
       id,
       version: 1,
       wrapped: [
         await WrappedFolderKeys.wrap(
           keys,
           folderId: id,
-          recipientPublicKey: publicKey,
-          userId: userId,
+          recipientPublicKey: _publicKey,
+          userId: _userId,
         ),
       ],
     );
-    await keyring.put(id, keys);
-    await vault.reload();
+    await _keyring.put(id, keys);
+    await _vault.reload();
     _emit(const SharedVaultCreated());
     return id;
   }
 
-  Future<void> trash(String id) => vault.setDeleted(this, id, deleted: true);
+  Future<void> trash(String id) => _vault.setDeleted(this, id, deleted: true);
 
-  Future<void> restore(String id) => vault.setDeleted(this, id, deleted: false);
+  Future<void> restore(String id) =>
+      _vault.setDeleted(this, id, deleted: false);
 
   /// Both parts of each item opened with the keys they were sealed with, sealed again with [keys] (rotation);
   /// the vault reloads once, after the last.
@@ -123,7 +124,7 @@ class OrgWriter implements WriteScope {
           throw const OrgWriteRefused(OrgWriteRefusal.noSecretKey);
         }
         sealed.add(
-          await vault.sealer.sealItem(
+          await _vault.sealer.sealItem(
             id: item.id,
             type: item.type,
             orgId: item.orgId!,
@@ -145,14 +146,14 @@ class OrgWriter implements WriteScope {
       }
     } finally {
       // The items sealed before a refusal midway go too, and show; one commit and one round for all.
-      if (sealed.isNotEmpty) await vault.sendAll(sealed);
-      await vault.reload();
+      if (sealed.isNotEmpty) await _vault.sendAll(sealed);
+      await _vault.reload();
     }
   }
 
   /// A new id in the same org folder, sealed at the folder's current version, revision 0. Null for an unknown type.
   Future<Item?> conflictCopy(Item mine, {required String suffix}) =>
-      vault.sealer.conflictCopyIn(
+      _vault.sealer.conflictCopyIn(
         this,
         mine,
         suffix: suffix,
@@ -170,7 +171,7 @@ class OrgWriter implements WriteScope {
     return explainFromBlock(
       block,
       orgId,
-      userId: userId,
+      userId: _userId,
       folderId: folderId,
     ).effective.contains(Permission.edit);
   }
@@ -217,7 +218,7 @@ class OrgWriter implements WriteScope {
   }) {
     final keyFolder = keyFolderIdOf(type: type, id: id, folderId: folderId)!;
     final keys =
-        keyring.current(keyFolder) ??
+        _keyring.current(keyFolder) ??
         (throw const OrgWriteRefused(OrgWriteRefusal.noKey));
     if (withSecret && keys.secretKey == null) {
       throw const OrgWriteRefused(OrgWriteRefusal.noSecretKey);
@@ -228,7 +229,7 @@ class OrgWriter implements WriteScope {
   // Opens one part with the keyring key its keyId names; OrgWriteRefusal.noSecretKey or `noKey` when not held.
   Future<Map<String, Object?>> _open(Item item, PayloadPart part) async {
     final envelope = part == PayloadPart.meta ? item.meta! : item.secret!;
-    final key = folderPartKey(keyring, envelope, part);
+    final key = folderPartKey(_keyring, envelope, part);
     if (key == null) {
       throw OrgWriteRefused(
         part == PayloadPart.secret

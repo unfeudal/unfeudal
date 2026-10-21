@@ -56,7 +56,7 @@ class AccessTab extends StatelessWidget {
               if (a.allow.isNotEmpty) permissionList(l, a.entry.allow),
               if (a.deny.isNotEmpty)
                 l.accessDenied(permissionList(l, a.entry.deny)),
-            ].join(' · '),
+            ].join(l.listSeparator),
           ),
         Wrap(
           spacing: 8,

@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 import '../payload/inheritance.dart';
 
-const _maxJumpHosts = 8; // fixed limit, the most POST /events/ssh accepts
+/// The most jump hosts a chain may cross; POST /events/ssh enforces the same limit.
+const maxJumpHosts = 8;
 
 class JumpLoop implements Exception {
   JumpLoop(this.path);
@@ -37,7 +38,7 @@ List<String> resolveJumpChain(
     if (!seen.add(next)) throw JumpLoop([hostId, ...hops, next]);
     final hop = lookup(next) ?? (throw JumpHostMissing(next));
     hops.add(next);
-    if (hops.length > _maxJumpHosts) throw JumpTooDeep([hostId, ...hops]);
+    if (hops.length > maxJumpHosts) throw JumpTooDeep([hostId, ...hops]);
     next = hop.jumpHostId;
   }
   return hops.reversed.toList();

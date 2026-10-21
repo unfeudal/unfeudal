@@ -71,7 +71,6 @@ class _SetupScreenState extends State<SetupScreen> with BusyAction {
         password: _password.text,
         displayName: _name.text.trim().isEmpty ? null : _name.text.trim(),
       );
-      if (!state.serverInfo.has(Flag.recoveryKit)) state.finishOnboarding();
     });
   }
 

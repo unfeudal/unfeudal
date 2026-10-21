@@ -47,25 +47,31 @@ void main() {
     expect(() => Config.load(const {}), errorOn('public_url'));
   });
 
-  test('env wins over YAML; YAML scalars and lists are read', () {
+  test('env wins over YAML; YAML scalars are read', () {
     const yaml =
-        'log_level: debug\nlogin_max_attempts: 20\ntrusted_proxies: [10.0.0.0/8, "fd00::/8"]\nmax_vault_size: 0\n';
+        'log_level: debug\nlogin_max_attempts: 20\nmax_vault_size: 0\n';
     final c = load({'UNFEUDAL_LOG_LEVEL': 'warn'}, yaml);
     expect(
-      (c.loginMaxAttempts, c.trustedProxies.length, c.maxVaultSize),
-      (20, 2, 0),
+      (c.logLevel.name, c.loginMaxAttempts, c.maxVaultSize),
+      ('warn', 20, 0),
     );
-    expect(c.logLevel.name, 'warn');
+  });
+
+  test('trusted_proxies reads a YAML list', () {
+    const yaml = 'trusted_proxies: [10.0.0.0/8, "fd00::/8"]\n';
+    expect(load(const {}, yaml).trustedProxies, hasLength(2));
+  });
+
+  test('trusted_proxies reads a comma-separated env value', () {
     expect(
       load({'UNFEUDAL_TRUSTED_PROXIES': '10.0.0.0/8, 192.168.0.0/16'})
           .trustedProxies,
       hasLength(2),
     );
-    expect(
-      load(const {}, 'setup_token:\n').setupToken,
-      isNull,
-      reason: 'YAML null = unset',
-    );
+  });
+
+  test('a YAML null leaves the key unset', () {
+    expect(load(const {}, 'setup_token:\n').setupToken, isNull);
   });
 
   test('unknown keys, variables and flags refuse to start, naming them', () {
@@ -79,8 +85,17 @@ void main() {
       () => load({'UNFEUDAL_FEATURE_TELEMETRY': 'true'}),
       errorOn('UNFEUDAL_FEATURE_TELEMETRY'),
     );
+  });
+
+  test('a YAML file that is not a map refuses to start', () {
     expect(() => load(const {}, '- a\n- b\n'), errorOn('UNFEUDAL_CONFIG_FILE'));
+  });
+
+  test('a list on a scalar key refuses to start, naming it', () {
     expect(() => load(const {}, 'log_level: [a]\n'), errorOn('log_level'));
+  });
+
+  test('UNFEUDAL_CONFIG_FILE and variables outside UNFEUDAL_ are not keys', () {
     expect(
       load({'UNFEUDAL_CONFIG_FILE': '/etc/unfeudal.yaml', 'PATH': '/bin'})
           .publicUrl

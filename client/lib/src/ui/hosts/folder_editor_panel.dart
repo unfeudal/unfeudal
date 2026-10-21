@@ -8,7 +8,7 @@ import '../../design/dialog.dart';
 import '../../design/feedback.dart';
 import '../../design/field.dart';
 import '../../design/inputs.dart';
-import '../../vault/org_writer.dart';
+import '../../vault/folder_subtree.dart';
 import '../../vault/vault.dart';
 import '../busy_action.dart';
 import '../fields.dart';
@@ -81,24 +81,9 @@ class _FolderEditorPanelState extends State<FolderEditorPanel> with BusyAction {
         _ => const <String, Object?>{},
       };
 
-  // The folder itself and every folder below it: never a valid parent.
-  Set<String> _subtree(Vault vault) {
-    final id = widget.folderId;
-    if (id == null) return const {};
-    final out = {id};
-    for (var grew = true; grew;) {
-      grew = false;
-      for (final e in vault.ofKind(ItemKind.folder)) {
-        if (out.contains(e.folderId) && out.add(e.id)) grew = true;
-      }
-    }
-    return out;
-  }
-
   Future<void> _save() async {
     final l = AppLocalizations.of(context);
     final state = AppScope.read(context);
-    final vault = state.vault!;
     _problems.clear();
     if (_name.text.trim().isEmpty) _problems['name'] = l.fieldRequired;
     final previous = _entry?.meta ?? const {};
@@ -126,27 +111,12 @@ class _FolderEditorPanelState extends State<FolderEditorPanel> with BusyAction {
     if (meta == null) return setState(() => _shakes++);
     final folder = meta;
     await run(() async {
-      final orgId = _orgId;
-      if (orgId == null) {
-        await vault.saveFolder(
-          folder,
-          id: widget.folderId,
-          parentId: _parentId,
-        );
-      } else if (widget.folderId == null) {
-        await state.orgs!.writer.createFolder(
-          orgId: orgId,
-          parentId: _parentId,
-          meta: folder,
-        );
-      } else {
-        await state.orgs!.writer.upsert(
-          type: 'folder',
-          id: widget.folderId,
-          target: OrgTarget(orgId, _parentId),
-          meta: folder.toJson(),
-        );
-      }
+      await state.orgs!.saveFolder(
+        folder,
+        id: widget.folderId,
+        orgId: _orgId,
+        parentId: _parentId,
+      );
       widget.onClose?.call();
     });
   }
@@ -160,8 +130,10 @@ class _FolderEditorPanelState extends State<FolderEditorPanel> with BusyAction {
       action: l.folderDelete,
     );
     if (!yes) return;
-    await state.orgs!.trashItem(widget.folderId!);
-    widget.onClose?.call();
+    await run(() async {
+      await state.orgs!.trashItem(widget.folderId!);
+      widget.onClose?.call();
+    });
   }
 
   @override
@@ -169,7 +141,7 @@ class _FolderEditorPanelState extends State<FolderEditorPanel> with BusyAction {
     final l = AppLocalizations.of(context);
     final state = AppScope.of(context);
     final vault = state.vault!;
-    final readOnly = state.sync?.readOnly ?? true;
+    final readOnly = state.sync?.isReadOnly ?? true;
     final parentName = vault.entry(_parentId ?? '')?.name;
     return UfShake(
       shakes: _shakes,
@@ -209,13 +181,13 @@ class _FolderEditorPanelState extends State<FolderEditorPanel> with BusyAction {
   }
 
   List<Widget> _fields(AppLocalizations l, Vault vault) {
-    final excluded = _subtree(vault);
+    final excluded = switch (widget.folderId) {
+      final id? => folderSubtree(vault, id),
+      null => const <String>{},
+    };
     final parents = [
-      for (final e in vault.ofKind(ItemKind.folder))
-        if (e.state == EntryState.ok &&
-            e.orgId == _orgId &&
-            !excluded.contains(e.id))
-          e,
+      for (final e in vault.usableOfKind(ItemKind.folder, orgId: _orgId))
+        if (!excluded.contains(e.id)) e,
     ];
     return [
       keyedField('folder-name', _name, l.folderName, error: _problems['name']),
@@ -232,10 +204,7 @@ class _FolderEditorPanelState extends State<FolderEditorPanel> with BusyAction {
   }
 
   List<Widget> _defaultFields(AppLocalizations l, Vault vault) {
-    final identities = vault
-        .ofKind(ItemKind.identity)
-        .where((e) => e.state == EntryState.ok && e.orgId == _orgId)
-        .toList();
+    final identities = vault.usableOfKind(ItemKind.identity, orgId: _orgId);
     return [
       Padding(
         padding: const EdgeInsets.only(top: 6),
@@ -255,7 +224,7 @@ class _FolderEditorPanelState extends State<FolderEditorPanel> with BusyAction {
           onChanged: (port) => setState(() => _port = port),
         ),
       ),
-      keyedField('folder-user', _user, l.hostUser, error: _problems['user']),
+      keyedField('folder-user', _user, l.hostUser),
       entryPicker(
         key: 'folder-identity',
         label: l.hostIdentity,

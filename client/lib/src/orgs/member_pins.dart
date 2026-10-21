@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: Apache-2.0
-import 'dart:async';
-
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../vault/vault.dart';
@@ -51,17 +49,15 @@ class MemberPins {
   }
 
   /// Copies a synced pin into the ledger only for a user the ledger has none for.
-  void seed() {
+  Future<void> seed() async {
     for (final e in vault.ofKind(ItemKind.memberPin)) {
       if (e.state != EntryState.ok || e.orgId != null) continue;
       final meta = MemberPinMeta.fromJson(e.meta);
       if (vault.ledger.memberPin(meta.userId) == null) {
-        unawaited(
-          vault.ledger.setMemberPin(meta.userId, (
-            fingerprint: meta.fingerprint,
-            verified: meta.verified,
-          )),
-        );
+        await vault.ledger.setMemberPin(meta.userId, (
+          fingerprint: meta.fingerprint,
+          verified: meta.verified,
+        ));
       }
     }
   }

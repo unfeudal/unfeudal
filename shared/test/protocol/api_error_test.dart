@@ -28,7 +28,7 @@ void main() {
     expect((b.error, b.message), ('teapot', ''));
   });
 
-  test('conflict body reads item, reason and extra fields', () {
+  test('conflict body reads its item', () {
     final item = {
       'id': '6f1c2b9a-3d4e-4f50-8a61-7b8c9d0e1f20',
       'type': 'host',
@@ -57,12 +57,18 @@ void main() {
       (b.error, b.message, b.item!.revision),
       ('conflict', 'Revision mismatch.', 4),
     );
+  });
+
+  test('a null item reads as none', () {
     final gone = ApiErrorBody.fromJson({
       'error': 'conflict',
       'message': 'Gone.',
       'item': null,
     });
     expect(gone.item, isNull);
+  });
+
+  test('reason and unknown fields are kept', () {
     final lastOwner = ApiErrorBody.fromJson({
       'orgs': ['Acme'],
       'error': 'conflict',

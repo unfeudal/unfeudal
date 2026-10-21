@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:unfeudal_client/l10n/app_localizations.dart';
+import 'package:unfeudal_client/src/app.dart';
 import 'package:unfeudal_client/src/app_state.dart';
 import 'package:unfeudal_client/src/session/lock_machine.dart';
 import 'package:unfeudal_client/src/session/session_store.dart';
@@ -140,12 +141,15 @@ void main() {
   testWidgets(
     'theme and language come from the cached settings before unlock',
     (t) async {
-      await pumpApp(
-        t,
+      // pumpApp pins English, which would hide the cached language.
+      final s = testAppState(
         settings: const Settings(themeMode: ThemeMode.dark, locale: 'fr'),
       );
+      await t.runAsync(s.boot);
+      await t.pumpWidget(UnfeudalApp(state: s));
       final app = t.widget<MaterialApp>(find.byType(MaterialApp));
       expect(app.themeMode, ThemeMode.dark);
+      expect(app.locale, const Locale('fr'));
     },
   );
 

@@ -8,6 +8,7 @@ import '../support/test_server.dart';
 void main() {
   test('startRetentionTimer runs the job at once, then keeps a 24 h timer until cancelled', () async {
     final s = await TestServer.start();
+    addTearDown(s.close);
     final o = await s.setupOwner();
     final item = await testItem(o);
     await s.put(
@@ -24,6 +25,7 @@ void main() {
     );
     s.clock.advance(const Duration(days: 31));
     final timer = startRetentionTimer(s.deps);
+    addTearDown(timer.cancel);
     await Future.doWhile(() async {
       await Future<void>.delayed(const Duration(milliseconds: 10));
       return !s.logLines.any((l) => l.contains('retention done'));
@@ -35,7 +37,5 @@ void main() {
       1,
     );
     expect(timer.isActive, isTrue);
-    timer.cancel();
-    await s.close();
   });
 }

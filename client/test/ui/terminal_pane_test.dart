@@ -20,24 +20,10 @@ final windows = TargetPlatformVariant.only(TargetPlatform.windows);
 Future<(AppState, TerminalSession, FakeSshConnector)> open(
   WidgetTester t,
 ) async {
-  final ssh = FakeSshConnector()
-    ..keyType = 'ssh-ed25519'
-    ..fingerprint = 'SHA256:${'A' * 43}';
-  final s = await signedInState(t, ssh: ssh);
-  late TerminalSession tab;
-  await t.runAsync(() async {
-    final web = await s.vault!.upsertItem(
-      type: 'host',
-      meta: hostJson('web', user: 'root'),
-    );
-    await s.vault!.hostKeys.pin(web, 'ssh-ed25519', 'SHA256:${'A' * 43}');
-    tab = await s.connections.connect(web);
-  });
-  await pumpApp(t, state: s);
-  await pumpReal(t, rounds: 5);
+  final opened = await pinnedTab(t);
   await t.tap(find.byType(TerminalView));
   await t.pump();
-  return (s, tab, ssh);
+  return opened;
 }
 
 Future<void> chord(
@@ -88,28 +74,37 @@ void main() {
     variant: windows,
   );
 
-  testWidgets(
-    'paste: one line goes straight in; multi-line asks first, cancel sends nothing; bracketed paste does not ask',
-    (t) async {
-      var text = 'ls -la\n';
-      clipboard(t, paste: () => text);
-      final (_, tab, ssh) = await open(t);
-      final shell = ssh.shells.single;
-      await chord(t, LogicalKeyboardKey.keyV);
-      expect(utf8.decode(shell.written.last), 'ls -la');
-      text = 'rm a\nrm b';
-      final before = shell.written.length;
-      await chord(t, LogicalKeyboardKey.keyV);
-      await t.tap(find.byKey(const Key('multiline-cancel')));
-      await t.pumpAndSettle();
-      expect(shell.written.length, before);
-      tab.terminal.write('\x1b[?2004h');
-      await chord(t, LogicalKeyboardKey.keyV);
-      expect(find.byKey(const Key('multiline-cancel')), findsNothing);
-      expect(utf8.decode(shell.written.last), '\x1b[200~rm a\nrm b\x1b[201~');
-    },
-    variant: windows,
-  );
+  testWidgets('paste: a single line goes straight in', (t) async {
+    clipboard(t, paste: () => 'ls -la\n');
+    final (_, _, ssh) = await open(t);
+    await chord(t, LogicalKeyboardKey.keyV);
+    expect(utf8.decode(ssh.shells.single.written.last), 'ls -la');
+  }, variant: windows);
+
+  testWidgets('paste: multi-line asks first and cancel sends nothing', (
+    t,
+  ) async {
+    clipboard(t, paste: () => 'rm a\nrm b');
+    final (_, _, ssh) = await open(t);
+    final shell = ssh.shells.single;
+    final before = shell.written.length;
+    await chord(t, LogicalKeyboardKey.keyV);
+    await t.tap(find.byKey(const Key('multiline-cancel')));
+    await t.pumpAndSettle();
+    expect(shell.written.length, before);
+  }, variant: windows);
+
+  testWidgets('paste: bracketed paste does not ask', (t) async {
+    clipboard(t, paste: () => 'rm a\nrm b');
+    final (_, tab, ssh) = await open(t);
+    tab.terminal.write('\x1b[?2004h');
+    await chord(t, LogicalKeyboardKey.keyV);
+    expect(find.byKey(const Key('multiline-cancel')), findsNothing);
+    expect(
+      utf8.decode(ssh.shells.single.written.last),
+      '\x1b[200~rm a\nrm b\x1b[201~',
+    );
+  }, variant: windows);
 
   testWidgets('right-click menu pastes', (t) async {
     clipboard(t, paste: () => 'uptime');
@@ -150,26 +145,28 @@ void main() {
     variant: windows,
   );
 
-  testWidgets(
-    'after a hang-up: banner with Reconnect; Ctrl+Shift+R reconnects too',
-    (t) async {
-      final (s, _, ssh) = await open(t);
-      final l = AppLocalizations.of(t.element(find.byType(TerminalPane)));
-      ssh.shells.single.hangUp();
-      await pumpReal(t, rounds: 3); // the hang-up runs in the real zone
-      expect(find.text(l.termClosed), findsOneWidget);
-      await t.tap(find.byKey(const Key('term-reconnect')));
-      await pumpReal(t, rounds: 5);
-      expect(s.connections.tabs.single.state, SealState.connected);
-      expect(ssh.shells, hasLength(2));
-      ssh.shells.last.hangUp();
-      await pumpReal(t, rounds: 3);
-      await t.tap(find.byType(TerminalView));
-      await chord(t, LogicalKeyboardKey.keyR);
-      await pumpReal(t, rounds: 5);
-      expect(s.connections.tabs.single.state, SealState.connected);
-      expect(ssh.shells, hasLength(3));
-    },
-    variant: windows,
-  );
+  testWidgets('after a hang-up the banner reconnects', (t) async {
+    final (s, _, ssh) = await open(t);
+    final l = AppLocalizations.of(t.element(find.byType(TerminalPane)));
+    ssh.shells.single.hangUp();
+    // The hang-up runs in the real zone.
+    await pumpReal(t, rounds: 3);
+    expect(find.text(l.termClosed), findsOneWidget);
+    await t.tap(find.byKey(const Key('term-reconnect')));
+    await pumpReal(t, rounds: 5);
+    expect(s.connections.tabs.single.state, SealState.connected);
+    expect(ssh.shells, hasLength(2));
+  }, variant: windows);
+
+  testWidgets('Ctrl+Shift+R reconnects after a hang-up', (t) async {
+    final (s, _, ssh) = await open(t);
+    ssh.shells.single.hangUp();
+    // The hang-up runs in the real zone.
+    await pumpReal(t, rounds: 3);
+    await t.tap(find.byType(TerminalView));
+    await chord(t, LogicalKeyboardKey.keyR);
+    await pumpReal(t, rounds: 5);
+    expect(s.connections.tabs.single.state, SealState.connected);
+    expect(ssh.shells, hasLength(2));
+  }, variant: windows);
 }

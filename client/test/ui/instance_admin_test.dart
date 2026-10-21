@@ -56,7 +56,9 @@ void main() {
     return s;
   }
 
-  testWidgets('Réglages shows Serveur to the Instance Owner only', (t) async {
+  testWidgets('Settings shows the Server group to the Instance Owner', (
+    t,
+  ) async {
     final s = await signedInState(t);
     await pumpApp(t, state: s, child: const SettingsScreen());
     expect(

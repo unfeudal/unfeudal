@@ -13,7 +13,7 @@ import '../support/sync_harness.dart';
 
 const newEpoch = 'AAAAAAAAAAAAAAAAAAAAAA';
 String? storedEpoch(LocalMirror m) =>
-    ApiInfo.fromJson(jsonDecode(m.getKv(KvKey.apiInfo)!)).instanceEpoch;
+    ApiInfo.fromJson(jsonDecode(m.kv(KvKey.apiInfo)!)).instanceEpoch;
 int syncCalls(SyncHarness h) =>
     h.requests.where((r) => r == 'GET /api/v1/sync').length;
 
@@ -26,7 +26,7 @@ void main() {
     final before = syncCalls(h);
     await e.syncNow();
     expect(
-      (e.restorePending, e.restoreRefused, syncCalls(h)),
+      (e.isRestorePending, e.isRestoreRefused, syncCalls(h)),
       (true, false, before),
     );
     expect(storedEpoch(m), 'q83vEjRWeJCrze8SNFZ4kA');
@@ -40,7 +40,7 @@ void main() {
     await e.syncNow();
     h.instanceEpoch = null;
     await e.syncNow();
-    expect(e.restorePending, isTrue);
+    expect(e.isRestorePending, isTrue);
     expect(storedEpoch(m), 'q83vEjRWeJCrze8SNFZ4kA');
   });
 
@@ -52,7 +52,7 @@ void main() {
     await e.syncNow();
     h.restore(empty, epoch: h.instanceEpoch); // same epoch, older data
     await e.syncNow();
-    expect(e.restorePending, isTrue);
+    expect(e.isRestorePending, isTrue);
   });
 
   test('refuse: read-only toward this server, kept after a restart, Accept still available', () async {
@@ -63,7 +63,7 @@ void main() {
     await e.syncNow();
     await e.refuseRestore();
     expect(
-      (m.getKv(KvKey.refusedEpoch), e.readOnly, e.restoreRefused),
+      (m.kv(KvKey.refusedEpoch), e.isReadOnly, e.isRestoreRefused),
       (newEpoch, true, true),
     );
     await expectLater(
@@ -72,7 +72,7 @@ void main() {
     );
     final api = ApiClient(h.baseUrl, h.client)..accessToken = login.accessToken;
     final restarted = SyncEngine(api: api, mirror: m, deviceId: login.deviceId);
-    expect((restarted.restorePending, restarted.readOnly), (true, true));
+    expect((restarted.isRestorePending, restarted.isReadOnly), (true, true));
   });
 
   test('accept: marks and anchors emptied, pins and keyring kept, server items taken as they are, outbox pushed again, epoch stored', () async {
@@ -101,7 +101,7 @@ void main() {
     await e.acceptRestore();
     expect(ledgerReset, 1);
     expect(
-      (m.getKv(KvKey.ledger), m.getKv(KvKey.keyring), m.getKv(KvKey.anchors)),
+      (m.kv(KvKey.ledger), m.kv(KvKey.keyring), m.kv(KvKey.anchors)),
       ('sealed', 'sealed', null),
     );
     expect(m.item(kept)!.revision, 1);
@@ -110,9 +110,9 @@ void main() {
     expect(
       (
         storedEpoch(m),
-        m.getKv(KvKey.refusedEpoch),
-        e.restorePending,
-        e.readOnly,
+        m.kv(KvKey.refusedEpoch),
+        e.isRestorePending,
+        e.isReadOnly,
       ),
       (newEpoch, null, false, false),
     );
@@ -129,10 +129,10 @@ void main() {
     h.holdInfo = info.future;
     final accepted = e.acceptRestore();
     await pumpEventQueue();
-    expect((e.readOnly, e.api.isReadOnly()), (false, true));
+    expect((e.isReadOnly, e.api.isReadOnly()), (false, true));
     info.complete();
     await accepted;
-    expect((e.readOnly, e.api.isReadOnly()), (false, false));
+    expect((e.isReadOnly, e.api.isReadOnly()), (false, false));
   });
 
   test('outside an accepted restore an older revision is ignored', () async {

@@ -97,7 +97,7 @@ extension _PaletteGroups on _TreePanelState {
           detail: [
             ?vault.entry(e.folderId ?? '')?.name,
             ?_target(state, e.id),
-          ].join(' · '),
+          ].join(l.listSeparator),
           hint: l.paletteConnect,
           icon: Seal(state: state.connections.sealFor(e.id)),
           onSelected: _thenClose(() => state.connections.connect(e.id)),

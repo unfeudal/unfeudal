@@ -8,6 +8,7 @@ import 'package:unfeudal_server/src/db/migrate.dart';
 import 'package:unfeudal_server/src/db/open_db.dart';
 import 'package:unfeudal_server/src/db/postgres_db.dart';
 
+import '../support/matchers.dart';
 import '../support/test_db.dart';
 
 void main() {
@@ -99,7 +100,7 @@ void main() {
         "INSERT INTO devices (id, user_id, name, platform, created_at, last_seen_at) "
         "VALUES ('d', 'nobody', 'n', 'linux', '2026-10-13T12:00:00.000Z', '2026-10-13T12:00:00.000Z')",
       ),
-      throwsA(anything),
+      throwsConstraintViolation,
     );
   });
 

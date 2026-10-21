@@ -14,7 +14,8 @@ void main() {
   late DateTime now;
   late ReactionEngine e;
   setUp(() {
-    now = DateTime(2026, 10, 15, 12); // Thursday, local
+    // Thursday, local.
+    now = DateTime(2026, 10, 15, 12);
     e = ReactionEngine(memory: LoquetMemory(), now: () => now);
   });
 
@@ -56,24 +57,25 @@ void main() {
     'no spontaneous bubble while typing in a terminal; the clock line waits',
     () {
       now = DateTime(2026, 10, 16, 2, 10);
-      e.terminalInput();
-      expect(e.typing, isTrue);
+      e.noteTerminalInput();
+      expect(e.isTyping, isTrue);
       expect(e.tick(), isNull);
       now = now.add(const Duration(seconds: 4));
-      expect(e.typing, isFalse);
+      expect(e.isTyping, isFalse);
       final r = e.tick()!;
       expect(
         (r.mood, r.line, r.spontaneous),
         (LoquetMood.sleepy, LineKey.night, true),
       );
-      expect(e.tick(), isNull); // once per night
+      // Once per night.
+      expect(e.tick(), isNull);
     },
   );
 
   test(
     'while typing, even a direct answer keeps its face and loses its bubble',
     () {
-      e.terminalInput();
+      e.noteTerminalInput();
       final r = e.handle(const HostKeyChanged())!;
       expect((r.mood, r.line), (LoquetMood.alert, null));
       now = now.add(const Duration(seconds: 4));

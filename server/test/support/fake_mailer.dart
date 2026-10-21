@@ -3,7 +3,8 @@ import 'package:unfeudal_server/src/mail/mailer.dart';
 
 class FakeMailer implements Mailer {
   final sent = <Mail>[];
-  bool fail = false; // true: send throws, as a dead SMTP server would
+  // True: send throws, as a dead SMTP server would.
+  bool fail = false;
   @override
   Future<bool> send(Mail mail) async {
     if (fail) throw StateError('smtp down');

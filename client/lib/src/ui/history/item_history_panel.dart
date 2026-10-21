@@ -25,7 +25,7 @@ class ItemHistoryPanel extends StatefulWidget {
   /// In its own dialog.
   const ItemHistoryPanel({super.key, required this.itemId}) : embedded = false;
 
-  /// The version list alone, for the inspector's Historique tab.
+  /// The version list alone, for the inspector's History tab.
   const ItemHistoryPanel.embedded({super.key, required this.itemId})
     : embedded = true;
 
@@ -149,10 +149,11 @@ class _ItemHistoryPanelState extends State<ItemHistoryPanel> with BusyAction {
         entry.state == EntryState.ok &&
         state.orgs!.canEditEntry(entry) &&
         !state.vault!.isTrashed(entry.id) &&
-        !(state.sync?.readOnly ?? true);
-    final reveal =
+        !(state.sync?.isReadOnly ?? true);
+    // Only the client reads this flag: no server route sits behind it.
+    final canReveal =
         entry != null &&
-        state.serverInfo.has(Flag.reveal) && // client-only flag
+        state.serverInfo.has(Flag.reveal) &&
         state.orgs!.canReveal(entry);
     final children = [
       if (problem case final error?)
@@ -166,7 +167,7 @@ class _ItemHistoryPanelState extends State<ItemHistoryPanel> with BusyAction {
           previous: i + 1 < versions!.length ? versions[i + 1] : null,
           isNewest: i == 0,
           secrets: _secrets,
-          canReveal: reveal,
+          canReveal: canReveal,
           onReveal: () => _reveal(i),
           onRestore: restorable && v.meta != null ? () => _restore(v) : null,
         ),
@@ -279,6 +280,7 @@ class _Changes extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     final muted = TextStyle(color: UfColors.of(context).muted, fontSize: 12);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -289,7 +291,7 @@ class _Changes extends StatelessWidget {
             children: [
               Text(c.field, style: muted),
               Flexible(
-                child: Text([_show(c.before), _show(c.after)].join(' → ')),
+                child: Text(l.historyChange(_show(c.before), _show(c.after))),
               ),
             ],
           ),

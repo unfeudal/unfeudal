@@ -108,8 +108,9 @@ class _TerminalPaneState extends State<TerminalPane> {
   Future<void> _reconnect() =>
       AppScope.read(context).connections.reconnect(_session);
 
-  void _menu(TapDownDetails details, CellOffset _) {
-    setState(() {}); // the items' enabled state follows the selection
+  void _openMenu(TapDownDetails details, CellOffset _) {
+    // The items' enabled state follows the selection.
+    setState(() {});
     _contextMenu.open(position: details.localPosition);
   }
 
@@ -179,7 +180,8 @@ class _TerminalPaneState extends State<TerminalPane> {
 
   void _search(String query) {
     _hits = findInTerminal(_session.terminal, query);
-    _current = _hits.length - 1; // the latest output first
+    // The latest output comes first.
+    _current = _hits.length - 1;
     _paint();
   }
 
@@ -257,7 +259,7 @@ class _TerminalPaneState extends State<TerminalPane> {
                       // Empty, to drop xterm2's own Ctrl+C/V.
                       shortcuts: const {},
                       onKeyEvent: _onKey,
-                      onSecondaryTapDown: _menu,
+                      onSecondaryTapDown: _openMenu,
                       theme: terminalThemeFor(
                         settings.terminalTheme,
                         Theme.of(context).brightness,

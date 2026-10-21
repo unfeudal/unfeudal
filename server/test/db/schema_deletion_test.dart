@@ -3,6 +3,7 @@ import 'package:test/test.dart';
 import 'package:unfeudal_server/src/db/db.dart';
 import 'package:unfeudal_server/src/db/migrate.dart';
 
+import '../support/matchers.dart';
 import '../support/schema_world.dart';
 import '../support/test_db.dart';
 
@@ -106,7 +107,7 @@ void main() {
       for (final sql in before) {
         await db.execute(sql);
       }
-      await expectLater(db.execute(blocked), throwsA(anything));
+      await expectLater(db.execute(blocked), throwsConstraintViolation);
     });
   }
 

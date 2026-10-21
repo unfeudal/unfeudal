@@ -109,25 +109,26 @@ void main() {
     expect((team['allow']! as List).toSet(), {'view', 'connect', 'edit'});
   });
 
-  testWidgets(
-    'user entries are hidden when user_overrides is off; teams screen hidden when teams is off',
-    (t) async {
-      await open(
-        t,
-        (_) => AclEditor(orgId: testOrgId, folderId: f),
-        role: 'admin',
-        caps: const ['teams'],
-      );
-      expect(find.byKey(const Key('acl-add-user')), findsNothing);
-      await open(
-        t,
-        (_) => const TeamsScreen(orgId: testOrgId),
-        role: 'admin',
-        caps: const [],
-      );
-      expect(find.byKey(const Key('team-new')), findsNothing);
-    },
-  );
+  testWidgets('user entries are hidden when user_overrides is off', (t) async {
+    await open(
+      t,
+      (_) => AclEditor(orgId: testOrgId, folderId: f),
+      role: 'admin',
+      caps: const ['teams'],
+    );
+    expect(find.byKey(Key('acl-$ops-view')), findsOneWidget);
+    expect(find.byKey(Key('acl-$kim-view')), findsNothing);
+  });
+
+  testWidgets('teams screen is hidden when teams is off', (t) async {
+    await open(
+      t,
+      (_) => const TeamsScreen(orgId: testOrgId),
+      role: 'admin',
+      caps: const [],
+    );
+    expect(find.byKey(const Key('team-new')), findsNothing);
+  });
 
   testWidgets('why view lists the steps of the resolution', (t) async {
     await open(

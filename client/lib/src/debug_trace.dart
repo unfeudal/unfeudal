@@ -21,12 +21,12 @@ final _areas = switch (_flag) {
 };
 
 /// Debug and profile builds only; a release build never traces, whatever the flag.
-bool tracing(TraceArea area) => !kReleaseMode && _areas.contains(area);
+bool isTracing(TraceArea area) => !kReleaseMode && _areas.contains(area);
 
 /// One line in the `flutter run` console and in DevTools' Logging view. Ids, kinds, statuses and counts only:
 /// never a token, key, password, host name, address, user or any decrypted payload.
 void trace(TraceArea area, String message) {
-  if (!tracing(area)) return;
+  if (!isTracing(area)) return;
   debugPrint('[unfeudal:${area.name}] $message');
   developer.log(message, name: 'unfeudal.${area.name}');
 }

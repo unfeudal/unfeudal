@@ -70,7 +70,7 @@ Future<Response> updateOrg(Request request) async {
           throw ApiError.invalid('mascot must be a boolean.');
         }
       } else if (value != null) {
-        _retention(key, value, server[key]!);
+        checkOrgRetention(key, value, server[key]!);
       }
     }
     final row = (await tx.query(
@@ -94,22 +94,6 @@ Future<Response> updateOrg(Request request) async {
     await auditWriter(request, tx)(AuditScope.org(org), 'org.updated', [org]);
   });
   return noContent();
-}
-
-// An org may only shorten the server retention (36500 days at most when the
-// server keeps forever); auditDays stays at 30 or more, unless the server is below 30.
-int _retention(String key, Object? value, int server) {
-  if (value is! int) {
-    throw ApiError.invalid('$key must be an integer or null.');
-  }
-  final ceiling = server == 0 ? 36500 : server;
-  final floor = key == 'auditDays'
-      ? (server != 0 && server < 30 ? server : 30)
-      : 1;
-  if (value < floor || value > ceiling) {
-    throw ApiError.invalid('$key must be between $floor and $ceiling.');
-  }
-  return value;
 }
 
 Future<Response> deleteOrgRoute(Request request) async {

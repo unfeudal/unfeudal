@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:collection/collection.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
+import '../mail/templates.dart';
 import '../util/email.dart';
 import 'errors.dart';
 
@@ -12,9 +13,9 @@ Never badField(String field, String rule) =>
     throw ApiError.invalid('$field: $rule');
 
 /// Trimmed and lowercased; at most 254 code points.
-String normalizeEmail(Object? v) {
-  if (v is! String) badField('email', 'must be a string');
-  final email = v.trim().toLowerCase();
+String normalizeEmail(Object? value) {
+  if (value is! String) badField('email', 'must be a string');
+  final email = canonicalEmail(value);
   if (email.runes.length > 254 || !isEmailAddress(email)) {
     badField('email', 'must be an email address');
   }
@@ -22,19 +23,27 @@ String normalizeEmail(Object? v) {
 }
 
 /// Non-empty, at most [max] code points.
-String reqString(Map<String, Object?> m, String key, {int max = 1024}) {
-  final v = m[key];
-  if (v is! String || v.isEmpty) badField(key, 'must be a non-empty string');
-  if (v.runes.length > max) badField(key, 'must be at most $max characters');
-  return v;
+String parseRequiredString(
+  Map<String, Object?> body,
+  String key, {
+  int max = 1024,
+}) {
+  final value = body[key];
+  if (value is! String || value.isEmpty) {
+    badField(key, 'must be a non-empty string');
+  }
+  if (value.runes.length > max) {
+    badField(key, 'must be at most $max characters');
+  }
+  return value;
 }
 
-Uint8List reqKey32(Map<String, Object?> m, String key) {
-  final v = m[key];
-  if (v is! String) badField(key, 'must be base64url');
+Uint8List parseKey32(Map<String, Object?> body, String key) {
+  final value = body[key];
+  if (value is! String) badField(key, 'must be base64url');
   final Uint8List bytes;
   try {
-    bytes = unb64(v);
+    bytes = unb64(value);
   } on FormatException {
     badField(key, 'must be base64url');
   }
@@ -64,9 +73,9 @@ typedef DeviceInput = ({String name, String platform});
 final _control = RegExp(r'\p{Cc}', unicode: true);
 
 /// Trimmed, 1 to 100 code points, no control character: device, org and team names.
-String parseName(Object? v, [String field = 'name']) {
-  if (v is! String) badField(field, 'must be a string');
-  final trimmed = v.trim();
+String parseName(Object? value, [String field = 'name']) {
+  if (value is! String) badField(field, 'must be a string');
+  final trimmed = value.trim();
   final length = trimmed.runes.length;
   if (length < 1 || length > 100 || _control.hasMatch(trimmed)) {
     badField(field, 'must be 1 to 100 printable characters');
@@ -88,23 +97,23 @@ final _ifMatch = RegExp(r'^\s*"?(\d{1,15})"?\s*$');
 
 /// The expected revision; `0` means create.
 int parseIfMatch(String? header) {
-  final m = header == null ? null : _ifMatch.firstMatch(header);
-  if (m == null) badField('If-Match', 'must be a revision number');
-  return int.parse(m[1]!);
+  final match = header == null ? null : _ifMatch.firstMatch(header);
+  if (match == null) badField('If-Match', 'must be a revision number');
+  return int.parse(match[1]!);
 }
 
-String parseUuid(String v) {
-  if (!isUuid(v)) badField('id', 'must be a lowercase UUID');
-  return v;
+String parseUuid(String value) {
+  if (!isUuid(value)) badField('id', 'must be a lowercase UUID');
+  return value;
 }
 
-OrgRole parseRole(Object? v) =>
-    OrgRole.values.asNameMap()[v] ??
+OrgRole parseRole(Object? value) =>
+    OrgRole.values.asNameMap()[value] ??
     (throw ApiError.invalid('role must be owner, admin or member.'));
 
-String parseLocale(Object? v) {
-  if (v != 'en' && v != 'fr') badField('locale', 'must be en or fr');
-  return v! as String;
+String parseLocale(Object? value) {
+  if (!supportedLocales.contains(value)) badField('locale', 'must be en or fr');
+  return value! as String;
 }
 
 /// Throws a 400 when a bundle field outside the route's list changes

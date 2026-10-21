@@ -31,7 +31,7 @@ void main() {
   test('first sight raises nothing and anchors the newest event', () {
     events(3);
     expect(
-      anchors.check(chain('instance'), completeScope: 'instance'),
+      anchors.checkAndAdvance(chain('instance'), completeScope: 'instance'),
       isEmpty,
     );
     expect(anchors.anchorOf('instance')?.seq, 3);
@@ -39,15 +39,15 @@ void main() {
 
   test('same seq with another hash is a rewrite and keeps the anchor', () {
     events(3);
-    anchors.check(chain('instance'));
+    anchors.checkAndAdvance(chain('instance'));
     final seen = anchors.anchorOf('instance')!.hash;
     h.rewriteAudit('instance', 3, 'item.created');
-    expect(shape(anchors.check(chain('instance'))), [
+    expect(shape(anchors.checkAndAdvance(chain('instance'))), [
       ['instance', 3, AnchorAlertKind.rewritten],
     ]);
     events(1);
     expect(
-      anchors.check(chain('instance')),
+      anchors.checkAndAdvance(chain('instance')),
       hasLength(1),
       reason: 'the evidence stays',
     );
@@ -56,16 +56,15 @@ void main() {
 
   test('an anchored seq gone without a covering checkpoint is reported on a complete read', () {
     events(5);
-    anchors.check(chain('instance'));
-    final served = chain('instance')
-        .take(3)
-        .toList(); // server rolled back behind what this device saw
+    anchors.checkAndAdvance(chain('instance'));
+    // The server rolled back behind what this device saw.
+    final served = chain('instance').take(3).toList();
     expect(
-      anchors.check(served),
+      anchors.checkAndAdvance(served),
       isEmpty,
       reason: 'a partial view proves nothing',
     );
-    expect(shape(anchors.check(served, completeScope: 'instance')), [
+    expect(shape(anchors.checkAndAdvance(served, completeScope: 'instance')), [
       ['instance', 5, AnchorAlertKind.vanished],
     ]);
     expect(
@@ -77,29 +76,32 @@ void main() {
 
   test('a checkpoint at or past the anchor covers the purge; one naming the anchor with another hash is a rewrite', () {
     events(5);
-    anchors.check(chain('instance'));
+    anchors.checkAndAdvance(chain('instance'));
     h.purgeAudit('instance', 5);
     expect(
-      anchors.check(chain('instance'), completeScope: 'instance'),
+      anchors.checkAndAdvance(chain('instance'), completeScope: 'instance'),
       isEmpty,
     );
     expect(anchors.anchorOf('instance')!.seq, 6);
     events(2, 'user:u');
-    anchors.check(chain('user:u'));
+    anchors.checkAndAdvance(chain('user:u'));
     h.auditLog.removeWhere((e) => e.scope == 'user:u');
     h.appendAudit(
       'user:u',
       'audit.checkpoint',
       targets: ['seq:2', 'hash:${'f' * 64}'],
     );
-    expect(shape(anchors.check(chain('user:u'), completeScope: 'user:u')), [
-      ['user:u', 2, AnchorAlertKind.rewritten],
-    ]);
+    expect(
+      shape(anchors.checkAndAdvance(chain('user:u'), completeScope: 'user:u')),
+      [
+        ['user:u', 2, AnchorAlertKind.rewritten],
+      ],
+    );
   });
 
   test('anchors live in kv.anchors; an accepted restore empties them', () {
     events(2);
-    anchors.check(chain('instance'));
+    anchors.checkAndAdvance(chain('instance'));
     expect(AuditAnchors(mirror).anchorOf('instance')!.seq, 2);
     mirror.resetForRestore();
     expect(anchors.anchorOf('instance'), isNull);

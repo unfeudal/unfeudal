@@ -51,7 +51,7 @@ void main() {
     });
   });
 
-  testWidgets('delete needs the exact name and an owner', (t) async {
+  testWidgets('delete needs the exact name', (t) async {
     await open(t, const OrgSettingsScreen(orgId: testOrgId));
     await t.tap(find.byKey(const Key('org-delete')));
     await t.pump();
@@ -65,6 +65,9 @@ void main() {
     await t.tap(find.byKey(const Key('org-delete-ok')));
     await pumpReal(t);
     expect(h.orgCalls.last.route, 'DELETE /orgs/$testOrgId');
+  });
+
+  testWidgets('an admin sees no delete', (t) async {
     await open(t, const OrgSettingsScreen(orgId: testOrgId), role: 'admin');
     expect(find.byKey(const Key('org-delete')), findsNothing);
   });
@@ -75,34 +78,40 @@ void main() {
     expect(find.byKey(const Key('org-leave')), findsOneWidget);
   });
 
-  testWidgets(
-    'rotation banner: admins only, count, credentials note, rotate now',
-    (t) async {
-      final f = newId();
-      final s = await open(
-        t,
-        const RotationBanner(),
-        role: 'admin',
-        pending: [
-          {
-            'orgId': testOrgId,
-            'folderId': f,
-            'reason': 'member_removed',
-            'removedUserIds': [newId()],
-            'rotatedVersion': null,
-          },
-        ],
-      );
-      expect(find.text('Keys of 1 folders must change.'), findsOneWidget);
-      expect(
-        find.textContaining('change those passwords and keys'),
-        findsOneWidget,
-      );
-      await t.tap(find.byKey(const Key('rotation-now')));
-      await pumpReal(t);
-      expect(s.orgs!.lastRotation, isNotNull);
-      await open(t, const RotationBanner(), role: 'member');
-      expect(find.byKey(const Key('rotation-now')), findsNothing);
-    },
-  );
+  Map<String, Object?> pendingRotation() => {
+    'orgId': testOrgId,
+    'folderId': newId(),
+    'reason': 'member_removed',
+    'removedUserIds': [newId()],
+    'rotatedVersion': null,
+  };
+
+  testWidgets('rotation banner: count, credentials note, rotate now', (
+    t,
+  ) async {
+    final s = await open(
+      t,
+      const RotationBanner(),
+      role: 'admin',
+      pending: [pendingRotation()],
+    );
+    expect(find.text('Keys of 1 folder must change.'), findsOneWidget);
+    expect(
+      find.textContaining('change those passwords and keys'),
+      findsOneWidget,
+    );
+    await t.tap(find.byKey(const Key('rotation-now')));
+    await pumpReal(t);
+    expect(s.orgs!.lastRotation, isNotNull);
+  });
+
+  testWidgets('a member sees no rotation banner', (t) async {
+    await open(
+      t,
+      const RotationBanner(),
+      role: 'member',
+      pending: [pendingRotation()],
+    );
+    expect(find.byKey(const Key('rotation-now')), findsNothing);
+  });
 }

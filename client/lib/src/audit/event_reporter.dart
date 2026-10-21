@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
+import 'package:unfeudal_shared/unfeudal_shared.dart';
+
 import '../api/api_client.dart';
 import '../events/app_events.dart';
 
@@ -32,17 +34,19 @@ class EventReporter {
         final hops = _hops.remove(hostId) ?? const [];
         _send(
           (api) => api.reportSsh(
-            event: 'open',
+            event: SshEvent.open,
             hostItemId: hostId,
             jumpHostItemIds: hops,
           ),
         );
       case SessionClosed(:final hostId):
-        _send((api) => api.reportSsh(event: 'close', hostItemId: hostId));
+        _send(
+          (api) => api.reportSsh(event: SshEvent.close, hostItemId: hostId),
+        );
       case ForwardStarted(:final hostId, :final forward):
         _send(
           (api) => api.reportSsh(
-            event: 'forward_start',
+            event: SshEvent.forwardStart,
             hostItemId: hostId,
             localPort: forward.localPort,
           ),
@@ -50,7 +54,7 @@ class EventReporter {
       case ForwardStopped(:final hostId, :final localPort):
         _send(
           (api) => api.reportSsh(
-            event: 'forward_stop',
+            event: SshEvent.forwardStop,
             hostItemId: hostId,
             localPort: localPort,
           ),

@@ -45,8 +45,7 @@ class LoquetPainter extends CustomPainter {
       ..translate(50, 96)
       ..scale(1 + 0.06 * squash, 1 - 0.12 * squash)
       ..translate(-50, -96);
-    final c = palette;
-    final feet = Paint()..color = c.feet;
+    final feet = Paint()..color = palette.feet;
     for (final x in [28.0, 58.0]) {
       canvas.drawRRect(
         RRect.fromRectAndRadius(
@@ -56,12 +55,12 @@ class LoquetPainter extends CustomPainter {
         feet,
       );
     }
-    canvas.drawPath(loquetBodyPath(), Paint()..color = c.body);
+    canvas.drawPath(loquetBodyPath(), Paint()..color = palette.body);
     for (final s in _face()) {
       _draw(canvas, s);
     }
     if (accessory case final a?) {
-      for (final s in _accessory(a, c)) {
+      for (final s in _accessory(a, palette)) {
         _draw(canvas, s);
       }
     }
@@ -288,7 +287,8 @@ Path _path(String d) {
         y = dy + next();
         path.moveTo(x, y);
         (startX, startY) = (x, y);
-        command = relative ? 'l' : 'L'; // further pairs are lines
+        // SVG treats further coordinate pairs after a move as lines.
+        command = relative ? 'l' : 'L';
       case 'L':
         x = dx + next();
         y = dy + next();

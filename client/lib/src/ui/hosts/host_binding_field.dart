@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../../../l10n/app_localizations.dart';
 import '../../app_scope.dart';
+import '../../design/toast.dart';
 import '../../orgs/host_binding.dart';
 import '../../vault/vault.dart';
+import '../describe_error.dart';
 import 'editor_frame.dart';
 
 /// The caller's own key for a `perMember` org host, chosen among personal identities.
@@ -23,13 +23,17 @@ class HostBindingField extends StatelessWidget {
       key: 'binding-identity',
       label: l.hostBindingLabel,
       none: l.hostDefault,
-      entries: [
-        for (final e in vault.ofKind(ItemKind.identity))
-          if (e.state == EntryState.ok && e.orgId == null) e,
-      ],
+      entries: vault.usableOfKind(ItemKind.identity, orgId: null),
       value: bindingFor(vault, hostId),
-      onChanged: (id) {
-        if (id != null) unawaited(bindHost(vault, hostId, id));
+      onChanged: (id) async {
+        if (id == null) return;
+        try {
+          await bindHost(vault, hostId, id);
+        } on Exception catch (e) {
+          if (context.mounted) {
+            showUfToast(context, describeError(l, e), tone: UfToastTone.warn);
+          }
+        }
       },
     );
   }

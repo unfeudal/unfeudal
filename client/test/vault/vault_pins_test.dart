@@ -45,26 +45,24 @@ void main() {
     ]);
     await v.reload();
     expect(v.hostKeys.pinOf(host)!.sha256Fingerprint, 'SHA256:${'A' * 43}');
-    final restarted = await testVault(key, m); // the ledger is on disk, sealed
+    // The ledger is on disk, sealed.
+    final restarted = await testVault(key, m);
     expect(
       restarted.hostKeys.pinOf(host)!.sha256Fingerprint,
       'SHA256:${'A' * 43}',
     );
   });
 
-  test(
-    'pinHostKey updates the ledger and the winning knownHost item',
-    () async {
-      final m = LocalMirror.inMemory();
-      final low = '00000000-0000-4000-8000-0000000000aa';
-      m.upsertItems([
-        await sealItem(key, id: low, type: 'knownHost', meta: pin('A')),
-        await sealItem(key, type: 'knownHost', meta: pin('C')),
-      ]);
-      final v = await testVault(key, m);
-      await v.hostKeys.pin(host, 'ssh-ed25519', 'SHA256:${'B' * 43}');
-      expect(v.hostKeys.pinOf(host)!.sha256Fingerprint, 'SHA256:${'B' * 43}');
-      expect(m.outbox().single.item.id, low);
-    },
-  );
+  test('pin updates the ledger and the winning knownHost item', () async {
+    final m = LocalMirror.inMemory();
+    final low = '00000000-0000-4000-8000-0000000000aa';
+    m.upsertItems([
+      await sealItem(key, id: low, type: 'knownHost', meta: pin('A')),
+      await sealItem(key, type: 'knownHost', meta: pin('C')),
+    ]);
+    final v = await testVault(key, m);
+    await v.hostKeys.pin(host, 'ssh-ed25519', 'SHA256:${'B' * 43}');
+    expect(v.hostKeys.pinOf(host)!.sha256Fingerprint, 'SHA256:${'B' * 43}');
+    expect(m.outbox().single.item.id, low);
+  });
 }

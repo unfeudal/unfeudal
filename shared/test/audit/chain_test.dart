@@ -74,22 +74,22 @@ void main() {
     );
   });
 
-  test(
-    'a whole chain verifies, in any order; raw ipAddress is outside the hash',
-    () {
-      final c = chain(5);
-      expect(verifyChain(c), isNull);
-      expect(verifyChain(c.reversed.toList()), isNull);
-      expect(
-        verifyChain([
-          ...chain(2),
-          link(chain(2).last.hash, 3, ipAddress: '203.0.113.7'),
-        ]),
-        isNull,
-      );
-      expect(verifyChain(const []), isNull);
-    },
-  );
+  test('a whole chain verifies, in any order', () {
+    final c = chain(5);
+    expect(verifyChain(c), isNull);
+    expect(verifyChain(c.reversed.toList()), isNull);
+    expect(verifyChain(const []), isNull);
+  });
+
+  test('a raw ipAddress is outside the hash', () {
+    expect(
+      verifyChain([
+        ...chain(2),
+        link(chain(2).last.hash, 3, ipAddress: '203.0.113.7'),
+      ]),
+      isNull,
+    );
+  });
 
   test('an edited field, a deleted middle event or a swapped order breaks the chain at that seq', () {
     final c = chain(5);
@@ -133,5 +133,25 @@ void main() {
       2,
       reason: 'a chain not starting at 1 needs a checkpoint',
     );
+  });
+
+  test('checkpointOf reads the seq and hash of a canonical checkpoint', () {
+    final checkpoint = link(
+      genesisHash,
+      6,
+      action: checkpointAction,
+      targets: ['seq:3', 'hash:abc'],
+    );
+    expect(checkpointOf(checkpoint), (seq: 3, hash: 'abc'));
+  });
+
+  test('checkpointOf refuses other actions and non-canonical targets', () {
+    AuditEvent checkpoint(List<String> targets) =>
+        link(genesisHash, 6, action: checkpointAction, targets: targets);
+    expect(checkpointOf(chain(1).single), isNull);
+    expect(checkpointOf(checkpoint(['seq:05', 'hash:abc'])), isNull);
+    expect(checkpointOf(checkpoint(['seq:+5', 'hash:abc'])), isNull);
+    expect(checkpointOf(checkpoint(['seq:5', 'abc'])), isNull);
+    expect(checkpointOf(checkpoint(['seq:5'])), isNull);
   });
 }

@@ -18,6 +18,7 @@ import '../../design/rows.dart';
 import '../../design/toast.dart';
 import '../../import/ssh_config_import.dart';
 import '../busy_action.dart';
+import '../describe_error.dart';
 import '../fields.dart';
 import '../hosts/editor_frame.dart';
 import '../manage_frame.dart';
@@ -81,13 +82,20 @@ class _ImportPreviewScreenState extends State<ImportPreviewScreen>
     Future<String?> Function(String path) readFile,
     String configPath,
   ) async {
-    final plan = await _importer.plan(await readFile(configPath) ?? '');
+    final ImportPlan plan;
+    try {
+      plan = await _importer.plan(await readFile(configPath) ?? '');
+    } on FileSystemException catch (e) {
+      if (!mounted) return;
+      final l = AppLocalizations.of(context);
+      return setState(() => problem = describeError(l, e));
+    }
     if (!mounted) return;
     setState(() {
       _plan = plan;
       _selected.addAll([
         for (final h in plan.hosts)
-          if (!h.duplicate) h.source.alias,
+          if (!h.isDuplicate) h.source.alias,
       ]);
       for (final k in plan.keys.where((k) => k.needsPassphrase)) {
         _passphrases[k.path] = TextEditingController();
@@ -98,7 +106,7 @@ class _ImportPreviewScreenState extends State<ImportPreviewScreen>
   Future<void> _submit() async {
     final l = AppLocalizations.of(context);
     await run(() async {
-      final count = await _importer.apply(
+      final (:written, :warnings) = await _importer.apply(
         _plan!,
         aliases: _selected,
         passphrases: {
@@ -108,7 +116,15 @@ class _ImportPreviewScreenState extends State<ImportPreviewScreen>
         folderId: _folderId,
       );
       if (!mounted) return;
-      showUfToast(context, l.importDone(count));
+      showUfToast(
+        context,
+        [
+          l.importDone(written),
+          for (final w in warnings)
+            l.importWarning(w.line, _problemLabel(l, w.kind)),
+        ].join('\n'),
+        tone: warnings.isEmpty ? UfToastTone.ok : UfToastTone.warn,
+      );
       Navigator.of(context).maybePop();
     });
   }
@@ -133,7 +149,10 @@ class _ImportPreviewScreenState extends State<ImportPreviewScreen>
       body: ManageFrame(
         title: l.settingsImportSshConfig,
         child: plan == null
-            ? Center(child: UfLoading(l.loading))
+            ? switch (problem) {
+                final problem? => UfErrorLine(problem),
+                null => Center(child: UfLoading(l.loading)),
+              }
             : plan.hosts.isEmpty && plan.warnings.isEmpty
             ? EmptyState(title: l.settingsImportSshConfig, body: l.importEmpty)
             : _preview(l, plan),
@@ -188,7 +207,7 @@ class _ImportPreviewScreenState extends State<ImportPreviewScreen>
           child: BusyButton(
             key: const Key('import-submit'),
             busy: busy,
-            onPressed: _selected.isEmpty || (state.sync?.readOnly ?? false)
+            onPressed: _selected.isEmpty || (state.sync?.isReadOnly ?? false)
                 ? null
                 : _submit,
             label: l.importCount(_selected.length),
@@ -214,16 +233,19 @@ class _ImportHostRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
     final source = host.source;
+    final target = [?source.user, source.hostName ?? source.alias].join('@');
     return UfCheckboxRow(
       key: Key('import-row-${source.alias}'),
       value: selected,
       onChanged: onChanged,
       label: source.alias,
       subtitle: [
-        [?source.user, source.hostName ?? source.alias].join('@'),
-        if (host.jumpAlias case final jump?) '→ $jump',
-        if (host.duplicate) l.importDuplicate,
-      ].join('  ·  '),
+        if (host.jumpAlias case final jump?)
+          l.statusVia(target, jump)
+        else
+          target,
+        if (host.isDuplicate) l.importDuplicate,
+      ].join(l.listSeparator),
     );
   }
 }

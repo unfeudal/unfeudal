@@ -4,6 +4,7 @@ import 'migrations/m0001_core.dart';
 import 'migrations/m0002_orgs.dart';
 import 'migrations/m0003_audit.dart';
 import 'migrations/m0004_locale.dart';
+import 'migrations/m0005_audit_targets.dart';
 
 /// Server schema, one file per migration under `migrations/`, one statement
 /// per string. A released migration is never edited: a change is a new file,
@@ -13,4 +14,5 @@ const migrations = <Migration>[
   orgsMigration,
   auditMigration,
   localeMigration,
+  auditTargetsMigration,
 ];

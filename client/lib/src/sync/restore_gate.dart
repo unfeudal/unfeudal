@@ -17,13 +17,13 @@ class RestoreGate {
   // The API applies a stored refusal from the first negotiation on, except in a negotiation of an accepted restore.
   bool _apiIgnoresRefusal = true;
 
-  bool get restoreRefused =>
-      !_accepting && mirror.getKv(KvKey.refusedEpoch) != null;
-  bool get restorePending => _pending || restoreRefused;
+  bool get isRestoreRefused =>
+      !_accepting && mirror.kv(KvKey.refusedEpoch) != null;
+  bool get isRestorePending => _pending || isRestoreRefused;
 
   /// The API client refuses writes: a refusal is stored and the API applies it.
   bool get apiRefusesWrites =>
-      mirror.getKv(KvKey.refusedEpoch) != null && !_apiIgnoresRefusal;
+      mirror.kv(KvKey.refusedEpoch) != null && !_apiIgnoresRefusal;
 
   void onNegotiated() => _apiIgnoresRefusal = _accepting;
 
@@ -36,7 +36,7 @@ class RestoreGate {
     final changed =
         info.instanceEpoch == null ||
         (storedEpoch != null && info.instanceEpoch != storedEpoch);
-    if (changed || restoreRefused) _pending = true;
+    if (changed || isRestoreRefused) _pending = true;
     return _pending;
   }
 

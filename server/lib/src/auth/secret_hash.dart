@@ -11,11 +11,11 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 import '../api/errors.dart';
 
 class SecretHashParams {
-  const SecretHashParams(this.m, this.t, this.p);
+  const SecretHashParams(this.memoryKib, this.iterations, this.parallelism);
 
-  final int m; // KiB
-  final int t;
-  final int p;
+  final int memoryKib;
+  final int iterations;
+  final int parallelism;
 
   static const server = SecretHashParams(19456, 2, 1);
 
@@ -116,9 +116,9 @@ Future<Uint8List> _argon2id(
 ) => _gate.run(
   () => Isolate.run(() async {
     final key = await Argon2id(
-      memory: params.m,
-      iterations: params.t,
-      parallelism: params.p,
+      memory: params.memoryKib,
+      iterations: params.iterations,
+      parallelism: params.parallelism,
       hashLength: 32,
     ).deriveKey(secretKey: SecretKey(secret), nonce: salt);
     return Uint8List.fromList(await key.extractBytes());
@@ -129,7 +129,7 @@ Future<Uint8List> _argon2id(
 Future<String> hashSecret(List<int> secret, SecretHashParams params) async {
   final salt = secureBytes(16);
   final hash = await _argon2id(secret, salt, params);
-  return 'argon2id\$${params.m}\$${params.t}\$${params.p}\$${b64(salt)}\$${b64(hash)}';
+  return 'argon2id\$${params.memoryKib}\$${params.iterations}\$${params.parallelism}\$${b64(salt)}\$${b64(hash)}';
 }
 
 /// False for a wrong secret and for any malformed or out-of-bounds stored hash.

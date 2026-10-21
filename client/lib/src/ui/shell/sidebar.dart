@@ -12,8 +12,10 @@ import '../../design/tokens.dart';
 import '../../loquet/line_bank.dart';
 import '../../loquet/loquet_pose.dart';
 import '../../loquet/loquet_spot.dart';
+import '../../orgs/org_controller.dart';
 import '../orgs/create_org_dialog.dart';
 import '../orgs/join_org_dialog.dart';
+import '../orgs/members_screen.dart' show roleLabel;
 import 'shortcuts.dart';
 import 'tree_panel.dart';
 
@@ -141,13 +143,7 @@ class _SidebarFooter extends StatelessWidget {
     final l = AppLocalizations.of(context);
     final state = AppScope.of(context);
     final org = selectedOrg(state);
-    final vault = state.vault;
-    final empty = !(vault?.entries ?? const []).any(
-      (e) =>
-          e.orgId == org?.id &&
-          e.kind == ItemKind.host &&
-          !vault!.isTrashed(e.id),
-    );
+    final empty = _hostsIn(state, org?.id) == 0;
     return Padding(
       padding: const EdgeInsets.fromLTRB(2, 8, 0, 0),
       child: Row(
@@ -185,9 +181,13 @@ class _SidebarFooter extends StatelessWidget {
 
 /// The org the sidebar shows, or null for the personal vault.
 OrgSummary? selectedOrg(AppState state) {
-  final orgs = state.serverInfo.has(Flag.orgs) ? state.orgs : null;
+  final orgs = availableOrgs(state);
   return orgs?.byId(orgs.selected);
 }
+
+/// The org controller while the server has orgs, otherwise null.
+OrgController? availableOrgs(AppState state) =>
+    state.serverInfo.has(Flag.orgs) ? state.orgs : null;
 
 String pageTitle(AppLocalizations l, ShellPage page) => switch (page) {
   ShellPage.snippets => l.snippetsTitle,
@@ -207,7 +207,7 @@ IconData pageIcon(ShellPage page) => switch (page) {
   ShellPage.settings => UfIcons.gear,
 };
 
-/// An entry of the vault's own sections: icon and label, the current one on `panelHover` in 600.
+/// An entry of the vault's own sections: icon and label, the current one semibold on `panelHover`.
 class SidebarEntry extends StatelessWidget {
   const SidebarEntry({
     super.key,

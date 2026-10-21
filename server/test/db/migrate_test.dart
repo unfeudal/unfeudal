@@ -68,7 +68,7 @@ void main() {
     expect(await version(db), '2');
     await migrate(db);
     await migrate(db);
-    expect(await version(db), '4');
+    expect(await version(db), '${migrations.last.version}');
     expect(
       (await db.query(
         "SELECT count(*) AS n FROM counters WHERE name = 'org_seq'",
@@ -80,12 +80,33 @@ void main() {
   test('a failing migration rolls back entirely', () async {
     final broken = [
       ...migrations,
-      const Migration(5, ['CREATE TABLE z (a TEXT)', 'NOT SQL']),
+      Migration(migrations.last.version + 1, const [
+        'CREATE TABLE z (a TEXT)',
+        'NOT SQL',
+      ]),
     ];
     await expectLater(migrate(db, broken), throwsA(anything));
-    expect(await version(db), '4');
+    expect(await version(db), '${migrations.last.version}');
     await expectLater(db.query('SELECT * FROM z'), throwsA(anything));
   });
+
+  test(
+    'an audit event written before the targets index is indexed by the upgrade',
+    () async {
+      await migrate(db, migrations.where((m) => m.version < 5).toList());
+      await db.execute(
+        'INSERT INTO audit_events (scope, seq, ts, action, target_ids, prev_hash, hash) '
+        "VALUES ('org:o', 1, '2026-01-01T00:00:00.000Z', 'item.updated', @t, 'p', 'h')",
+        {'t': '["a","b","a"]'},
+      );
+      await migrate(db);
+      final rows = await db.query(
+        'SELECT target_id FROM audit_targets WHERE scope = @s AND seq = 1 ORDER BY target_id',
+        {'s': 'org:o'},
+      );
+      expect([for (final r in rows) r['target_id']], ['a', 'b']);
+    },
+  );
 
   test('a newer database is refused with SchemaTooNew', () async {
     await migrate(db);
@@ -110,7 +131,7 @@ void main() {
       final other = await openDb(pg!);
       addTearDown(other.close);
       await Future.wait([migrate(db), migrate(other)]);
-      expect(await version(db), '4');
+      expect(await version(db), '${migrations.last.version}');
     },
     skip: pg == null ? 'PostgreSQL only' : false,
   );
