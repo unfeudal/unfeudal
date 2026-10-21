@@ -14,14 +14,14 @@ class _IdentityRow extends StatelessWidget {
   final VaultEntry entry;
   final bool readOnly;
 
-  /// Null on a linked key: it is edited in the personal vault.
+  // Null on a linked key: it is edited in the personal vault.
   final VoidCallback? onRename;
   final VoidCallback? onDelete;
 
-  /// Null hides the button (no reveal flag, or no reveal right on the folder).
+  // Null hides the button (no reveal flag, or no reveal right on the folder).
   final VoidCallback? onReveal;
 
-  /// Null hides the button (no item history on this server).
+  // Null hides the button (no item history on this server).
   final VoidCallback? onHistory;
 
   @override

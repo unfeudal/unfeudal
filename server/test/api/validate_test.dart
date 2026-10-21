@@ -27,20 +27,20 @@ void main() {
     },
   );
 
-  test('reqString counts code points; reqKey32 needs 32 bytes', () {
-    expect(reqString({'n': '😀' * 1024}, 'n'), hasLength(2048));
+  test('parseRequiredString counts code points; parseKey32 needs 32 bytes', () {
+    expect(parseRequiredString({'n': '😀' * 1024}, 'n'), hasLength(2048));
     for (final m in [
       <String, Object?>{},
       {'n': ''},
       {'n': 3},
       {'n': 'é' * 1025},
     ]) {
-      expect(() => reqString(m, 'n'), bad, reason: '$m');
+      expect(() => parseRequiredString(m, 'n'), bad, reason: '$m');
     }
-    expect(() => reqString({'n': 'abcd'}, 'n', max: 3), bad);
-    expect(reqKey32({'k': b64(List.filled(32, 1))}, 'k'), List.filled(32, 1));
+    expect(() => parseRequiredString({'n': 'abcd'}, 'n', max: 3), bad);
+    expect(parseKey32({'k': b64(List.filled(32, 1))}, 'k'), List.filled(32, 1));
     for (final v in [b64(List.filled(31, 1)), 'not base64!', 32, null]) {
-      expect(() => reqKey32({'k': v}, 'k'), bad, reason: '$v');
+      expect(() => parseKey32({'k': v}, 'k'), bad, reason: '$v');
     }
   });
 

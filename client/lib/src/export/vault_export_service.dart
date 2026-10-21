@@ -12,23 +12,23 @@ Future<({String text, int count, int unreadable})> exportVault(
 }) async {
   final items = <Map<String, Object?>>[];
   var unreadable = 0;
-  for (final e in vault.entries) {
-    if (e.item.scope != ItemScope.personal ||
-        e.item.purged ||
-        vault.isTrashed(e.id)) {
-      continue; // personal, live items only
+  for (final entry in vault.entries) {
+    if (entry.item.scope != ItemScope.personal ||
+        entry.item.purged ||
+        vault.isTrashed(entry.id)) {
+      continue;
     }
-    final meta = e.meta;
+    final meta = entry.meta;
     if (meta == null ||
-        (e.state != EntryState.ok && e.state != EntryState.readOnly)) {
+        (entry.state != EntryState.ok && entry.state != EntryState.readOnly)) {
       unreadable++;
       continue;
     }
     Map<String, Object?>? secret;
-    if (e.item.secret != null) {
+    if (entry.item.secret != null) {
       try {
         secret = (await vault.open(
-          e.item,
+          entry.item,
           PayloadPart.secret,
           fromServer: false,
         ))?.json;
@@ -41,9 +41,9 @@ Future<({String text, int count, int unreadable})> exportVault(
       }
     }
     items.add({
-      'id': e.id,
-      'type': e.item.type,
-      'folderId': e.item.folderId,
+      'id': entry.id,
+      'type': entry.item.type,
+      'folderId': entry.item.folderId,
       'meta': meta,
       'secret': secret,
     });

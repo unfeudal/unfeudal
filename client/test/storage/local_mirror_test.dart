@@ -69,37 +69,63 @@ void main() {
     },
   );
 
-  test('outbox keeps the first base revision and queue position, failures lead to rejected', () {
+  test(
+    'outbox keeps the first base revision and queue position on re-enqueue',
+    () {
+      final m = LocalMirror.inMemory();
+      final a = newId(), b = newId();
+      m
+        ..enqueue(wireItem(a, revision: 4), baseRevision: 4)
+        ..enqueue(wireItem(b, revision: 0), baseRevision: 0)
+        ..enqueue(wireItem(a, revision: 4, deleted: true), baseRevision: 9);
+      expect(
+        [
+          for (final e in m.outbox())
+            (e.item.id, e.baseRevision, e.item.deleted),
+        ],
+        [(a, 4, true), (b, 0, false)],
+      );
+    },
+  );
+
+  test(
+    'outbox failures count, then reject keeps them and retry resets them',
+    () {
+      final m = LocalMirror.inMemory();
+      final a = newId();
+      m.enqueue(wireItem(a, revision: 4), baseRevision: 4);
+      m.recordOutboxFailure(a, 'invalid_request');
+      m.recordOutboxFailure(a, 'invalid_request');
+      expect(m.outboxEntry(a)!.attempts, 2);
+      m.rejectOutbox(a);
+      final e = m.outboxEntry(a)!;
+      expect(
+        (e.state, e.attempts, e.lastError),
+        (OutboxState.rejected, 2, 'invalid_request'),
+      );
+      m.retryOutbox(a);
+      final retried = m.outboxEntry(a)!;
+      expect((retried.state, retried.attempts), (OutboxState.pending, 0));
+    },
+  );
+
+  test('a new edit makes a rejected outbox entry pending again', () {
+    final m = LocalMirror.inMemory();
+    final b = newId();
+    m.enqueue(wireItem(b, revision: 0), baseRevision: 0);
+    m.rejectOutbox(b);
+    m.enqueue(wireItem(b, revision: 0, deleted: true), baseRevision: 0);
+    expect(m.outboxEntry(b)!.state, OutboxState.pending);
+  });
+
+  test('outbox rebase moves the base revision and remove drops the entry', () {
     final m = LocalMirror.inMemory();
     final a = newId(), b = newId();
     m
       ..enqueue(wireItem(a, revision: 4), baseRevision: 4)
-      ..enqueue(wireItem(b, revision: 0), baseRevision: 0)
-      ..enqueue(wireItem(a, revision: 4, deleted: true), baseRevision: 9);
-    expect(
-      [for (final e in m.outbox()) (e.item.id, e.baseRevision, e.item.deleted)],
-      [(a, 4, true), (b, 0, false)],
-    );
-    expect(m.recordOutboxFailure(a, 'invalid_request'), 1);
-    expect(m.recordOutboxFailure(a, 'invalid_request'), 2);
-    m.rejectOutbox(a);
-    final e = m.outbox().first;
-    expect(
-      (e.state, e.attempts, e.lastError),
-      (OutboxState.rejected, 2, 'invalid_request'),
-    );
-    m.retryOutbox(a);
-    expect(
-      (m.outbox().first.state, m.outbox().first.attempts),
-      (OutboxState.pending, 0),
-    );
-    m.enqueue(wireItem(b, revision: 0), baseRevision: 0);
-    m.rejectOutbox(b);
-    m.enqueue(wireItem(b, revision: 0, deleted: true), baseRevision: 0);
-    // A new edit makes a rejected entry pending again.
-    expect(m.outbox().last.state, OutboxState.pending);
+      ..enqueue(wireItem(b, revision: 0), baseRevision: 0);
     m.rebaseOutbox(a, 5);
-    expect(m.outbox().first.baseRevision, 5);
+    expect(m.outboxEntry(a)!.baseRevision, 5);
     m.removeOutbox(a);
     expect(m.outbox().map((e) => e.item.id), [b]);
   });
@@ -110,11 +136,11 @@ void main() {
       m.setKv(k, '${k.name}-v');
     }
     expect(
-      [for (final k in KvKey.values) m.getKv(k)],
+      [for (final k in KvKey.values) m.kv(k)],
       [for (final k in KvKey.values) '${k.name}-v'],
     );
     m.setKv(KvKey.cursor, null);
-    expect(m.getKv(KvKey.cursor), isNull);
+    expect(m.kv(KvKey.cursor), isNull);
   });
 
   test('accepted restore resets its keys', () {
@@ -129,7 +155,7 @@ void main() {
     expect(restore.items(), hasLength(1));
     expect(restore.outbox(), hasLength(1));
     expect(
-      {for (final k in KvKey.values) k: restore.getKv(k)},
+      {for (final k in KvKey.values) k: restore.kv(k)},
       {
         KvKey.cursor: null,
         KvKey.orgCursor: null,

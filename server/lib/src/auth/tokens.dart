@@ -95,11 +95,11 @@ Future<void> revokeDevice(Tx tx, String deviceId, DateTime now) async {
 typedef Rotated = ({String userId, String deviceId, String refreshToken});
 
 class RefreshTokens {
-  RefreshTokens(
-    this.db,
-    this.clock,
-    this.ttl,
-    this._secret, {
+  RefreshTokens({
+    required this.db,
+    required this.clock,
+    required this.ttl,
+    required this._secret,
     required this.audit,
   });
 
@@ -145,28 +145,16 @@ class RefreshTokens {
         final live = row['revoked_at'] == null && row['disabled'] == 0;
         final usedAt = row['used_at'] as String?;
         if (usedAt != null) {
-          final successor = await tx.query(
-            'SELECT used_at FROM refresh_tokens WHERE token_hash = @h',
-            {'h': hashToken(next)},
-          );
-          final lostResponse =
-              now.difference(parseIso(usedAt)) <= grace &&
-              successor.length == 1 &&
-              successor.single['used_at'] == null;
-          if (lostResponse && live) {
-            return (userId: userId, deviceId: deviceId, refreshToken: next);
-          }
-          // Replay: revoked and committed, then 401.
-          await revokeDevice(tx, deviceId, now);
-          // no actor: whoever presented the token is unknown
-          await audit.append(
+          return _answerUsedToken(
             tx,
-            scope: AuditScope.user(userId),
-            action: 'auth.refresh_replay',
+            userId: userId,
+            deviceId: deviceId,
+            usedAt: parseIso(usedAt),
+            isLive: live,
+            next: next,
+            now: now,
             ip: ip,
-            targetIds: [deviceId],
           );
-          return UnauthorizedReason.deviceRevoked;
         }
         if (!live) return UnauthorizedReason.deviceRevoked;
         if (!parseIso(row['expires_at']! as String).isAfter(now)) {
@@ -191,5 +179,39 @@ class RefreshTokens {
       );
     }
     return outcome as Rotated;
+  }
+
+  Future<Object> _answerUsedToken(
+    Tx tx, {
+    required String userId,
+    required String deviceId,
+    required DateTime usedAt,
+    required bool isLive,
+    required String next,
+    required DateTime now,
+    required String? ip,
+  }) async {
+    final successor = await tx.query(
+      'SELECT used_at FROM refresh_tokens WHERE token_hash = @h',
+      {'h': hashToken(next)},
+    );
+    final lostResponse =
+        now.difference(usedAt) <= grace &&
+        successor.length == 1 &&
+        successor.single['used_at'] == null;
+    if (lostResponse && isLive) {
+      return (userId: userId, deviceId: deviceId, refreshToken: next);
+    }
+    // Replay: revoked and committed, then 401.
+    await revokeDevice(tx, deviceId, now);
+    // no actor: whoever presented the token is unknown
+    await audit.append(
+      tx,
+      scope: AuditScope.user(userId),
+      action: 'auth.refresh_replay',
+      ip: ip,
+      targetIds: [deviceId],
+    );
+    return UnauthorizedReason.deviceRevoked;
   }
 }

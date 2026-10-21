@@ -61,14 +61,14 @@ class EditorFrame extends StatelessWidget {
   static const width = 360.0;
   final String title;
 
-  /// "Personnel / Maison".
+  /// Where the item lives, as "Personal / Home".
   final String? crumb;
   final String? notice;
 
-  /// The Connexion tab, or the only content.
+  /// The Connection tab, or the only content.
   final List<Widget> children;
 
-  /// Tabs after Connexion: each a label and its fields.
+  /// Tabs after Connection: each a label and its fields.
   final List<(String, List<Widget>)> tabs;
   final VoidCallback? onClose;
   final VoidCallback? onConnect;

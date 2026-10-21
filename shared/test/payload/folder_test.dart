@@ -40,18 +40,21 @@ void main() {
   });
 
   test('malformed folders throw FormatException', () {
-    Map<String, Object?> f(Map<String, Object?> d, [String name = 'X']) => {
+    Map<String, Object?> folder(
+      Map<String, Object?> defaults, [
+      String name = 'X',
+    ]) => {
       'schemaVersion': 1,
       'name': name,
-      'defaults': {'port': null, 'user': null, 'identityId': null, ...d},
+      'defaults': {'port': null, 'user': null, 'identityId': null, ...defaults},
     };
     for (final json in [
-      f({}, ' '),
-      f({}, 'x' * 101),
-      f({'port': 0}),
-      f({'user': 'u' * 65}),
-      f({'identityId': 'i'}),
-      f({'jumpHostId': 'j'}),
+      folder({}, ' '),
+      folder({}, 'x' * 101),
+      folder({'port': 0}),
+      folder({'user': 'u' * 65}),
+      folder({'identityId': 'i'}),
+      folder({'jumpHostId': 'j'}),
       {'schemaVersion': 1, 'name': 'X'},
       {'schemaVersion': 1, 'name': 'X', 'defaults': <Object?>[]},
     ]) {

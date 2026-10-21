@@ -21,11 +21,11 @@ class SignIn {
     Uri server, {
     required Future<bool> Function(Uri server)? confirmPlainHttp,
   }) async {
-    final http = server.scheme == 'http';
-    if (!http && server.scheme != 'https') throw const InsecureServer();
-    if (http && !isLanHost(server)) throw const InsecureServer();
+    final isPlainHttp = server.scheme == 'http';
+    if (!isPlainHttp && server.scheme != 'https') throw const InsecureServer();
+    if (isPlainHttp && !isLanHost(server)) throw const InsecureServer();
     final info = await ApiClient(server, _http).info();
-    if (http) {
+    if (isPlainHttp) {
       if (!info.has(Flag.plainHttpLan)) throw const InsecureServer();
       if (await confirmPlainHttp?.call(server) != true) {
         throw const PlainHttpRefused();

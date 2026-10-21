@@ -14,7 +14,7 @@ const syncedPrefKeys = [
 
 class ProfileMeta extends Payload {
   ProfileMeta({
-    super.schemaVersion = 1,
+    super.schemaVersion = Payload.knownSchemaVersion,
     this.displayName,
     this.prefs = const {},
     super.extra = const {},

@@ -22,7 +22,7 @@ enum LoquetMood {
   dizzy;
 
   /// Never with an accessory or a joke line.
-  bool get serious => this == alert || this == sad || this == offline;
+  bool get isSerious => this == alert || this == sad || this == offline;
 }
 
 enum LoquetAccessory { hardHat, woollyHat, partyHat, sunglasses, fakeNose }

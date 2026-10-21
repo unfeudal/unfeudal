@@ -46,7 +46,7 @@ void main() {
   });
 
   testWidgets('no hardware: no toggle and no button', (t) async {
-    final s = await signedIn(t, FakeBiometricBackend(isAvailable: false));
+    final s = await signedIn(t, FakeBiometricBackend(hasHardware: false));
     await pumpApp(
       t,
       state: s,

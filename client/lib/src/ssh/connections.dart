@@ -39,7 +39,8 @@ Future<String?> startupCommandToSend({
   final hash = await startupCommandHash(command);
   if (ledger.startupApproval(hostId) == hash) return command;
   if (await dialogs?.confirmStartupCommand(hostName, command) != true) {
-    return null; // the session opens without it
+    // The session opens without it.
+    return null;
   }
   await ledger.approveStartup(hostId, hash);
   return command;
@@ -110,7 +111,7 @@ class Connections implements SshCallbacks {
     // only that a key was typed, never which
     tab.onUserInput = () {
       input?.call();
-      _loquet.terminalInput();
+      _loquet.noteTerminalInput();
     };
     tabs.add(tab);
     activeTab = tabs.length - 1;
@@ -125,7 +126,7 @@ class Connections implements SshCallbacks {
           hostId: hostId,
           hostName: found.meta.name,
           command: found.meta.startupCommand,
-          org: found.org,
+          org: found.isOrg,
           ledger: _openVault.ledger,
           dialogs: dialogs,
         ),
@@ -197,9 +198,9 @@ class Connections implements SshCallbacks {
     TerminalSession tab,
     List<PortForward> forwards,
   ) async {
-    for (final f in forwards.where((f) => f.autoStart)) {
+    for (final forward in forwards.where((f) => f.autoStart)) {
       try {
-        await startForward(tab, f);
+        await startForward(tab, forward);
       } on Exception {
         // already recorded and reported; the shell stays
       }
@@ -208,6 +209,14 @@ class Connections implements SshCallbacks {
 
   void selectTab(int index) {
     activeTab = index;
+    _changed();
+  }
+
+  /// Moves the tab at [from] to [to] (indexes after the move); the shown tab stays shown.
+  void moveTab(int from, int to) {
+    final shown = activeSession;
+    tabs.insert(to, tabs.removeAt(from));
+    activeTab = shown == null ? 0 : tabs.indexOf(shown);
     _changed();
   }
 
@@ -258,9 +267,9 @@ class Connections implements SshCallbacks {
     if (_live.remove(tab)) _emit(SessionClosed(hostId: tab.hostId));
   }
 
-  Future<void> startForward(TerminalSession tab, PortForward f) async {
-    await tab.forwarder!.start(f);
-    _emit(ForwardStarted(hostId: tab.hostId, forward: f));
+  Future<void> startForward(TerminalSession tab, PortForward forward) async {
+    await tab.forwarder!.start(forward);
+    _emit(ForwardStarted(hostId: tab.hostId, forward: forward));
   }
 
   Future<void> stopForward(TerminalSession tab, int localPort) async {

@@ -33,7 +33,7 @@ ResolvedHost resolveHost(
   final chain = <(String, FolderMeta)>[];
   final seen = <String>{};
   for (var id = folderId; id != null && seen.add(id);) {
-    final meta = folderOf(id); // null = missing or unreadable: stop
+    final meta = folderOf(id);
     if (meta == null) break;
     chain.add((id, meta));
     id = parentOf(id);
@@ -65,8 +65,9 @@ ResolvedHost resolveHost(
     (d) => perMember ? null : d.identityId,
   );
   var jumpHostId = pick('jumpHostId', host.jumpHostId, (d) => d.jumpHostId);
+  // A jump host equal to the host itself means a direct connection.
   if (jumpHostId != null && jumpHostId == hostId) {
-    jumpHostId = null; // the host itself: direct connection
+    jumpHostId = null;
     sources['jumpHostId'] = 'default';
   }
   return ResolvedHost(

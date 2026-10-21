@@ -12,12 +12,18 @@ void main(List<String> args) {
     exit(64);
   }
   final [package, level] = args;
-  final version = bump(
-    Directory('..'),
-    package,
-    level,
-    date: DateTime.now().toUtc(),
-  );
+  final String version;
+  try {
+    version = bump(
+      Directory('..'),
+      package,
+      level,
+      date: DateTime.now().toUtc(),
+    );
+  } on FormatException catch (error) {
+    stderr.writeln(error.message);
+    exit(64);
+  }
   stdout
     ..writeln('version=$version')
     ..writeln('title=chore(release): $package $version');

@@ -7,6 +7,18 @@ import '../api/api_client.dart';
 import '../debug_trace.dart';
 import '../storage/local_mirror.dart';
 
+/// How much a pull fetches and which local revisions it may overwrite.
+enum PullMode {
+  /// From the stored cursors.
+  incremental,
+
+  /// Everything from cursor 0; items the server no longer lists are dropped.
+  resync,
+
+  /// A resync that also accepts revisions older than the mirror's.
+  restore,
+}
+
 /// Pulls the server's pages into the mirror and applies the org block's itemIds rule.
 class ItemPuller {
   ItemPuller({
@@ -22,9 +34,11 @@ class ItemPuller {
   final Future<void> Function(OrgBlock block) onOrgBlock;
   bool _resyncing = false;
 
-  Future<void> pull({bool full = false, bool acceptOlder = false}) async {
-    var cursor = full ? 0 : int.parse(mirror.getKv(KvKey.cursor) ?? '0');
-    var orgCursor = full ? 0 : int.parse(mirror.getKv(KvKey.orgCursor) ?? '0');
+  Future<void> pull([PullMode mode = PullMode.incremental]) async {
+    final full = mode != PullMode.incremental;
+    final acceptOlder = mode == PullMode.restore;
+    var cursor = full ? 0 : int.parse(mirror.kv(KvKey.cursor) ?? '0');
+    var orgCursor = full ? 0 : int.parse(mirror.kv(KvKey.orgCursor) ?? '0');
     final seen = <String>{};
     OrgBlock? arrived;
     // Ids received after the block's response: their seq is above its cursor.
@@ -47,11 +61,11 @@ class ItemPuller {
       }
       trace(
         TraceArea.sync,
-        'pulled ${page.items.length} items, cursor $cursor → ${page.cursor}',
+        'pulled ${page.items.length} items, cursor $cursor -> ${page.cursor}',
       );
       cursor = page.cursor;
       mirror.setKv(KvKey.cursor, '$cursor');
-      more = page.more;
+      more = page.hasMore;
     }
     if (full) {
       // Replaced by the server's, only once the whole pull succeeded; queued items stay.
@@ -76,7 +90,7 @@ class ItemPuller {
       // Only once: a server that keeps listing a missing id cannot loop us.
       _resyncing = true;
       try {
-        return await pull(full: true, acceptOlder: acceptOlder);
+        return await pull(PullMode.resync);
       } finally {
         _resyncing = false;
       }

@@ -4,18 +4,18 @@ import 'package:flutter/material.dart';
 import 'motion.dart';
 import 'tokens.dart';
 
-/// A group list left of a section's content: 30 px rows, the current one on `panelHover` in 600.
+/// A group list left of a section's content: 30 px rows, the selected one on `panelHover` in 600.
 class GroupNav<T> extends StatelessWidget {
   const GroupNav({
     super.key,
     required this.groups,
-    required this.current,
-    required this.onPick,
+    required this.selected,
+    required this.onChanged,
   });
 
   final List<(T, String)> groups;
-  final T current;
-  final ValueChanged<T> onPick;
+  final T selected;
+  final ValueChanged<T> onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -30,25 +30,27 @@ class GroupNav<T> extends StatelessWidget {
         children: [
           for (final (id, label) in groups)
             Semantics(
-              selected: id == current,
+              selected: id == selected,
               button: true,
               child: UfFocusRing(
                 child: Material(
-                  color: id == current ? colors.panelHover : Colors.transparent,
+                  color: id == selected
+                      ? colors.panelHover
+                      : Colors.transparent,
                   borderRadius: UfRadius.control,
                   child: InkWell(
                     key: Key('group-${id is Enum ? id.name : id}'),
                     borderRadius: UfRadius.control,
                     hoverColor: colors.panelHover,
                     hoverDuration: UfMotion.of(context).fast,
-                    onTap: () => onPick(id),
+                    onTap: () => onChanged(id),
                     child: Container(
                       height: 30,
                       alignment: Alignment.centerLeft,
                       padding: const EdgeInsets.symmetric(horizontal: 8),
                       child: Text(
                         label,
-                        style: id == current
+                        style: id == selected
                             ? text.copyWith(fontWeight: FontWeight.w600)
                             : text,
                       ),

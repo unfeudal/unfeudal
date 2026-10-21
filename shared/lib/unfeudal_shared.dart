@@ -39,6 +39,7 @@ export 'src/protocol/compat.dart';
 export 'src/protocol/item.dart';
 export 'src/protocol/org_block.dart';
 export 'src/protocol/session.dart';
+export 'src/protocol/ssh_event.dart';
 export 'src/protocol/sync_page.dart';
 export 'src/protocol/version.dart';
 export 'src/ssh/jump_chain.dart';

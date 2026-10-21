@@ -102,7 +102,7 @@ class _Segment extends StatefulWidget {
 }
 
 class _SegmentState extends State<_Segment> {
-  bool _hover = false, _focus = false;
+  bool _isHovered = false, _isFocused = false;
 
   @override
   Widget build(BuildContext context) {
@@ -116,8 +116,8 @@ class _SegmentState extends State<_Segment> {
         mouseCursor: onTap == null
             ? SystemMouseCursors.basic
             : SystemMouseCursors.click,
-        onShowHoverHighlight: (v) => setState(() => _hover = v),
-        onShowFocusHighlight: (v) => setState(() => _focus = v),
+        onShowHoverHighlight: (v) => setState(() => _isHovered = v),
+        onShowFocusHighlight: (v) => setState(() => _isFocused = v),
         actions: {
           ActivateIntent: CallbackAction<ActivateIntent>(
             onInvoke: (_) => onTap?.call(),
@@ -131,7 +131,7 @@ class _SegmentState extends State<_Segment> {
             alignment: Alignment.center,
             decoration: BoxDecoration(
               borderRadius: UfRadius.control,
-              boxShadow: _focus
+              boxShadow: _isFocused
                   ? [BoxShadow(color: colors.focus, spreadRadius: 2)]
                   : null,
             ),
@@ -141,7 +141,9 @@ class _SegmentState extends State<_Segment> {
               style: Theme.of(context).textTheme.labelLarge!.copyWith(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
-                color: widget.selected || _hover ? colors.text : colors.muted,
+                color: widget.selected || _isHovered
+                    ? colors.text
+                    : colors.muted,
               ),
               child: widget.child,
             ),

@@ -10,7 +10,8 @@ void main() {
   test('body: logo silhouette with the notch left open', () {
     final body = loquetBodyPath();
     expect(body.contains(const Offset(30, 30)), isTrue);
-    expect(body.contains(const Offset(50, 14)), isFalse); // notch, even-odd
+    // The notch stays open under the even-odd fill.
+    expect(body.contains(const Offset(50, 14)), isFalse);
     // Rounded bottom (radius 34).
     expect(body.contains(const Offset(50, 90)), isTrue);
     expect(body.getBounds(), const Rect.fromLTRB(16, 8, 84, 92));

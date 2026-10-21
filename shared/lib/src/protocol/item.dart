@@ -17,7 +17,15 @@ enum ItemKind {
   unknown,
 }
 
-const personalOnlyTypes = {'knownHost', 'profile', 'hostBinding', 'memberPin'};
+final personalOnlyTypes = {
+  for (final kind in [
+    ItemKind.knownHost,
+    ItemKind.profile,
+    ItemKind.hostBinding,
+    ItemKind.memberPin,
+  ])
+    kind.name,
+};
 
 /// The folder whose keys seal an org item's payloads and whose permissions
 /// govern it: a folder governs itself, any other item its [folderId].
@@ -25,7 +33,7 @@ String? keyFolderIdOf({
   required String type,
   required String id,
   required String? folderId,
-}) => type == 'folder' ? id : folderId;
+}) => type == ItemKind.folder.name ? id : folderId;
 
 /// One synced record: ids and placement in clear, content in [meta] and
 /// [secret]. Server-set fields are null in a client request body.

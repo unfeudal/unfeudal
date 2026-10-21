@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:unfeudal_client/l10n/app_localizations.dart';
+import 'package:unfeudal_client/src/app_state.dart';
 import 'package:unfeudal_client/src/keys/key_tools.dart';
 import 'package:unfeudal_client/src/orgs/host_binding.dart';
+import 'package:unfeudal_client/src/ui/keychain/identity_forms.dart';
 import 'package:unfeudal_client/src/ui/keychain/keychain_screen.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
@@ -134,9 +136,39 @@ void main() {
     );
   });
 
-  testWidgets('password identity; copy public key; rename keeps the secret', (
-    t,
-  ) async {
+  testWidgets('import fills the key from an opened file', (t) async {
+    final s = await signedInState(t);
+    late GeneratedKey k;
+    await t.runAsync(() async => k = await generateEd25519());
+    final dialog = openKeyFile;
+    addTearDown(() => openKeyFile = dialog);
+    openKeyFile = () async => k.privateKeyPem;
+    await pumpApp(t, state: s, child: const KeychainScreen());
+    await t.tap(find.byKey(const Key('key-import')));
+    await t.pumpAndSettle();
+    await t.enterText(find.byKey(const Key('import-name')), 'from file');
+    await t.tap(find.byKey(const Key('import-pem-file')));
+    await pumpReal(t, rounds: 3);
+    await t.tap(find.byKey(const Key('import-save')));
+    await pumpReal(t, rounds: 10);
+    expect(
+      s.vault!.ofKind(ItemKind.identity).single.meta!['publicKey'],
+      startsWith(k.publicKey.split(' ').take(2).join(' ')),
+    );
+  });
+
+  Future<String> savePassword(WidgetTester t, AppState s) async {
+    await pumpApp(t, state: s, child: const KeychainScreen());
+    await t.tap(find.byKey(const Key('key-password')));
+    await t.pumpAndSettle();
+    await t.enterText(find.byKey(const Key('pw-name')), 'root pw');
+    await t.enterText(find.byKey(const Key('pw-value')), 's3cret');
+    await t.tap(find.byKey(const Key('pw-save')));
+    await pumpReal(t, rounds: 10);
+    return s.vault!.ofKind(ItemKind.identity).single.id;
+  }
+
+  testWidgets('a password identity has no copy button', (t) async {
     final s = await signedInState(t);
     final clip = <String?>[];
     t.binding.defaultBinaryMessenger.setMockMethodCallHandler(
@@ -148,14 +180,14 @@ void main() {
         return null;
       },
     );
-    await pumpApp(t, state: s, child: const KeychainScreen());
-    await t.tap(find.byKey(const Key('key-password')));
-    await t.pumpAndSettle();
-    await t.enterText(find.byKey(const Key('pw-name')), 'root pw');
-    await t.enterText(find.byKey(const Key('pw-value')), 's3cret');
-    await t.tap(find.byKey(const Key('pw-save')));
-    await pumpReal(t, rounds: 10);
-    final id = s.vault!.ofKind(ItemKind.identity).single.id;
+    final id = await savePassword(t, s);
+    expect(find.byKey(Key('identity-copy-$id')), findsNothing);
+    expect(clip, isEmpty);
+  });
+
+  testWidgets('rename keeps the secret', (t) async {
+    final s = await signedInState(t);
+    final id = await savePassword(t, s);
     await t.tap(find.byKey(Key('identity-rename-$id')));
     await t.pumpAndSettle();
     await t.enterText(find.byKey(const Key('identity-name')), 'root password');
@@ -165,9 +197,6 @@ void main() {
     late IdentitySecret secret;
     await t.runAsync(() async => secret = (await s.vault!.identitySecret(id))!);
     expect(secret.password, 's3cret');
-    // Passwords have no public key.
-    expect(find.byKey(Key('identity-copy-$id')), findsNothing);
-    expect(clip, isEmpty);
   });
 
   testWidgets(

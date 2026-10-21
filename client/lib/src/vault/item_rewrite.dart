@@ -12,7 +12,7 @@ Item withDeleted(LocalMirror mirror, Item item, {required bool deleted}) {
   final json = item.toJson()
     ..removeWhere((k, _) => _serverSet.contains(k))
     ..['deleted'] = deleted;
-  if (!hasQueuedSecret(mirror, item.id)) json['secret'] = null;
+  if (!_hasQueuedSecret(mirror, item.id)) json['secret'] = null;
   return Item.fromJson(json);
 }
 
@@ -24,17 +24,13 @@ const _serverSet = {
   'updatedDevice',
 };
 
-bool hasQueuedSecret(LocalMirror mirror, String id) =>
-    mirror.outbox().any((e) => e.item.id == id && e.item.secret != null);
+bool _hasQueuedSecret(LocalMirror mirror, String id) =>
+    mirror.outboxEntry(id)?.item.secret != null;
 
 /// The item holding the current secret of [id]: the queued write if it carries a secret, else the server row.
 /// Null when neither has one.
 ({Item item, bool queued})? secretHolder(LocalMirror mirror, String id) {
-  final queued = mirror
-      .outbox()
-      .where((e) => e.item.id == id)
-      .firstOrNull
-      ?.item;
+  final queued = mirror.outboxEntry(id)?.item;
   if (queued?.secret != null) return (item: queued!, queued: true);
   final stored = mirror.item(id);
   return stored?.secret == null ? null : (item: stored!, queued: false);
@@ -43,9 +39,9 @@ bool hasQueuedSecret(LocalMirror mirror, String id) =>
 /// A move re-seals both parts (the server refuses a moved item without its secret), and so does an edit
 /// of an item whose queued write still carries a secret the server has not stored yet.
 bool resealsSecret(LocalMirror mirror, Item current, String? folderId) =>
-    current.folderId != folderId || hasQueuedSecret(mirror, current.id);
+    current.folderId != folderId || _hasQueuedSecret(mirror, current.id);
 
-/// The keyring key of the folder and version [envelope]'s keyId names, for [part]. Null = not held.
+/// The keyring key of the folder and version [envelope]'s keyId names, for [part]. Null when not held.
 Uint8List? folderPartKey(
   FolderKeyring? keyring,
   Envelope envelope,

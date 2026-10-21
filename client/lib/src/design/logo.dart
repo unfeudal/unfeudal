@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import 'package:flutter/widgets.dart';
 
-/// The "U serrure" mark in [color], else the ambient icon colour; always square.
+/// The U-shaped lock mark in [color], else the ambient icon colour; always square.
 class UfLogo extends StatelessWidget {
   const UfLogo({super.key, this.size = 24, this.color});
 
@@ -22,7 +22,7 @@ class _LogoPainter extends CustomPainter {
 
   final Color color;
 
-  // brand/logo/logo.svg, viewBox 0 0 100 100
+  // The brand mark in a 100 by 100 viewBox; paint() scales it to the widget size.
   static final _mark = Path()
     ..fillType = PathFillType.evenOdd
     ..moveTo(20, 8)
@@ -45,7 +45,8 @@ class _LogoPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    canvas.scale(size.width / 100);
+    // A stretched box (a tight parent) never overflows: the mark fits its shortest side.
+    canvas.scale(size.shortestSide / 100);
     canvas.drawPath(_mark, Paint()..color = color);
   }
 

@@ -113,7 +113,10 @@ class _ForwardRow extends StatelessWidget {
             spacing: 12,
             children: [
               Text(
-                '127.0.0.1:$port → ${forward.remoteHost}:${forward.remotePort}',
+                l.forwardRoute(
+                  '127.0.0.1:$port',
+                  '${forward.remoteHost}:${forward.remotePort}',
+                ),
                 style: monoStyle.copyWith(fontSize: 12, color: colors.text),
               ),
               running

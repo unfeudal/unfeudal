@@ -76,7 +76,7 @@ class ApiClient {
   });
 
   Future<TokenPair> refresh() async {
-    if (tracing(TraceArea.session)) {
+    if (isTracing(TraceArea.session)) {
       trace(TraceArea.session, 'refresh with #${await tokenTag(refreshToken)}');
     }
     final res = await _raw(
@@ -86,8 +86,9 @@ class ApiClient {
       auth: false,
     );
     final pair = TokenPair.fromJson(_decode(res));
-    await onTokens?.call(pair); // persisted before anything uses it: a lost write would revoke the device on replay
-    if (tracing(TraceArea.session)) {
+    // Persisted before anything uses it: a lost write would revoke the device on replay.
+    await onTokens?.call(pair);
+    if (isTracing(TraceArea.session)) {
       trace(
         TraceArea.session,
         'refresh: new #${await tokenTag(pair.refreshToken)} persisted',
@@ -233,7 +234,7 @@ class ApiClient {
       _list('/items/$itemId/revisions', 'revisions', Item.fromJson);
 
   Future<void> reportSsh({
-    required String event,
+    required SshEvent event,
     required String hostItemId,
     int? localPort,
     List<String> jumpHostItemIds = const [],
@@ -241,7 +242,7 @@ class ApiClient {
     'POST',
     '/events/ssh',
     body: {
-      'event': event,
+      'event': event.wire,
       'hostItemId': hostItemId,
       'localPort': ?localPort,
       if (jumpHostItemIds.isNotEmpty) 'jumpHostItemIds': jumpHostItemIds,
@@ -305,7 +306,8 @@ class ApiClient {
     if (isReadOnly() && !_allowedReadOnly(method, path)) {
       throw const ReadOnlyException();
     }
-    var busy = 0; // short 429s (server busy, e.g. the Argon2 queue full): retried silently
+    // Short 429s (server busy, e.g. the Argon2 queue full) are retried silently.
+    var busy = 0;
     var refreshed = false;
     while (true) {
       final sentWith = accessToken;
@@ -374,7 +376,7 @@ class ApiClient {
       );
       trace(
         TraceArea.http,
-        '$method $path → ${res.statusCode} (${watch.elapsedMilliseconds} ms)',
+        '$method $path -> ${res.statusCode} (${watch.elapsedMilliseconds} ms)',
       );
       return res;
     } on Exception catch (e) {
@@ -384,7 +386,7 @@ class ApiClient {
         rethrow;
       }
       final what = e is TimeoutException ? 'timeout' : 'network error';
-      trace(TraceArea.http, '$method $path → $what');
+      trace(TraceArea.http, '$method $path -> $what');
       throw NetworkException(e);
     }
   }

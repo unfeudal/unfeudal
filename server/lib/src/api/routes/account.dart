@@ -31,7 +31,7 @@ typedef _User = ({
 const _columns =
     'id, email, disabled, bundle, bundle_version, auth_hash, recovery_auth_hash';
 
-_User _user(Map<String, Object?> r) => (
+_User _parseUser(Map<String, Object?> r) => (
   id: r['id']! as String,
   email: r['email']! as String,
   disabled: r['disabled'] != 0,
@@ -41,7 +41,7 @@ _User _user(Map<String, Object?> r) => (
   recoveryHash: r['recovery_auth_hash'] as String?,
 );
 
-Future<_User> _userById(Db db, String id) async => _user(
+Future<_User> _userById(Db db, String id) async => _parseUser(
   (await db.query('SELECT $_columns FROM users WHERE id = @id', {
     'id': id,
   })).single,
@@ -51,10 +51,10 @@ Future<_User?> _userByEmail(Db db, String email) async {
   final rows = await db.query('SELECT $_columns FROM users WHERE email = @e', {
     'e': email,
   });
-  return rows.isEmpty ? null : _user(rows.single);
+  return rows.isEmpty ? null : _parseUser(rows.single);
 }
 
-int _bundleVersion(Map<String, Object?> body) {
+int _parseBundleVersion(Map<String, Object?> body) {
   final v = body['bundleVersion'];
   if (v is! int || v < 0) {
     throw ApiError.invalid('bundleVersion: must be an integer >= 0');
@@ -62,7 +62,7 @@ int _bundleVersion(Map<String, Object?> body) {
   return v;
 }
 
-Map<String, Object?> _bundle(AppDeps deps, Map<String, Object?> body) =>
+Map<String, Object?> _parseBundle(AppDeps deps, Map<String, Object?> body) =>
     parseBundle(body['bundle'], kdfFloor: deps.kdfFloor);
 
 void _requireVersion(_User user, int version) {
@@ -81,7 +81,7 @@ Future<void> _requireCurrentAuthKey(
   _User user,
   Map<String, Object?> body,
 ) async {
-  final current = reqKey32(body, 'currentAuthKey');
+  final current = parseKey32(body, 'currentAuthKey');
   if (!await verifySecret(user.authHash, current)) {
     throw ApiError(ApiErrorCode.forbidden, 'Current master password is wrong.');
   }
@@ -138,9 +138,9 @@ Future<Response> changePassword(Request request) async {
   final deps = depsOf(request);
   final auth = authOf(request);
   final body = await readJson(request);
-  final bundle = _bundle(deps, body);
-  final authKey = reqKey32(body, 'authKey');
-  final version = _bundleVersion(body);
+  final bundle = _parseBundle(deps, body);
+  final authKey = parseKey32(body, 'authKey');
+  final version = _parseBundleVersion(body);
   final user = await _userById(deps.db, auth.userId);
   await limitCredentials(request, user.email);
   await _requireCurrentAuthKey(request, user, body);
@@ -181,7 +181,7 @@ Future<_User> _proveRecovery(Request request, Map<String, Object?> body) async {
   final deps = depsOf(request);
   final email = normalizeEmail(body['email']);
   await limitCredentials(request, email);
-  final key = reqKey32(body, 'recoveryAuthKey');
+  final key = parseKey32(body, 'recoveryAuthKey');
   final user = await _userByEmail(deps.db, email);
   final stored = user?.recoveryHash ?? await dummyHash(deps.secretHash);
   final ok = await verifySecret(stored, key);
@@ -210,16 +210,16 @@ Future<Response> recover(Request request) async {
   final deps = depsOf(request);
   final body = await readJson(request);
   final user = await _proveRecovery(request, body);
-  final bundle = _bundle(deps, body);
+  final bundle = _parseBundle(deps, body);
   requireBundleChangeOnly(user.bundle, bundle, {
     'salt',
     'kdf',
     'wrappedUserKey',
     'wrappedUserKeyByRecovery',
   });
-  final authKey = reqKey32(body, 'authKey');
-  final newRecoveryAuthKey = reqKey32(body, 'newRecoveryAuthKey');
-  _requireVersion(user, _bundleVersion(body));
+  final authKey = parseKey32(body, 'authKey');
+  final newRecoveryAuthKey = parseKey32(body, 'newRecoveryAuthKey');
+  _requireVersion(user, _parseBundleVersion(body));
   final authHash = await hashSecret(authKey, deps.secretHash);
   final recoveryHash = await hashSecret(newRecoveryAuthKey, deps.secretHash);
   await deps.db.transaction((tx) async {
@@ -249,9 +249,9 @@ Future<Response> recoveryKit(Request request) async {
   final deps = depsOf(request);
   final auth = authOf(request);
   final body = await readJson(request);
-  final bundle = _bundle(deps, body);
-  final recoveryAuthKey = reqKey32(body, 'recoveryAuthKey');
-  final version = _bundleVersion(body);
+  final bundle = _parseBundle(deps, body);
+  final recoveryAuthKey = parseKey32(body, 'recoveryAuthKey');
+  final version = _parseBundleVersion(body);
   final user = await _userById(deps.db, auth.userId);
   await limitCredentials(request, user.email);
   await _requireCurrentAuthKey(request, user, body);

@@ -11,45 +11,35 @@ import '../support/pump_app.dart';
 import '../support/sync_harness.dart';
 
 void main() {
-  testWidgets(
-    'rows, load more, verify, export, raw IPs for the Instance Owner, the SSH note',
-    (t) async {
-      final h = SyncHarness(capabilities: ['audit', 'mascot', 'sync']);
-      // The first account is the Instance Owner.
-      final s = await signedInState(t, harness: h);
-      final me = s.stored!.userId;
-      for (var i = 0; i < 101; i++) {
-        h.appendAudit(
-          'user:$me',
-          'device.added',
-          actorUser: me,
-          ipAddress: '203.0.113.7',
-        );
-      }
-      final saved = <String, List<int>>{};
-      await pumpApp(
-        t,
-        state: s,
-        child: ActivityScreen(
-          savePath: (name) async => '/tmp/$name',
-          writeFile: (path, bytes) async => saved[path] = bytes,
-        ),
-      );
-      await pumpReal(t);
-      expect(find.text('A device signed in'), findsWidgets);
-      expect(find.textContaining('203.0.113.7'), findsWidgets);
-      await t.tap(find.byKey(const Key('activity-more')));
-      await pumpReal(t);
-      expect(find.byKey(const Key('activity-more')), findsNothing);
-      await t.tap(find.byKey(const Key('activity-verify')));
-      await pumpReal(t);
-      expect(find.text('Chain verified: 101 events.'), findsOneWidget);
-      await t.tap(find.byKey(const Key('activity-export')));
-      await pumpReal(t);
-      expect(saved.keys, ['/tmp/unfeudal-audit-user.json']);
-      expect(find.textContaining('reported by the app'), findsOneWidget);
-    },
-  );
+  testWidgets('rows show the event and the raw IP to the Instance Owner', (
+    t,
+  ) async {
+    await openOwnerChain(t);
+    expect(find.text('A device signed in'), findsWidgets);
+    expect(find.textContaining('203.0.113.7'), findsWidgets);
+  });
+
+  testWidgets('load more reads the rest of the chain', (t) async {
+    await openOwnerChain(t);
+    await t.tap(find.byKey(const Key('activity-more')));
+    await pumpReal(t);
+    expect(find.byKey(const Key('activity-more')), findsNothing);
+  });
+
+  testWidgets('verify checks every event of the chain', (t) async {
+    await openOwnerChain(t);
+    await t.tap(find.byKey(const Key('activity-verify')));
+    await pumpReal(t);
+    expect(find.text('Chain verified: 101 events.'), findsOneWidget);
+  });
+
+  testWidgets('export saves the chain and notes the SSH events', (t) async {
+    final saved = await openOwnerChain(t);
+    await t.tap(find.byKey(const Key('activity-export')));
+    await pumpReal(t);
+    expect(saved.keys, ['/tmp/unfeudal-audit-user.json']);
+    expect(find.textContaining('reported by the app'), findsOneWidget);
+  });
 
   testWidgets(
     'vault scopes: my actions and the folders I manage; account and server stay in settings',
@@ -208,4 +198,31 @@ void main() {
       );
     }
   });
+}
+
+Future<Map<String, List<int>>> openOwnerChain(WidgetTester t) async {
+  final h = SyncHarness(capabilities: ['audit', 'mascot', 'sync']);
+  // The first account is the Instance Owner.
+  final s = await signedInState(t, harness: h);
+  final me = s.stored!.userId;
+  // One event more than a page, so load more has something to read.
+  for (var i = 0; i < 101; i++) {
+    h.appendAudit(
+      'user:$me',
+      'device.added',
+      actorUser: me,
+      ipAddress: '203.0.113.7',
+    );
+  }
+  final saved = <String, List<int>>{};
+  await pumpApp(
+    t,
+    state: s,
+    child: ActivityScreen(
+      savePath: (name) async => '/tmp/$name',
+      writeFile: (path, bytes) async => saved[path] = bytes,
+    ),
+  );
+  await pumpReal(t);
+  return saved;
 }

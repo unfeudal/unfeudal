@@ -96,7 +96,7 @@ class _InviteDialogState extends State<InviteDialog> with BusyAction {
                 UfOption(
                   r,
                   roleLabel(l, r),
-                  enabled: isOwner || r == OrgRole.member,
+                  enabled: isOwner || !r.isOwnerManaged,
                 ),
             ],
             onChanged: (r) => setState(() => _role = r),
@@ -184,7 +184,7 @@ class PendingInviteRow extends StatelessWidget {
         invite.email,
         if (invite.role case final role?) roleLabel(l, role),
         if (creator case final by?) l.inviteBy(by),
-      ].join(' · '),
+      ].join(l.listSeparator),
       subtitle: dates.formatMediumDate(invite.expiresAt.toLocal()),
       trailing: [
         TextButton(

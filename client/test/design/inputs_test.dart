@@ -157,7 +157,7 @@ void main() {
       await pumpCombo(t);
       await t.enterText(find.byType(TextField), 'zz');
       await t.pumpAndSettle();
-      expect(find.text('Nothing matches \u201Czz\u201D.'), findsOneWidget);
+      expect(find.text('Nothing matches "zz".'), findsOneWidget);
     });
 
     testWidgets(
@@ -166,7 +166,8 @@ void main() {
         final picked = await pumpCombo(t);
         await t.tap(find.byType(TextField));
         await t.pumpAndSettle();
-        await t.sendKeyEvent(LogicalKeyboardKey.arrowDown); // opens on Europe
+        // Opens on Europe.
+        await t.sendKeyEvent(LogicalKeyboardKey.arrowDown);
         // Skips United States.
         await t.sendKeyEvent(LogicalKeyboardKey.arrowDown);
         await t.sendKeyEvent(LogicalKeyboardKey.enter);

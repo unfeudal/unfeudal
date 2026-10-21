@@ -16,6 +16,9 @@
 - Org snippets and shared org identities (a key or password the whole folder uses), created in a folder you can edit.
 - Leave an organization while still waiting for confirmation; an owner can hand over the owner role and step down.
 - The trash shows what a deleted org folder holds and moves items out of it; the Instance Owner opens a deleted organization's activity.
+- Drag hosts and folders in the tree to move them (onto a folder, a host's folder, or the Hosts header for the root); a new host starts in the selected folder, and the host editor no longer has a Folder field.
+- Drag terminal tabs to reorder them.
+- Import a key from a file as well as by pasting it, and generate, import or add a password straight from the host editor.
 
 ### Fixed
 - Editing an item no longer drops fields written by a newer version of the app.
@@ -23,5 +26,8 @@
 - An exported activity log is verified; a broken chain is still saved, with a warning.
 - An edit of only an item's password or key, made right after a lost server answer, is no longer lost at the next sync.
 - Retrying a failed connection keeps its tab in place.
+- A folder key rotation no longer fails when a removed or disabled member regained access before it ran.
+- An organization that turns Loquet off now does it only while it is the vault shown, not across every vault of its members.
+- With Loquet off, the sidebar shows the logo at its size beside the account name instead of a stretched mark.
 - Terminal search highlights the right text after wide (CJK) characters.
 - The password strength meter rates common passwords, keyboard rows and sequences as weak.

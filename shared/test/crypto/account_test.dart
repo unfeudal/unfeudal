@@ -122,7 +122,7 @@ void main() {
     },
   );
 
-  test('forged publicKey is refused on both unlock paths', () async {
+  test('forged publicKey is refused on every unlock path', () async {
     final other = await crypto.create('battery staple');
     final forged = AccountBundle.fromJson({
       ...acc.bundle.toJson(),
@@ -135,6 +135,10 @@ void main() {
     await expectLater(
       crypto.unlockWithRecovery(forged, acc.recoveryKey),
       throwsA(isA<InvalidRecoveryKey>()),
+    );
+    await expectLater(
+      crypto.unlockWithUserKey(forged, acc.unlocked.userKey),
+      throwsA(isA<WrongPassword>()),
     );
   });
 
@@ -243,28 +247,16 @@ void main() {
     }
   });
 
-  test(
-    'unlockWithUserKey rebuilds the account and keeps the public key check',
-    () async {
-      final u = await crypto.unlockWithUserKey(
-        acc.bundle,
-        acc.unlocked.userKey,
-      );
-      expect((await u.keyPair.extractPublicKey()).bytes, acc.bundle.publicKey);
-      expect(u.userKey, acc.unlocked.userKey);
-      await expectLater(
-        crypto.unlockWithUserKey(acc.bundle, SymmetricCipher.newKey()),
-        throwsA(isA<WrongPassword>()),
-      );
-      final other = await crypto.create('another horse');
-      final forged = AccountBundle.fromJson({
-        ...acc.bundle.toJson(),
-        'publicKey': b64(other.bundle.publicKey),
-      });
-      await expectLater(
-        crypto.unlockWithUserKey(forged, acc.unlocked.userKey),
-        throwsA(isA<WrongPassword>()),
-      );
-    },
-  );
+  test('unlockWithUserKey rebuilds the account', () async {
+    final u = await crypto.unlockWithUserKey(acc.bundle, acc.unlocked.userKey);
+    expect((await u.keyPair.extractPublicKey()).bytes, acc.bundle.publicKey);
+    expect(u.userKey, acc.unlocked.userKey);
+  });
+
+  test('unlockWithUserKey with another key throws WrongPassword', () async {
+    await expectLater(
+      crypto.unlockWithUserKey(acc.bundle, SymmetricCipher.newKey()),
+      throwsA(isA<WrongPassword>()),
+    );
+  });
 }

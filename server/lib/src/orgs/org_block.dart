@@ -5,7 +5,7 @@ import 'dart:math';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../db/db.dart';
-import 'org_access.dart' hide OrgTeam;
+import 'org_access.dart';
 
 typedef OrgView = ({OrgSnapshot org, Set<String> viewable, Set<String> tree});
 
@@ -33,34 +33,60 @@ Future<List<({int seq, String id, String? body})>> visibleOrgItems(
   Map<String, OrgView> views,
   int cursor, {
   int? limit,
-  bool idsOnly = false,
 }) async {
-  final p = <String, Object?>{'c': cursor};
+  final params = <String, Object?>{'c': cursor};
+  final visible = _visibleClause(params, views);
+  if (visible == null) return [];
+  final rows = await tx.query(
+    'SELECT seq, id, body FROM items WHERE seq > @c AND $visible '
+    'ORDER BY seq${limit == null ? '' : ' LIMIT $limit'}',
+    params,
+  );
+  return [
+    for (final row in rows)
+      (
+        seq: row['seq']! as int,
+        id: row['id']! as String,
+        body: row['body'] as String?,
+      ),
+  ];
+}
+
+/// The ids of the items [visibleOrgItems] returns from cursor 0.
+Future<List<String>> visibleOrgItemIds(
+  Tx tx,
+  Map<String, OrgView> views,
+) async {
+  final params = <String, Object?>{'c': 0};
+  final visible = _visibleClause(params, views);
+  if (visible == null) return [];
+  return [
+    for (final row in await tx.query(
+      'SELECT id FROM items WHERE seq > @c AND $visible',
+      params,
+    ))
+      row['id']! as String,
+  ];
+}
+
+// The OR of one branch per org with a tree, its ids put in params; null when no org has a tree.
+String? _visibleClause(
+  Map<String, Object?> params,
+  Map<String, OrgView> views,
+) {
   final branches = <String>[];
   for (final (i, view) in views.values.indexed) {
     if (view.tree.isEmpty) continue;
-    p['o$i'] = view.org.orgId;
-    final viewable = _inList(p, 'v${i}_', view.viewable);
-    final tree = _inList(p, 't${i}_', view.tree);
+    params['o$i'] = view.org.orgId;
+    final viewable = _inList(params, 'v${i}_', view.viewable);
+    final tree = _inList(params, 't${i}_', view.tree);
     branches.add(
       "(org_id = @o$i AND ((type <> 'folder' AND folder_id IN $viewable) "
       "OR (type = 'folder' AND id IN $tree)))",
     );
   }
-  if (branches.isEmpty) return [];
-  final rows = await tx.query(
-    'SELECT seq, id${idsOnly ? '' : ', body'} FROM items WHERE seq > @c AND (${branches.join(' OR ')}) '
-    'ORDER BY seq${limit == null ? '' : ' LIMIT $limit'}',
-    p,
-  );
-  return [
-    for (final x in rows)
-      (
-        seq: x['seq']! as int,
-        id: x['id']! as String,
-        body: x['body'] as String?,
-      ),
-  ];
+  if (branches.isEmpty) return null;
+  return '(${branches.join(' OR ')})';
 }
 
 // `(@prefix0, @prefix1, ...)` with each id put in params; `(NULL)`, which matches nothing, for no id.
@@ -103,7 +129,8 @@ Future<OrgBlock> buildOrgBlock(
   final pendingRotations = <PendingRotation>[];
   for (final m in memberships) {
     orgs.add(_summary(m));
-    if (m['status'] != 'confirmed') continue; // accepted: the org name only
+    // An accepted member gets the org name only.
+    if (m['status'] != 'confirmed') continue;
     final (:org, :viewable, :tree) = views[m['id']! as String]!;
     final admin = org.members[userId]!.isAdmin;
     members.addAll(_members(org, admin: admin));
@@ -118,9 +145,8 @@ Future<OrgBlock> buildOrgBlock(
     keyRequests.addAll(await _missingKeyRequests(tx, org));
     pendingRotations.addAll(await _pendingRotations(tx, org.orgId));
   }
-  final itemIds = [
-    for (final x in await visibleOrgItems(tx, views, 0, idsOnly: true)) x.id,
-  ]..sort();
+  final itemIds = await visibleOrgItemIds(tx, views)
+    ..sort();
   return OrgBlock(
     orgCursor: orgSeq,
     orgs: orgs,
@@ -150,15 +176,17 @@ OrgSummary _summary(Map<String, Object?> membership) {
 
 // Status, public key and disabled flag are for admins only.
 List<OrgMember> _members(OrgSnapshot org, {required bool admin}) => [
-  for (final MapEntry(key: id, value: x) in org.members.entries)
+  for (final MapEntry(key: id, value: member) in org.members.entries)
     OrgMember(
       orgId: org.orgId,
       userId: id,
-      email: x.email,
-      role: x.role.name,
-      status: admin ? x.status.name : null,
-      publicKey: admin && x.publicKey != null ? unb64(x.publicKey!) : null,
-      disabled: admin ? x.disabled : null,
+      email: member.email,
+      role: member.role.name,
+      status: admin ? member.status.name : null,
+      publicKey: admin && member.publicKey != null
+          ? unb64(member.publicKey!)
+          : null,
+      disabled: admin ? member.disabled : null,
     ),
 ];
 
@@ -226,22 +254,22 @@ Future<List<WrappedKeyRow>> _keyHistory(
   required Set<String> viewable,
 }) async {
   final out = <WrappedKeyRow>[];
-  for (final h in await tx.query(
+  for (final historyRow in await tx.query(
     'SELECT folder_id, body FROM folder_key_history WHERE org_id = @o',
     {'o': org.orgId},
   )) {
-    final f = h['folder_id']! as String;
-    if (!viewable.contains(f)) continue;
-    final hasSecret = FolderKeyAccess.of(permissionsOf(org, userId, f))
+    final folderId = historyRow['folder_id']! as String;
+    if (!viewable.contains(folderId)) continue;
+    final hasSecret = FolderKeyAccess.of(permissionsOf(org, userId, folderId))
         .hasSecret;
     final body = FolderKeyHistory.fromJson({
-      ...jsonDecode(h['body']! as String) as Map<String, Object?>,
+      ...jsonDecode(historyRow['body']! as String) as Map<String, Object?>,
       // A secret the member cannot read is never sent, so it is never parsed.
       if (!hasSecret) 'secret': null,
     });
     out.add(
       WrappedKeyRow(
-        folderId: f,
+        folderId: folderId,
         keys: WrappedFolderKeys(
           version: body.version,
           meta: body.meta,
@@ -255,50 +283,54 @@ Future<List<WrappedKeyRow>> _keyHistory(
 
 Future<List<KeyRequest>> _missingKeyRequests(Tx tx, OrgSnapshot org) async {
   if (org.folders.isEmpty) return [];
-  final p = <String, Object?>{};
-  final folders = _inList(p, 'f', org.folders.keys);
+  final params = <String, Object?>{};
+  final folders = _inList(params, 'f', org.folders.keys);
   // The rotated version where a rotation left history, else the highest version held.
   final current = {
-    for (final h in await tx.query(
+    for (final historyRow in await tx.query(
       'SELECT folder_id, version FROM folder_key_history WHERE folder_id IN $folders',
-      p,
+      params,
     ))
-      h['folder_id']! as String: h['version']! as int,
+      historyRow['folder_id']! as String: historyRow['version']! as int,
   };
   final held = <String, Map<Object?, Map<String, Object?>>>{};
-  for (final k in await tx.query(
+  for (final keyRow in await tx.query(
     'SELECT folder_id, user_id, version, secret_wrapped FROM folder_keys WHERE folder_id IN $folders',
-    p,
+    params,
   )) {
-    final f = k['folder_id']! as String;
-    held.putIfAbsent(f, () => {})[k['user_id']] = k;
+    final folderId = keyRow['folder_id']! as String;
+    held.putIfAbsent(folderId, () => {})[keyRow['user_id']] = keyRow;
   }
   final out = <KeyRequest>[];
-  for (final f in org.folders.keys) {
-    final keys = held[f] ?? const {};
+  for (final folderId in org.folders.keys) {
+    final keys = held[folderId] ?? const {};
     final version =
-        current[f] ??
-        keys.values.fold<int>(0, (top, k) => max(top, k['version']! as int));
-    if (version == 0) {
-      continue; // nobody holds a key yet: the creator uploads the first one
-    }
-    for (final MapEntry(key: u, value: x) in org.members.entries) {
-      final access = FolderKeyAccess.of(permissionsOf(org, u, f));
-      if (x.status != MemberStatus.confirmed || x.disabled || !access.hasMeta) {
+        current[folderId] ??
+        keys.values.fold<int>(
+          0,
+          (top, keyRow) => max(top, keyRow['version']! as int),
+        );
+    // Nobody holds a key yet: the creator uploads the first one.
+    if (version == 0) continue;
+    for (final MapEntry(key: userId, value: member) in org.members.entries) {
+      final access = FolderKeyAccess.of(permissionsOf(org, userId, folderId));
+      if (member.status != MemberStatus.confirmed ||
+          member.disabled ||
+          !access.hasMeta) {
         continue;
       }
       final needsSecret = access.hasSecret;
-      final k = keys[u];
-      if (k == null ||
-          (k['version']! as int) < version ||
-          (needsSecret && k['secret_wrapped'] == null)) {
+      final keyRow = keys[userId];
+      if (keyRow == null ||
+          (keyRow['version']! as int) < version ||
+          (needsSecret && keyRow['secret_wrapped'] == null)) {
         out.add(
           KeyRequest(
             orgId: org.orgId,
-            folderId: f,
-            userId: u,
+            folderId: folderId,
+            userId: userId,
             version: version,
-            secret: needsSecret,
+            needsSecret: needsSecret,
           ),
         );
       }

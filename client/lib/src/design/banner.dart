@@ -19,6 +19,8 @@ enum BannerTone {
   };
 }
 
+/// A full-width notice above the main area: the tone's icon, the message, then up to two small actions and a dismiss
+/// button.
 class StatusBanner extends StatelessWidget {
   const StatusBanner({
     super.key,
@@ -48,7 +50,6 @@ class StatusBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (color, fill, icon) = tone.style(UfColors.of(context));
-    // full width above the main area; actions are small secondary buttons
     return Material(
       color: fill,
       child: ConstrainedBox(

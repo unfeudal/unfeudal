@@ -21,11 +21,11 @@ abstract final class RecoveryKey {
   }
 
   static Uint8List decode(String text) {
-    final s = ungroup(text);
-    if (s.length != 53) throw const InvalidRecoveryKey();
+    final chars = ungroup(text);
+    if (chars.length != 53) throw const InvalidRecoveryKey();
     final out = <int>[];
     var acc = 0, bits = 0;
-    for (final ch in s.split('')) {
+    for (final ch in chars.split('')) {
       final v = base32Alphabet.indexOf(ch);
       if (v < 0) throw const InvalidRecoveryKey();
       acc = (acc << 5 | v) & 0xffff;

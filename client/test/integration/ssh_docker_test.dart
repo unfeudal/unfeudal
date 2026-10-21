@@ -12,9 +12,8 @@ import 'package:unfeudal_client/src/ssh/ssh_connector.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../support/fakes.dart';
+import 'sshd_image.dart';
 
-const image =
-    'lscr.io/linuxserver/openssh-server:10.3_p1-r1-ls239@sha256:bef23ec7e4b6849f8c61b7e5fc1c67fc38bafe100539d5c34fc2d682c582bbf2';
 const port = 2222;
 const password = 'pw-123456';
 final hostId = newId();
@@ -95,7 +94,7 @@ void main() {
       'USER_PASSWORD=$password',
       '-e', 'PUBLIC_KEY=${key.publicKey}',
       '-v', '${sshdConf.path}:/config/sshd/sshd_config.d:ro',
-      image,
+      sshdImage,
     ]);
     if (run.exitCode != 0) fail('docker run: ${run.stderr}');
     container = (run.stdout as String).trim();
@@ -111,7 +110,7 @@ void main() {
   });
 
   test(
-    'unknown key declined → HostKeyRejected(unknown), nothing pinned',
+    'a declined unknown key throws HostKeyRejected(unknown), nothing pinned',
     () async {
       final r = FakeSshCallbacks(password: password);
       await expectLater(
@@ -128,7 +127,7 @@ void main() {
     },
   );
 
-  test('accepted → pinned; password auth; shell echoes ok', () async {
+  test('an accepted key is pinned; password auth; shell echoes ok', () async {
     final r = FakeSshCallbacks(answer: true, password: password);
     final shell = await connect(target(), r);
     expect(r.pins.values.single.sha256Fingerprint, serverPin.sha256Fingerprint);
@@ -136,7 +135,7 @@ void main() {
     await shell.close();
   });
 
-  test('tampered pin → HostKeyRejected(changed)', () async {
+  test('a tampered pin throws HostKeyRejected(changed)', () async {
     final tampered = KnownHostMeta(
       hostItemId: hostId,
       keyType: serverPin.keyType,
@@ -157,7 +156,7 @@ void main() {
     );
   });
 
-  test('wrong password → SshAuthFailed', () async {
+  test('a wrong password throws SshAuthFailed', () async {
     await expectLater(
       connect(
         target(),

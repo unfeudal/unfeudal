@@ -85,7 +85,8 @@ void main() {
     await t.pump(const Duration(seconds: 5));
     expect(painterOf(t).blink > 0 || t.hasRunningAnimations, isTrue);
     await t.pumpWidget(host(const SizedBox()));
-    await t.pump(const Duration(seconds: 10)); // no pending timer left
+    // The test framework fails here if a life timer survived dispose.
+    await t.pump(const Duration(seconds: 10));
   });
 
   testWidgets('life is ignored when still', (t) async {

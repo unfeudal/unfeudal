@@ -11,19 +11,13 @@ class SnippetStore {
   final Vault vault;
   final OrgWriter? writer;
 
-  /// Readable snippets matching [query] (name, command or tag, any case), sorted by name; one that does not
-  /// parse is skipped.
+  /// Readable snippets matching [query] (name, command or tag, any case), sorted by name.
   List<({String id, SnippetMeta meta})> list({String query = ''}) {
     final q = query.trim().toLowerCase();
     final out = <({String id, SnippetMeta meta})>[];
     for (final e in vault.ofKind(ItemKind.snippet)) {
       if (e.state != EntryState.ok) continue;
-      final SnippetMeta meta;
-      try {
-        meta = SnippetMeta.fromJson(e.meta);
-      } on FormatException {
-        continue;
-      }
+      final meta = SnippetMeta.fromJson(e.meta);
       if (q.isEmpty ||
           meta.name.toLowerCase().contains(q) ||
           meta.command.toLowerCase().contains(q) ||

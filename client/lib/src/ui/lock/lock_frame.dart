@@ -95,6 +95,31 @@ class LockFrame extends StatelessWidget {
       },
     );
   }
+
+  Widget _hero(BuildContext context) {
+    final state = context
+        .dependOnInheritedWidgetOfExactType<AppScope>()
+        ?.notifier;
+    if (state == null) {
+      return const LoquetSpot(placement: LoquetPlacement.lock);
+    }
+    return ListenableBuilder(
+      listenable: Listenable.merge([state.lockMachine, state.loquet]),
+      builder: (context, _) {
+        final face = loquetForLock(state.lockMachine.state);
+        // three wrong passwords: he hides his face over the table's mood
+        final covering = state.loquet.current?.mood == LoquetMood.covering;
+        return LoquetSpot(
+          key: const Key('loquet-spot-lock'),
+          placement: LoquetPlacement.lock,
+          mood: covering ? LoquetMood.covering : face.mood,
+          line: face.line,
+          params: {'name': ?state.stored?.displayName},
+          eyeX: eyeX,
+        );
+      },
+    );
+  }
 }
 
 class _Wordmark extends StatelessWidget {
@@ -143,33 +168,6 @@ class _LockHeading extends StatelessWidget {
             ),
           ),
       ],
-    );
-  }
-}
-
-extension on LockFrame {
-  Widget _hero(BuildContext context) {
-    final state = context
-        .dependOnInheritedWidgetOfExactType<AppScope>()
-        ?.notifier;
-    if (state == null) {
-      return const LoquetSpot(placement: LoquetPlacement.lock);
-    }
-    return ListenableBuilder(
-      listenable: Listenable.merge([state.lockMachine, state.loquet]),
-      builder: (context, _) {
-        final face = loquetForLock(state.lockMachine.state);
-        // three wrong passwords: he hides his face over the table's mood
-        final covering = state.loquet.current?.mood == LoquetMood.covering;
-        return LoquetSpot(
-          key: const Key('loquet-spot-lock'),
-          placement: LoquetPlacement.lock,
-          mood: covering ? LoquetMood.covering : face.mood,
-          line: face.line,
-          params: {'name': ?state.stored?.displayName},
-          eyeX: eyeX,
-        );
-      },
     );
   }
 }

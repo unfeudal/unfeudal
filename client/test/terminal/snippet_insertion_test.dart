@@ -24,7 +24,8 @@ void main() {
 
   test('control characters are removed, so an embedded end-of-paste marker cannot escape', () async {
     final (tab, shell) = live();
-    tab.terminal.write('\x1b[?2004h'); // the remote turns bracketed paste on
+    // The remote turns bracketed paste on.
+    tab.terminal.write('\x1b[?2004h');
     expect(
       await insertSnippet(
         tab,
@@ -50,7 +51,8 @@ void main() {
         await insertSnippet(tab, 'cd /srv\nmake\n', confirm: () async => true),
         isTrue,
       );
-      expect(last(shell), 'cd /srv\rmake'); // paste sends a line break as \r
+      // Paste sends a line break as a carriage return.
+      expect(last(shell), 'cd /srv\rmake');
     },
   );
 

@@ -28,7 +28,7 @@ class AccountBundle {
   factory AccountBundle.fromJson(Object? json) {
     final r = JsonReader(json, 'accountBundle');
     return AccountBundle(
-      salt: r.bytes('salt', length: 16),
+      salt: r.bytes('salt', length: kdfSaltLength),
       kdf: KdfParams.fromJson(r.object('kdf')),
       wrappedUserKey: Envelope.fromJson(r.object('wrappedUserKey')),
       wrappedUserKeyByRecovery: Envelope.fromJson(
@@ -123,7 +123,9 @@ class AccountCrypto {
   }
 
   static const minPasswordLength = 8;
-  final KdfParams kdf; // the instance KDF used for new wraps
+
+  /// The instance KDF used for new wraps.
+  final KdfParams kdf;
 
   /// The weakest KDF accepted from outside; only tests lower it.
   final KdfParams kdfFloor;
@@ -131,8 +133,8 @@ class AccountCrypto {
 
   Future<NewAccount> create(String password) async {
     _checkPassword(password);
-    final salt = secureBytes(16),
-        userKey = secureBytes(32),
+    final salt = secureBytes(kdfSaltLength),
+        userKey = SymmetricCipher.newKey(),
         seed = secureBytes(32);
     final recovery = RecoveryKey.generate();
     final keys = await deriveMasterKeys(password, salt, kdf);
@@ -258,7 +260,7 @@ class AccountCrypto {
     String newPassword,
   ) async {
     _checkPassword(newPassword);
-    final salt = secureBytes(16);
+    final salt = secureBytes(kdfSaltLength);
     final keys = await deriveMasterKeys(newPassword, salt, kdf);
     final wrapped = await SymmetricCipher.encrypt(
       keys.encKey,

@@ -28,13 +28,13 @@ class SmtpMailer implements Mailer {
   /// Throws on any failure: the caller logs it without the body (SecurityNotifier, inviteMailSent).
   @override
   Future<bool> send(Mail mail) async {
-    final m = renderMail(mail, timezone);
+    final rendered = renderMail(mail, timezone);
     await mailer.send(
       mailer.Message()
         ..from = mailer.Address(config.from)
         ..recipients.add(mail.to)
-        ..subject = m.subject
-        ..text = m.text,
+        ..subject = rendered.subject
+        ..text = rendered.text,
       _server,
       timeout: _timeout,
     );

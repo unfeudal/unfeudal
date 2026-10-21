@@ -31,11 +31,11 @@ class VaultHealth {
     if (keysOver5Years > 0) MoodReason.oldKeys,
     if (syncOver7Days) MoodReason.staleSync,
   ];
-}
 
-LoquetMood computeMood(VaultHealth h) {
-  if (h.reasons.isNotEmpty) return LoquetMood.concerned;
-  return h.hostsToVerify > 0 ? LoquetMood.idle : LoquetMood.cheerful;
+  LoquetMood get mood {
+    if (reasons.isNotEmpty) return LoquetMood.concerned;
+    return hostsToVerify > 0 ? LoquetMood.idle : LoquetMood.cheerful;
+  }
 }
 
 /// Readable, non-trashed entries only. Ages count from `createdAt`; a pending entry has none and never
@@ -59,7 +59,7 @@ VaultHealth vaultHealthOf(
       if (olderThan(e.item.createdAt, const Duration(days: 7))) verifyOld++;
     }
     if (e.kind == ItemKind.identity &&
-        e.meta?['kind'] == 'privateKey' &&
+        e.meta?['kind'] == IdentityKind.privateKey.name &&
         olderThan(e.item.createdAt, const Duration(days: 5 * 365))) {
       oldKeys++;
     }

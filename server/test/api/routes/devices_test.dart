@@ -31,7 +31,7 @@ void main() {
       final devices = [
         for (final d in r.body['devices']! as List) Device.fromJson(d),
       ];
-      expect(devices.map((d) => (d.id, d.current, d.revokedAt != null)), [
+      expect(devices.map((d) => (d.id, d.isCurrent, d.revokedAt != null)), [
         (owner.deviceId, true, false),
         (second.deviceId, false, true),
       ]);

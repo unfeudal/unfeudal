@@ -121,8 +121,8 @@ class _DialogHeading extends StatelessWidget {
   }
 }
 
-/// "Annuler" as a secondary button, next to a primary action. [autofocus] gives it the dialog's initial focus,
-/// for a risky question.
+/// The localized Cancel as a secondary button, next to a primary action. [autofocus] gives it the dialog's initial
+/// focus, for a risky question.
 class CancelButton extends StatelessWidget {
   const CancelButton({
     super.key,

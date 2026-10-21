@@ -5,7 +5,7 @@ extension _SecurityGroup on _SettingsScreenState {
   List<Widget> _security(BuildContext context) {
     final l = AppLocalizations.of(context);
     final state = AppScope.of(context);
-    final offline = !(state.sync?.online ?? false);
+    final offline = !(state.sync?.isOnline ?? false);
     final colors = UfColors.of(context);
     return [
       const _AutoLockRow(),
@@ -28,7 +28,9 @@ extension _SecurityGroup on _SettingsScreenState {
           hint: l.settingsRecoveryKitBody,
           trailing: OutlinedButton(
             key: const Key('settings-recovery-kit'),
-            onPressed: (state.sync?.readOnly ?? true) ? null : _newRecoveryKit,
+            onPressed: (state.sync?.isReadOnly ?? true)
+                ? null
+                : _newRecoveryKit,
             child: Text(l.settingsRecoveryKit),
           ),
         ),

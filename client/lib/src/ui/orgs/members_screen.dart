@@ -24,9 +24,6 @@ String roleLabel(AppLocalizations l, OrgRole role) => switch (role) {
   OrgRole.member => l.roleMember,
 };
 
-OrgRole? _roleOf(String wire) =>
-    OrgRole.values.where((r) => r.name == wire).firstOrNull;
-
 /// Asks, then leaves [orgId]: allowed to any member, confirmed or not.
 Future<void> confirmAndLeaveOrg(
   BuildContext context,
@@ -76,32 +73,15 @@ class _MembersScreenState extends State<MembersScreen> with BusyAction {
 
   // Pins a confirmed member on this device; a changed key rotates every folder they can view.
   Future<void> _verify(OrgMember m) async {
-    final orgs = AppScope.read(context).orgs!;
-    final changed = orgs.pins.check(m.userId, m.publicKey!) == PinCheck.changed;
     final verified = await showSafetyCode(
       context,
       email: m.email,
       publicKey: m.publicKey!,
     );
     if (verified == null) return;
-    await run(() async {
-      final state = AppScope.read(context);
-      await orgs.pins.pin(m.userId, m.publicKey!, verified: verified);
-      orgs.alerts.remove(m.userId);
-      await state.sync!.syncNow();
-      final block = orgs.block;
-      if (!changed || block == null) return;
-      for (final n in block.folderTree.where((n) => n.orgId == widget.orgId)) {
-        final perms = orgs.permissions(
-          widget.orgId,
-          n.folderId,
-          userId: m.userId,
-        );
-        if (perms.contains(Permission.view)) {
-          await orgs.rotation.rotate(block, widget.orgId, n.folderId);
-        }
-      }
-    });
+    await run(
+      () => AppScope.read(context).orgs!.verifyMember(m, verified: verified),
+    );
   }
 
   Future<void> _remove(OrgMember m) async {
@@ -119,7 +99,7 @@ class _MembersScreenState extends State<MembersScreen> with BusyAction {
     });
   }
 
-  /// Pins live in the vault: its changes redraw the badges.
+  // Pins live in the vault: its changes redraw the badges.
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: AppScope.of(context).vault!,
@@ -138,7 +118,7 @@ class _MembersScreenState extends State<MembersScreen> with BusyAction {
     final anotherOwner = members.any(
       (m) =>
           m.userId != me &&
-          m.role == OrgRole.owner.name &&
+          m.knownRole == OrgRole.owner &&
           m.status != MemberStatus.accepted.name &&
           m.disabled != true,
     );
@@ -176,10 +156,10 @@ class _MembersScreenState extends State<MembersScreen> with BusyAction {
   }) {
     final l = AppLocalizations.of(context);
     final colors = UfColors.of(context);
-    final role = _roleOf(m.role);
+    final role = m.knownRole;
     final accepted = m.status == MemberStatus.accepted.name;
     final self = m.userId == me;
-    final touchable = isOwner || role == OrgRole.member;
+    final touchable = isOwner || role?.isOwnerManaged == false;
     return ItemRow(
       icon: UfIcons.user,
       title: m.email,
@@ -282,7 +262,7 @@ class _MembersScreenState extends State<MembersScreen> with BusyAction {
             r,
             roleLabel(l, r),
             key: Key('role-option-${r.name}'),
-            enabled: isOwner || r == OrgRole.member,
+            enabled: isOwner || !r.isOwnerManaged,
           ),
       ],
     );

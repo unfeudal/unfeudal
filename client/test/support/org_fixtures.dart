@@ -184,18 +184,19 @@ Future<Item> sealOrgItem(
 
 /// A signed-in client wired like AppState does for orgs: mirror, sync engine, vault with keyring, pins.
 class ClientOrg {
-  ClientOrg._(
-    this.h,
-    this.api,
-    this.mirror,
-    this.sync,
-    this.vault,
-    this.keyring,
-    this.pins,
-    this.userId,
-    this.keyPair,
-    this.publicKey,
-  );
+  ClientOrg._({
+    required this.h,
+    required this.api,
+    required this.mirror,
+    required this.sync,
+    required this.vault,
+    required this.keyring,
+    required this.pins,
+    required this.userId,
+    required this.keyPair,
+    required this.publicKey,
+    required this.userKey,
+  });
 
   final SyncHarness h;
   final ApiClient api;
@@ -207,6 +208,7 @@ class ClientOrg {
   final String userId;
   final SimpleKeyPair keyPair;
   final Uint8List publicKey;
+  final Uint8List userKey;
   final events = <AppEvent>[];
 
   static Future<ClientOrg> start() async {
@@ -221,7 +223,7 @@ class ClientOrg {
     final vault = Vault(
       mirror: mirror,
       ledger: LedgerStore(mirror),
-      write: (items) async => mirror.enqueueAll(items),
+      send: (items) async => mirror.enqueueAll(items),
     );
     await vault.unlock(acc.unlocked.userKey);
     final keyring = FolderKeyring(mirror);
@@ -229,16 +231,17 @@ class ClientOrg {
     vault.keyring = keyring;
     h.orgMembers[testOrgId] = {login.account.userId};
     return ClientOrg._(
-      h,
-      api,
-      mirror,
-      sync,
-      vault,
-      keyring,
-      MemberPins(vault),
-      login.account.userId,
-      acc.unlocked.keyPair,
-      Uint8List.fromList(acc.bundle.publicKey),
+      h: h,
+      api: api,
+      mirror: mirror,
+      sync: sync,
+      vault: vault,
+      keyring: keyring,
+      pins: MemberPins(vault),
+      userId: login.account.userId,
+      keyPair: acc.unlocked.keyPair,
+      publicKey: Uint8List.fromList(acc.bundle.publicKey),
+      userKey: acc.unlocked.userKey,
     );
   }
 

@@ -117,7 +117,8 @@ void main() {
     );
     expect(s.logLines.join(), isNot(contains('ghost')));
     await s.db.execute('UPDATE users SET disabled = 1');
-    s.clock.advance(const Duration(seconds: 30)); // past the acct: delay
+    // Past the acct: delay.
+    s.clock.advance(const Duration(seconds: 30));
     answers.add(await loginWith(right.authKey));
     for (final r in answers) {
       expect(r.status, 401);
@@ -187,29 +188,41 @@ void main() {
     },
   );
 
-  test('device cap: active devices ≥ max_devices_per_user is 403; the right key is not counted as a failure', () async {
-    await s.login('owner@example.org', testPassword);
-    await s.login('owner@example.org', testPassword);
-    final right = await deriveMasterKeys(
-      testPassword,
-      owner.bundle.salt,
-      owner.bundle.kdf,
-    );
-    expect((await loginWith(right.authKey)).status, 403);
+  // The owner holds the three devices of the cap afterwards.
+  Future<void> fillDeviceCap() async {
+    for (var i = 0; i < 2; i++) {
+      await s.login('owner@example.org', testPassword);
+    }
+  }
+
+  Future<List<int>> rightAuthKey() async => (await deriveMasterKeys(
+    testPassword,
+    owner.bundle.salt,
+    owner.bundle.kdf,
+  )).authKey;
+
+  test('device cap: active devices >= max_devices_per_user is 403', () async {
+    await fillDeviceCap();
+    expect((await loginWith(await rightAuthKey())).status, 403);
+  });
+
+  test('device cap: the right key is not counted as a failure', () async {
+    await fillDeviceCap();
+    await loginWith(await rightAuthKey());
     expect(
       await s.db.query(
         "SELECT key FROM login_attempts WHERE key LIKE 'acct:%'",
       ),
       isEmpty,
     );
+  });
+
+  test('device cap: revoked devices do not count', () async {
+    await fillDeviceCap();
     await s.db.execute("UPDATE devices SET revoked_at = @t WHERE id = @d", {
       't': iso(s.clock.now()),
       'd': owner.deviceId,
     });
-    expect(
-      (await loginWith(right.authKey)).status,
-      200,
-      reason: 'revoked devices do not count',
-    );
+    expect((await loginWith(await rightAuthKey())).status, 200);
   });
 }

@@ -12,7 +12,7 @@ void main() {
     final (e, m, _) = await h.engine();
     m.enqueue(wireItem(newId(), revision: 0), baseRevision: 0);
     await e.syncNow();
-    expect((e.readOnly, e.compat!.reason), (true, 'no-common-api'));
+    expect((e.isReadOnly, e.compat!.reason), (true, CompatReason.noCommonApi));
     expect(h.requests.where((r) => r.contains('/api/v1/')), isEmpty);
     await expectLater(
       e.write(wireItem(newId(), revision: 0)),
@@ -26,7 +26,7 @@ void main() {
     h.serverPut(wireItem(newId(), revision: 0));
     m.enqueue(wireItem(newId(), revision: 0), baseRevision: 0);
     await e.syncNow();
-    expect((e.readOnly, e.compat!.reason), (true, 'client-too-old'));
+    expect((e.isReadOnly, e.compat!.reason), (true, CompatReason.clientTooOld));
     expect(m.items(), hasLength(1));
     expect(h.requests.where((r) => r.startsWith('PUT ')), isEmpty);
   });
@@ -40,8 +40,8 @@ void main() {
     final (e, m, _) = await h.engine();
     await e.write(wireItem(newId(), revision: 0));
     await e.syncNow();
-    expect(e.readOnly, true);
-    expect(e.compat!.reason, 'client-too-old');
+    expect(e.isReadOnly, true);
+    expect(e.compat!.reason, CompatReason.clientTooOld);
     expect(m.outbox(), hasLength(1));
   });
 
@@ -59,9 +59,9 @@ void main() {
     final h = SyncHarness(minClient: '9.0.0');
     final (e, _, _) = await h.engine();
     await e.syncNow();
-    expect(e.readOnly, isTrue);
+    expect(e.isReadOnly, isTrue);
     h.minClient = '0.1.0';
     await e.syncNow();
-    expect(e.readOnly, isFalse);
+    expect(e.isReadOnly, isFalse);
   });
 }

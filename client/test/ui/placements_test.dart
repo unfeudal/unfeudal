@@ -162,4 +162,15 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets('off: the sidebar logo keeps the footer size', (t) async {
+    final s = await signedInState(
+      t,
+      settings: const Settings(loquetMode: LoquetMode.off),
+    );
+    await pumpApp(t, state: s);
+    final sidebar = find.byKey(const Key('loquet-spot-sidebar'));
+    final logo = find.descendant(of: sidebar, matching: find.byType(UfLogo));
+    expect(t.getSize(logo), const Size.square(28));
+  });
 }

@@ -21,18 +21,18 @@ Future<void> removeMember(
   OrgSnapshot? before,
 }) async {
   final org = before ?? (await loadOrg(tx, orgId))!;
-  final p = {'o': orgId, 'u': userId};
+  final params = {'o': orgId, 'u': userId};
   await tx.execute(
     'DELETE FROM team_members WHERE org_id = @o AND user_id = @u',
-    p,
+    params,
   );
   await tx.execute(
     "DELETE FROM acl_entries WHERE org_id = @o AND principal_type = 'user' AND principal_id = @u",
-    p,
+    params,
   );
   await tx.execute(
     'DELETE FROM folder_keys WHERE org_id = @o AND user_id = @u',
-    p,
+    params,
   );
   await recordRotations(
     tx,
@@ -43,27 +43,31 @@ Future<void> removeMember(
   );
   await tx.execute(
     'DELETE FROM org_members WHERE org_id = @o AND user_id = @u',
-    p,
+    params,
   );
   await bumpOrgSeq(tx);
 }
 
-Future<void> deleteTeam(Tx tx, String orgId, String teamId) =>
-    changeOrg(tx, orgId, reason: 'team_deleted', (_) async {
-      final p = {'o': orgId, 't': teamId};
-      await tx.execute(
-        "DELETE FROM acl_entries WHERE org_id = @o AND principal_type = 'team' AND principal_id = @t",
-        p,
-      );
-      await tx.execute(
-        'DELETE FROM team_members WHERE org_id = @o AND team_id = @t',
-        p,
-      );
-      await tx.execute('DELETE FROM teams WHERE org_id = @o AND id = @t', p);
-    });
+Future<void> deleteTeam(Tx tx, String orgId, String teamId) => changeOrg(
+  tx,
+  orgId,
+  reason: 'team_deleted',
+  (_) async {
+    final params = {'o': orgId, 't': teamId};
+    await tx.execute(
+      "DELETE FROM acl_entries WHERE org_id = @o AND principal_type = 'team' AND principal_id = @t",
+      params,
+    );
+    await tx.execute(
+      'DELETE FROM team_members WHERE org_id = @o AND team_id = @t',
+      params,
+    );
+    await tx.execute('DELETE FROM teams WHERE org_id = @o AND id = @t', params);
+  },
+);
 
 Future<void> deleteOrg(Tx tx, String orgId) async {
-  final p = {'o': orgId};
+  final params = {'o': orgId};
   for (final table in [
     'folder_keys',
     'folder_key_history',
@@ -73,16 +77,17 @@ Future<void> deleteOrg(Tx tx, String orgId) async {
     'teams',
     'invites',
   ]) {
-    await tx.execute('DELETE FROM $table WHERE org_id = @o', p);
+    await tx.execute('DELETE FROM $table WHERE org_id = @o', params);
   }
   await tx.execute(
     'DELETE FROM item_revisions WHERE item_id IN (SELECT id FROM items WHERE org_id = @o)',
-    p,
+    params,
   );
-  await tx.execute('DELETE FROM items WHERE org_id = @o', p);
-  await tx.execute('DELETE FROM org_members WHERE org_id = @o', p);
-  await tx.execute('DELETE FROM orgs WHERE id = @o', p);
-  await bumpOrgSeq(tx); // the org:<id> audit chain stays
+  await tx.execute('DELETE FROM items WHERE org_id = @o', params);
+  await tx.execute('DELETE FROM org_members WHERE org_id = @o', params);
+  await tx.execute('DELETE FROM orgs WHERE id = @o', params);
+  // The org:<id> audit chain is kept.
+  await bumpOrgSeq(tx);
 }
 
 /// Deletes an account: refusals, every org loaded before any delete, member removal per org, personal data.
@@ -108,29 +113,36 @@ Future<void> deleteUser(Tx tx, String userId, {AuditWrite? audit}) async {
       r['org_id']! as String,
   ];
   // Every org is loaded before any delete, so each removal sees the org as it was.
-  final snapshots = {for (final o in orgIds) o: (await loadOrg(tx, o))!};
+  final snapshots = {
+    for (final orgId in orgIds) orgId: (await loadOrg(tx, orgId))!,
+  };
   for (final MapEntry(key: orgId, value: org) in snapshots.entries) {
     await audit?.call(AuditScope.org(orgId), 'member.removed', [userId]);
     await removeMember(tx, orgId, userId, reason: 'user_deleted', before: org);
   }
-  final p = {'u': userId};
+  final params = {'u': userId};
   await tx.execute(
     'DELETE FROM refresh_tokens WHERE device_id IN (SELECT id FROM devices WHERE user_id = @u)',
-    p,
+    params,
   );
-  await tx.execute('DELETE FROM devices WHERE user_id = @u', p);
+  await tx.execute('DELETE FROM devices WHERE user_id = @u', params);
   await tx.execute(
     'DELETE FROM item_revisions WHERE item_id IN (SELECT id FROM items WHERE owner_user_id = @u)',
-    p,
+    params,
   );
-  await tx.execute('DELETE FROM items WHERE owner_user_id = @u', p);
+  await tx.execute('DELETE FROM items WHERE owner_user_id = @u', params);
   // every raw IP of the user: their own chain, and the events they performed in org and instance chains
   await tx.execute(
     'DELETE FROM audit_ips WHERE scope = @s OR EXISTS (SELECT 1 FROM audit_events e '
     'WHERE e.scope = audit_ips.scope AND e.seq = audit_ips.seq AND e.actor_user = @u)',
     {'s': AuditScope.user(userId).wire, 'u': userId},
   );
-  final email = user['email']! as String;
+  await _deleteLoginAttempts(tx, userId, user['email']! as String);
+  await tx.execute('DELETE FROM users WHERE id = @u', params);
+  await audit?.call(AuditScope.instance, 'account.deleted', [userId]);
+}
+
+Future<void> _deleteLoginAttempts(Tx tx, String userId, String email) async {
   await tx.execute(
     "DELETE FROM login_attempts WHERE key IN (@a, @e, @ic, @m) OR key LIKE @ai ESCAPE '\\'",
     {
@@ -147,33 +159,22 @@ Future<void> deleteUser(Tx tx, String userId, {AuditWrite? audit}) async {
       ),
     },
   );
-  await tx.execute('DELETE FROM users WHERE id = @u', p);
-  await audit?.call(AuditScope.instance, 'account.deleted', [userId]);
 }
 
 /// Turns [itemId] and, for a folder, its whole subtree into tombstones in the caller's transaction; an org
 /// folder also loses its ACL, keys, key history and pending rotation (a personal folder has none).
 Future<void> purgeItem(Tx tx, String itemId, AuditLog audit) async {
-  var seq = await nextItemSeq(tx); // first statement: sync invariant
+  // Taking items_seq first is what the sync invariant requires of every item write.
+  var seq = await nextItemSeq(tx);
   final root = (await tx.query(
     'SELECT org_id, owner_user_id, type, purged FROM items WHERE id = @i',
     {'i': itemId},
   )).firstOrNull;
   if (root == null || root['purged'] == 1) return;
   final orgId = root['org_id'] as String?;
-  final ids = [itemId];
-  final seen = {itemId};
-  for (var i = 0; i < ids.length; i++) {
-    // breadth first; the seen-set stops a stored loop
-    for (final r in await tx.query(
-      'SELECT id FROM items WHERE folder_id = @f AND purged = 0',
-      {'f': ids[i]},
-    )) {
-      if (seen.add(r['id']! as String)) ids.add(r['id']! as String);
-    }
-  }
-  for (final (n, id) in ids.indexed) {
-    if (n > 0) seq = await nextItemSeq(tx);
+  final ids = await _unpurgedSubtree(tx, itemId);
+  for (final (index, id) in ids.indexed) {
+    if (index > 0) seq = await nextItemSeq(tx);
     final row = (await tx.query(
       'SELECT type, folder_id, body FROM items WHERE id = @i',
       {'i': id},
@@ -194,13 +195,13 @@ Future<void> purgeItem(Tx tx, String itemId, AuditLog audit) async {
       'i': id,
     });
     if (orgId != null && row['type'] == 'folder') {
-      for (final t in [
+      for (final table in [
         'acl_entries',
         'folder_keys',
         'folder_key_history',
         'pending_rotations',
       ]) {
-        await tx.execute('DELETE FROM $t WHERE folder_id = @f', {'f': id});
+        await tx.execute('DELETE FROM $table WHERE folder_id = @f', {'f': id});
       }
     }
     await audit.append(
@@ -209,8 +210,26 @@ Future<void> purgeItem(Tx tx, String itemId, AuditLog audit) async {
           ? AuditScope.user(root['owner_user_id']! as String)
           : AuditScope.org(orgId),
       action: 'item.purged',
-      targetIds: [id, if (row['folder_id'] case final String f) f],
+      targetIds: [
+        id,
+        if (row['folder_id'] case final String folderId) folderId,
+      ],
     );
   }
   if (orgId != null && root['type'] == 'folder') await bumpOrgSeq(tx);
+}
+
+Future<List<String>> _unpurgedSubtree(Tx tx, String itemId) async {
+  final ids = [itemId];
+  final seen = {itemId};
+  for (var i = 0; i < ids.length; i++) {
+    // breadth first; the seen-set stops a stored loop
+    for (final r in await tx.query(
+      'SELECT id FROM items WHERE folder_id = @f AND purged = 0',
+      {'f': ids[i]},
+    )) {
+      if (seen.add(r['id']! as String)) ids.add(r['id']! as String);
+    }
+  }
+  return ids;
 }

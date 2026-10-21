@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:unfeudal_client/src/events/app_events.dart';
 import 'package:unfeudal_client/src/session/lock_machine.dart';
 
 void main() {
@@ -73,16 +72,4 @@ void main() {
       });
     },
   );
-
-  test('events are plain values', () {
-    const AppEvent e = HostCreated(name: 'localhost');
-    expect(switch (e) {
-      HostCreated(:final name) => name,
-      _ => '',
-    }, 'localhost');
-    expect(
-      const ConnectSucceeded(hostId: 'h', user: 'root', tags: ['prod']).user,
-      'root',
-    );
-  });
 }

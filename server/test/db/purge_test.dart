@@ -86,12 +86,16 @@ void main() {
       'item.purged',
       item['id'],
     ]);
+  });
+
+  test('an already purged item is left alone', () async {
+    final o = w['olivia'];
+    final item = await testItem(o);
+    await put(o, item, 0);
     await purge(item['id']);
-    expect(
-      (await row(item['id']))['seq'],
-      before + 1,
-      reason: 'an already purged item is left alone',
-    );
+    final seq = (await row(item['id']))['seq'];
+    await purge(item['id']);
+    expect((await row(item['id']))['seq'], seq);
   });
 
   test('an org folder takes its subtree: tombstones, ACL, keys, history, pending rotation, org_seq', () async {

@@ -10,60 +10,79 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 import '../support/pump_app.dart';
 import '../support/sync_harness.dart';
 
-void main() {
-  testWidgets(
-    'devices: current marked, revoke another, revoking this one asks then signs out',
-    (t) async {
-      final h = SyncHarness();
-      final s = await signedInState(t, harness: h);
-      late String other;
-      await t.runAsync(() async => other = (await h.signIn()).deviceId);
-      await pumpApp(
-        t,
-        state: s,
-        child: const Scaffold(body: DeviceList()),
-      );
-      await pumpReal(t, rounds: 5);
-      expect(
-        find.byKey(Key('device-current-${s.stored!.deviceId}')),
-        findsOneWidget,
-      );
-      await t.tap(find.byKey(Key('revoke-$other')));
-      await pumpReal(t, rounds: 5);
-      expect(h.devices[other]!.revokedAt, isNotNull);
-      await t.tap(find.byKey(Key('revoke-${s.stored!.deviceId}')));
-      await t.pumpAndSettle();
-      await t.tap(find.byKey(const Key('confirm-yes')));
-      await pumpReal(t, rounds: 5);
-      expect(s.stage, AppStage.login);
-    },
+// A signed-in device list with a second device of the same account, whose id is returned.
+Future<(SyncHarness, AppState, String)> pumpDeviceList(WidgetTester t) async {
+  final h = SyncHarness();
+  final s = await signedInState(t, harness: h);
+  late String other;
+  await t.runAsync(() async => other = (await h.signIn()).deviceId);
+  await pumpApp(
+    t,
+    state: s,
+    child: const Scaffold(body: DeviceList()),
   );
+  await pumpReal(t, rounds: 5);
+  return (h, s, other);
+}
 
-  testWidgets(
-    'settings: theme synced, auto-lock per device, safety code shown',
-    (t) async {
-      final s = await signedInState(t);
-      await pumpApp(t, state: s, child: const SettingsScreen());
-      await t.tap(find.byKey(const Key('theme-dark')));
-      await pumpReal(t, rounds: 5);
-      await t.tap(find.byKey(const Key('group-security')));
-      await t.pump();
-      await t.tap(find.byKey(const Key('autolock')));
-      await t.pumpAndSettle();
-      await t.tap(find.byKey(const Key('autolock-5')).last);
-      await pumpReal(t, rounds: 5);
-      expect(
-        (s.settings.themeMode, s.settings.autoLockMinutes),
-        (ThemeMode.dark, 5),
-      );
-      expect(s.vault!.profile.meta.prefs['themeMode'], 'dark');
-      expect(
-        s.vault!.profile.meta.prefs.containsKey('autoLockMinutes'),
-        isFalse,
-      );
-      expect(find.text(safetyCode(s.credentials.publicKey)), findsOneWidget);
-    },
-  );
+void main() {
+  testWidgets('devices: the current device is marked', (t) async {
+    final (_, s, _) = await pumpDeviceList(t);
+    expect(
+      find.byKey(Key('device-current-${s.stored!.deviceId}')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('devices: revoking another device revokes it', (t) async {
+    final (h, _, other) = await pumpDeviceList(t);
+    await t.tap(find.byKey(Key('revoke-$other')));
+    await pumpReal(t, rounds: 5);
+    expect(h.devices[other]!.revokedAt, isNotNull);
+  });
+
+  testWidgets('devices: revoking this device asks, then signs out', (t) async {
+    final (_, s, _) = await pumpDeviceList(t);
+    await t.tap(find.byKey(Key('revoke-${s.stored!.deviceId}')));
+    await t.pumpAndSettle();
+    await t.tap(find.byKey(const Key('confirm-yes')));
+    await pumpReal(t, rounds: 5);
+    expect(s.stage, AppStage.login);
+  });
+
+  testWidgets('settings: the theme is synced to the profile', (t) async {
+    final s = await signedInState(t);
+    await pumpApp(t, state: s, child: const SettingsScreen());
+    await t.tap(find.byKey(const Key('theme-dark')));
+    await pumpReal(t, rounds: 5);
+    expect(s.settings.themeMode, ThemeMode.dark);
+    expect(s.vault!.profile.meta.prefs['themeMode'], 'dark');
+  });
+
+  testWidgets('settings: auto-lock stays on this device', (t) async {
+    final s = await signedInState(t);
+    await pumpApp(
+      t,
+      state: s,
+      child: const SettingsScreen(initialGroup: 'security'),
+    );
+    await t.tap(find.byKey(const Key('autolock')));
+    await t.pumpAndSettle();
+    await t.tap(find.byKey(const Key('autolock-5')).last);
+    await pumpReal(t, rounds: 5);
+    expect(s.settings.autoLockMinutes, 5);
+    expect(s.vault!.profile.meta.prefs.containsKey('autoLockMinutes'), isFalse);
+  });
+
+  testWidgets('settings: the safety code is shown', (t) async {
+    final s = await signedInState(t);
+    await pumpApp(
+      t,
+      state: s,
+      child: const SettingsScreen(initialGroup: 'security'),
+    );
+    expect(find.text(safetyCode(s.credentials.publicKey)), findsOneWidget);
+  });
 
   testWidgets(
     'recovery kit regeneration asks the password, then shows the new kit',

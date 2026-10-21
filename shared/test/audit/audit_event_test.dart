@@ -4,17 +4,17 @@ import 'dart:convert';
 import 'package:test/test.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
-const u = '5d1e9a7c-2b3f-4c8d-9e0a-1b2c3d4e5f60';
+const userId = '5d1e9a7c-2b3f-4c8d-9e0a-1b2c3d4e5f60';
 
 Map<String, Object?> eventJson() => {
-  'scope': 'user:$u',
+  'scope': 'user:$userId',
   'seq': 1,
   'ts': '2026-10-15T12:00:00.000Z',
-  'actorUser': u,
+  'actorUser': userId,
   'actorDevice': null,
   'ip': 'ip:0123456789abcdef0123456789abcdef',
   'action': 'device.added',
-  'targetIds': [u],
+  'targetIds': [userId],
   'prevHash': '0' * 64,
   'hash': 'ab' * 32,
 };
@@ -103,19 +103,25 @@ void main() {
     }
   });
 
-  test(
-    'effectiveRetention: org null → server; server 0 → org; else the smaller',
-    () {
-      expect(
-        [
-          effectiveRetention(365, null),
-          effectiveRetention(0, 90),
-          effectiveRetention(365, 90),
-          effectiveRetention(30, 90),
-          effectiveRetention(0, null),
-        ],
-        [365, 90, 90, 30, 0],
-      );
-    },
-  );
+  test('effectiveRetention: no org value gives the server one, server 0 gives the org one, else the smaller', () {
+    expect(
+      [
+        effectiveRetention(365, null),
+        effectiveRetention(0, 90),
+        effectiveRetention(365, 90),
+        effectiveRetention(30, 90),
+        effectiveRetention(0, null),
+      ],
+      [365, 90, 90, 30, 0],
+    );
+  });
+
+  test('a forward target carries its port and reads back', () {
+    expect(forwardTarget(5432), 'forward:5432');
+    expect(forwardPortOf(forwardTarget(5432)), '5432');
+  });
+
+  test('an id that is not a forward target has no port', () {
+    expect(forwardPortOf(userId), isNull);
+  });
 }

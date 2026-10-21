@@ -2,12 +2,14 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as shelf_io;
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import 'api/app.dart';
 import 'audit/retention.dart';
 import 'config/config.dart';
+import 'db/db.dart';
 import 'db/maintenance.dart';
 import 'db/migrate.dart';
 import 'db/open_db.dart';
@@ -16,14 +18,54 @@ import 'log/logger.dart';
 import 'mail/mailer.dart';
 
 class RunningServer {
-  RunningServer(this.port, this._close);
+  RunningServer._({
+    required HttpServer server,
+    required Handler handler,
+    required this._deps,
+    required this._db,
+  }) : _server = server,
+       port = server.port {
+    _server.listen((request) {
+      // Counted until the response is written, not only until the handler returns.
+      _inFlight++;
+      unawaited(
+        shelf_io.handleRequest(request, handler).whenComplete(() {
+          final idle = _idle;
+          if (--_inFlight == 0 && idle != null && !idle.isCompleted) {
+            idle.complete();
+          }
+        }),
+      );
+    });
+    _deps.log.info('listening', {
+      'host': _deps.config.listen.host,
+      'port': port,
+    });
+    _retention = startRetentionTimer(_deps);
+  }
 
   final int port;
-  final Future<void> Function(Duration drain) _close;
+  final HttpServer _server;
+  final AppDeps _deps;
+  final Db _db;
+  late final Timer _retention;
+  var _inFlight = 0;
+  Completer<void>? _idle;
 
   /// Stops accepting, lets open requests and queued mails finish within [drain], closes the database.
-  Future<void> close({Duration drain = const Duration(seconds: 8)}) =>
-      _close(drain);
+  Future<void> close({Duration drain = const Duration(seconds: 8)}) async {
+    final elapsed = Stopwatch()..start();
+    // Stops accepting; open requests keep their connection.
+    unawaited(_server.close());
+    if (_inFlight > 0) {
+      await (_idle = Completer<void>()).future.timeout(drain, onTimeout: () {});
+    }
+    final left = drain - elapsed.elapsed;
+    await _deps.notifier.drain(left.isNegative ? Duration.zero : left);
+    await _server.close(force: true);
+    _retention.cancel();
+    await _db.close();
+  }
 }
 
 /// Opens and migrates the database (a newer schema refuses to start), prints
@@ -51,36 +93,12 @@ Future<RunningServer> runServer(
       config.listen.host,
       config.listen.port,
     );
-    var inFlight = 0;
-    Completer<void>? idle;
-    server.listen((req) {
-      inFlight++; // counted until the response is written, not only until the handler returns
-      unawaited(
-        shelf_io.handleRequest(req, handler).whenComplete(() {
-          if (--inFlight == 0 && idle != null && !idle!.isCompleted) {
-            idle!.complete();
-          }
-        }),
-      );
-    });
-    log.info('listening', {'host': config.listen.host, 'port': server.port});
-    final retention = startRetentionTimer(deps);
-    return RunningServer(server.port, (Duration drain) async {
-      final deadline = DateTime.now().add(drain);
-      // Stops accepting; open requests keep their connection.
-      unawaited(server.close());
-      if (inFlight > 0) {
-        await (idle = Completer<void>()).future.timeout(
-          drain,
-          onTimeout: () {},
-        );
-      }
-      final left = deadline.difference(DateTime.now());
-      await deps.notifier.drain(left.isNegative ? Duration.zero : left);
-      await server.close(force: true);
-      retention.cancel();
-      await db.close();
-    });
+    return RunningServer._(
+      server: server,
+      handler: handler,
+      deps: deps,
+      db: db,
+    );
     // Any startup failure closes the database before propagating.
   } on Object catch (_) {
     await db.close();

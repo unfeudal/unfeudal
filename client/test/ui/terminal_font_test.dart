@@ -5,7 +5,6 @@ import 'package:unfeudal_client/src/settings/settings.dart';
 import 'package:unfeudal_client/src/ui/settings/settings_screen.dart';
 import 'package:xterm2/xterm.dart';
 
-import '../support/fakes.dart';
 import '../support/pump_app.dart';
 
 void main() {
@@ -48,24 +47,10 @@ void main() {
   }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
 
   testWidgets('open terminals use the font settings', (t) async {
-    final ssh = FakeSshConnector()
-      ..keyType = 'ssh-ed25519'
-      ..fingerprint = 'SHA256:${'A' * 43}';
-    final s = await signedInState(
+    await pinnedTab(
       t,
-      ssh: ssh,
       settings: const Settings(terminalFont: 'Menlo', terminalFontSize: 16),
     );
-    await t.runAsync(() async {
-      final web = await s.vault!.upsertItem(
-        type: 'host',
-        meta: hostJson('web', user: 'root'),
-      );
-      await s.vault!.hostKeys.pin(web, 'ssh-ed25519', 'SHA256:${'A' * 43}');
-      await s.connections.connect(web);
-    });
-    await pumpApp(t, state: s);
-    await pumpReal(t, rounds: 5);
     final style = t.widget<TerminalView>(find.byType(TerminalView)).textStyle;
     expect((style.fontFamily, style.fontSize), ('Menlo', 16.0));
   });

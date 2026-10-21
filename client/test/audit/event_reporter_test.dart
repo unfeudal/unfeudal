@@ -3,30 +3,42 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:unfeudal_client/src/api/api_client.dart';
-import 'package:unfeudal_client/src/app_state.dart';
 import 'package:unfeudal_client/src/audit/event_reporter.dart';
 import 'package:unfeudal_client/src/events/app_events.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
-import '../support/fakes.dart';
 import '../support/sync_harness.dart';
 
 void main() {
-  test('reports sessions, forwards and reveals in order, ids only; nothing when off; failures dropped', () async {
-    final h = SyncHarness(capabilities: ['client_events', 'sync']);
+  late SyncHarness h;
+  late StreamController<AppEvent> events;
+  late bool enabled;
+  final host = newId();
+
+  Future<void> until(bool Function() isDone) async {
+    while (!isDone()) {
+      await pumpEventQueue();
+    }
+  }
+
+  setUp(() async {
+    h = SyncHarness(capabilities: ['client_events', 'sync']);
     final login = await h.signIn();
     final api = ApiClient(h.baseUrl, h.client)
       ..accessToken = login.accessToken
       ..refreshToken = login.refreshToken;
-    final events = StreamController<AppEvent>.broadcast();
+    events = StreamController<AppEvent>.broadcast();
     addTearDown(events.close);
-    var enabled = true;
+    enabled = true;
     EventReporter(
       events: events.stream,
       api: () => api,
       enabled: () => enabled,
     ).start();
-    final (host, bastion) = (newId(), newId());
+  });
+
+  test('reports sessions, forwards and reveals in order, ids only', () async {
+    final bastion = newId();
     final f = PortForward(localPort: 5432, remoteHost: 'db', remotePort: 5432);
     for (final e in <AppEvent>[
       JumpUsed(hostId: host, hopIds: [bastion]),
@@ -39,7 +51,7 @@ void main() {
     ]) {
       events.add(e);
     }
-    await Future<void>.delayed(const Duration(milliseconds: 50));
+    await until(() => h.reported.length == 6);
     expect(
       [
         for (final r in h.reported) [r.route, r.body],
@@ -75,55 +87,20 @@ void main() {
         ],
       ],
     );
-    h.eventStatus = 429;
-    events.add(SecretRevealed(itemId: host));
-    await Future<void>.delayed(const Duration(milliseconds: 50));
-    expect(
-      h.reported,
-      hasLength(6),
-      reason: 'a refused report is dropped, never thrown',
-    );
-    h.eventStatus = null;
-    enabled = false;
-    events.add(SecretRevealed(itemId: host));
-    await Future<void>.delayed(const Duration(milliseconds: 50));
-    expect(h.reported, hasLength(6), reason: 'client_events off');
   });
 
-  test('AppState emits SessionClosed once per connected tab: closed, ended by the host, or locked', () async {
-    final h = SyncHarness(capabilities: ['client_events', 'sync']);
-    await h.createAccount('camille@example.org', 'password-123');
-    final ssh = FakeSshConnector()
-      ..keyType = 'ssh-ed25519'
-      ..fingerprint = 'SHA256:${'A' * 43}';
-    final AppState s = testAppState(harness: h, ssh: ssh)
-      ..connections.dialogs = (FakeDialogs()..accept = true);
-    await s.boot();
-    await s.login(
-      server: h.baseUrl,
-      email: 'camille@example.org',
-      password: 'password-123',
-    );
-    final closed = <String>[];
-    s.events.listen((e) {
-      if (e is SessionClosed) closed.add(e.hostId);
-    });
-    final [a, b, c] = [
-      for (final n in ['a', 'b', 'c'])
-        await s.vault!.upsertItem(
-          type: 'host',
-          meta: hostJson(n, user: 'root'),
-        ),
-    ];
-    await s.sync!.syncNow();
-    await s.connections.closeTab(await s.connections.connect(a));
-    await s.connections.connect(b);
-    ssh.shells.last.hangUp();
-    await Future<void>.delayed(Duration.zero);
-    await s.connections.connect(c);
-    await Future.sync(s.lock);
-    await Future<void>.delayed(const Duration(milliseconds: 20));
-    expect(closed, [a, b, c]);
-    expect(h.reported.where((r) => r.body['event'] == 'close'), hasLength(3));
+  test('a refused report is dropped, never thrown', () async {
+    h.eventStatus = 429;
+    events.add(SecretRevealed(itemId: host));
+    await until(() => h.requests.contains('POST /api/v1/events/reveal'));
+    await pumpEventQueue();
+    expect(h.reported, isEmpty);
+  });
+
+  test('nothing is reported while client_events is off', () async {
+    enabled = false;
+    events.add(SecretRevealed(itemId: host));
+    await pumpEventQueue();
+    expect(h.requests, isNot(contains('POST /api/v1/events/reveal')));
   });
 }

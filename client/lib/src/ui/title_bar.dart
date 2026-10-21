@@ -35,18 +35,18 @@ class UfTitleBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
     final colors = UfColors.of(context);
-    final mac = defaultTargetPlatform == TargetPlatform.macOS;
+    final isMac = defaultTargetPlatform == TargetPlatform.macOS;
     return ListenableBuilder(
       listenable: Listenable.merge([chrome.focused, chrome.maximized, shell]),
       builder: (context, _) {
         final dim = chrome.focused.value ? 1.0 : 0.45;
-        final home = shell.title != null;
+        final isHome = shell.title != null;
         // a Material: the bar sits above the Navigator, where text has no default style
         return Material(
-          color: home ? colors.bg : background,
+          color: isHome ? colors.bg : background,
           child: Container(
             height: 38,
-            decoration: home
+            decoration: isHome
                 ? BoxDecoration(
                     border: Border(bottom: BorderSide(color: colors.line)),
                   )
@@ -54,13 +54,15 @@ class UfTitleBar extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _LeftCell(shell: shell, mac: mac, dim: dim),
+                _LeftCell(shell: shell, isMac: isMac, dim: dim),
                 Expanded(
                   child: chrome.dragArea(
                     Container(
                       color: Colors.transparent,
                       padding: const EdgeInsets.symmetric(horizontal: 12),
-                      alignment: mac ? Alignment.center : Alignment.centerLeft,
+                      alignment: isMac
+                          ? Alignment.center
+                          : Alignment.centerLeft,
                       child: Opacity(
                         opacity: dim,
                         child: Text(
@@ -73,7 +75,7 @@ class UfTitleBar extends StatelessWidget {
                     ),
                   ),
                 ),
-                if (!mac) ..._captionButtons(l, colors, dim),
+                if (!isMac) ..._captionButtons(l, colors, dim),
               ],
             ),
           ),
@@ -124,10 +126,14 @@ Widget _sidebarToggle(String key, String label, VoidCallback onPressed) =>
 // The cell left of the title: the sidebar's own (logo, name, hide), the show toggle and Loquet over the home
 // screen with the sidebar hidden, else the logo or room for the traffic lights.
 class _LeftCell extends StatelessWidget {
-  const _LeftCell({required this.shell, required this.mac, required this.dim});
+  const _LeftCell({
+    required this.shell,
+    required this.isMac,
+    required this.dim,
+  });
 
   final ShellChrome shell;
-  final bool mac;
+  final bool isMac;
   final double dim;
 
   @override
@@ -139,7 +145,7 @@ class _LeftCell extends StatelessWidget {
     if (sidebar != null) {
       return Container(
         width: sidebar,
-        padding: EdgeInsets.only(left: mac ? 78 : 12, right: 6),
+        padding: EdgeInsets.only(left: isMac ? 78 : 12, right: 6),
         decoration: BoxDecoration(
           color: colors.side,
           border: Border(right: BorderSide(color: colors.line)),
@@ -167,7 +173,7 @@ class _LeftCell extends StatelessWidget {
     }
     if (shell.title != null) {
       return Padding(
-        padding: EdgeInsets.only(left: mac ? 78 : 12, right: 4),
+        padding: EdgeInsets.only(left: isMac ? 78 : 12, right: 4),
         child: Opacity(
           opacity: dim,
           child: Row(
@@ -181,7 +187,7 @@ class _LeftCell extends StatelessWidget {
         ),
       );
     }
-    if (mac) return const SizedBox(width: 78);
+    if (isMac) return const SizedBox(width: 78);
     return SizedBox(
       width: 44,
       child: Opacity(

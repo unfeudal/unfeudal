@@ -13,6 +13,7 @@ import '../storage/sealed_kv.dart';
 import '../sync/ledger_store.dart';
 import 'item_rewrite.dart';
 
+part 'editor_choices.dart';
 part 'entry_rules.dart';
 part 'host_key_pins.dart';
 part 'item_sealer.dart';
@@ -22,11 +23,7 @@ part 'vault_entry.dart';
 
 /// The decrypted local view: server mirror rows overlaid by the outbox. Plaintext lives only in memory.
 class Vault extends ChangeNotifier {
-  Vault({
-    required this.mirror,
-    required this.ledger,
-    required Future<void> Function(List<Item>) write,
-  }) : _send = write {
+  Vault({required this.mirror, required this.ledger, required this._send}) {
     _personal = _PersonalScope(this);
   }
 
@@ -160,7 +157,7 @@ class Vault extends ChangeNotifier {
       );
 
   /// An `ok` host with its inherited values; null for anything else.
-  ({HostMeta meta, ResolvedHost resolved, bool org})? hostLookup(String id) {
+  ({HostMeta meta, ResolvedHost resolved, bool isOrg})? hostLookup(String id) {
     final e = _entries[id];
     if (e == null || e.state != EntryState.ok || e.kind != ItemKind.host) {
       return null;
@@ -175,7 +172,7 @@ class Vault extends ChangeNotifier {
         hostId: id,
         parentOf: (f) => _entries[f]?.folderId,
       ),
-      org: e.item.scope == ItemScope.org,
+      isOrg: e.item.scope == ItemScope.org,
     );
   }
 
@@ -237,9 +234,8 @@ class Vault extends ChangeNotifier {
 
   Future<void> reload() async {
     final key = _key;
-    if (key == null) {
-      return; // locked: a late sync round finds nothing to rebuild
-    }
+    // Locked: a late sync round finds nothing to rebuild.
+    if (key == null) return;
     final writes = _writes;
     final queued = {for (final e in mirror.outbox()) e.item.id: e.item};
     // The outbox overlays the server row.
@@ -247,7 +243,8 @@ class Vault extends ChangeNotifier {
     final next = <String, VaultEntry>{};
     final replayed = <String>{};
     for (final item in rows.values) {
-      if (_key == null) return; // locked while this round ran
+      // Locked while this round ran.
+      if (_key == null) return;
       if (item.purged || (item.scope == ItemScope.org && keyring == null)) {
         continue;
       }
@@ -279,7 +276,7 @@ class Vault extends ChangeNotifier {
     _entries = next;
     _replayed = replayed;
     hostKeys._rebuild(next.values);
-    if (tracing(TraceArea.vault)) {
+    if (isTracing(TraceArea.vault)) {
       final odd = next.values.where((e) => e.state != EntryState.ok).length;
       trace(
         TraceArea.vault,
@@ -383,7 +380,8 @@ class Vault extends ChangeNotifier {
       'write ${item.type} ${shortId(item.id)}${item.deleted ? ' (trash)' : ''}',
     );
     await _send([item]);
-    if (_key == null) return; // locked while sending
+    // Locked while sending.
+    if (_key == null) return;
     if (item.scope == ItemScope.org && keyring == null) return;
     _entries[item.id] = _written(item, meta);
     _writes++;

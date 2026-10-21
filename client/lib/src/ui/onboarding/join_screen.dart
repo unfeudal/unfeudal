@@ -68,7 +68,6 @@ class _JoinScreenState extends State<JoinScreen>
         email: _email.text.trim(),
         password: _password.text,
       );
-      if (!state.serverInfo.has(Flag.recoveryKit)) state.finishOnboarding();
     });
   }
 
@@ -105,7 +104,7 @@ class _JoinScreenState extends State<JoinScreen>
       link,
       l.joinLink,
       mono: true,
-      hint: 'unfeudal://enroll?\u2026',
+      hint: 'unfeudal://enroll?...',
     ),
     Align(
       alignment: Alignment.centerLeft,

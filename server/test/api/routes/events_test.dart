@@ -117,7 +117,7 @@ void main() {
     ]);
   });
 
-  test('refusals: no connect or reveal, another account, deleted, unknown → 404; malformed → 400', () async {
+  test('refusals: no connect or reveal, another account, deleted, unknown is 404; malformed is 400', () async {
     final (mia, max) = (w['mia'], w['max']);
     await s.put(
       '/api/v1/items/${mine['id']}',
@@ -184,7 +184,7 @@ void main() {
     },
   );
 
-  test('client_events off → 404 feature_disabled on both routes', () async {
+  test('client_events off is 404 feature_disabled on both routes', () async {
     final off = await TestServer.start(
       env: {'UNFEUDAL_FEATURE_CLIENT_EVENTS': 'false'},
     );

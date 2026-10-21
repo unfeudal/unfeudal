@@ -10,7 +10,7 @@ import '../storage/local_mirror.dart';
 /// The account bundle cached at sign-in and after each change the server accepted.
 extension CachedBundle on LocalMirror {
   ({AccountBundle bundle, int bundleVersion}) get cachedBundle {
-    final raw = getKv(KvKey.bundle) ?? (throw StateError('no cached bundle'));
+    final raw = kv(KvKey.bundle) ?? (throw StateError('no cached bundle'));
     final json = jsonDecode(raw) as Map<String, Object?>;
     return (
       bundle: AccountBundle.fromJson(json['bundle']),

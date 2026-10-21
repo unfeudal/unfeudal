@@ -9,10 +9,10 @@ import 'package:unfeudal_client/l10n/app_localizations.dart';
 Map<String, Object?> arb(String lang) =>
     jsonDecode(File('lib/l10n/app_$lang.arb').readAsStringSync())
         as Map<String, Object?>;
-Set<String> keys(Map<String, Object?> a) =>
-    a.keys.where((k) => !k.startsWith('@')).toSet();
-Set<String> holes(String s) =>
-    RegExp(r'\{(\w+)').allMatches(s).map((m) => m[1]!).toSet();
+Set<String> keys(Map<String, Object?> messages) =>
+    messages.keys.where((k) => !k.startsWith('@')).toSet();
+Set<String> holes(String message) =>
+    RegExp(r'\{(\w+)').allMatches(message).map((m) => m[1]!).toSet();
 
 void main() {
   test('EN and FR have the same keys and placeholders', () {
@@ -29,11 +29,16 @@ void main() {
       r"(^|[\s'\u2019(])(tu|vous|votre|vos|ton|ta|tes|toi)(?=[\s.,;:!?)]|$)",
       caseSensitive: false,
     );
+    final imperative = RegExp(
+      r'\b(?!chez\b|assez\b)\w*ez\b',
+      caseSensitive: false,
+    );
     for (final k in keys(fr)) {
+      final message = fr[k]! as String;
       expect(
-        personal.hasMatch(fr[k]! as String),
+        personal.hasMatch(message) || imperative.hasMatch(message),
         isFalse,
-        reason: '$k: ${fr[k]}',
+        reason: '$k: $message',
       );
     }
   });

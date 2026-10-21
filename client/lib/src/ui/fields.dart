@@ -1,14 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../design/field.dart';
 import '../design/icons.dart';
 import '../design/inputs.dart';
 import '../design/tokens.dart';
-import 'password_guess.dart';
+import '../password_strength.dart';
 
 /// A labelled text field; its [TextField] carries the test key. A [secret] one has an eye to show its text,
 /// keyed `<key>-peek`; a [strength] one (a new password) has the strength meter under it. Without a [label]
@@ -55,22 +54,6 @@ Widget keyedField(
   return label == null
       ? field
       : UfField(label: label, error: error, child: field);
-}
-
-/// 0 when empty, 1 under the minimum length or guessable, then up to 4 with length and character classes.
-int passwordScore(String password) {
-  final length = passwordLength(password);
-  if (length == 0) return 0;
-  if (length < AccountCrypto.minPasswordLength || isGuessable(password)) {
-    return 1;
-  }
-  final classes = [
-    RegExp('[a-z]'),
-    RegExp('[A-Z]'),
-    RegExp(r'\d'),
-    RegExp(r'[^a-zA-Z\d]'),
-  ].where((c) => c.hasMatch(password)).length;
-  return 2 + (length >= 12 ? 1 : 0) + (length >= 16 || classes >= 3 ? 1 : 0);
 }
 
 // The strength meter of the controller's password and the Caps Lock state, kept current as keys go down.

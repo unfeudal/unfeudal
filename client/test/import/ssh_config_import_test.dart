@@ -28,7 +28,7 @@ void main() {
       'Host db\n  IdentityFile ~/.ssh/missing\nHost old\n',
     );
     expect(
-      [for (final h in plan.hosts) (h.source.alias, h.duplicate)],
+      [for (final h in plan.hosts) (h.source.alias, h.isDuplicate)],
       [('bastion', false), ('db', false), ('old', true)],
     );
     expect(plan.keys.single.path, '/home/c/.ssh/id_ed25519');
@@ -49,11 +49,11 @@ void main() {
     );
     expect(plan.keys.single.needsPassphrase, isTrue);
     expect(
-      await i.apply(
+      (await i.apply(
         plan,
         aliases: {'target', 'bastion'},
         passphrases: {'/home/c/.ssh/k': 'pp'},
-      ),
+      )).written,
       2,
     );
     final hosts = {for (final e in v.ofKind(ItemKind.host)) e.name: e};
@@ -79,22 +79,20 @@ void main() {
         .privateKeyPem;
     final i = importer();
     final plan = await i.plan('Host a\n  IdentityFile ~/.ssh/k\n');
-    expect(
-      await i.apply(
-        plan,
-        aliases: {'a'},
-        passphrases: {'/home/c/.ssh/k': 'nope'},
-      ),
-      1,
+    final result = await i.apply(
+      plan,
+      aliases: {'a'},
+      passphrases: {'/home/c/.ssh/k': 'nope'},
     );
+    expect(result.written, 1);
     expect(v.ofKind(ItemKind.identity), isEmpty);
     expect(
       HostMeta.fromJson(v.ofKind(ItemKind.host).single.meta).identityId,
       isNull,
     );
     expect(
-      plan.warnings.map((w) => w.kind),
-      contains(SshConfigWarningKind.keyUnreadable),
+      [for (final w in result.warnings) (w.line, w.kind)],
+      [(1, SshConfigWarningKind.keyUnreadable)],
     );
   });
 

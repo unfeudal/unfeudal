@@ -59,7 +59,7 @@ void main() {
     }
   });
 
-  test('key ids', () {
+  test('key labels have their pinned text', () {
     const f = '11111111-1111-4111-8111-111111111111';
     expect(
       [
@@ -86,19 +86,26 @@ void main() {
       KeyIds.sealed(KeyIds.folder(f, 1, PayloadPart.meta)),
       'sealed:folder:$f:v1:meta',
     );
-    final p = KeyIds.parseFolder('folder:$f:v3:secret')!;
-    expect((p.folderId, p.version, p.part), (f, 3, PayloadPart.secret));
-    for (final s in [
-      'user',
-      'folder:$f:v0:meta',
-      'folder:$f:v01:meta',
-      'folder:$f:v1:other',
-      'folder:NOT-A-UUID:v1:meta',
-      'sealed:folder:$f:v1:meta',
-    ]) {
-      expect(KeyIds.parseFolder(s), isNull, reason: s);
-    }
   });
+
+  test(
+    'parseFolder reads folder labels and returns null for anything else',
+    () {
+      const f = '11111111-1111-4111-8111-111111111111';
+      final p = KeyIds.parseFolder('folder:$f:v3:secret')!;
+      expect((p.folderId, p.version, p.part), (f, 3, PayloadPart.secret));
+      for (final s in [
+        'user',
+        'folder:$f:v0:meta',
+        'folder:$f:v01:meta',
+        'folder:$f:v1:other',
+        'folder:NOT-A-UUID:v1:meta',
+        'sealed:folder:$f:v1:meta',
+      ]) {
+        expect(KeyIds.parseFolder(s), isNull, reason: s);
+      }
+    },
+  );
 
   test('crypto errors are typed exceptions', () {
     const all = <Exception>[

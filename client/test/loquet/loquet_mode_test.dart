@@ -19,26 +19,17 @@ void main() {
   test('server flag off beats every pref', () {
     for (final pref in LoquetMode.values) {
       expect(
-        effectiveLoquetMode(
-          serverFlag: false,
-          orgSettings: const [],
-          pref: pref,
-        ),
+        effectiveLoquetMode(serverFlag: false, org: null, pref: pref),
         LoquetMode.off,
       );
     }
   });
 
-  test('one org with mascot false turns it off, any status', () {
-    final orgs = [
-      org(),
-      org(status: 'accepted', settings: {'mascot': false}),
-      org(settings: {'mascot': true}),
-    ];
+  test('the shown org with mascot false turns it off, any status', () {
     expect(
       effectiveLoquetMode(
         serverFlag: true,
-        orgSettings: orgs,
+        org: org(settings: {'mascot': false}),
         pref: LoquetMode.on,
       ),
       LoquetMode.off,
@@ -46,49 +37,39 @@ void main() {
     expect(
       effectiveLoquetMode(
         serverFlag: true,
-        orgSettings: [
-          org(status: 'accepted', settings: {'mascot': false}),
-        ],
+        org: org(status: 'accepted', settings: {'mascot': false}),
         pref: LoquetMode.sober,
       ),
       LoquetMode.off,
     );
   });
 
-  test('a missing org setting means on; the user pref passes through', () {
-    final orgs = [
-      org(),
-      org(settings: {'future': 1}),
-    ];
+  test('the personal vault and a missing org setting keep the user pref', () {
     for (final pref in LoquetMode.values) {
-      expect(
-        effectiveLoquetMode(serverFlag: true, orgSettings: orgs, pref: pref),
-        pref,
-      );
-      expect(
-        effectiveLoquetMode(
-          serverFlag: true,
-          orgSettings: const [],
-          pref: pref,
-        ),
-        pref,
-      );
+      for (final shown in [
+        null,
+        org(),
+        org(settings: {'future': 1}),
+      ]) {
+        expect(
+          effectiveLoquetMode(serverFlag: true, org: shown, pref: pref),
+          pref,
+        );
+      }
     }
   });
 
   test('never raises the level', () {
     for (final server in [true, false]) {
-      for (final orgs in [
-        <OrgSummary>[],
-        [
-          org(settings: {'mascot': false}),
-        ],
+      for (final shown in [
+        null,
+        org(settings: {'mascot': false}),
       ]) {
         for (final pref in LoquetMode.values) {
           expect(
             effectiveLoquetMode(
               serverFlag: server,
-              orgSettings: orgs,
+              org: shown,
               pref: pref,
             ).index,
             greaterThanOrEqualTo(pref.index),

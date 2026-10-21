@@ -6,7 +6,8 @@ import 'package:dartssh2/dartssh2.dart';
 import 'package:flutter/foundation.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
-const _addressInUse = {48, 98, 10048}; // EADDRINUSE: macOS, Linux, Windows
+// EADDRINUSE: macOS, Linux, Windows
+const _addressInUse = {48, 98, 10048};
 
 // The OS says the port is taken, or the Dart VM does: it refuses a second bind of a port this process
 // already holds (another tab's forward) before asking the OS.
@@ -65,12 +66,12 @@ class PortForwarder extends ChangeNotifier {
   Map<int, ForwardHandle> get active => Map.unmodifiable(_active);
   Map<int, Object> get failed => Map.unmodifiable(_failed);
 
-  Future<ForwardHandle> start(PortForward f) async {
-    final running = _active[f.localPort];
+  Future<ForwardHandle> start(PortForward forward) async {
+    final running = _active[forward.localPort];
     if (running != null) return running;
-    if (f.localPort < 1024 && !f.allowLowPorts) {
+    if (forward.localPort < 1024 && !forward.allowLowPorts) {
       throw ArgumentError.value(
-        f.localPort,
+        forward.localPort,
         'localPort',
         'needs allowLowPorts',
       );
@@ -80,21 +81,22 @@ class PortForwarder extends ChangeNotifier {
       // Loopback only, never 0.0.0.0 or ::, so the forward is not exposed to the network.
       server = await ServerSocket.bind(
         InternetAddress.loopbackIPv4,
-        f.localPort,
+        forward.localPort,
       );
     } on SocketException catch (e) {
       final Exception error = _isInUse(e)
-          ? PortInUse(f.localPort)
-          : ForwardBindFailed(f.localPort, e.osError);
-      _failed[f.localPort] = error;
+          ? PortInUse(forward.localPort)
+          : ForwardBindFailed(forward.localPort, e.osError);
+      _failed[forward.localPort] = error;
       notifyListeners();
       throw error;
     }
-    final handle = ForwardHandle._(f, server);
+    final handle = ForwardHandle._(forward, server);
     server.listen((local) async {
       handle._track(local);
       try {
-        final remote = await _open(f.remoteHost, f.remotePort);
+        final remote = await _open(forward.remoteHost, forward.remotePort);
+        // A broken pipe ends only this connection; the other side sees the close.
         unawaited(
           remote.stream.cast<List<int>>().pipe(local).catchError((Object _) {}),
         );
@@ -106,8 +108,8 @@ class PortForwarder extends ChangeNotifier {
         local.destroy();
       }
     });
-    _active[f.localPort] = handle;
-    _failed.remove(f.localPort);
+    _active[forward.localPort] = handle;
+    _failed.remove(forward.localPort);
     notifyListeners();
     return handle;
   }

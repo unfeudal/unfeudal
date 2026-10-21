@@ -23,11 +23,15 @@ class FolderKeys {
   }
 
   factory FolderKeys.generate(int version) =>
-      FolderKeys(version, secureBytes(32), secureBytes(32));
+      FolderKeys(version, SymmetricCipher.newKey(), SymmetricCipher.newKey());
 
   final int version;
-  final Uint8List metaKey; // `view`
-  final Uint8List? secretKey; // `connect`; null when not held
+
+  /// Opens payloads for the view permission.
+  final Uint8List metaKey;
+
+  /// Opens secrets for the connect permission; null when not held.
+  final Uint8List? secretKey;
 }
 
 /// Folder keys sealed to one member's X25519 public key.
@@ -52,7 +56,8 @@ class WrappedFolderKeys {
     );
   }
 
-  final String? userId; // omitted on the sync wire
+  /// Null on the sync wire.
+  final String? userId;
   final int version;
   final Envelope meta;
   final Envelope? secret;
@@ -95,6 +100,10 @@ class WrappedFolderKeys {
     final secretKey = secret == null
         ? null
         : await SealedBox.open(secret!, keyPair, label(PayloadPart.secret));
+    // The sealed bytes come from the server, so a bad length is malformed input, not a programming error.
+    if (metaKey.length != 32 || (secretKey != null && secretKey.length != 32)) {
+      throw const FormatException('wrappedFolderKeys: key must be 32 bytes');
+    }
     return FolderKeys(version, metaKey, secretKey);
   }
 

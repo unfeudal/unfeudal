@@ -27,7 +27,7 @@ class SecurityNotifier {
   final Logger log;
   final _pending = <Future<void>>{};
 
-  bool get _on =>
+  bool get _isEnabled =>
       config.smtp != null && config.features.enabled(Flag.securityEmails);
 
   /// Call after the commit. Returns at once; reads the address and locale when the job runs.
@@ -36,7 +36,7 @@ class SecurityNotifier {
     MailKind kind, [
     Map<String, String> vars = const {},
   ]) {
-    if (!_on) return;
+    if (!_isEnabled) return;
     final time = iso(clock.now());
     _queue(kind, () async {
       final row = (await db.query(
@@ -55,7 +55,7 @@ class SecurityNotifier {
 
   /// RateLimiter.onLockout: existing accounts only; `mail:<userId>` allows one per hour, a refused hit skips the mail.
   void lockout(String email) {
-    if (!_on) return;
+    if (!_isEnabled) return;
     final time = iso(clock.now());
     _queue(MailKind.lockout, () async {
       final row = (await db.query(

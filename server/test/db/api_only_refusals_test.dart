@@ -86,7 +86,7 @@ void main() {
     );
   });
 
-  test('locale, device platform and org name length are API rules', () async {
+  test('locale is an API rule', () async {
     final mia = w['mia'];
     await stored("UPDATE users SET locale = 'de' WHERE id = @u", {
       'u': mia.userId,
@@ -99,6 +99,10 @@ void main() {
       )).status,
       400,
     );
+  });
+
+  test('device platform is an API rule', () async {
+    final mia = w['mia'];
     await stored(
       "INSERT INTO devices (id, user_id, name, platform, created_at, last_seen_at) VALUES ('d-beos', @u, 'n', 'beos', '$t', '$t')",
       {'u': mia.userId},
@@ -112,6 +116,9 @@ void main() {
       },
     );
     expect(login.status, 400);
+  });
+
+  test('org name length is an API rule', () async {
     await stored("UPDATE orgs SET name = @n WHERE id = @o", {
       'n': 'x' * 101,
       'o': w.orgId,
@@ -119,52 +126,75 @@ void main() {
     expect(
       (await s.post(
         '/api/v1/orgs',
-        token: mia.accessToken,
+        token: w['mia'].accessToken,
         body: {'name': 'x' * 101},
       )).status,
       400,
     );
   });
 
-  test('personal items: unknown folder, cycle, long type and type change are API rules', () async {
-    final mia = w['mia'];
-    await stored(
-      "INSERT INTO items (id, owner_user_id, type, folder_id, revision, body, size, created_at, updated_at, seq) VALUES ('r1', @u, @ty, 'nowhere', 1, '{}', 2, '$t', '$t', 900)",
-      {'u': mia.userId, 'ty': 'x' * 65},
-    );
+  group('personal items', () {
     Future<int> put(Map<String, Object?> item, int rev) async => (await s.put(
       '/api/v1/items/${item['id']}',
-      token: mia.accessToken,
+      token: w['mia'].accessToken,
       body: item,
       headers: {'if-match': '$rev'},
     )).status;
-    expect(await put(await testItem(mia, folderId: newId()), 0), 400);
-    expect(await put({...await testItem(mia), 'type': 'x' * 65}, 0), 400);
-    final a = await testItem(mia, type: 'folder');
-    expect(await put(a, 0), 200);
-    final b = await testItem(mia, type: 'folder', folderId: a['id']! as String);
-    expect(await put(b, 0), 200);
-    expect(
-      await put(
-        await testItem(
-          mia,
-          id: a['id']! as String,
-          type: 'folder',
-          folderId: b['id']! as String,
+
+    test('an unknown folder is an API rule', () async {
+      final mia = w['mia'];
+      await stored(
+        "INSERT INTO items (id, owner_user_id, type, folder_id, revision, body, size, created_at, updated_at, seq) VALUES ('r1', @u, 'host', 'nowhere', 1, '{}', 2, '$t', '$t', 900)",
+        {'u': mia.userId},
+      );
+      expect(await put(await testItem(mia, folderId: newId()), 0), 400);
+    });
+
+    test('a folder cycle is an API rule', () async {
+      final mia = w['mia'];
+      final a = await testItem(mia, type: 'folder');
+      expect(await put(a, 0), 200);
+      final b = await testItem(
+        mia,
+        type: 'folder',
+        folderId: a['id']! as String,
+      );
+      expect(await put(b, 0), 200);
+      expect(
+        await put(
+          await testItem(
+            mia,
+            id: a['id']! as String,
+            type: 'folder',
+            folderId: b['id']! as String,
+          ),
+          1,
         ),
-        1,
-      ),
-      400,
-    );
-    final host = await testItem(mia);
-    expect(await put(host, 0), 200);
-    expect(
-      await put(
-        await testItem(mia, id: host['id']! as String, type: 'snippet'),
-        1,
-      ),
-      400,
-    );
+        400,
+      );
+    });
+
+    test('a long type is an API rule', () async {
+      final mia = w['mia'];
+      await stored(
+        "INSERT INTO items (id, owner_user_id, type, revision, body, size, created_at, updated_at, seq) VALUES ('r1', @u, @ty, 1, '{}', 2, '$t', '$t', 900)",
+        {'u': mia.userId, 'ty': 'x' * 65},
+      );
+      expect(await put({...await testItem(mia), 'type': 'x' * 65}, 0), 400);
+    });
+
+    test('a type change is an API rule', () async {
+      final mia = w['mia'];
+      final host = await testItem(mia);
+      expect(await put(host, 0), 200);
+      expect(
+        await put(
+          await testItem(mia, id: host['id']! as String, type: 'snippet'),
+          1,
+        ),
+        400,
+      );
+    });
   });
 
   test('emails: the schema is case-sensitive, the API normalises', () async {

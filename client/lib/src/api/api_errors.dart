@@ -9,7 +9,7 @@ class ApiException implements Exception {
     this.message = '',
     this.reason,
     this.item,
-    this.orgs,
+    this.orgs = const [],
     this.retryAfter,
   });
 
@@ -18,7 +18,7 @@ class ApiException implements Exception {
   final String message;
   final String? reason;
   final Item? item;
-  final List<String>? orgs;
+  final List<String> orgs;
   final Duration? retryAfter;
 
   ApiErrorCode? get known => ApiErrorCode.fromWire(code);
@@ -60,7 +60,7 @@ Object? _decode(http.Response res) {
     message: error.message,
     reason: error.reason,
     item: error.item,
-    orgs: (error.extra['orgs'] as List<Object?>?)?.cast<String>(),
+    orgs: (error.extra['orgs'] as List<Object?>?)?.cast<String>() ?? const [],
     retryAfter: after == null ? null : Duration(seconds: after),
   );
 }

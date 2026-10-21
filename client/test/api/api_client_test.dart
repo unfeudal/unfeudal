@@ -29,7 +29,8 @@ void main() {
       seen[r.url.path] = r.headers['x-unfeudal-client'];
       final copy = http.Request(r.method, r.url)
         ..headers.addAll(r.headers)
-        ..bodyBytes = r.bodyBytes; // a MockClient request is already finalized
+        // A MockClient request is already finalized.
+        ..bodyBytes = r.bodyBytes;
       return h.client.send(copy).then(http.Response.fromStream);
     });
     final api = ApiClient(h.baseUrl, spy);
@@ -46,7 +47,7 @@ void main() {
     expect(seen['/api/v1/prelogin'], clientVersion);
   });
 
-  test('a 429 with retry-after ≤ 2 s is retried silently, at most 5 times; a longer one is not', () async {
+  test('a 429 with retry-after <= 2 s is retried silently, at most 5 times; a longer one is not', () async {
     final waits = <Duration>[];
     var calls = 0;
     ApiClient with429(String after, {int times = 99}) =>
@@ -148,7 +149,8 @@ void main() {
       final (h, api, saved) = await signedIn();
       h.expireAccess();
       api.onTokens = (t) async {
-        expect(api.refreshToken, isNot(t.refreshToken)); // persisted before use
+        // Persisted before use.
+        expect(api.refreshToken, isNot(t.refreshToken));
         saved.add(t);
       };
       final results = await Future.wait([

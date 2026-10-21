@@ -77,6 +77,19 @@ void main() {
     expect(missing.connections, 0);
   });
 
+  test('a failed write does not stop the next save', () async {
+    final later = Directory('${dir.path}/later');
+    final f = File('${later.path}/loquet.json');
+    final m = await LoquetMemory.load(f, now: now)
+      ..connections = 1;
+    await m.save();
+    later.createSync();
+    m.connections = 2;
+    await m.save();
+    final json = jsonDecode(f.readAsStringSync()) as Map<String, Object?>;
+    expect(json['connections'], 2);
+  });
+
   test('in memory: no file, save is a no-op', () async {
     final m = LoquetMemory()..fire('a');
     await m.save();

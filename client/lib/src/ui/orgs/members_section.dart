@@ -41,17 +41,17 @@ class _MembersSectionState extends State<MembersSection> {
   MembersGroup _group = MembersGroup.members;
 
   // Bumped after an invitation is created, so the pending list reloads.
-  int _invites = 0;
+  int _invitesGeneration = 0;
 
   Future<void> _invite() async {
     await showUfDialog<void>(context, (_) => InviteDialog(orgId: widget.orgId));
-    if (mounted) setState(() => _invites++);
+    if (mounted) setState(() => _invitesGeneration++);
   }
 
   Widget _groupBody(MembersGroup group) => switch (group) {
     MembersGroup.members => MembersScreen(orgId: widget.orgId),
     MembersGroup.invitations => PendingInvites(
-      key: ValueKey(_invites),
+      key: ValueKey(_invitesGeneration),
       orgId: widget.orgId,
     ),
     MembersGroup.teams => TeamsScreen(orgId: widget.orgId),
@@ -102,8 +102,8 @@ class _MembersSectionState extends State<MembersSection> {
               children: [
                 GroupNav(
                   groups: groups,
-                  current: group,
-                  onPick: (g) => setState(() => _group = g),
+                  selected: group,
+                  onChanged: (g) => setState(() => _group = g),
                 ),
                 Expanded(
                   child: Align(
@@ -187,7 +187,7 @@ class _PendingInvitesState extends State<PendingInvites> with BusyAction {
           PendingInviteRow(
             invite: p,
             creator: emails[p.createdBy],
-            onRevoke: p.role == OrgRole.member || isOwner
+            onRevoke: p.role?.isOwnerManaged == false || isOwner
                 ? () => _revoke(p)
                 : null,
           ),

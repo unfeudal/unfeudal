@@ -69,7 +69,7 @@ class _InstanceAdminPanelState extends State<InstanceAdminPanel>
     }
   });
 
-  Future<void> _toggle(AdminUser u) => run(() async {
+  Future<void> _toggleDisabled(AdminUser u) => run(() async {
     await AppScope.read(context).api!.admin
         .setDisabled(u.id, disabled: !u.disabled);
     setState(() {
@@ -182,7 +182,7 @@ class _InstanceAdminPanelState extends State<InstanceAdminPanel>
               children: [
                 _AccountsTab(
                   users: _users,
-                  onToggle: _toggle,
+                  onToggleDisabled: _toggleDisabled,
                   onDelete: _deleteUser,
                 ),
                 _InvitesTab(
@@ -205,12 +205,12 @@ class _InstanceAdminPanelState extends State<InstanceAdminPanel>
 class _AccountsTab extends StatelessWidget {
   const _AccountsTab({
     required this.users,
-    required this.onToggle,
+    required this.onToggleDisabled,
     required this.onDelete,
   });
 
   final List<AdminUser> users;
-  final ValueChanged<AdminUser> onToggle;
+  final ValueChanged<AdminUser> onToggleDisabled;
   final ValueChanged<AdminUser> onDelete;
 
   @override
@@ -228,7 +228,7 @@ class _AccountsTab extends StatelessWidget {
                 TextButton(
                   key: Key('admin-user-disable-${u.id}'),
                   style: smallButton,
-                  onPressed: () => onToggle(u),
+                  onPressed: () => onToggleDisabled(u),
                   child: Text(u.disabled ? l.adminEnable : l.adminDisable),
                 ),
                 TextButton(
@@ -316,7 +316,7 @@ class _OrgsTab extends StatelessWidget {
               o.lastActivityAt == null
                   ? noValue
                   : dates.formatMediumDate(o.lastActivityAt!.toLocal()),
-            ].join(' · '),
+            ].join(l.listSeparator),
             trailing: [
               UfTag(sizeLabel(l, o.storageBytes)),
               TextButton(

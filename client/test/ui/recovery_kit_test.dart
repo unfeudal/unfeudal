@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:unfeudal_client/l10n/app_localizations.dart';
 import 'package:unfeudal_client/src/ui/onboarding/recovery_kit_view.dart';
 
 import '../support/pump_app.dart';
@@ -114,5 +117,41 @@ void main() {
     await t.pumpWidget(const SizedBox());
     await t.pump();
     expect(clip.last, '');
+  });
+
+  testWidgets('a save that fails shows a toast', (t) async {
+    await pumpApp(
+      t,
+      child: RecoveryKitView(
+        recoveryKey: sampleWords,
+        server: Uri.parse('https://vault.example.org'),
+        email: 'camille@example.org',
+        onDone: () {},
+        savePath: (name) async => '/tmp/kit.txt',
+        writeFile: (path, bytes) async =>
+            throw FileSystemException('read-only', path),
+      ),
+    );
+    await t.tap(find.byKey(const Key('recovery-save')));
+    await pumpReal(t, rounds: 5);
+    final l = AppLocalizations.of(t.element(find.byType(RecoveryKitView)));
+    expect(find.text(l.errorUnexpected('FileSystemException')), findsOneWidget);
+  });
+
+  testWidgets('a print that fails shows a toast', (t) async {
+    await pumpApp(
+      t,
+      child: RecoveryKitView(
+        recoveryKey: sampleWords,
+        server: Uri.parse('https://vault.example.org'),
+        email: 'camille@example.org',
+        onDone: () {},
+        printPdf: (bytes) async => throw PlatformException(code: 'print'),
+      ),
+    );
+    await t.tap(find.byKey(const Key('recovery-print')));
+    await pumpReal(t, rounds: 10);
+    final l = AppLocalizations.of(t.element(find.byType(RecoveryKitView)));
+    expect(find.text(l.errorUnexpected('PlatformException')), findsOneWidget);
   });
 }

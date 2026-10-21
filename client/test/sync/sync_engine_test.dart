@@ -29,7 +29,7 @@ void main() {
     }
     await e.syncNow();
     expect(m.items(), hasLength(5));
-    expect(m.getKv(KvKey.cursor), '${h.itemsSeq}');
+    expect(m.kv(KvKey.cursor), '${h.itemsSeq}');
     expect(h.requests.where((r) => r == 'GET /api/v1/sync'), hasLength(3));
   });
 
@@ -181,8 +181,8 @@ void main() {
       });
     final (e, m, _) = await h.engine();
     await e.syncNow();
-    expect(m.getKv(KvKey.orgCursor), '4');
-    expect(m.getKv(KvKey.orgBlock), contains('"orgCursor":4'));
+    expect(m.kv(KvKey.orgCursor), '4');
+    expect(m.kv(KvKey.orgBlock), contains('"orgCursor":4'));
   });
 
   test('malformed page keeps local data and the loop alive', () async {
@@ -209,7 +209,7 @@ void main() {
         '{"items": [], "cursor": ${h.itemsSeq}, "more": false, "org": {"orgCursor": 1, "orgs": []}}';
     await e.syncNow();
     expect(m.items(), hasLength(1));
-    expect(m.getKv(KvKey.orgBlock), isNull);
+    expect(m.kv(KvKey.orgBlock), isNull);
     expect(e.lastError, isA<FormatException>());
   });
 
@@ -252,12 +252,20 @@ void main() {
     h.offline = true;
     await e.write(wireItem(newId(), revision: 0));
     await e.syncNow();
-    expect(e.online, false);
+    expect(e.isOnline, false);
     expect(m.outbox(), hasLength(1));
     h.offline = false;
     await e.syncNow();
-    expect(e.online, true);
+    expect(e.isOnline, true);
     expect(m.outbox(), isEmpty);
+  });
+
+  test('a first sync is pending until the first round ends', () async {
+    final h = SyncHarness();
+    final (e, _, _) = await h.engine();
+    expect(e.isFirstSyncPending, isTrue);
+    await e.syncNow();
+    expect(e.isFirstSyncPending, isFalse);
   });
 
   test('timer runs a round every 30 s; syncNow calls coalesce', () async {

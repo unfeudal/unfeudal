@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import 'package:test/test.dart';
-import 'package:unfeudal_shared/src/util/json_reader.dart';
+import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 void main() {
   final r = JsonReader({
@@ -41,26 +41,35 @@ void main() {
     expect(() => r.integer('n', max: 0), throwsFormatException);
   });
 
-  test('text counts code points; required text is trimmed and non-empty', () {
+  test('text counts code points; trimmed text is non-empty', () {
     expect(r.text('e', max: 3), '\u{1F600}' * 3);
     expect(() => r.text('e', max: 2), throwsFormatException);
-    expect(r.text('s', max: 2, required: true), 'hi');
+    expect(r.trimmedText('s', max: 2), 'hi');
     expect(r.text('s', max: 6), '  hi  ');
     expect(
-      () => JsonReader({'s': '   '}, 't').text('s', max: 9, required: true),
+      () => JsonReader({'s': '   '}, 't').trimmedText('s', max: 9),
       throwsFormatException,
     );
     expect(r.optText('nul', max: 1), isNull);
   });
 
-  test('uuids, bounded lists, flags and extra', () {
+  test('uuids are checked; an optional null uuid reads as null', () {
     expect(r.uuid('u'), '6f1c2b9a-3d4e-4f50-8a61-7b8c9d0e1f20');
     expect(() => r.uuid('s'), throwsFormatException);
     expect(r.optUuid('nul'), isNull);
+  });
+
+  test('lists are bounded', () {
     expect(r.list<String>('l', max: 2), ['a', 'b']);
     expect(() => r.list<String>('l', max: 1), throwsFormatException);
+  });
+
+  test('a missing flag reads as its fallback', () {
     expect(r.flag('b'), isTrue);
     expect(r.flag('missing', orElse: false), isFalse);
+  });
+
+  test('extra returns the fields outside the known keys', () {
     expect(r.extra({'n', 'd', 's', 'e', 'b', 'l', 'o', 'u', 'nul'}), {
       'x': 'extra',
     });

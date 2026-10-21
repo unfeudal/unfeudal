@@ -89,32 +89,17 @@ class _TabStrip extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           Flexible(
-            child: ListView(
+            child: ReorderableListView(
               scrollDirection: Axis.horizontal,
               shrinkWrap: true,
+              buildDefaultDragHandles: false,
+              onReorderItem: connections.moveTab,
               children: [
                 for (var i = 0; i < connections.tabs.length; i++)
-                  ListenableBuilder(
-                    listenable: connections.tabs[i],
-                    builder: (context, _) => _TabChip(
-                      key: Key('tab-$i'),
-                      index: i,
-                      title: connections.tabs[i].title,
-                      seal: connections.tabs[i].state,
-                      selected: i == active,
-                      onSelect: () => connections.selectTab(i),
-                      onClose: () => connections.closeTab(connections.tabs[i]),
-                      badge: ForwardsBadge(
-                        tab: connections.tabs[i],
-                        configured:
-                            state.vault
-                                ?.hostLookup(connections.tabs[i].hostId)
-                                ?.meta
-                                .forwards ??
-                            const [],
-                        index: i,
-                      ),
-                    ),
+                  ReorderableDragStartListener(
+                    key: ObjectKey(connections.tabs[i]),
+                    index: i,
+                    child: _chip(state, i),
                   ),
               ],
             ),
@@ -129,6 +114,29 @@ class _TabStrip extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _chip(AppState state, int i) {
+    final connections = state.connections;
+    final tab = connections.tabs[i];
+    return ListenableBuilder(
+      listenable: tab,
+      builder: (context, _) => _TabChip(
+        key: Key('tab-$i'),
+        index: i,
+        title: tab.title,
+        seal: tab.state,
+        selected: i == active,
+        onSelect: () => connections.selectTab(i),
+        onClose: () => connections.closeTab(tab),
+        badge: ForwardsBadge(
+          tab: tab,
+          configured:
+              state.vault?.hostLookup(tab.hostId)?.meta.forwards ?? const [],
+          index: i,
+        ),
       ),
     );
   }
@@ -190,7 +198,6 @@ class _TabChipState extends State<_TabChip> {
       color: selected || _hover ? colors.text : colors.muted,
       fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
     );
-    // the active tab grows by the strip's bottom line so it joins the terminal
     return Padding(
       padding: const EdgeInsets.only(right: 2),
       child: TweenAnimationBuilder<double>(
@@ -201,6 +208,7 @@ class _TabChipState extends State<_TabChip> {
         child: MouseRegion(
           onEnter: (_) => setState(() => _hover = true),
           onExit: (_) => setState(() => _hover = false),
+          // The active tab grows by the strip's bottom line so it joins the terminal.
           child: Transform.translate(
             offset: Offset(0, selected ? 1 : 0),
             child: Container(
@@ -324,7 +332,7 @@ class _StatusBar extends StatelessWidget {
               builder: (context, _) => forwards.active.isEmpty
                   ? const SizedBox.shrink()
                   : Text(
-                      l.statusForwards(forwards.active.length),
+                      l.forwardsActive(forwards.active.length),
                       style: style,
                     ),
             ),
@@ -339,7 +347,7 @@ class _StatusBar extends StatelessWidget {
   static String _target(AppLocalizations l, AppState state, String hostId) {
     final lookup = state.vault?.hostLookup(hostId);
     if (lookup == null) return '';
-    final (:meta, :resolved, org: _) = lookup;
+    final (:meta, :resolved, isOrg: _) = lookup;
     final target = [
       if (resolved.user case final user?) '$user@',
       meta.address,
@@ -359,7 +367,7 @@ class _StatusBar extends StatelessWidget {
   ) {
     final sync = state.sync;
     if (sync == null) return const [];
-    final (seal, label) = !sync.online
+    final (seal, label) = !sync.isOnline
         ? (SealState.offline, l.sealOffline)
         : sync.lastSyncAt == null
         ? (SealState.verify, l.statusSyncing)

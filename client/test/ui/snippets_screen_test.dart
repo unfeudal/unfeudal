@@ -212,6 +212,79 @@ void main() {
       }
     },
   );
+
+  testWidgets(
+    'an org snippet whose edit right is revoked before the confirm reports the refused trash',
+    (t) async {
+      final h = SyncHarness(capabilities: ['orgs', 'sync']);
+      final s = await signedInState(t, harness: h);
+      final me = s.stored!.userId;
+      final keys = FolderKeys.generate(1), f = newId();
+      h.orgMembers[testOrgId] = {me};
+      late Item snippet, folder;
+      late Map<String, Object?> wrapped;
+      await t.runAsync(() async {
+        final pub = h.accounts.values.first.bundle.publicKey;
+        snippet = h.serverPutOrg(
+          await sealOrgItem(
+            keys,
+            type: 'snippet',
+            folderId: f,
+            meta: {
+              'schemaVersion': 1,
+              'name': 'org uptime',
+              'command': 'uptime',
+              'tags': <String>[],
+            },
+          ),
+        );
+        folder = h.serverPutOrg(
+          await sealOrgItem(
+            keys,
+            id: f,
+            type: 'folder',
+            meta: folderJson('Ops'),
+          ),
+        );
+        wrapped = await wrappedRow(keys, f, pub);
+        h.orgBlock = orgBlock(
+          members: [memberRow(me)],
+          folderTree: [node(f)],
+          acl: [
+            aclRow(f, me, allow: ['view', 'edit']),
+          ],
+          wrappedKeys: [wrapped],
+          itemIds: [snippet.id, folder.id],
+        );
+        await s.sync!.syncNow();
+      });
+      s.orgs!.select(testOrgId);
+      await pumpApp(
+        t,
+        state: s,
+        child: const Scaffold(body: SnippetsScreen()),
+      );
+      await pumpReal(t);
+      await t.tap(find.byKey(Key('snippet-delete-${snippet.id}')));
+      await t.pumpAndSettle();
+      await t.runAsync(() async {
+        h.orgBlock = orgBlock(
+          cursor: 2,
+          members: [memberRow(me)],
+          folderTree: [node(f)],
+          acl: [
+            aclRow(f, me, allow: ['view']),
+          ],
+          wrappedKeys: [wrapped],
+          itemIds: [snippet.id, folder.id],
+        );
+        await s.sync!.syncNow();
+      });
+      await t.tap(find.byKey(const Key('confirm-yes')));
+      await pumpReal(t, rounds: 10);
+      expect(find.byType(SnackBar), findsOneWidget);
+    },
+  );
 }
 
 /// The callback of a text or icon button, null when disabled.

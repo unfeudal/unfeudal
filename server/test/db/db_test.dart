@@ -46,27 +46,27 @@ void main() {
     );
   });
 
-  test(
-    'a throwing transaction rolls back and rethrows; a returning one commits',
-    () async {
-      await expectLater(
-        db.transaction((tx) async {
-          await tx.execute("INSERT INTO kv (k, n, flag) VALUES ('x', 1, 0)");
-          throw StateError('boom');
-        }),
-        throwsStateError,
-      );
-      expect(await db.query('SELECT k FROM kv'), isEmpty);
-      expect(
-        await db.transaction((tx) async {
-          await tx.execute("INSERT INTO kv (k, n, flag) VALUES ('y', 7, 0)");
-          return 42;
-        }),
-        42,
-      );
-      expect((await db.query('SELECT n FROM kv')).single['n'], 7);
-    },
-  );
+  test('a throwing transaction rolls back and rethrows', () async {
+    await expectLater(
+      db.transaction((tx) async {
+        await tx.execute("INSERT INTO kv (k, n, flag) VALUES ('x', 1, 0)");
+        throw StateError('boom');
+      }),
+      throwsStateError,
+    );
+    expect(await db.query('SELECT k FROM kv'), isEmpty);
+  });
+
+  test('a returning transaction commits and returns its value', () async {
+    expect(
+      await db.transaction((tx) async {
+        await tx.execute("INSERT INTO kv (k, n, flag) VALUES ('y', 7, 0)");
+        return 42;
+      }),
+      42,
+    );
+    expect((await db.query('SELECT n FROM kv')).single['n'], 7);
+  });
 
   test(
     'concurrent read-modify-write transactions never lose an update',

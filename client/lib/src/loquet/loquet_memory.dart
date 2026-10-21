@@ -4,6 +4,8 @@ import 'dart:io';
 
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
+import '../debug_trace.dart';
+
 /// Loquet's counters and once-keys, kept on this machine only (`loquet.json`); nothing here is synced.
 class LoquetMemory {
   LoquetMemory({this._file});
@@ -67,11 +69,24 @@ class LoquetMemory {
       'firstUnlock': firstUnlock == null ? null : iso(firstUnlock!),
       'once': _once.toList()..sort(),
     });
-    return _saving = _saving.then((_) async {
+    Future<void> write() async {
       final tmp = File('${file.path}.tmp');
-      await tmp.writeAsString(text, flush: true);
-      await tmp.rename(file.path);
-    });
+      try {
+        await tmp.writeAsString(text, flush: true);
+        await tmp.rename(file.path);
+      } on FileSystemException catch (e) {
+        trace(
+          TraceArea.ui,
+          'loquet memory: not saved (os error ${e.osError?.errorCode})',
+        );
+      }
+    }
+
+    // A failed write already went to its own caller; the next save still runs.
+    return _saving = _saving.then(
+      (_) => write(),
+      onError: (Object _) => write(),
+    );
   }
 
   /// `yyyy-mm-dd` of [t] as given (local time).

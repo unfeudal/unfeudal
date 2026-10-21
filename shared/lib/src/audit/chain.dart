@@ -7,6 +7,19 @@ import 'audit_event.dart';
 
 final genesisHash = '0' * 64;
 
+const checkpointAction = 'audit.checkpoint';
+
+/// The `[seq:N, hash:H]` anchor of a checkpoint event, null for any other event or a non-canonical checkpoint
+/// (`seq:05` and `seq:+5` are refused).
+({int seq, String hash})? checkpointOf(AuditEvent e) {
+  if (e.action != checkpointAction || e.targetIds.length != 2) return null;
+  final [seqTarget, hashTarget] = e.targetIds;
+  final seq = int.tryParse(seqTarget.replaceFirst('seq:', ''));
+  if (seq == null || seqTarget != 'seq:$seq') return null;
+  if (!hashTarget.startsWith('hash:')) return null;
+  return (seq: seq, hash: hashTarget.substring('hash:'.length));
+}
+
 // Keys sorted at every level, no spaces (jsonEncode's escaping); lists keep their order.
 String _canonicalJson(Object? value) => jsonEncode(_sorted(value));
 
@@ -34,10 +47,7 @@ int? verifyChain(List<AuditEvent> events) {
       : sorted.any(
           (e) =>
               e.scope == first.scope &&
-              e.action == 'audit.checkpoint' &&
-              e.targetIds.length == 2 &&
-              e.targetIds[0] == 'seq:${first.seq - 1}' &&
-              e.targetIds[1] == 'hash:${first.prevHash}',
+              checkpointOf(e) == (seq: first.seq - 1, hash: first.prevHash),
         );
   if (!anchored) return first.seq;
   AuditEvent? prev;

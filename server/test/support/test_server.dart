@@ -12,6 +12,7 @@ import 'package:unfeudal_server/src/db/migrate.dart';
 import 'package:unfeudal_server/src/log/logger.dart';
 import 'package:unfeudal_server/src/mail/mailer.dart';
 import 'package:unfeudal_server/src/net/client_ip.dart';
+import 'package:unfeudal_server/src/util/email.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import 'fake_clock.dart';
@@ -21,6 +22,7 @@ import 'test_db.dart';
 
 const testPassword = 'correct horse battery staple';
 const testSetupToken = 'ABCD-EFGH-IJKL-MNOP-QRST-UVWX-YZ';
+const testClientIp = '203.0.113.7';
 
 class TestResponse {
   TestResponse(this.status, this.headers, this.json, this.error);
@@ -82,7 +84,7 @@ class TestServer {
     String? token,
     Object? body,
     Map<String, String> headers = const {},
-    String ip = '203.0.113.7',
+    String ip = testClientIp,
   }) async {
     final all = {
       'x-unfeudal-client': '0.1.0',
@@ -112,28 +114,28 @@ class TestServer {
     String path, {
     String? token,
     Map<String, String> headers = const {},
-    String ip = '203.0.113.7',
+    String ip = testClientIp,
   }) => send('GET', path, token: token, headers: headers, ip: ip);
   Future<TestResponse> post(
     String path, {
     String? token,
     Object? body,
     Map<String, String> headers = const {},
-    String ip = '203.0.113.7',
+    String ip = testClientIp,
   }) => send('POST', path, token: token, body: body, headers: headers, ip: ip);
   Future<TestResponse> put(
     String path, {
     String? token,
     Object? body,
     Map<String, String> headers = const {},
-    String ip = '203.0.113.7',
+    String ip = testClientIp,
   }) => send('PUT', path, token: token, body: body, headers: headers, ip: ip);
   Future<TestResponse> delete(
     String path, {
     String? token,
     Object? body,
     Map<String, String> headers = const {},
-    String ip = '203.0.113.7',
+    String ip = testClientIp,
   }) =>
       send('DELETE', path, token: token, body: body, headers: headers, ip: ip);
 
@@ -144,16 +146,16 @@ class TestServer {
 }
 
 class TestSession {
-  TestSession(
-    this.userId,
-    this.deviceId,
-    this.accessToken,
-    this.refreshToken,
-    this.email,
-    this.password,
-    this.bundle,
-    this.bundleVersion,
-    this.account, {
+  TestSession({
+    required this.userId,
+    required this.deviceId,
+    required this.accessToken,
+    required this.refreshToken,
+    required this.email,
+    required this.password,
+    required this.bundle,
+    required this.bundleVersion,
+    required this.account,
     this.recoveryKey,
   });
   final String userId;
@@ -201,15 +203,15 @@ extension SetupOwner on TestServer {
     }
     final session = Session.fromJson(r.json);
     return TestSession(
-      session.userId,
-      session.deviceId,
-      session.accessToken,
-      session.refreshToken,
-      email.trim().toLowerCase(),
-      password,
-      session.bundle,
-      session.bundleVersion,
-      acc.unlocked,
+      userId: session.userId,
+      deviceId: session.deviceId,
+      accessToken: session.accessToken,
+      refreshToken: session.refreshToken,
+      email: canonicalEmail(email),
+      password: password,
+      bundle: session.bundle,
+      bundleVersion: session.bundleVersion,
+      account: acc.unlocked,
       recoveryKey: acc.recoveryKey,
     );
   }
@@ -220,7 +222,7 @@ extension Accounts on TestServer {
     String email,
     String password, {
     String deviceName = 'Test device',
-    String ip = '203.0.113.7',
+    String ip = testClientIp,
   }) async {
     final pre = await post('/api/v1/prelogin', body: {'email': email}, ip: ip);
     final keys = await deriveMasterKeys(
@@ -242,15 +244,15 @@ extension Accounts on TestServer {
     }
     final session = Session.fromJson(r.json);
     return TestSession(
-      session.userId,
-      session.deviceId,
-      session.accessToken,
-      session.refreshToken,
-      email,
-      password,
-      session.bundle,
-      session.bundleVersion,
-      await testCrypto.unlock(session.bundle, password),
+      userId: session.userId,
+      deviceId: session.deviceId,
+      accessToken: session.accessToken,
+      refreshToken: session.refreshToken,
+      email: email,
+      password: password,
+      bundle: session.bundle,
+      bundleVersion: session.bundleVersion,
+      account: await testCrypto.unlock(session.bundle, password),
     );
   }
 
@@ -277,15 +279,15 @@ extension Accounts on TestServer {
     );
     final s = await login(email, password);
     return TestSession(
-      s.userId,
-      s.deviceId,
-      s.accessToken,
-      s.refreshToken,
-      email,
-      password,
-      s.bundle,
-      s.bundleVersion,
-      s.account,
+      userId: s.userId,
+      deviceId: s.deviceId,
+      accessToken: s.accessToken,
+      refreshToken: s.refreshToken,
+      email: email,
+      password: password,
+      bundle: s.bundle,
+      bundleVersion: s.bundleVersion,
+      account: s.account,
       recoveryKey: acc.recoveryKey,
     );
   }

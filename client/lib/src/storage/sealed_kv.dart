@@ -28,7 +28,7 @@ class SealedKv {
   ) async {
     _key = userKey;
     _writes = 0;
-    final stored = _mirror.getKv(_slot);
+    final stored = _mirror.kv(_slot);
     if (stored == null) return true;
     try {
       final opened = await PayloadCrypto.open(

@@ -4,8 +4,8 @@ import 'dart:convert';
 import 'package:test/test.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
-const h = '6f1c2b9a-3d4e-4f50-8a61-7b8c9d0e1f20';
-const i = '4a6c8e0a-2b4d-4f6a-8c0e-2a4c6e8a0c2e';
+const hostId = '6f1c2b9a-3d4e-4f50-8a61-7b8c9d0e1f20';
+const identityId = '4a6c8e0a-2b4d-4f6a-8c0e-2a4c6e8a0c2e';
 final fp = 'SHA256:${'A' * 43}';
 
 void expectRoundTrip(
@@ -22,7 +22,7 @@ void main() {
     expectRoundTrip(KnownHostMeta.fromJson, {
       'x': 1,
       'schemaVersion': 1,
-      'hostItemId': h,
+      'hostItemId': hostId,
       'keyType': 'ssh-ed25519',
       'sha256Fingerprint': fp,
     });
@@ -46,19 +46,19 @@ void main() {
     expectRoundTrip(HostBindingMeta.fromJson, {
       'x': 1,
       'schemaVersion': 1,
-      'hostItemId': h,
-      'identityId': i,
+      'hostItemId': hostId,
+      'identityId': identityId,
     });
     expectRoundTrip(MemberPinMeta.fromJson, {
       'x': 1,
       'schemaVersion': 1,
-      'userId': i,
+      'userId': identityId,
       'fingerprint': 'a' * 40,
       'verified': true,
     });
   });
 
-  test('defaults: empty prefs not written, verified false when absent, command not trimmed', () {
+  test('ProfileMeta does not write empty prefs', () {
     expect(
       ProfileMeta.fromJson({
         'schemaVersion': 1,
@@ -67,14 +67,20 @@ void main() {
       }).toJson().containsKey('prefs'),
       isFalse,
     );
+  });
+
+  test('MemberPinMeta.verified is false when absent', () {
     expect(
       MemberPinMeta.fromJson({
         'schemaVersion': 1,
-        'userId': i,
+        'userId': identityId,
         'fingerprint': 'a' * 40,
       }).verified,
       isFalse,
     );
+  });
+
+  test('SnippetMeta.command is not trimmed', () {
     expect(
       SnippetMeta.fromJson({
         'schemaVersion': 1,
@@ -84,6 +90,9 @@ void main() {
       }).command,
       ' ls ',
     );
+  });
+
+  test('syncedPrefKeys lists the synced preferences', () {
     expect(syncedPrefKeys, [
       'themeMode',
       'terminalTheme',
@@ -100,7 +109,7 @@ void main() {
         KnownHostMeta.fromJson,
         {
           'schemaVersion': 1,
-          'hostItemId': h,
+          'hostItemId': hostId,
           'keyType': 'k',
           'sha256Fingerprint': 'SHA256:short',
         },
@@ -118,7 +127,7 @@ void main() {
         KnownHostMeta.fromJson,
         {
           'schemaVersion': 1,
-          'hostItemId': h,
+          'hostItemId': hostId,
           'keyType': 'k' * 65,
           'sha256Fingerprint': fp,
         },
@@ -146,17 +155,17 @@ void main() {
       ),
       (
         HostBindingMeta.fromJson,
-        {'schemaVersion': 1, 'hostItemId': h, 'identityId': 'x'},
+        {'schemaVersion': 1, 'hostItemId': hostId, 'identityId': 'x'},
       ),
       (
         MemberPinMeta.fromJson,
-        {'schemaVersion': 1, 'userId': i, 'fingerprint': 'A' * 40},
+        {'schemaVersion': 1, 'userId': identityId, 'fingerprint': 'A' * 40},
       ),
       (
         MemberPinMeta.fromJson,
         {
           'schemaVersion': 1,
-          'userId': i,
+          'userId': identityId,
           'fingerprint': 'a' * 40,
           'verified': 'yes',
         },

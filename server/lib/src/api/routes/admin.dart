@@ -17,14 +17,14 @@ import '../request_audit.dart';
 import '../validate.dart';
 
 // Must be the first line of every admin handler, before the body is read.
-void _requireIo(Request request) {
+void _requireInstanceOwner(Request request) {
   if (!authOf(request).isInstanceOwner) {
     throw ApiError(ApiErrorCode.forbidden, 'Instance Owner only.');
   }
 }
 
 Future<Response> listUsers(Request request) async {
-  _requireIo(request);
+  _requireInstanceOwner(request);
   final rows = await depsOf(request).db.query(
     'SELECT id, email, disabled, is_instance_owner, created_at FROM users ORDER BY email',
   );
@@ -43,7 +43,7 @@ Future<Response> listUsers(Request request) async {
 }
 
 Future<Response> setDisabled(Request request) async {
-  _requireIo(request);
+  _requireInstanceOwner(request);
   final deps = depsOf(request);
   final id = parseUuid(request.params['id']!);
   final disabled = (await readJson(request))['disabled'];
@@ -100,7 +100,7 @@ Future<Response> setDisabled(Request request) async {
 }
 
 Future<Response> deleteUserRoute(Request request) async {
-  _requireIo(request);
+  _requireInstanceOwner(request);
   final deps = depsOf(request);
   final id = parseUuid(request.params['id']!);
   // deleteUser refuses the Instance Owner, an unknown id and a last owner.
@@ -112,7 +112,7 @@ Future<Response> deleteUserRoute(Request request) async {
 
 /// Metadata only: owner emails, member count, storage and last activity; never an item body.
 Future<Response> listOrgs(Request request) async {
-  _requireIo(request);
+  _requireInstanceOwner(request);
   final deps = depsOf(request);
   final orgs = await deps.db.transaction(readOnly: true, (tx) async {
     final owners = <Object?, List<String>>{};
@@ -162,7 +162,7 @@ Future<Response> listOrgs(Request request) async {
 
 /// The exact name confirms a deletion the Instance Owner cannot see inside.
 Future<Response> adminDeleteOrg(Request request) async {
-  _requireIo(request);
+  _requireInstanceOwner(request);
   final deps = depsOf(request);
   final id = parseUuid(request.params['id']!);
   final confirmName = (await readJson(request))['confirmName'];
@@ -186,7 +186,7 @@ Future<Response> adminDeleteOrg(Request request) async {
 }
 
 Future<Response> createInstanceInvite(Request request) async {
-  _requireIo(request);
+  _requireInstanceOwner(request);
   final deps = depsOf(request), auth = authOf(request);
   final email = normalizeEmail((await readJson(request))['email']);
   await deps.limiter.hit([inviteCreateKey(auth.userId)]);
@@ -215,7 +215,7 @@ Future<Response> createInstanceInvite(Request request) async {
 
 /// Pending instance invites (no org), by expiresAt.
 Future<Response> listInstanceInvites(Request request) async {
-  _requireIo(request);
+  _requireInstanceOwner(request);
   final deps = depsOf(request);
   return jsonResponse({'invites': await pendingInvites(deps.db, deps, null)});
 }

@@ -9,10 +9,13 @@ import 'session_store.dart';
 
 /// Platform side (the native runners): a 32-byte secret that only the hardware releases, after the OS prompt.
 abstract interface class BiometricBackend {
-  Future<bool> available();
+  Future<bool> isAvailable();
 
-  /// Null when the user cancels or the secret is gone. [create] makes it first.
-  Future<Uint8List?> secret({required bool create, required String reason});
+  /// Makes the secret, or keeps the existing one; null when the user cancels.
+  Future<Uint8List?> createSecret({required String reason});
+
+  /// Null when the user cancels or the secret is gone.
+  Future<Uint8List?> secret({required String reason});
   Future<void> delete();
 }
 
@@ -20,7 +23,7 @@ class ChannelBiometricBackend implements BiometricBackend {
   const ChannelBiometricBackend();
   static const _channel = MethodChannel('fr.unfeudal/biometric');
   @override
-  Future<bool> available() async {
+  Future<bool> isAvailable() async {
     try {
       return await _channel.invokeMethod<bool>('available') ?? false;
     } on PlatformException {
@@ -31,7 +34,14 @@ class ChannelBiometricBackend implements BiometricBackend {
   }
 
   @override
-  Future<Uint8List?> secret({
+  Future<Uint8List?> createSecret({required String reason}) =>
+      _secret(create: true, reason: reason);
+
+  @override
+  Future<Uint8List?> secret({required String reason}) =>
+      _secret(create: false, reason: reason);
+
+  Future<Uint8List?> _secret({
     required bool create,
     required String reason,
   }) async {
@@ -66,8 +76,8 @@ class BiometricUnlock {
   Future<bool> isEnabled() async => await kv.read(storageKey) != null;
 
   Future<bool> enable(Uint8List userKey, {required String reason}) async {
-    if (!await backend.available()) return false;
-    final secret = await backend.secret(create: true, reason: reason);
+    if (!await backend.isAvailable()) return false;
+    final secret = await backend.createSecret(reason: reason);
     if (secret == null) return false;
     final wrapped = await SymmetricCipher.encrypt(
       secret,
@@ -83,7 +93,7 @@ class BiometricUnlock {
   Future<Uint8List?> unlock({required String reason}) async {
     final raw = await kv.read(storageKey);
     if (raw == null) return null;
-    final secret = await backend.secret(create: false, reason: reason);
+    final secret = await backend.secret(reason: reason);
     if (secret == null) return null;
     try {
       return await SymmetricCipher.decrypt(
@@ -121,7 +131,7 @@ class BiometricGate {
 
   /// Hardware present, the server allows it, and the OS offers it.
   Future<bool> isAvailable() async =>
-      _allowed() && await _unlock.backend.available();
+      _allowed() && await _unlock.backend.isAvailable();
 
   /// A stored wrap the server still allows; a wrap it no longer allows is wiped.
   Future<bool> isOffered() async {

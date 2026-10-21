@@ -1,4 +1,21 @@
 // SPDX-License-Identifier: Apache-2.0
+import 'package:unfeudal_shared/unfeudal_shared.dart';
+
+/// 0 when empty, 1 under the minimum length or guessable, then up to 4 with length and character classes.
+int passwordScore(String password) {
+  final length = passwordLength(password);
+  if (length == 0) return 0;
+  if (length < AccountCrypto.minPasswordLength || isGuessable(password)) {
+    return 1;
+  }
+  final classes = [
+    RegExp('[a-z]'),
+    RegExp('[A-Z]'),
+    RegExp(r'\d'),
+    RegExp(r'[^a-zA-Z\d]'),
+  ].where((c) => c.hasMatch(password)).length;
+  return 2 + (length >= 12 ? 1 : 0) + (length >= 16 || classes >= 3 ? 1 : 0);
+}
 
 /// Whether [password] is among the first an attacker tries: a common password, look-alike digits and
 /// symbols included, or nothing but a repeat, a run of letters or digits, or a keyboard row, with digits

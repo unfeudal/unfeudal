@@ -5,7 +5,7 @@ import 'payload.dart';
 /// The caller's own identity for a `perMember` org host.
 class HostBindingMeta extends Payload {
   HostBindingMeta({
-    super.schemaVersion = 1,
+    super.schemaVersion = Payload.knownSchemaVersion,
     required this.hostItemId,
     required this.identityId,
     super.extra = const {},

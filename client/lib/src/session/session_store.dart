@@ -109,7 +109,8 @@ class SessionStore {
         TraceArea.session,
         'session store: unreadable (${e.runtimeType}), treated as signed out',
       );
-      return null; // keystore error or malformed value: signed out, never a crash
+      // A keystore error or malformed value means signed out, never a crash.
+      return null;
     }
   }
 

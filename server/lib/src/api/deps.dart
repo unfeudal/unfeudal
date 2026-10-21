@@ -58,10 +58,10 @@ class AppDeps {
       audit: audit,
       access: AccessTokens(serverSecret, clock, config.accessTokenTtl),
       refresh: RefreshTokens(
-        db,
-        clock,
-        config.refreshTokenTtl,
-        serverSecret,
+        db: db,
+        clock: clock,
+        ttl: config.refreshTokenTtl,
+        secret: serverSecret,
         audit: audit,
       ),
       limiter: RateLimiter(db, clock, config),
@@ -99,10 +99,25 @@ class AppDeps {
   /// The weakest bundle KDF accepted; lowered by tests only.
   final KdfParams kdfFloor;
 
-  /// One trusted_proxies warning per process.
-  bool proxyWarned = false;
+  bool _isProxyWarned = false;
 
   Features get features => config.features;
+
+  /// Warns once per process when a LAN peer reaches the server directly while
+  /// trusted_proxies is empty.
+  void warnIfUnproxiedLanPeer(InternetAddress ip) {
+    if (config.trustedProxies.isNotEmpty ||
+        _isProxyWarned ||
+        !isLanHost(Uri(host: ip.address))) {
+      return;
+    }
+    // Behind a reverse proxy every client would share this address.
+    _isProxyWarned = true;
+    log.warn(
+      'requests come from ${ip.address} and trusted_proxies is empty: '
+      'set it to the reverse proxy address',
+    );
+  }
 }
 
 const _depsKey = 'unfeudal.deps';

@@ -2,13 +2,13 @@
 import 'package:test/test.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
-ResolvedHost r(String? jump) => ResolvedHost(
+ResolvedHost resolvedHost(String? jump) => ResolvedHost(
   port: 22,
   jumpHostId: jump,
   sources: {'jumpHostId': jump == null ? 'default' : 'host'},
 );
 ResolvedHost? Function(String) table(Map<String, String?> jumps) =>
-    (id) => jumps.containsKey(id) ? r(jumps[id]) : null;
+    (id) => jumps.containsKey(id) ? resolvedHost(jumps[id]) : null;
 
 void main() {
   test('no jump host: empty chain', () {

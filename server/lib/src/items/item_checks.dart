@@ -117,10 +117,10 @@ Future<void> checkOrgWrite(
     throw ApiError(ApiErrorCode.forbidden, 'You need edit on this folder.');
   }
   if (isFolder && row != null && oldParent != parent) {
-    // a move changes inherited entries: priced like an ACL change
+    // A move changes inherited entries, so it is priced like an ACL change.
     final after = org.withParent(input.id, parent);
     if (!org.members[auth.userId]!.isAdmin) {
-      checkNoEscalation(org, after, auth.userId); // 403
+      checkNoEscalation(org, after, auth.userId);
     }
     await recordRotations(
       tx,

@@ -89,7 +89,8 @@ void main() {
           'error': 'forbidden',
           'message': 'Current master password is wrong.',
         });
-        s.clock.advance(const Duration(seconds: 30)); // past the acct: delay
+        // Past the acct: delay.
+        s.clock.advance(const Duration(seconds: 30));
         final bad = await body();
         bad['currentAuthKey'] = 'AAAA';
         expect(
@@ -181,7 +182,8 @@ void main() {
           await start(key: List.filled(32, 2)),
         ];
         await s.db.execute('UPDATE users SET disabled = 1');
-        s.clock.advance(const Duration(seconds: 30)); // past the acct: delay
+        // Past the acct: delay.
+        s.clock.advance(const Duration(seconds: 30));
         answers.add(await start());
         await s.db.execute(
           'UPDATE users SET disabled = 0, recovery_auth_hash = NULL',
@@ -245,7 +247,8 @@ void main() {
         isTrue,
         reason: 'the old recovery key is dead',
       );
-      s.clock.advance(const Duration(seconds: 30)); // past the acct: delay
+      // Past the acct: delay.
+      s.clock.advance(const Duration(seconds: 30));
       expect(
         (await s.login(owner.email, 'fresh password')).userId,
         owner.userId,
@@ -275,7 +278,8 @@ void main() {
           await send({...b, 'publicKey': b64(List.filled(32, 5))}, 0),
           400,
         );
-        s.clock.advance(const Duration(seconds: 30)); // past the acct: delay
+        // Past the acct: delay.
+        s.clock.advance(const Duration(seconds: 30));
         expect(await send(b, 3), 409);
         expect((await userRow())['bundle_version'], 0);
       },
@@ -300,7 +304,8 @@ void main() {
         },
       );
       expect((await send(List.filled(32, 3))).status, 403);
-      s.clock.advance(const Duration(seconds: 30)); // past the acct: delay
+      // Past the acct: delay.
+      s.clock.advance(const Duration(seconds: 30));
       final current = await authKeyOf(testPassword, owner.bundle);
       final salted = {
         ...rotated.bundle.toJson(),

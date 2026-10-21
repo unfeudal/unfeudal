@@ -36,17 +36,17 @@ class OutboxPusher {
 
   Future<void> push() async {
     if (_pushAfter case final after? when _now().isBefore(after)) return;
-    for (final e in mirror.outbox().where(
+    for (final entry in mirror.outbox().where(
       (e) => e.state == OutboxState.pending,
     )) {
       try {
         resolver.settle(
-          e.item,
-          await api.putItem(e.item, ifMatch: e.baseRevision),
+          entry.item,
+          await api.putItem(entry.item, ifMatch: entry.baseRevision),
         );
         trace(
           TraceArea.sync,
-          'pushed ${e.item.kind.name} ${shortId(e.item.id)}',
+          'pushed ${entry.item.kind.name} ${shortId(entry.item.id)}',
         );
         _failures = 0;
         _pushAfter = null;
@@ -54,25 +54,27 @@ class OutboxPusher {
         // Nothing is counted on the entry; the round then marks the client offline.
         _backOff(null);
         rethrow;
-      } on ApiException catch (x) {
-        if (x.status == 401) rethrow;
+      } on ApiException catch (refusal) {
+        if (refusal.status == 401) rethrow;
         trace(
           TraceArea.sync,
-          'push ${shortId(e.item.id)} refused: ${x.status} ${x.reason ?? x.code}',
+          'push ${shortId(entry.item.id)} refused: ${refusal.status} ${refusal.reason ?? refusal.code}',
         );
-        if (x.conflictReason == ConflictReason.clientTooOld) {
+        if (refusal.conflictReason == ConflictReason.clientTooOld) {
           return onClientTooOld();
         }
-        if (x.status == 409) {
-          await resolver.resolve(e.item, x.item);
-        } else if (x.status == 429 || x.status >= 500) {
+        if (refusal.status == 409) {
+          await resolver.resolve(entry.item, refusal.item);
+        } else if (refusal.status == 429 || refusal.status >= 500) {
           // Nothing is counted on the entry.
-          return _backOff(x.retryAfter);
-        } else if (mirror.recordOutboxFailure(e.item.id, x.code) >=
-            maxAttempts) {
-          // Other refusals (400, 403, 413 and the like) reject the entry after maxAttempts.
-          mirror.rejectOutbox(e.item.id);
-          markChanged();
+          return _backOff(refusal.retryAfter);
+        } else {
+          mirror.recordOutboxFailure(entry.item.id, refusal.code);
+          if (mirror.outboxEntry(entry.item.id)!.attempts >= maxAttempts) {
+            // Other refusals (400, 403, 413 and the like) reject the entry after maxAttempts.
+            mirror.rejectOutbox(entry.item.id);
+            markChanged();
+          }
         }
       }
     }

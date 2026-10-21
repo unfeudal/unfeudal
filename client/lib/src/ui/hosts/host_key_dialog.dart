@@ -74,7 +74,8 @@ class _HostKeyChangedDialogState extends State<HostKeyChangedDialog> {
     final l = AppLocalizations.of(context);
     final colors = UfColors.of(context);
     final check = widget.check;
-    final matches = _typed.text == check.hostName; // case-sensitive on purpose
+    // case-sensitive on purpose
+    final matches = _typed.text == check.hostName;
     return UfDialog(
       width: 580,
       leading: const LoquetSpot(

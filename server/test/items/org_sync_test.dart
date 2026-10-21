@@ -186,7 +186,7 @@ void main() {
     expect((b.teams.length, b.acl.length, b.folderTree.length), (2, 5, 4));
     expect(
       b.keyRequests
-          .map((r) => (r.folderId, r.userId, r.version, r.secret))
+          .map((r) => (r.folderId, r.userId, r.version, r.needsSecret))
           .toSet(),
       {
         (w.folder('db'), w.id('mia'), 1, true),
@@ -200,7 +200,7 @@ void main() {
       (await w.block(w['adam'])).keyRequests
           .where((r) => r.userId == w.id('mia'))
           .single
-          .secret,
+          .needsSecret,
       isTrue,
       reason: 'connect without a secret wrap',
     );
@@ -369,7 +369,7 @@ void main() {
       },
     );
     final org = (await w.sync(w['mia'], orgCursor: seq)).org!;
-    expect(org.orgs.single.mascot, false);
+    expect(org.orgs.single.isMascotEnabled, false);
     expect(org.orgs.single.settings.keys.toSet(), {'mascot'});
   });
 

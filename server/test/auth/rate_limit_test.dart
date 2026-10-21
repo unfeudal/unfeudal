@@ -72,9 +72,15 @@ void main() {
       expect((e.code, e.retryAfter), (ApiErrorCode.rateLimited, 600));
     }
     expect((await count(ip), await count(acctIp)), (3, 3));
-    clock.advance(const Duration(minutes: 10));
+  });
+
+  test('counting restarts once the window ends', () async {
+    for (var i = 0; i < 3; i++) {
+      await limiter.hit([ip, acctIp]);
+    }
+    clock.advance(const Duration(minutes: 15));
     await limiter.hit([ip, acctIp]);
-    expect(await count(ip), 1, reason: 'window ended: counting restarts');
+    expect(await count(ip), 1);
   });
 
   test('a locked ip key is refused before any row is inserted', () async {
@@ -88,7 +94,7 @@ void main() {
     expect(await count(acctKey('new@b.c')), isNull);
   });
 
-  test('acct: each attempt bars the next for 1, 2, 4 and so on up to 30 seconds; a barred attempt is not counted; reset clears', () async {
+  test('acct: each attempt bars the next for 1, 2, 4 and so on up to 30 seconds; a barred attempt is not counted', () async {
     final waits = <int>[];
     for (var i = 0; i < 7; i++) {
       await limiter.hit([acct]);
@@ -102,8 +108,14 @@ void main() {
     }
     expect(waits, [1, 2, 4, 8, 16, 30, 30]);
     expect(await count(acct), 7);
-    await limiter.reset([acct]);
+  });
+
+  test('reset clears a barred key: the next attempt passes', () async {
     await limiter.hit([acct]);
+    await limiter.reset([acct]);
+    expect(await count(acct), isNull);
+    await limiter.hit([acct]);
+    expect(await count(acct), 1);
   });
 
   test(
@@ -118,37 +130,45 @@ void main() {
     },
   );
 
-  test(
-    'refund lowers a count once; quota keys use their fixed limits',
-    () async {
-      final invite = inviteIpKey('198.51.100.4');
-      await limiter.hit([invite]);
-      await limiter.refund(invite);
-      await limiter.refund(invite);
-      expect(await count(invite), 0);
-      for (var i = 0; i < 120; i++) {
-        await limiter.hit([eventsKey('u')]);
-      }
-      await expectLater(
-        limiter.hit([eventsKey('u')]),
-        throwsApi(ApiErrorCode.rateLimited),
-      );
-      clock.advance(const Duration(minutes: 1));
+  test('refund lowers a count once and never below zero', () async {
+    final invite = inviteIpKey('198.51.100.4');
+    await limiter.hit([invite]);
+    await limiter.refund(invite);
+    expect(await count(invite), 0);
+    await limiter.refund(invite);
+    expect(await count(invite), 0);
+  });
+
+  test('events: 120 per minute, then counting restarts', () async {
+    for (var i = 0; i < 120; i++) {
       await limiter.hit([eventsKey('u')]);
-      await limiter.hit([mailKey('u')]);
-      await expectLater(
-        limiter.hit([mailKey('u')]),
-        throwsApi(ApiErrorCode.rateLimited),
-      );
-      for (var i = 0; i < 50; i++) {
-        await limiter.hit([inviteCreateKey('u')]);
-      }
-      await expectLater(
-        limiter.hit([inviteCreateKey('u')]),
-        throwsApi(ApiErrorCode.rateLimited),
-      );
-    },
-  );
+    }
+    await expectLater(
+      limiter.hit([eventsKey('u')]),
+      throwsApi(ApiErrorCode.rateLimited),
+    );
+    clock.advance(const Duration(minutes: 1));
+    await limiter.hit([eventsKey('u')]);
+    expect(await count(eventsKey('u')), 1);
+  });
+
+  test('mail: one per hour', () async {
+    await limiter.hit([mailKey('u')]);
+    await expectLater(
+      limiter.hit([mailKey('u')]),
+      throwsApi(ApiErrorCode.rateLimited),
+    );
+  });
+
+  test('invite-create: 50 per day', () async {
+    for (var i = 0; i < 50; i++) {
+      await limiter.hit([inviteCreateKey('u')]);
+    }
+    await expectLater(
+      limiter.hit([inviteCreateKey('u')]),
+      throwsApi(ApiErrorCode.rateLimited),
+    );
+  });
 
   test('concurrent hits never pass the max', () async {
     final results = await Future.wait([
@@ -166,7 +186,8 @@ void main() {
     limiter.onLockout = locked.add;
     for (var i = 0; i < 3; i++) {
       await limiter.hit([ip, acctIp, acct]);
-      clock.advance(const Duration(seconds: 30)); // past the acct: delay
+      // past the acct: delay
+      clock.advance(const Duration(seconds: 30));
     }
     expect(locked, ['a@b.c']);
     for (var i = 0; i < 3; i++) {

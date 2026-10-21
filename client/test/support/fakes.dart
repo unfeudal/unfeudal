@@ -147,7 +147,7 @@ Future<Vault> testVault(Uint8List key, LocalMirror mirror) async {
   final v = Vault(
     mirror: mirror,
     ledger: LedgerStore(mirror),
-    write: (items) async => mirror.enqueueAll(items),
+    send: (items) async => mirror.enqueueAll(items),
   );
   await v.unlock(key);
   return v;
@@ -319,11 +319,16 @@ class FakeHop implements HopClient {
   final String hostId;
   final List<FakeShell> shells;
   final forwarded = <String>[];
+  final _firstForward = Completer<void>();
   bool closed = false;
+
+  /// Completes at the first [forwardLocal], so a test waits for it without a sleep.
+  Future<void> get firstForward => _firstForward.future;
 
   @override
   Future<SSHSocket> forwardLocal(String host, int port) async {
     forwarded.add('$host:$port');
+    if (!_firstForward.isCompleted) _firstForward.complete();
     return FakeChannel('$hostId>$host');
   }
 
@@ -442,20 +447,22 @@ class FakeDialogs implements SshDialogs {
 }
 
 class FakeBiometricBackend implements BiometricBackend {
-  FakeBiometricBackend({this.isAvailable = true});
-  bool isAvailable;
+  FakeBiometricBackend({this.hasHardware = true});
+  bool hasHardware;
   bool cancel = false;
   Uint8List? secretBytes; // the "hardware" secret
   int deleted = 0;
   @override
-  Future<bool> available() async => isAvailable;
+  Future<bool> isAvailable() async => hasHardware;
   @override
-  Future<Uint8List?> secret({
-    required bool create,
-    required String reason,
-  }) async {
-    if (cancel || !isAvailable) return null;
-    if (create) secretBytes ??= SymmetricCipher.newKey();
+  Future<Uint8List?> createSecret({required String reason}) async {
+    if (cancel || !hasHardware) return null;
+    return secretBytes ??= SymmetricCipher.newKey();
+  }
+
+  @override
+  Future<Uint8List?> secret({required String reason}) async {
+    if (cancel || !hasHardware) return null;
     return secretBytes;
   }
 

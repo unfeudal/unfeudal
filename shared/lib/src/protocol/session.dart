@@ -97,7 +97,7 @@ class Device {
     required this.createdAt,
     required this.lastSeenAt,
     this.revokedAt,
-    required this.current,
+    required this.isCurrent,
     this.extra = const {},
   });
 
@@ -105,13 +105,13 @@ class Device {
     final r = JsonReader(json, 'device');
     return Device(
       id: r.uuid('id'),
-      name: r.text('name', max: 100, required: true),
+      name: r.trimmedText('name', max: 100),
       // Kept as sent; the server validates it against devicePlatforms.
       platform: r.text('platform', max: 32),
       createdAt: r.time('createdAt'),
       lastSeenAt: r.time('lastSeenAt'),
       revokedAt: r.optTime('revokedAt'),
-      current: r.flag('current'),
+      isCurrent: r.flag('current'),
       extra: r.extra(const {
         'id',
         'name',
@@ -130,7 +130,7 @@ class Device {
   final DateTime createdAt;
   final DateTime lastSeenAt;
   final DateTime? revokedAt;
-  final bool current;
+  final bool isCurrent;
   final Map<String, Object?> extra;
 
   Map<String, Object?> toJson() => {
@@ -141,6 +141,6 @@ class Device {
     'createdAt': iso(createdAt),
     'lastSeenAt': iso(lastSeenAt),
     'revokedAt': revokedAt == null ? null : iso(revokedAt!),
-    'current': current,
+    'current': isCurrent,
   };
 }

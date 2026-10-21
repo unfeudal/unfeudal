@@ -160,7 +160,7 @@ void main() {
     );
   });
 
-  test('delete user: IO 403, unknown 404, last owner 409 with the org names, else gone', () async {
+  test('delete user: the Instance Owner is 403', () async {
     expect(
       (await s.delete(
         '/api/v1/admin/users/${w.io.userId}',
@@ -168,16 +168,25 @@ void main() {
       )).status,
       403,
     );
+  });
+
+  test('delete user: an unknown id is 404', () async {
     expect(
       (await s.delete('/api/v1/admin/users/${newId()}', token: io())).status,
       404,
     );
+  });
+
+  test('delete user: a last owner is 409 with the org names', () async {
     await s.db.execute('UPDATE users SET disabled = 1 WHERE id = @u', {
       'u': w.id('oscar'),
     });
     final last = await s.delete(user('olivia'), token: io());
     expect(last.status, 409);
     expect(last.body['orgs'], ['Acme']);
+  });
+
+  test('delete user: anyone else is gone and their orgs rotate', () async {
     expect((await s.delete(user('mia'), token: io())).status, 204);
     expect(await w.count('users', 'id = @u', {'u': w.id('mia')}), 0);
     expect(

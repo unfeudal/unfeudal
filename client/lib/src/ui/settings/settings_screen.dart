@@ -61,13 +61,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late Future<bool> _biometricOn =
       AppScope.read(context).biometrics?.isEnabled() ?? Future.value(false);
 
-  Future<void> _setBiometric(bool on) async {
+  Future<void> _setBiometric(bool enable) async {
     final state = AppScope.read(context);
-    on ? await state.enableBiometrics() : await state.biometrics?.disable();
+    if (enable) {
+      await state.enableBiometrics();
+    } else {
+      await state.biometrics?.disable();
+    }
     if (mounted) {
-      final on = state.biometrics!.isEnabled();
+      final enabled = state.biometrics!.isEnabled();
       setState(() {
-        _biometricOn = on;
+        _biometricOn = enabled;
       });
     }
   }
@@ -161,8 +165,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         children: [
           GroupNav<String>(
             groups: groups,
-            current: group,
-            onPick: (g) => setState(() => _group = g),
+            selected: group,
+            onChanged: (g) => setState(() => _group = g),
           ),
           Expanded(
             child: _GroupPane(label: label, content: content),
@@ -200,7 +204,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final l = AppLocalizations.of(context);
     final state = AppScope.of(context);
     final colors = UfColors.of(context);
-    final offline = !(state.sync?.online ?? false);
+    final offline = !(state.sync?.isOnline ?? false);
     return [
       SettingRow(
         label: l.settingsDisplayName,
@@ -210,7 +214,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           child: TextField(
             key: const Key('settings-display-name'),
             controller: _displayName,
-            enabled: !(state.sync?.readOnly ?? true),
+            enabled: !(state.sync?.isReadOnly ?? true),
             onSubmitted: (v) => state.vault?.profile.setDisplayName(
               v.trim().isEmpty ? null : v.trim(),
             ),

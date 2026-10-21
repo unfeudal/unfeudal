@@ -2,6 +2,7 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:unfeudal_client/src/api/api_client.dart';
 import 'package:unfeudal_client/src/app_state.dart';
 import 'package:unfeudal_client/src/events/app_events.dart';
 import 'package:unfeudal_client/src/session/session_store.dart';
@@ -27,27 +28,36 @@ loggedIn() async {
 }
 
 void main() {
-  test('boot: no session → login; a session → unlock; a newer mirror → blocking stage, nothing wiped', () async {
+  test('boot: a stored session goes to unlock', () async {
     final (h, s, kv, mirrors) = await loggedIn();
-    expect(s.stage, AppStage.home);
     final again = testAppState(harness: h, kv: kv, mirrors: mirrors);
     await again.boot();
     expect(again.stage, AppStage.unlock);
-    final fresh = testAppState(harness: h);
+  });
+
+  test('boot: no session goes to login', () async {
+    final fresh = testAppState(harness: SyncHarness());
     await fresh.boot();
     expect(fresh.stage, AppStage.login);
-    final tooNew = AppState(
-      sessions: s.sessions,
-      settingsStore: s.settingsStore,
-      openMirror: (_) async => throw const MirrorTooNew(2),
-      httpClient: h.client,
-      kdfFloor: KdfParams.testing,
-      kdf: KdfParams.testing,
-    );
-    await tooNew.boot();
-    expect(tooNew.stage, AppStage.mirrorTooNew);
-    expect(kv.values, isNotEmpty);
   });
+
+  test(
+    'boot: a newer mirror goes to a blocking stage, nothing wiped',
+    () async {
+      final (h, s, kv, _) = await loggedIn();
+      final tooNew = AppState(
+        sessions: s.sessions,
+        settingsStore: s.settingsStore,
+        openMirror: (_) async => throw const MirrorTooNew(2),
+        httpClient: h.client,
+        kdfFloor: KdfParams.testing,
+        kdf: KdfParams.testing,
+      );
+      await tooNew.boot();
+      expect(tooNew.stage, AppStage.mirrorTooNew);
+      expect(kv.values, isNotEmpty);
+    },
+  );
 
   test('setup: owner created, recovery key shown once, kit in kv.bundle with its version', () async {
     final h = SyncHarness();
@@ -64,7 +74,7 @@ void main() {
     // 53 base32 characters in groups of 4.
     expect(s.recoveryKey!.replaceAll('-', ''), hasLength(53));
     final bundle =
-        jsonDecode(s.mirror!.getKv(KvKey.bundle)!) as Map<String, Object?>;
+        jsonDecode(s.mirror!.kv(KvKey.bundle)!) as Map<String, Object?>;
     expect(bundle['bundleVersion'], 0);
     s.finishOnboarding();
     expect((s.stage, s.recoveryKey), (AppStage.home, null));
@@ -186,39 +196,50 @@ void main() {
     expect((await s.sessions.load())!.refreshToken, isNot(before));
   });
 
+  test('device_revoked goes to login, mirror and outbox kept', () async {
+    final (h, s, _, mirrors) = await loggedIn();
+    h.offline = true;
+    await s.vault!.upsertItem(type: 'host', meta: hostJson('web'));
+    h.offline = false;
+    h.devices.values.first.revokedAt = h.now;
+    await s.sync!.syncNow();
+    // The session ends behind the sync round.
+    await pumpEventQueue();
+    expect(
+      (s.stage, s.signedOutBecause),
+      (AppStage.login, SignOutReason.deviceRevoked),
+    );
+    expect(mirrors.values.single.outbox(), hasLength(1));
+    final kept = (await s.sessions.load())!;
+    expect((kept.refreshToken, kept.email), (null, s.stored!.email));
+  });
+
   test(
-    'device_revoked and session_expired go to login, mirror and outbox kept',
+    'a relaunch after device_revoked skips the unlock and goes to login',
     () async {
-      final (h, s, _, mirrors) = await loggedIn();
-      h.offline = true;
-      await s.vault!.upsertItem(type: 'host', meta: hostJson('web'));
-      h.offline = false;
+      final (h, s, _, _) = await loggedIn();
       h.devices.values.first.revokedAt = h.now;
       await s.sync!.syncNow();
-      await pumpEventQueue(); // the session ends behind the sync round
-      expect(
-        (s.stage, s.signedOutBecause),
-        (AppStage.login, SignOutReason.deviceRevoked),
-      );
-      expect(mirrors.values.single.outbox(), hasLength(1));
-      final kept = (await s.sessions.load())!;
-      expect((kept.refreshToken, kept.email), (null, s.stored!.email));
-      await s.boot(); // a relaunch skips the unlock a dead token would fail
-      expect(s.stage, AppStage.login);
-      final (h2, s2, _, _) = await loggedIn();
-      h2.expireSessions();
-      await s2.sync!.syncNow();
       await pumpEventQueue();
-      expect(
-        (s2.stage, s2.signedOutBecause),
-        (AppStage.login, SignOutReason.sessionExpired),
-      );
-      expect((await s2.sessions.load())!.refreshToken, isNull);
+      await s.boot();
+      expect(s.stage, AppStage.login);
     },
   );
 
+  test('session_expired goes to login and forgets the refresh token', () async {
+    final (h, s, _, _) = await loggedIn();
+    h.expireSessions();
+    await s.sync!.syncNow();
+    await pumpEventQueue();
+    expect(
+      (s.stage, s.signedOutBecause),
+      (AppStage.login, SignOutReason.sessionExpired),
+    );
+    expect((await s.sessions.load())!.refreshToken, isNull);
+  });
+
   test(
-    'invite: new account from an enrollment; existing account → account_exists',
+    'invite: a new account from an enrollment lands on the setup stage',
     () async {
       final h = SyncHarness();
       await h.createAccount('owner@example.org', 'password-000');
@@ -235,24 +256,68 @@ void main() {
     },
   );
 
-  test('recovery kit regeneration and recovery with the key', () async {
+  test('invite: an email that already has an account is refused with account_exists', () async {
+    final h = SyncHarness();
+    await h.createAccount('owner@example.org', 'password-000');
+    final token = b64(List.filled(32, 5));
+    h.invites[token] = 'owner@example.org';
+    final s = testAppState(harness: h);
+    await s.boot();
+    await expectLater(
+      s.acceptInvite(
+        enrollment: Enrollment(h.baseUrl, token, EnrollKind.invite),
+        email: 'owner@example.org',
+        password: 'password-456',
+      ),
+      throwsA(
+        isA<ApiException>().having(
+          (e) => e.conflictReason,
+          'conflictReason',
+          ConflictReason.accountExists,
+        ),
+      ),
+    );
+  });
+
+  test('recovery kit regeneration bumps the bundle version', () async {
     final (h, s, _, _) = await loggedIn();
-    final fresh = await s.credentials.regenerateRecoveryKit(password);
+    await s.credentials.regenerateRecoveryKit(password);
     expect(h.accounts[email]!.bundleVersion, 1);
     final bundle =
-        jsonDecode(s.mirror!.getKv(KvKey.bundle)!) as Map<String, Object?>;
+        jsonDecode(s.mirror!.kv(KvKey.bundle)!) as Map<String, Object?>;
     expect(bundle['bundleVersion'], 1);
+  });
+
+  test(
+    'recovery with the key returns a new key and revokes every device',
+    () async {
+      final (h, s, _, _) = await loggedIn();
+      final fresh = await s.credentials.regenerateRecoveryKit(password);
+      final other = testAppState(harness: h);
+      await other.boot();
+      final next = await other.recover(
+        server: h.baseUrl,
+        email: email,
+        recoveryKey: fresh,
+        newPassword: 'new-password-1',
+      );
+      expect(next, isNot(fresh));
+      expect(other.stage, AppStage.login);
+      expect(h.devices.values.every((d) => d.revokedAt != null), isTrue);
+    },
+  );
+
+  test('after a recovery the new password signs in', () async {
+    final (h, s, _, _) = await loggedIn();
+    final fresh = await s.credentials.regenerateRecoveryKit(password);
     final other = testAppState(harness: h);
     await other.boot();
-    final next = await other.recover(
+    await other.recover(
       server: h.baseUrl,
       email: email,
       recoveryKey: fresh,
       newPassword: 'new-password-1',
     );
-    expect(next, isNot(fresh));
-    expect(other.stage, AppStage.login);
-    expect(h.devices.values.every((d) => d.revokedAt != null), isTrue);
     await other.login(
       server: h.baseUrl,
       email: email,

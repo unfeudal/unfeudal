@@ -2,3 +2,5 @@
 final _email = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
 
 bool isEmailAddress(String text) => _email.hasMatch(text);
+
+String canonicalEmail(String text) => text.trim().toLowerCase();

@@ -6,7 +6,7 @@ import 'package:unfeudal_client/src/ssh/ssh_connector.dart';
 
 import '../support/fakes.dart';
 
-ConnectTarget t(String id) => ConnectTarget(
+ConnectTarget target(String id) => ConnectTarget(
   hostId: id,
   hostName: id,
   address: '$id.lan',
@@ -34,12 +34,12 @@ void main() {
   test('hops open outermost first, each over the previous forward; close runs innermost first', () async {
     final log = <String>[];
     final conn = await connectChain(
-      (target, {over}) async {
-        log.add('open ${target.hostId} over ${(over as FakeChannel?)?.label}');
-        return _Hop(target.hostId, log);
+      (hop, {over}) async {
+        log.add('open ${hop.hostId} over ${(over as FakeChannel?)?.label}');
+        return _Hop(hop.hostId, log);
       },
-      [t('j2'), t('j1')],
-      t('web'),
+      [target('j2'), target('j1')],
+      target('web'),
     );
     expect(log, [
       'open j2 over null',
@@ -56,16 +56,16 @@ void main() {
     'failure at a hop closes the opened hops and never opens the next',
     () async {
       final log = <String>[];
-      Future<HopClient> open(ConnectTarget target, {SSHSocket? over}) async {
-        if (target.hostId == 'j1') {
+      Future<HopClient> open(ConnectTarget hop, {SSHSocket? over}) async {
+        if (hop.hostId == 'j1') {
           throw const HostKeyRejected(HostKeyDecision.changed, hostId: 'j1');
         }
-        log.add('open ${target.hostId}');
-        return _Hop(target.hostId, log);
+        log.add('open ${hop.hostId}');
+        return _Hop(hop.hostId, log);
       }
 
       await expectLater(
-        connectChain(open, [t('j2'), t('j1')], t('web')),
+        connectChain(open, [target('j2'), target('j1')], target('web')),
         throwsA(
           isA<JumpChainFailed>()
               .having((e) => e.hostId, 'hostId', 'j1')
@@ -80,12 +80,12 @@ void main() {
 
   test('no hops: the target is opened directly', () async {
     final conn = await connectChain(
-      (target, {over}) async {
+      (hop, {over}) async {
         expect(over, isNull);
-        return _Hop(target.hostId, []);
+        return _Hop(hop.hostId, []);
       },
       const [],
-      t('web'),
+      target('web'),
     );
     expect(conn.hops, isEmpty);
   });
@@ -97,8 +97,8 @@ void main() {
     final cb = FakeSshCallbacks();
     await expectLater(
       connectChain((hop, {over}) => ssh.connectHop(hop, cb, over: over), [
-        t('bastion'),
-      ], t('web')),
+        target('bastion'),
+      ], target('web')),
       throwsA(
         isA<JumpChainFailed>()
             .having((e) => e.hostId, 'hostId', 'bastion')

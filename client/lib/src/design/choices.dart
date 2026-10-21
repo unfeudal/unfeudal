@@ -195,9 +195,9 @@ class _Pressable extends StatefulWidget {
 }
 
 class _PressableState extends State<_Pressable> {
-  bool _hover = false, _focus = false, _press = false;
+  bool _isHovered = false, _isFocused = false, _isPressed = false;
 
-  void _pressed(bool value) => setState(() => _press = value);
+  void _pressed(bool value) => setState(() => _isPressed = value);
 
   @override
   Widget build(BuildContext context) {
@@ -209,8 +209,8 @@ class _PressableState extends State<_Pressable> {
       mouseCursor: enabled
           ? SystemMouseCursors.click
           : SystemMouseCursors.forbidden,
-      onShowHoverHighlight: (v) => setState(() => _hover = v),
-      onShowFocusHighlight: (v) => setState(() => _focus = v),
+      onShowHoverHighlight: (v) => setState(() => _isHovered = v),
+      onShowFocusHighlight: (v) => setState(() => _isFocused = v),
       actions: {
         ActivateIntent: CallbackAction<ActivateIntent>(
           onInvoke: (_) => onTap?.call(),
@@ -224,9 +224,9 @@ class _PressableState extends State<_Pressable> {
         onTapCancel: enabled ? () => _pressed(false) : null,
         child: widget.builder(context, {
           if (!enabled) WidgetState.disabled,
-          if (enabled && _hover) WidgetState.hovered,
-          if (enabled && _focus) WidgetState.focused,
-          if (enabled && _press) WidgetState.pressed,
+          if (enabled && _isHovered) WidgetState.hovered,
+          if (enabled && _isFocused) WidgetState.focused,
+          if (enabled && _isPressed) WidgetState.pressed,
         }),
       ),
     );

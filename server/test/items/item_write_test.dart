@@ -387,7 +387,7 @@ void main() {
     expect(
       (await put(owner, {...folder, 'deleted': false}, 2)).status,
       200,
-      reason: 'deleted true → false: restore',
+      reason: 'deleted true to false: restore',
     );
   });
 

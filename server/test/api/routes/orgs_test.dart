@@ -74,15 +74,12 @@ void main() {
     },
   );
 
-  test('create: org_creation, max_orgs_per_user, orgs flag', () async {
+  test('create: org_creation instance_owner refuses other users', () async {
     final io = await TestServer.start(
-      env: {
-        'UNFEUDAL_ORG_CREATION': 'instance_owner',
-        'UNFEUDAL_MAX_ORGS_PER_USER': '1',
-      },
+      env: {'UNFEUDAL_ORG_CREATION': 'instance_owner'},
     );
     addTearDown(io.close);
-    final owner = await io.setupOwner();
+    await io.setupOwner();
     final bob = await io.createUser('bob@example.org');
     expect(
       (await io.post(
@@ -92,6 +89,12 @@ void main() {
       )).status,
       403,
     );
+  });
+
+  test('create: max_orgs_per_user caps the orgs a user creates', () async {
+    final io = await TestServer.start(env: {'UNFEUDAL_MAX_ORGS_PER_USER': '1'});
+    addTearDown(io.close);
+    final owner = await io.setupOwner();
     final r = await io.post(
       '/api/v1/orgs',
       token: owner.accessToken,
@@ -105,17 +108,22 @@ void main() {
         body: {'name': 'C'},
       )).status,
       403,
-      reason: 'cap 1',
     );
+  });
+
+  test('create: orgs flag off answers 404 feature_disabled', () async {
     final off = await TestServer.start(env: {'UNFEUDAL_FEATURE_ORGS': 'false'});
     addTearDown(off.close);
     final o = await off.setupOwner();
-    final r2 = await off.post(
+    final r = await off.post(
       '/api/v1/orgs',
       token: o.accessToken,
       body: {'name': 'A'},
     );
-    expect((r2.status, r2.error), (404, 'feature_disabled'));
+    expect((r.status, r.error), (404, 'feature_disabled'));
+  });
+
+  test('create: unauthenticated answers 401', () async {
     expect((await s.post('/api/v1/orgs', body: {'name': 'A'})).status, 401);
   });
 
@@ -246,6 +254,9 @@ void main() {
         reason: '$ok',
       );
     }
+  });
+
+  test('update: a keep-forever server caps auditDays at 36500', () async {
     final forever = await TestServer.start(
       env: {'UNFEUDAL_AUDIT_RETENTION_DAYS': '0'},
     );

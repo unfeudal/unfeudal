@@ -87,9 +87,9 @@ class _RecoveryScreenState extends State<RecoveryScreen> with BusyAction {
     final l = AppLocalizations.of(context);
     final local = checkNewPassword(l, _password.text, _confirm.text);
     if (local != null) return setState(() => problem = local);
-    final server = Uri.parse(_server.text.trim());
-    final email = _email.text.trim();
     await run(() async {
+      final server = Uri.parse(_server.text.trim());
+      final email = _email.text.trim();
       final key = await AppScope.read(context).recover(
         server: server,
         email: email,
@@ -172,7 +172,7 @@ class _RecoveryScreenState extends State<RecoveryScreen> with BusyAction {
       _key,
       l.recoverKey,
       mono: true,
-      hint: 'XXXX-XXXX-XXXX-XXXX-\u2026',
+      hint: 'XXXX-XXXX-XXXX-XXXX-...',
       onSubmitted: (_) => _next(),
     ),
     if (problem case final problem?) UfErrorLine(problem),

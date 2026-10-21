@@ -5,6 +5,7 @@ import 'package:unfeudal_client/src/app.dart';
 import 'package:unfeudal_client/src/app_state.dart';
 import 'package:unfeudal_client/src/loquet/loquet_memory.dart';
 import 'package:unfeudal_client/src/settings/settings.dart';
+import 'package:unfeudal_client/src/terminal/terminal_session.dart';
 
 import 'fakes.dart';
 import 'sync_harness.dart';
@@ -63,4 +64,30 @@ Future<AppState> signedInState(
     await s.login(server: h.baseUrl, email: testEmail, password: testPassword);
   });
   return s;
+}
+
+/// A signed-in app showing one terminal tab on host `web`, its key already pinned.
+Future<(AppState, TerminalSession, FakeSshConnector)> pinnedTab(
+  WidgetTester tester, {
+  Settings settings = const Settings(),
+  Map<String, Object?>? hostMeta,
+}) async {
+  const keyType = 'ssh-ed25519';
+  final fingerprint = 'SHA256:${'A' * 43}';
+  final ssh = FakeSshConnector()
+    ..keyType = keyType
+    ..fingerprint = fingerprint;
+  final s = await signedInState(tester, ssh: ssh, settings: settings);
+  late TerminalSession tab;
+  await tester.runAsync(() async {
+    final web = await s.vault!.upsertItem(
+      type: 'host',
+      meta: hostMeta ?? hostJson('web', user: 'root'),
+    );
+    await s.vault!.hostKeys.pin(web, keyType, fingerprint);
+    tab = await s.connections.connect(web);
+  });
+  await pumpApp(tester, state: s);
+  await pumpReal(tester, rounds: 5);
+  return (s, tab, ssh);
 }

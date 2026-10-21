@@ -5,6 +5,10 @@ import 'package:unfeudal_shared/unfeudal_shared.dart';
 import '../config/config.dart';
 import 'mailer.dart';
 
+const supportedLocales = {'en', 'fr'};
+
+const defaultLocale = 'en';
+
 typedef _Template = ({String subject, String text});
 
 const _en = <MailKind, _Template>{
@@ -90,7 +94,9 @@ const _instanceInvite = {
 
 /// Plain text in the user's language (`en` unless `fr`); `{time}` is shown in [timezone].
 ({String subject, String text}) renderMail(Mail mail, String timezone) {
-  final locale = mail.locale == 'fr' ? 'fr' : 'en';
+  final locale = supportedLocales.contains(mail.locale)
+      ? mail.locale
+      : defaultLocale;
   final template = (locale == 'fr' ? _fr : _en)[mail.kind]!;
   final vars = {...mail.vars};
   var subject = template.subject;

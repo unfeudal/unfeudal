@@ -19,7 +19,8 @@ void main() {
     bob = await s.createUser('bob@example.org');
   });
   tearDown(() => s.close());
-  const attacker = '198.51.100.50'; // a fresh network: setup already counted once on the default address
+  // A fresh network: setup already counted once on the default address.
+  const attacker = '198.51.100.50';
 
   Future<Map<String, Object?>> aliceItem() async {
     final item = await testItem(alice);
@@ -122,7 +123,8 @@ void main() {
       )).status,
       403,
     );
-    s.clock.advance(const Duration(seconds: 1)); // past the acct: delay
+    // Past the acct: delay.
+    s.clock.advance(const Duration(seconds: 1));
     expect(
       (await s.post(
         '/api/v1/account/recovery-kit',

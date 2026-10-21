@@ -25,7 +25,8 @@ Future<void> main() async {
     support,
     onKnock: () => unawaited(chrome.bringToFront()),
   );
-  if (instance == null) exit(0); // the running instance came forward
+  // The running instance came forward.
+  if (instance == null) exit(0);
   chrome = await WindowChrome.start();
   final state = AppState(
     sessions: SessionStore(FlutterSecureKv()),

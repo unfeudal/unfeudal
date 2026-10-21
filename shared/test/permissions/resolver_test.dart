@@ -19,14 +19,25 @@ const v = Permission.view,
     e = Permission.edit,
     m = Permission.manage;
 
-AclEntry team(String id, String folder, Set<Permission> allow) =>
-    AclEntry(folder, PrincipalType.team, id, allow, const {});
+AclEntry team(String id, String folder, Set<Permission> allow) => AclEntry(
+  folderId: folder,
+  principalType: PrincipalType.team,
+  principalId: id,
+  allow: allow,
+  deny: const {},
+);
 AclEntry user(
   String id,
   String folder, {
   Set<Permission> allow = const {},
   Set<Permission> deny = const {},
-}) => AclEntry(folder, PrincipalType.user, id, allow, deny);
+}) => AclEntry(
+  folderId: folder,
+  principalType: PrincipalType.user,
+  principalId: id,
+  allow: allow,
+  deny: deny,
+);
 
 Explanation run(
   String who,
@@ -126,7 +137,7 @@ void main() {
     });
   });
 
-  test('implications: reveal ⇒ connect ⇒ view, edit ⇒ view, manage ⇒ view', () {
+  test('reveal implies connect and view; edit and manage imply view', () {
     Set<Permission> mine(
       Set<Permission> allow, [
       Set<Permission> deny = const {},
@@ -170,9 +181,18 @@ void main() {
     );
   });
 
-  test('team entries never deny; another user\'s entry does not apply', () {
-    const bad = AclEntry(prod, PrincipalType.team, ops, {v, c}, {c});
+  test('team entries never deny', () {
+    const bad = AclEntry(
+      folderId: prod,
+      principalType: PrincipalType.team,
+      principalId: ops,
+      allow: {v, c},
+      deny: {c},
+    );
     expect(run(alice, prod, [bad]).effective, {v, c});
+  });
+
+  test('another user\'s entry does not apply', () {
     expect(
       run(alice, prod, [
         user(bob, prod, allow: {e}),
@@ -211,13 +231,26 @@ void main() {
         (StepKind.denied, bob, prod, 'reveal'),
       ],
     );
+  });
+
+  test('an admin gets a single role step', () {
     expect(
       run(dave, db, const [], role: OrgRole.admin).steps.single.kind,
       StepKind.role,
     );
+  });
+
+  test('a member not yet confirmed gets a single notConfirmed step', () {
     expect(
       run(alice, db, const [], status: MemberStatus.accepted).steps.single.kind,
       StepKind.notConfirmed,
     );
+  });
+
+  test('only admin and owner roles are owner-managed', () {
+    expect(OrgRole.values.where((r) => r.isOwnerManaged), [
+      OrgRole.owner,
+      OrgRole.admin,
+    ]);
   });
 }

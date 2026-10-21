@@ -147,6 +147,11 @@ void main() {
     }
   });
 
+  test('the palette lerp starts on light and ends on dark', () {
+    expect(UfColors.light.lerp(UfColors.dark, 0), UfColors.light);
+    expect(UfColors.light.lerp(UfColors.dark, 1), UfColors.dark);
+  });
+
   test('the theme lerps between light and dark, as on a theme switch', () {
     expect(
       () => ThemeData.lerp(

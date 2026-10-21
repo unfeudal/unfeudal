@@ -8,8 +8,8 @@ import '../support/test_server.dart';
 void main() {
   late TestServer s;
   late OrgWorld w;
-  late TestSession
-  eve; // the malicious member: view + connect on prod, manage on lab
+  // The malicious member: view and connect on prod, manage on lab.
+  late TestSession eve;
   setUp(() async {
     s = await TestServer.start();
     w = await OrgWorld.build(

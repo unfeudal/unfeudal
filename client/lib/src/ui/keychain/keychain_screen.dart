@@ -19,7 +19,6 @@ import '../../design/rows.dart';
 import '../../design/toast.dart';
 import '../../design/tokens.dart';
 import '../../events/app_events.dart';
-import '../../keys/key_tools.dart';
 import '../../orgs/host_binding.dart';
 import '../../vault/vault.dart';
 import '../form_dialog.dart';
@@ -27,6 +26,7 @@ import '../history/item_history_panel.dart';
 import '../hosts/editor_frame.dart';
 import '../manage_frame.dart';
 import '../secret_clipboard.dart';
+import 'identity_forms.dart';
 
 part 'identity_row.dart';
 part 'keychain_list.dart';
@@ -90,15 +90,14 @@ class _KeychainScreenState extends State<KeychainScreen> {
     final orgId = state.orgs?.selected;
     final vaultName = vaultNameOf(l, state, orgId);
     final orgFolders = [
-      if (orgId != null)
-        for (final e in vault.ofKind(ItemKind.folder))
-          if (e.orgId == orgId && e.state == EntryState.ok) e,
+      if (orgId != null) ...vault.usableOfKind(ItemKind.folder, orgId: orgId),
     ]..sort(byName);
+    // the vault or the folder changed
     if (!orgFolders.any((e) => e.id == _folderId)) {
-      _folderId = orgFolders.firstOrNull?.id; // the vault or the folder changed
+      _folderId = orgFolders.firstOrNull?.id;
     }
     final place = _Place(state, _folderId);
-    final serverReadOnly = state.sync?.readOnly ?? true;
+    final serverReadOnly = state.sync?.isReadOnly ?? true;
     final readOnly =
         serverReadOnly ||
         (orgId != null && _folderId == null) ||
@@ -223,63 +222,17 @@ class _KeychainScreenState extends State<KeychainScreen> {
     );
   }
 
-  Future<void> _openGenerate(_Place place) {
-    final l = AppLocalizations.of(context);
-    return _form(
-      title: l.keyGenerate,
-      fields: [
-        FormDialogField('gen-name', l.keyName),
-        FormDialogField(
-          'gen-passphrase',
-          l.keyPassphrase,
-          kind: FormFieldKind.secret,
-        ),
-        FormDialogField(
-          'gen-type-rsa',
-          l.keyTypeRsa,
-          kind: FormFieldKind.toggle,
-          offLabel: l.keyTypeEd25519,
-        ),
-      ],
-      saveKey: 'gen-save',
-      onSave: (v) => _generate(place, v),
-    );
-  }
+  IdentityPlace _identityPlace(_Place place) =>
+      (orgId: place._orgId, folderId: place.folderId);
 
-  Future<void> _openImport(_Place place) {
-    final l = AppLocalizations.of(context);
-    return _form(
-      title: l.keyImport,
-      fields: [
-        FormDialogField('import-name', l.keyName),
-        FormDialogField('import-pem', l.keyPem, lines: 6, mono: true),
-        FormDialogField(
-          'import-passphrase',
-          l.keyPassphrase,
-          kind: FormFieldKind.secret,
-        ),
-      ],
-      saveKey: 'import-save',
-      onSave: (v) => _import(place, v),
-    );
-  }
+  Future<void> _openGenerate(_Place place) =>
+      showGenerateKey(context, _identityPlace(place));
 
-  Future<void> _openPassword(_Place place) {
-    final l = AppLocalizations.of(context);
-    return _form(
-      title: l.keyPassword,
-      fields: [
-        FormDialogField('pw-name', l.keyName),
-        FormDialogField(
-          'pw-value',
-          l.keyKindPassword,
-          kind: FormFieldKind.secret,
-        ),
-      ],
-      saveKey: 'pw-save',
-      onSave: (v) => _password(place, v),
-    );
-  }
+  Future<void> _openImport(_Place place) =>
+      showImportKey(context, _identityPlace(place));
+
+  Future<void> _openPassword(_Place place) =>
+      showAddPassword(context, _identityPlace(place));
 
   // Shows the secret once per opening and reports that it was shown.
   static Future<void> _reveal(BuildContext context, VaultEntry e) async {
@@ -292,70 +245,6 @@ class _KeychainScreenState extends State<KeychainScreen> {
       (_) => _RevealDialog(name: e.name ?? '', secret: secret),
     );
   }
-
-  static Future<void> _generate(_Place place, Map<String, String> v) async {
-    final passphrase = v['gen-passphrase']!.isEmpty
-        ? null
-        : v['gen-passphrase'];
-    final name = v['gen-name']!.trim();
-    final key = v['gen-type-rsa'] == 'true'
-        ? await generateRsa4096(comment: name, passphrase: passphrase)
-        : await generateEd25519(comment: name, passphrase: passphrase);
-    await _savePrivateKey(
-      place,
-      name: name,
-      pem: key.privateKeyPem,
-      passphrase: passphrase,
-      publicKey: key.publicKey,
-    );
-  }
-
-  // The key is read (and its passphrase checked) before anything is stored; the original text is kept.
-  static Future<void> _import(_Place place, Map<String, String> v) async {
-    final passphrase = v['import-passphrase']!.isEmpty
-        ? null
-        : v['import-passphrase'];
-    final pem = v['import-pem']!.trim();
-    final publicKey = publicKeyOf(pem, passphrase: passphrase);
-    await _savePrivateKey(
-      place,
-      name: v['import-name']!.trim(),
-      pem: pem,
-      passphrase: passphrase,
-      publicKey: publicKey,
-    );
-  }
-
-  static Future<void> _savePrivateKey(
-    _Place place, {
-    required String name,
-    required String pem,
-    required String? passphrase,
-    required String publicKey,
-  }) => place.save(
-    IdentityMeta(
-      name: name,
-      kind: IdentityKind.privateKey,
-      publicKey: publicKey,
-    ).toJson(),
-    secret: IdentitySecret(
-      kind: IdentityKind.privateKey,
-      privateKeyPem: pem,
-      passphrase: passphrase,
-    ).toJson(),
-  );
-
-  static Future<void> _password(_Place place, Map<String, String> v) =>
-      place.save(
-        IdentityMeta(
-          name: v['pw-name']!.trim(),
-          kind: IdentityKind.password,
-        ).toJson(),
-        secret: IdentitySecret(
-          kind: IdentityKind.password,
-          password: v['pw-value'],
-        ).toJson(),
-      );
 
   static Future<void> _confirmTrash(
     BuildContext context,

@@ -70,37 +70,43 @@ class Config {
 
   factory Config.load(Map<String, String> env, {String? yamlText}) {
     final sources = _sources(env, yamlText);
-    final r = _Reader(sources.values);
+    final reader = _Reader(sources.values);
     final features = Features(sources.flags);
     return Config._(
-      databaseUrl: r.databaseUrl('database_url'),
-      listen: r.listen('listen'),
-      publicUrl: r.publicUrl(features),
-      secretFile: r.nonEmpty('secret_file', '/data/secret.key'),
-      sourceUrl: r.sourceUrl('source_url'),
-      trustedProxies: r.cidrs('trusted_proxies'),
-      logLevel: r.logLevel('log_level'),
-      timezone: r.timezone('timezone'),
-      setupToken: r.setupToken('setup_token'),
-      minClientVersion: r.minClientVersion('min_client_version'),
-      orgCreation: r.orgCreation('org_creation'),
-      accessTokenTtl: r.duration('access_token_ttl', '15m', ('1m', '1h')),
-      refreshTokenTtl: r.duration('refresh_token_ttl', '30d', ('1d', '365d')),
-      loginMaxAttempts: r.count('login_max_attempts', 10, (3, 100)),
-      loginLockout: r.duration('login_lockout', '15m', ('1m', '24h')),
-      inviteTtl: r.duration('invite_ttl', '7d', ('1h', '30d')),
-      maxVaultSize: r.size('max_vault_size', 50 << 20),
-      maxOrgSize: r.size('max_org_size', 500 << 20),
-      maxOrgsPerUser: r.count('max_orgs_per_user', 0, (0, 10000)),
-      maxDevicesPerUser: r.count('max_devices_per_user', 0, (0, 10000)),
-      auditRetentionDays: r.count('audit_retention_days', 365, (0, 36500)),
-      auditIpRetentionDays: r.count('audit_ip_retention_days', 90, (1, 36500)),
-      itemHistoryMaxVersions: r.count('item_history_max_versions', 50, (
+      databaseUrl: reader.databaseUrl('database_url'),
+      listen: reader.listen('listen'),
+      publicUrl: reader.publicUrl(features),
+      secretFile: reader.nonEmpty('secret_file', '/data/secret.key'),
+      sourceUrl: reader.sourceUrl('source_url'),
+      trustedProxies: reader.cidrs('trusted_proxies'),
+      logLevel: reader.logLevel('log_level'),
+      timezone: reader.timezone('timezone'),
+      setupToken: reader.setupToken('setup_token'),
+      minClientVersion: reader.minClientVersion('min_client_version'),
+      orgCreation: reader.orgCreation('org_creation'),
+      accessTokenTtl: reader.duration('access_token_ttl', '15m', ('1m', '1h')),
+      refreshTokenTtl: reader.duration('refresh_token_ttl', '30d', (
+        '1d',
+        '365d',
+      )),
+      loginMaxAttempts: reader.count('login_max_attempts', 10, (3, 100)),
+      loginLockout: reader.duration('login_lockout', '15m', ('1m', '24h')),
+      inviteTtl: reader.duration('invite_ttl', '7d', ('1h', '30d')),
+      maxVaultSize: reader.size('max_vault_size', 50 << 20),
+      maxOrgSize: reader.size('max_org_size', 500 << 20),
+      maxOrgsPerUser: reader.count('max_orgs_per_user', 0, (0, 10000)),
+      maxDevicesPerUser: reader.count('max_devices_per_user', 0, (0, 10000)),
+      auditRetentionDays: reader.count('audit_retention_days', 365, (0, 36500)),
+      auditIpRetentionDays: reader.count('audit_ip_retention_days', 90, (
+        1,
+        36500,
+      )),
+      itemHistoryMaxVersions: reader.count('item_history_max_versions', 50, (
         0,
         36500,
       )),
-      trashRetentionDays: r.count('trash_retention_days', 30, (0, 36500)),
-      smtp: r.smtp(),
+      trashRetentionDays: reader.count('trash_retention_days', 30, (0, 36500)),
+      smtp: reader.smtp(),
       features: features,
     );
   }

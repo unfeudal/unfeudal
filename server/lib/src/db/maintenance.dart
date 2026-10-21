@@ -105,19 +105,19 @@ Future<void> backupDatabase(Db db, String path) async {
 
 /// Daily cleanup. One cutoff for login_attempts: 24 h is the longest window of any key (login_lockout is at most 24 h).
 Future<void> runCleanup(Tx tx, DateTime now, Config config) async {
-  final t = iso(now);
+  final nowIso = iso(now);
   await tx.execute(
     'DELETE FROM login_attempts WHERE (locked_until IS NULL OR locked_until <= @t) AND window_start < @w',
-    {'t': t, 'w': iso(now.subtract(const Duration(hours: 24)))},
+    {'t': nowIso, 'w': iso(now.subtract(const Duration(hours: 24)))},
   );
   await tx.execute(
     'DELETE FROM refresh_tokens WHERE expires_at <= @t OR used_at < @u',
-    {'t': t, 'u': iso(now.subtract(const Duration(days: 7)))},
+    {'t': nowIso, 'u': iso(now.subtract(const Duration(days: 7)))},
   );
-  final c = iso(now.subtract(config.inviteTtl));
+  final inviteCutoff = iso(now.subtract(config.inviteTtl));
   await tx.execute(
     'DELETE FROM invites WHERE expires_at < @c OR accepted_at < @c OR revoked_at < @c',
-    {'c': c},
+    {'c': inviteCutoff},
   );
 }
 

@@ -142,7 +142,10 @@ class OrgSummary {
   final Map<String, Object?> settings;
   final Map<String, Object?> extra;
 
-  bool get mascot => settings['mascot'] != false;
+  /// Null for a role this build does not know.
+  OrgRole? get knownRole => OrgRole.values.asNameMap()[role];
+
+  bool get isMascotEnabled => settings['mascot'] != false;
 
   bool get isConfirmed => status == MemberStatus.confirmed.name;
 
@@ -201,6 +204,9 @@ class OrgMember {
   final Uint8List? publicKey;
   final bool? disabled;
   final Map<String, Object?> extra;
+
+  /// Null for a role this build does not know.
+  OrgRole? get knownRole => OrgRole.values.asNameMap()[role];
 
   Map<String, Object?> toJson() => {
     ...extra,
@@ -293,11 +299,11 @@ class AclRow {
   /// Typed for the resolver; unknown permission names are skipped and any
   /// principal type other than team reads as user.
   AclEntry get entry => AclEntry(
-    folderId,
-    isTeam ? PrincipalType.team : PrincipalType.user,
-    principalId,
-    _permissions(allow),
-    _permissions(deny),
+    folderId: folderId,
+    principalType: isTeam ? PrincipalType.team : PrincipalType.user,
+    principalId: principalId,
+    allow: _permissions(allow),
+    deny: _permissions(deny),
   );
 
   static Set<Permission> _permissions(List<String> names) => {

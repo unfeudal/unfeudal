@@ -8,6 +8,7 @@ import '../api/api_client.dart';
 import '../events/app_events.dart';
 import '../storage/local_mirror.dart';
 import '../sync/sync_engine.dart';
+import '../vault/folder_subtree.dart';
 import '../vault/org_writer.dart';
 import '../vault/vault.dart';
 import 'block_permissions.dart';
@@ -27,7 +28,7 @@ class OrgController extends ChangeNotifier {
     required List<int> publicKey,
     required void Function(AppEvent) emit,
     required bool Function() online,
-  }) {
+  }) : _sync = sync {
     keyring = FolderKeyring(mirror);
     pins = MemberPins(vault);
     writer = OrgWriter(
@@ -58,6 +59,7 @@ class OrgController extends ChangeNotifier {
   final Vault vault;
   final ApiClient api;
   final String userId;
+  final SyncEngine _sync;
   late final FolderKeyring keyring;
   late final MemberPins pins;
   late final OrgWriter writer;
@@ -65,7 +67,9 @@ class OrgController extends ChangeNotifier {
   late final RotationService rotation;
 
   OrgBlock? block;
-  final alerts = <String>{}; // refused folder keys and changed member keys
+
+  /// Refused folder keys and changed member keys.
+  final alerts = <String>{};
   HandoffReport? lastHandoff;
   RotationReport? lastRotation;
 
@@ -96,6 +100,63 @@ class OrgController extends ChangeNotifier {
           secret: secret,
         );
 
+  /// Writes a folder to the personal vault, or to [orgId]: a new org folder is created, an existing one rewritten.
+  Future<String> saveFolder(
+    FolderMeta meta, {
+    String? id,
+    String? orgId,
+    String? parentId,
+  }) {
+    if (orgId == null) {
+      return vault.saveFolder(meta, id: id, parentId: parentId);
+    }
+    if (id == null) {
+      return writer.createFolder(orgId: orgId, parentId: parentId, meta: meta);
+    }
+    return writer.upsert(
+      type: 'folder',
+      id: id,
+      target: OrgTarget(orgId, parentId),
+      meta: meta.toJson(),
+    );
+  }
+
+  /// Whether [entry], a readable host or folder, may move into [folderId] (null: the root): not where it is,
+  /// never into itself or below it, and in an org with edit on its current and its new parent.
+  bool canMove(VaultEntry entry, String? folderId) {
+    if (entry.state != EntryState.ok || entry.folderId == folderId) {
+      return false;
+    }
+    final isFolder = entry.kind == ItemKind.folder;
+    if (!isFolder && entry.kind != ItemKind.host) return false;
+    if (isFolder &&
+        folderId != null &&
+        folderSubtree(vault, entry.id).contains(folderId)) {
+      return false;
+    }
+    final orgId = entry.orgId;
+    return orgId == null ||
+        (writer.canEdit(orgId, entry.folderId) &&
+            writer.canEdit(orgId, folderId));
+  }
+
+  /// Moves [entry] into [folderId] with the writes its editor makes, so an org item is sealed for its new place.
+  Future<void> moveItem(VaultEntry entry, String? folderId) =>
+      entry.kind == ItemKind.folder
+      ? saveFolder(
+          FolderMeta.fromJson(entry.meta),
+          id: entry.id,
+          orgId: entry.orgId,
+          parentId: folderId,
+        )
+      : saveItem(
+          type: 'host',
+          id: entry.id,
+          orgId: entry.orgId,
+          folderId: folderId,
+          meta: entry.meta!,
+        );
+
   /// Moves an item to the trash, through the org writer for an org item.
   Future<void> trashItem(String id) =>
       _isOrgItem(id) ? writer.trash(id) : vault.trashItem(id);
@@ -120,7 +181,7 @@ class OrgController extends ChangeNotifier {
     _keyPair = account.keyPair;
     await keyring.load(account.userKey);
     vault.keyring = keyring;
-    if (mirror.getKv(KvKey.orgBlock) case final raw?) {
+    if (mirror.kv(KvKey.orgBlock) case final raw?) {
       block = OrgBlock.fromJson(jsonDecode(raw));
     }
     notifyListeners();
@@ -134,18 +195,19 @@ class OrgController extends ChangeNotifier {
     alerts.clear();
   }
 
-  Future<void> onBlock(OrgBlock b) async {
+  Future<void> onBlock(OrgBlock arrived) async {
     final keyPair = _keyPair;
-    if (keyPair == null) return; // locked while the round ran
-    block = b;
-    alerts.addAll(await keyring.apply(b, keyPair));
+    // Locked while the round ran.
+    if (keyPair == null) return;
+    block = arrived;
+    alerts.addAll(await keyring.apply(arrived, keyPair));
     await vault.reload();
-    pins.seed();
-    if (b.orgs.any((o) => o.isAdmin)) {
+    await pins.seed();
+    if (arrived.orgs.any((o) => o.isAdmin)) {
       try {
-        final report = lastHandoff = await handoff.run(b);
+        final report = lastHandoff = await handoff.run(arrived);
         alerts.addAll(report.alerts);
-        lastRotation = await rotation.run(b);
+        lastRotation = await rotation.run(arrived);
       } on ApiException {
         // retried on the next block
       } on NetworkException {
@@ -153,6 +215,27 @@ class OrgController extends ChangeNotifier {
       }
     }
     notifyListeners();
+  }
+
+  /// Pins [member]'s key on this device; a changed key rotates every folder of the org they can view.
+  Future<void> verifyMember(OrgMember member, {required bool verified}) async {
+    final changed =
+        pins.check(member.userId, member.publicKey!) == PinCheck.changed;
+    await pins.pin(member.userId, member.publicKey!, verified: verified);
+    alerts.remove(member.userId);
+    await _sync.syncNow();
+    final b = block;
+    if (!changed || b == null) return;
+    for (final n in b.folderTree.where((n) => n.orgId == member.orgId)) {
+      final perms = permissions(
+        member.orgId,
+        n.folderId,
+        userId: member.userId,
+      );
+      if (perms.contains(Permission.view)) {
+        await rotation.rotate(b, member.orgId, n.folderId);
+      }
+    }
   }
 
   /// Rotates the pending folders now (the banner's button).
@@ -200,5 +283,5 @@ class OrgController extends ChangeNotifier {
   bool isAdmin(String orgId) => block?.isAdminOf(orgId) ?? false;
 
   /// The role alone, confirmed or not.
-  bool isOwner(String orgId) => byId(orgId)?.role == OrgRole.owner.name;
+  bool isOwner(String orgId) => byId(orgId)?.knownRole == OrgRole.owner;
 }

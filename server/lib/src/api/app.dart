@@ -95,7 +95,7 @@ void _addAdminAndEventRoutes(Router api) {
     ..post('/admin/invites', requireAuth(createInstanceInvite))
     ..get('/admin/invites', requireAuth(listInstanceInvites))
     ..get('/audit', requireAuth(requireFeature(Flag.audit)(getAudit)))
-    ..get('/orgs/<id>/settings/retention', _org(getRetention))
+    ..get('/orgs/<id>/settings/retention', _org(retentionSettings))
     ..post(
       '/events/ssh',
       requireAuth(requireFeature(Flag.clientEvents)(sshEvent)),

@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:unfeudal_client/src/design/motion.dart';
 
 void main() {
-  test('tokens', () {
+  test('normal motion uses the 90/120/160/280 ms steps', () {
     const m = UfMotion.normal;
     expect(
       (m.instant, m.fast, m.base, m.slow),
@@ -15,9 +15,15 @@ void main() {
         const Duration(milliseconds: 280),
       ),
     );
+  });
+
+  test('the curves are standard, enter and exit', () {
     expect(UfMotion.standard, const Cubic(0.2, 0, 0, 1));
     expect(UfMotion.enter, const Cubic(0.05, 0.7, 0.1, 1));
     expect(UfMotion.exit, const Cubic(0.3, 0, 1, 1));
+  });
+
+  test('still motion has no duration', () {
     expect([
       UfMotion.still.instant,
       UfMotion.still.fast,

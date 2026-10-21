@@ -7,6 +7,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:unfeudal_client/src/settings/settings.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
+Future<File> tempSettingsFile() async {
+  final dir = await Directory.systemTemp.createTemp('settings');
+  addTearDown(() => dir.delete(recursive: true));
+  return File('${dir.path}/settings.json');
+}
+
 void main() {
   test('defaults', () {
     const s = Settings();
@@ -81,6 +87,29 @@ void main() {
     );
   });
 
+  test('uiLocale: the chosen language, else a supported system language, else null', () {
+    expect(const Settings(locale: 'en').uiLocale('fr'), 'en');
+    expect(const Settings().uiLocale('fr'), 'fr');
+    expect(const Settings().uiLocale('de'), isNull);
+  });
+
+  test(
+    'prefChangesSince sends every current pref and each removed one as null',
+    () {
+      final changes = const Settings().prefChangesSince(
+        const Settings(locale: 'fr'),
+      );
+      expect(changes, {...const Settings().toPrefs(), 'locale': null});
+    },
+  );
+
+  test('withLocale sets and clears the locale, keeping the other fields', () {
+    const base = Settings(themeMode: ThemeMode.dark, locale: 'fr');
+    final cleared = base.withLocale(null);
+    expect((cleared.locale, cleared.themeMode), (null, ThemeMode.dark));
+    expect(cleared.withLocale('en').locale, 'en');
+  });
+
   test('per-device ranges', () {
     final s = Settings.fromJson({
       'treeWidth': 900,
@@ -94,11 +123,9 @@ void main() {
     expect(Settings.autoLockChoices, [0, 5, 15, 30, 60]);
   });
 
-  test('store: round trip keeps unknown fields, writes atomically, unreadable gives defaults', () async {
-    final dir = await Directory.systemTemp.createTemp('settings');
-    final file = File('${dir.path}/settings.json');
+  test('store: a round trip keeps unknown fields', () async {
+    final file = await tempSettingsFile();
     final store = SettingsStore(file);
-    expect(await store.load(), const Settings());
     file.writeAsStringSync('{"future": {"a": 1}, "themeMode": "light"}');
     final s = await store.load();
     expect(s.themeMode, ThemeMode.light);
@@ -106,14 +133,24 @@ void main() {
     final saved = jsonDecode(file.readAsStringSync()) as Map<String, Object?>;
     expect(saved['future'], {'a': 1});
     expect(saved['autoLockMinutes'], 30);
+  });
+
+  test('store: save writes atomically, leaving no temporary file', () async {
+    final file = await tempSettingsFile();
+    await SettingsStore(file).save(const Settings());
     expect(File('${file.path}.tmp').existsSync(), isFalse);
+  });
+
+  test('store: a missing or unreadable file gives the defaults', () async {
+    final file = await tempSettingsFile();
+    final store = SettingsStore(file);
+    expect(await store.load(), const Settings());
     file.writeAsStringSync('not json');
     expect(await store.load(), const Settings());
   });
 
   test('settings.json holds no profile item and no secret', () async {
-    final dir = await Directory.systemTemp.createTemp('settings');
-    final file = File('${dir.path}/settings.json');
+    final file = await tempSettingsFile();
     await SettingsStore(file)
         .save(const Settings().withPrefs({'themeMode': 'dark'}));
     final keysWritten = (jsonDecode(file.readAsStringSync()) as Map).keys

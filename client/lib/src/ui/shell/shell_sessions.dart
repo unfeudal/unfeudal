@@ -26,9 +26,9 @@ StatusBanner _rejectedBanner(
 
 String _readOnlyReason(AppLocalizations l, SyncEngine sync) =>
     switch (sync.compat?.reason) {
-      'no-common-api' => l.readOnlyNoCommonApi,
-      'client-too-old' => l.readOnlyClientTooOld,
-      _ => l.bannerRestoreRefused,
+      CompatReason.noCommonApi => l.readOnlyNoCommonApi,
+      CompatReason.clientTooOld => l.readOnlyClientTooOld,
+      null => l.bannerRestoreRefused,
     };
 
 // The status banners over the terminal tabs, with the open inspector docked on their right.

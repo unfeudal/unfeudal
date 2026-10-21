@@ -35,13 +35,16 @@ class Envelope {
       extra: r.extra(_known),
     );
     if (envelope.isSupported &&
-        (envelope.nonce.length != 24 || envelope.ct.length < 16)) {
+        (envelope.nonce.length != nonceLength ||
+            envelope.ct.length < tagLength)) {
       throw const FormatException('envelope: bad nonce or ct length');
     }
     return envelope;
   }
 
   static const xchacha = 'xchacha20poly1305';
+  static const nonceLength = 24;
+  static const tagLength = 16;
   static const _known = {'v', 'alg', 'keyId', 'nonce', 'ct'};
 
   final int v;

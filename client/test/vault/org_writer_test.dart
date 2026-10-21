@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import 'package:flutter_test/flutter_test.dart';
 import 'package:unfeudal_client/src/events/app_events.dart';
-import 'package:unfeudal_client/src/orgs/block_permissions.dart';
 import 'package:unfeudal_client/src/vault/org_writer.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
@@ -57,41 +56,42 @@ void main() {
     expect(c.vault.entry(id)!.name, 'db');
   });
 
-  test(
-    'refused without edit in the cached block; folders need the server',
-    () async {
-      await expectLater(
-        writer.upsert(
-          type: 'host',
-          target: OrgTarget(testOrgId, g),
-          meta: hostJson('x'),
+  test('refused without edit in the cached block', () async {
+    await expectLater(
+      writer.upsert(
+        type: 'host',
+        target: OrgTarget(testOrgId, g),
+        meta: hostJson('x'),
+      ),
+      throwsA(
+        isA<OrgWriteRefused>().having(
+          (e) => e.reason,
+          'reason',
+          OrgWriteRefusal.noEdit,
         ),
-        throwsA(
-          isA<OrgWriteRefused>().having(
-            (e) => e.reason,
-            'reason',
-            OrgWriteRefusal.noEdit,
-          ),
+      ),
+    );
+    expect(c.mirror.outbox(), isEmpty);
+  });
+
+  test('createFolder needs the server', () async {
+    c.h.offline = true;
+    await expectLater(
+      writer.createFolder(
+        orgId: testOrgId,
+        parentId: f,
+        meta: FolderMeta.fromJson(folderJson('sub')),
+      ),
+      throwsA(
+        isA<OrgWriteRefused>().having(
+          (e) => e.reason,
+          'reason',
+          OrgWriteRefusal.needsServer,
         ),
-      );
-      c.h.offline = true;
-      await expectLater(
-        writer.createFolder(
-          orgId: testOrgId,
-          parentId: f,
-          meta: FolderMeta.fromJson(folderJson('sub')),
-        ),
-        throwsA(
-          isA<OrgWriteRefused>().having(
-            (e) => e.reason,
-            'reason',
-            OrgWriteRefusal.needsServer,
-          ),
-        ),
-      );
-      expect(c.mirror.outbox(), isEmpty);
-    },
-  );
+      ),
+    );
+    expect(c.mirror.outbox(), isEmpty);
+  });
 
   test('an edit keeps the unknown fields of the wire item', () async {
     final id = await writer.upsert(
@@ -193,7 +193,7 @@ void main() {
     );
   });
 
-  test('createFolder online: item first, then the first keys for the creator; root needs an admin', () async {
+  test('an org root folder needs an admin', () async {
     await expectLater(
       writer.createFolder(
         orgId: testOrgId,
@@ -207,28 +207,34 @@ void main() {
         ),
       ),
     );
-    final id = await writer.createFolder(
-      orgId: testOrgId,
-      parentId: f,
-      meta: FolderMeta.fromJson(folderJson('sub')),
-    );
-    expect(
-      c.h.serverItem(id)!.meta!.keyId,
-      KeyIds.folder(id, 1, PayloadPart.meta),
-    );
-    final keysCall = c.h.orgCalls
-        .singleWhere((x) => x.route == 'PUT /folders/$id/keys')
-        .body;
-    final wrap = WrappedFolderKeys.fromJson(
-      (keysCall['wrapped']! as List).single,
-    );
-    expect((keysCall['version'], wrap.userId), (1, c.userId));
-    expect(
-      b64((await wrap.unwrap(id, c.keyPair)).metaKey),
-      b64(c.keyring.current(id)!.metaKey),
-    );
-    expect(c.events.whereType<SharedVaultCreated>(), hasLength(1));
   });
+
+  test(
+    'createFolder online: item first, then the first keys for the creator',
+    () async {
+      final id = await writer.createFolder(
+        orgId: testOrgId,
+        parentId: f,
+        meta: FolderMeta.fromJson(folderJson('sub')),
+      );
+      expect(
+        c.h.serverItem(id)!.meta!.keyId,
+        KeyIds.folder(id, 1, PayloadPart.meta),
+      );
+      final keysCall = c.h.orgCalls
+          .singleWhere((x) => x.route == 'PUT /folders/$id/keys')
+          .body;
+      final wrap = WrappedFolderKeys.fromJson(
+        (keysCall['wrapped']! as List).single,
+      );
+      expect((keysCall['version'], wrap.userId), (1, c.userId));
+      expect(
+        b64((await wrap.unwrap(id, c.keyPair)).metaKey),
+        b64(c.keyring.current(id)!.metaKey),
+      );
+      expect(c.events.whereType<SharedVaultCreated>(), hasLength(1));
+    },
+  );
 
   test('trash, restore and a conflict copy stay in the org folder', () async {
     final id = await writer.upsert(
@@ -251,15 +257,6 @@ void main() {
     expect(
       (copy.scope, copy.folderId, copy.id == id, copy.revision),
       (ItemScope.org, f, false, 0),
-    );
-    expect(
-      explainFromBlock(
-        block,
-        testOrgId,
-        userId: c.userId,
-        folderId: f,
-      ).effective,
-      contains(Permission.edit),
     );
   });
 }

@@ -66,12 +66,18 @@ void main() {
     expect(access.verify(t), isNull, reason: 'now == exp is expired');
   });
 
-  test('hashToken, successor and prelogin fake salt are pinned', () {
+  test('hashToken is base64url of the SHA-256 digest', () {
     expect(hashToken('abc'), b64(sha256.convert(utf8.encode('abc')).bytes));
+  });
+
+  test('refreshSuccessor is the HMAC of the refresh-next label', () {
     expect(
       refreshSuccessor(secret, 'tok'),
       b64(Hmac(sha256, secret).convert(utf8.encode('refresh-next:tok')).bytes),
     );
+  });
+
+  test('preloginFakeSalt is a stable per-email HMAC prefix', () {
     final salt = preloginFakeSalt(secret, 'a@b.c');
     expect(
       salt,
@@ -82,5 +88,20 @@ void main() {
     );
     expect(preloginFakeSalt(secret, 'a@b.c'), salt);
     expect(preloginFakeSalt(secret, 'x@b.c'), isNot(salt));
+  });
+
+  test('randomToken is base64url of 32 fresh bytes', () {
+    final t = randomToken();
+    expect(t, matches(RegExp(r'^[A-Za-z0-9_-]{43}$')));
+    expect(unb64(t), hasLength(32));
+    expect(randomToken(), isNot(t));
+    expect(secureBytes(16), hasLength(16));
+  });
+
+  test('newSetupToken is 26 base32 chars; grouped form normalises back', () {
+    final s = newSetupToken();
+    expect(s, matches(RegExp(r'^[A-Z2-7]{26}$')));
+    expect(groupBy4(s), matches(RegExp(r'^([A-Z2-7]{4}-){6}[A-Z2-7]{2}$')));
+    expect(normalizeSetupToken(groupBy4(s)), s);
   });
 }

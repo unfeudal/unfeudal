@@ -38,9 +38,8 @@ class _DeviceListState extends State<DeviceList> with BusyAction {
     }
     await run(() async {
       await state.revokeDevice(device.id);
-      if (!mounted || state.stored == null) {
-        return; // revoking this device signed out
-      }
+      // Revoking this device signs out.
+      if (!mounted || state.stored == null) return;
       final reloaded = state.api!.devices();
       setState(() {
         _devices = reloaded;
@@ -107,7 +106,7 @@ class _DeviceRow extends StatelessWidget {
         subtitle: lastSeen,
         dimmed: revoked,
         trailing: [
-          if (device.current)
+          if (device.isCurrent)
             UfStatusChip(
               l.deviceCurrent,
               key: Key('device-current-${device.id}'),

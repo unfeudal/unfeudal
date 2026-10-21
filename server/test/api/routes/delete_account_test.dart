@@ -14,7 +14,8 @@ void main() {
         s = await TestServer.start(env: {'UNFEUDAL_LOGIN_MAX_ATTEMPTS': '3'}),
   );
   tearDown(() => s.close());
-  const attacker = '198.51.100.50'; // a fresh network: setup already counted once on the default address
+  // A fresh network: setup already counted once on the default address.
+  const attacker = '198.51.100.50';
 
   Future<List<int>> authKeyOf(TestSession u) async =>
       (await deriveMasterKeys(u.password, u.bundle.salt, u.bundle.kdf)).authKey;
@@ -78,9 +79,8 @@ void main() {
     expect(await count('users', 'id', o.userId), 1);
   });
 
-  test('wrong currentAuthKey is 403, malformed 400, no token 401; nothing deleted; guesses lock', () async {
+  test('no token is 401', () async {
     await s.setupOwner();
-    final mia = await s.createUser('mia@example.org');
     expect(
       (await s.delete(
         '/api/v1/account',
@@ -88,6 +88,11 @@ void main() {
       )).status,
       401,
     );
+  });
+
+  test('a malformed currentAuthKey is 400', () async {
+    await s.setupOwner();
+    final mia = await s.createUser('mia@example.org');
     expect(
       (await s.delete(
         '/api/v1/account',
@@ -97,13 +102,32 @@ void main() {
       )).status,
       400,
     );
-    s.clock.advance(const Duration(seconds: 1)); // past the acct: barrier
+  });
+
+  test('a wrong currentAuthKey is 403 and deletes nothing', () async {
+    await s.setupOwner();
+    final mia = await s.createUser('mia@example.org');
     final wrong = await del(mia, List.filled(32, 1));
     expect(wrong.status, 403);
     expect(wrong.json, {
       'error': 'forbidden',
       'message': 'Current master password is wrong.',
     });
+    expect(await count('users', 'id', mia.userId), 1);
+  });
+
+  test('guesses lock, counted before any key check', () async {
+    await s.setupOwner();
+    final mia = await s.createUser('mia@example.org');
+    await s.delete(
+      '/api/v1/account',
+      token: mia.accessToken,
+      body: {'currentAuthKey': 'AAAA'},
+      ip: attacker,
+    );
+    // Past the acct: barrier.
+    s.clock.advance(const Duration(seconds: 1));
+    await del(mia, List.filled(32, 1));
     s.clock.advance(const Duration(seconds: 2));
     expect((await del(mia, List.filled(32, 1))).status, 403);
     s.clock.advance(const Duration(seconds: 4));

@@ -54,7 +54,7 @@ void main() {
     );
   });
 
-  test('device_revoked wipes the wrap; session_expired keeps it', () async {
+  test('session_expired keeps the wrap', () async {
     final (h, s, _) = await home();
     await s.enableBiometrics();
     h.expireSessions();
@@ -63,12 +63,15 @@ void main() {
       (s.signedOutBecause, await s.biometrics!.isEnabled()),
       (SignOutReason.sessionExpired, true),
     );
-    final (h2, s2, _) = await home();
-    await s2.enableBiometrics();
-    h2.devices[s2.stored!.deviceId]!.revokedAt = h2.now;
-    await s2.sync!.syncNow();
+  });
+
+  test('device_revoked wipes the wrap', () async {
+    final (h, s, _) = await home();
+    await s.enableBiometrics();
+    h.devices[s.stored!.deviceId]!.revokedAt = h.now;
+    await s.sync!.syncNow();
     expect(
-      (s2.signedOutBecause, await s2.biometrics!.isEnabled()),
+      (s.signedOutBecause, await s.biometrics!.isEnabled()),
       (SignOutReason.deviceRevoked, false),
     );
   });

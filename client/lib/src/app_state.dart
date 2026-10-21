@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import 'dart:async';
-import 'dart:ui' show Locale;
+import 'dart:ui' show Locale, PlatformDispatcher;
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -79,9 +79,7 @@ class AppState extends ChangeNotifier {
     final backend? => BiometricGate(
       BiometricUnlock(sessions.kv, backend),
       allowed: () => serverInfo.has(Flag.biometricUnlock),
-      reason: () =>
-          lookupAppLocalizations(Locale(settings.uiLocale ?? 'en'))
-              .biometricReason,
+      reason: () => _strings.biometricReason,
     ),
     null => null,
   };
@@ -162,16 +160,18 @@ class AppState extends ChangeNotifier {
   }
 
   void emit(AppEvent event) {
-    if (tracing(TraceArea.ui)) trace(TraceArea.ui, 'event ${_describe(event)}');
+    if (isTracing(TraceArea.ui)) {
+      trace(TraceArea.ui, 'event ${_describe(event)}');
+    }
     _events.add(event);
     loquet.show(loquet.engine.handle(event));
   }
 
-  // The three levels: server flag, then the orgs, then the user's pref. A server never seen yet shows the logo.
+  // The three levels: server flag, then the shown org, then the user's pref. A server never seen yet shows the logo.
   void _refreshLoquet() {
     final mode = effectiveLoquetMode(
       serverFlag: serverInfo.has(Flag.mascot),
-      orgSettings: orgs?.orgs ?? const [],
+      org: orgs?.byId(orgs?.selected),
       pref: settings.loquetMode,
     );
     if (mode != loquet.mode) loquet.mode = mode;
@@ -208,8 +208,8 @@ class AppState extends ChangeNotifier {
         await _mirrorFor(session.userId);
         stage = session.refreshToken == null ? AppStage.login : AppStage.unlock;
       } on MirrorTooNew {
-        stage = AppStage
-            .mirrorTooNew; // a newer client wrote it: nothing is touched
+        // A newer client wrote it: nothing is touched.
+        stage = AppStage.mirrorTooNew;
       }
     }
     _refreshLoquet();
@@ -278,7 +278,7 @@ class AppState extends ChangeNotifier {
       token: token,
       email: email,
       password: password,
-      locale: settings.uiLocale,
+      locale: _uiLocaleOf(settings),
     );
     await _open(
       api,
@@ -288,6 +288,7 @@ class AppState extends ChangeNotifier {
       unlocked: account.unlocked,
     );
     if (displayName != null) await vault!.profile.setDisplayName(displayName);
+    if (!serverInfo.has(Flag.recoveryKit)) return finishOnboarding();
     recoveryKey = account.recoveryKey;
     stage = AppStage.setup;
     notifyListeners();
@@ -353,7 +354,7 @@ class AppState extends ChangeNotifier {
     }
     final session = stored =
         loaded ?? stored ?? (throw StateError('no stored session'));
-    if (tracing(TraceArea.session)) {
+    if (isTracing(TraceArea.session)) {
       trace(
         TraceArea.session,
         'unlock with #${await tokenTag(session.refreshToken)}',
@@ -417,7 +418,8 @@ class AppState extends ChangeNotifier {
 
   Future<void> signOut() async {
     trace(TraceArea.session, 'sign out');
-    await biometrics?.disable(); // the wrap is useless without the session
+    // The wrap is useless without the session.
+    await biometrics?.disable();
     await lock();
     await sessions.clear();
     stored = null;
@@ -480,20 +482,17 @@ class AppState extends ChangeNotifier {
     _refreshLoquet();
     notifyListeners();
     if (next.locale != previous.locale) await _sendLocale();
-    final prefs = next.toPrefs(), before = previous.toPrefs();
-    final v = vault;
-    if (mapEquals(prefs, before) ||
-        v == null ||
-        !v.isUnlocked ||
-        (sync?.readOnly ?? true)) {
+    final unlockedVault = vault;
+    if (mapEquals(next.toPrefs(), previous.toPrefs()) ||
+        unlockedVault == null ||
+        !unlockedVault.isUnlocked ||
+        (sync?.isReadOnly ?? true)) {
       return;
     }
-    final changes = {
-      for (final key in before.keys)
-        if (!prefs.containsKey(key)) key: null,
-      ...prefs,
-    };
-    await (_prefsWrite = _prefsWrite.then((_) => v.profile.setPrefs(changes)));
+    final changes = next.prefChangesSince(previous);
+    await (_prefsWrite = _prefsWrite.then(
+      (_) => unlockedVault.profile.setPrefs(changes),
+    ));
   }
 
   /// Revoking this device signs out.
@@ -525,8 +524,8 @@ class AppState extends ChangeNotifier {
     _autoLock?.stop();
   }
 
-  void activity() {
-    _autoLock?.activity();
+  void recordActivity() {
+    _autoLock?.recordActivity();
     loquet.show(loquet.engine.wake());
   }
 
@@ -542,6 +541,9 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  AppLocalizations get _strings =>
+      lookupAppLocalizations(Locale(_languageOf(settings)));
+
   /// The name shown beside Loquet in the sidebar.
   String? get displayName =>
       vault?.profile.meta.displayName ?? stored?.displayName;
@@ -549,7 +551,7 @@ class AppState extends ChangeNotifier {
   // The language of the security mails; best effort, retried at the next sign-in or change.
   Future<void> _sendLocale() async {
     try {
-      await api?.setLocale(settings.uiLocale ?? 'en');
+      await api?.setLocale(_languageOf(settings));
     } on NetworkException {
       // offline
     } on ApiException {
@@ -587,45 +589,52 @@ class AppState extends ChangeNotifier {
 
   Future<void> _startVault(ApiClient api, UnlockedAccount unlocked) async {
     _account = unlocked;
-    final m = mirror!;
+    final openMirror = mirror!;
     sync?.dispose();
     vault?.removeListener(_applySyncedPrefs);
     orgs?.removeListener(_onOrgsChanged);
     api.onTokens = (t) => sessions.saveRefreshToken(t.refreshToken);
-    final engine = SyncEngine(api: api, mirror: m, deviceId: stored!.deviceId);
-    final v = Vault(mirror: m, ledger: LedgerStore(m), write: engine.writeAll);
-    final suffix =
-        ' ${lookupAppLocalizations(Locale(settings.uiLocale ?? 'en')).conflictSuffix}';
-    final o = OrgController(
-      mirror: m,
-      vault: v,
+    final engine = SyncEngine(
+      api: api,
+      mirror: openMirror,
+      deviceId: stored!.deviceId,
+    );
+    final newVault = Vault(
+      mirror: openMirror,
+      ledger: LedgerStore(openMirror),
+      send: engine.writeAll,
+    );
+    final suffix = ' ${_strings.conflictSuffix}';
+    final newOrgs = OrgController(
+      mirror: openMirror,
+      vault: newVault,
       api: api,
       sync: engine,
       userId: stored!.userId,
-      publicKey: m.cachedBundle.bundle.publicKey,
+      publicKey: openMirror.cachedBundle.bundle.publicKey,
       emit: emit,
-      online: () => engine.online,
+      online: () => engine.isOnline,
     );
     engine
       ..copyOf = ((mine, {required personal}) =>
           mine.scope == ItemScope.org && !personal
-          ? o.writer.conflictCopy(mine, suffix: suffix)
-          : v.conflictCopy(mine, suffix: suffix))
-      ..onOrgBlock = o.onBlock
-      ..onChanged = v.reload
+          ? newOrgs.writer.conflictCopy(mine, suffix: suffix)
+          : newVault.conflictCopy(mine, suffix: suffix))
+      ..onOrgBlock = newOrgs.onBlock
+      ..onChanged = newVault.reload
       ..onUnauthorized = ((reason) => unawaited(_sessionEnded(reason)))
-      ..onRestoreAccepted = v.ledger.reset;
+      ..onRestoreAccepted = newVault.ledger.reset;
     this.api = api;
     sync = engine;
-    vault = v;
-    orgs = o;
+    vault = newVault;
+    orgs = newOrgs;
 
-    await o.unlock(unlocked);
-    ledgerReported = !await v.unlock(unlocked.userKey);
-    o.pins.seed();
-    o.addListener(_onOrgsChanged);
-    v.addListener(_applySyncedPrefs);
-    _syncWatch.watch(engine, v, m);
+    await newOrgs.unlock(unlocked);
+    ledgerReported = !await newVault.unlock(unlocked.userKey);
+    await newOrgs.pins.seed();
+    newOrgs.addListener(_onOrgsChanged);
+    newVault.addListener(_applySyncedPrefs);
+    _syncWatch.watch(engine, newVault, openMirror);
     _applySyncedPrefs();
     _refreshHealth();
   }
@@ -645,8 +654,10 @@ class AppState extends ChangeNotifier {
     signedOutBecause = revoked
         ? SignOutReason.deviceRevoked
         : SignOutReason.sessionExpired;
-    if (revoked) unawaited(biometrics?.disable()); // other endings keep it
-    await lock(); // first: stops sync and the vault before any await below
+    // Other endings keep the wrap.
+    if (revoked) unawaited(biometrics?.disable());
+    // Runs first: stops sync and the vault before any await below.
+    await lock();
     stage = AppStage.login;
     notifyListeners();
     await sessions.forgetRefreshToken();
@@ -668,6 +679,11 @@ class AppState extends ChangeNotifier {
     super.dispose();
   }
 }
+
+String? _uiLocaleOf(Settings settings) =>
+    settings.uiLocale(PlatformDispatcher.instance.locale.languageCode);
+
+String _languageOf(Settings settings) => _uiLocaleOf(settings) ?? 'en';
 
 // The event's type, plus the host id and error type for connections; nothing from the vault.
 String _describe(AppEvent event) => switch (event) {

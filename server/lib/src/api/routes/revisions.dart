@@ -17,30 +17,30 @@ Future<Response> listRevisions(Request request) async {
   final deps = depsOf(request), auth = authOf(request);
   final id = parseUuid(request.params['id']!);
   final list = await deps.db.transaction(readOnly: true, (tx) async {
-    final cur =
+    final current =
         (await tx.query(
           'SELECT owner_user_id, org_id, folder_id, type, purged, body FROM items WHERE id = @i',
           {'i': id},
         )).firstOrNull ??
         (throw ApiError.notFound());
-    if (cur['org_id'] != null && !deps.features.enabled(Flag.orgs)) {
+    if (current['org_id'] != null && !deps.features.enabled(Flag.orgs)) {
       throw ApiError.orgsOff();
     }
     // A personal item needs its owner, an org item needs view (admins hold every permission).
     await requireItemAccess(
       tx,
-      cur,
+      current,
       itemId: id,
       userId: auth.userId,
       need: Permission.view,
     );
-    if (cur['purged'] == 1) return const <Object?>[];
+    if (current['purged'] == 1) return const <Object?>[];
     final older = await tx.query(
       'SELECT body FROM item_revisions WHERE item_id = @i ORDER BY revision DESC',
       {'i': id},
     );
     return [
-      jsonDecode(cur['body']! as String),
+      jsonDecode(current['body']! as String),
       for (final r in older) jsonDecode(r['body']! as String),
     ];
   });

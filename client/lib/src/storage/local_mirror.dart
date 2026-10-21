@@ -17,13 +17,13 @@ class MirrorTooNew implements Exception {
 enum OutboxState { pending, rejected }
 
 class OutboxEntry {
-  const OutboxEntry(
-    this.item,
-    this.baseRevision,
-    this.state,
-    this.attempts,
-    this.lastError,
-  );
+  const OutboxEntry({
+    required this.item,
+    required this.baseRevision,
+    required this.state,
+    required this.attempts,
+    required this.lastError,
+  });
 
   final Item item;
   final int baseRevision;
@@ -141,7 +141,7 @@ CREATE TABLE kv (
     }
   });
 
-  String? getKv(KvKey key) {
+  String? kv(KvKey key) {
     final rows = _db.select('SELECT value FROM kv WHERE key = ?', [key.name]);
     return rows.isEmpty ? null : rows.single['value'] as String;
   }
@@ -195,13 +195,10 @@ CREATE TABLE kv (
     }
   });
 
-  /// Returns the attempt count after this failure.
-  int recordOutboxFailure(String itemId, String error) =>
-      _db.select(
-            'UPDATE outbox SET attempts = attempts + 1, last_error = ? WHERE item_id = ? RETURNING attempts',
-            [error, itemId],
-          ).single['attempts']
-          as int;
+  void recordOutboxFailure(String itemId, String error) => _db.execute(
+    'UPDATE outbox SET attempts = attempts + 1, last_error = ? WHERE item_id = ?',
+    [error, itemId],
+  );
 
   void rejectOutbox(String itemId) => _db.execute(
     "UPDATE outbox SET state = 'rejected' WHERE item_id = ?",
@@ -250,11 +247,11 @@ CREATE TABLE kv (
   Item _item(Row row) => Item.fromJson(jsonDecode(row['json'] as String));
 
   OutboxEntry _outboxEntry(Row row) => OutboxEntry(
-    _item(row),
-    row['base_revision'] as int,
-    OutboxState.values.byName(row['state'] as String),
-    row['attempts'] as int,
-    row['last_error'] as String?,
+    item: _item(row),
+    baseRevision: row['base_revision'] as int,
+    state: OutboxState.values.byName(row['state'] as String),
+    attempts: row['attempts'] as int,
+    lastError: row['last_error'] as String?,
   );
 
   void _transaction(void Function() body) {

@@ -84,7 +84,7 @@ final block = <String, Object?>{
 void main() {
   test('org block round-trips and exposes typed rows', () {
     final b = OrgBlock.fromJson(jsonDecode(jsonEncode(block)));
-    expect((b.orgCursor, b.orgs.single.mascot), (12, false));
+    expect((b.orgCursor, b.orgs.single.isMascotEnabled), (12, false));
     expect(
       (
         b.members.first.disabled,
@@ -96,13 +96,34 @@ void main() {
     );
     expect(
       (
-        b.keyRequests.single.secret,
+        b.keyRequests.single.needsSecret,
         b.wrappedKeys.single.keys.version,
         b.keyHistory.single.history.version,
       ),
       (true, 1, 2),
     );
     expect(jsonEncode(b.toJson()), jsonEncode(block));
+  });
+
+  test('knownRole parses the role and is null for an unknown one', () {
+    final b = OrgBlock.fromJson(block);
+    expect(
+      (b.orgs.single.knownRole, b.members.last.knownRole),
+      (OrgRole.admin, OrgRole.owner),
+    );
+    final future = OrgBlock.fromJson({
+      ...block,
+      'orgs': [
+        {
+          ...((block['orgs'] as List).single as Map<String, Object?>),
+          'role': 'auditor',
+        },
+      ],
+    });
+    expect(
+      (future.orgs.single.role, future.orgs.single.knownRole),
+      ('auditor', null),
+    );
   });
 
   test('a missing list is a FormatException, never empty', () {
@@ -142,20 +163,4 @@ void main() {
       }
     },
   );
-
-  test('sync page with and without org block', () {
-    final page = {'items': <Object?>[], 'cursor': 0, 'more': false};
-    final p = SyncPage.fromJson(page);
-    expect(p.items, isEmpty);
-    expect((p.cursor, p.more, p.org), (0, false, null));
-    expect(SyncPage.fromJson({...page, 'org': block}).org!.orgCursor, 12);
-    expect(
-      () => SyncPage.fromJson({...page, 'cursor': -1}),
-      throwsFormatException,
-    );
-    expect(
-      () => SyncPage.fromJson({'items': <Object?>[], 'cursor': 0}),
-      throwsFormatException,
-    );
-  });
 }

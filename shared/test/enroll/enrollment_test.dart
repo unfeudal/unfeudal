@@ -78,7 +78,7 @@ void main() {
     }
   });
 
-  test('plain files round-trip; the encrypted fixture opens', () async {
+  test('plain files round-trip', () async {
     final plain = Enrollment(server, invite, EnrollKind.invite).toFile();
     expect(jsonDecode(plain), {
       'unfeudal-enroll': 1,
@@ -87,6 +87,9 @@ void main() {
       'kind': 'invite',
     });
     expect((await Enrollment.parseFile(plain)).token, invite);
+  });
+
+  test('the encrypted fixture opens', () async {
     expect(sealed.contains(invite), isFalse);
     final back = await Enrollment.parseFile(
       sealed,
@@ -121,25 +124,25 @@ void main() {
     );
   });
 
-  test(
-    'unknown file version is unsupported; garbage is a FormatException',
-    () async {
+  test('an unknown file version is unsupported', () async {
+    await expectLater(
+      Enrollment.parseFile('{"unfeudal-enroll": 2}'),
+      throwsA(isA<UnsupportedEnvelope>()),
+    );
+  });
+
+  test('a garbage file is a FormatException', () async {
+    for (final text in [
+      'nope',
+      '[]',
+      '{"unfeudal-enroll": "1"}',
+      '{"unfeudal-enroll": 1, "server": "https://x.org"}',
+    ]) {
       await expectLater(
-        Enrollment.parseFile('{"unfeudal-enroll": 2}'),
-        throwsA(isA<UnsupportedEnvelope>()),
+        Enrollment.parseFile(text),
+        throwsFormatException,
+        reason: text,
       );
-      for (final text in [
-        'nope',
-        '[]',
-        '{"unfeudal-enroll": "1"}',
-        '{"unfeudal-enroll": 1, "server": "https://x.org"}',
-      ]) {
-        await expectLater(
-          Enrollment.parseFile(text),
-          throwsFormatException,
-          reason: text,
-        );
-      }
-    },
-  );
+    }
+  });
 }

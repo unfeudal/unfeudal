@@ -25,10 +25,10 @@ void main() {
     await migrate(db);
     clock = FakeClock(DateTime.utc(2026, 10, 13, 12));
     refresh = RefreshTokens(
-      db,
-      clock,
-      const Duration(days: 30),
-      secret,
+      db: db,
+      clock: clock,
+      ttl: const Duration(days: 30),
+      secret: secret,
       audit: AuditLog(clock, Features(const {}), secret),
     );
     final t = iso(clock.now());
@@ -54,35 +54,44 @@ void main() {
     )),
   );
 
-  test('rotate returns the token successor, stores only hashes, touches last_seen_at', () async {
+  test('rotate returns the token successor', () async {
     final t = await db.transaction((tx) => refresh.create(tx, d));
     expect(t, matches(RegExp(r'^[A-Za-z0-9_-]{43}$')));
-    clock.advance(const Duration(minutes: 6));
     final r = await refresh.rotate(t);
     expect(
       (r.userId, r.deviceId, r.refreshToken),
       (u, d, refreshSuccessor(secret, t)),
     );
-    final rows = await db.query(
-      'SELECT token_hash, expires_at, used_at FROM refresh_tokens ORDER BY expires_at',
-    );
-    expect(rows.map((x) => x['token_hash']), [
-      hashToken(t),
-      hashToken(r.refreshToken),
-    ]);
-    expect(
-      rows.last['expires_at'],
-      iso(clock.now().add(const Duration(days: 30))),
-      reason: 'a successor gets a fresh expiry',
-    );
+  });
+
+  test(
+    'only hashes are stored and the successor gets a fresh expiry',
+    () async {
+      final t = await db.transaction((tx) => refresh.create(tx, d));
+      clock.advance(const Duration(minutes: 6));
+      final r = await refresh.rotate(t);
+      final rows = await db.query(
+        'SELECT token_hash, expires_at FROM refresh_tokens ORDER BY expires_at',
+      );
+      expect(rows.map((x) => x['token_hash']), [
+        hashToken(t),
+        hashToken(r.refreshToken),
+      ]);
+      expect(
+        rows.last['expires_at'],
+        iso(clock.now().add(const Duration(days: 30))),
+      );
+    },
+  );
+
+  test('rotate touches last_seen_at at most every 5 minutes', () async {
+    final t = await db.transaction((tx) => refresh.create(tx, d));
+    clock.advance(const Duration(minutes: 6));
+    final r = await refresh.rotate(t);
     expect((await device())['last_seen_at'], iso(clock.now()));
     clock.advance(const Duration(minutes: 1));
     await refresh.rotate(r.refreshToken);
-    expect(
-      (await device())['last_seen_at'],
-      isNot(iso(clock.now())),
-      reason: 'at most every 5 min',
-    );
+    expect((await device())['last_seen_at'], isNot(iso(clock.now())));
   });
 
   test('a lost response within 30 s gets the same successor', () async {
@@ -127,26 +136,39 @@ void main() {
     },
   );
 
-  test('unknown, expired, revoked and disabled', () async {
+  test('an unknown token is invalid_token', () async {
     await expectLater(
       refresh.rotate('nope'),
       unauthorized(UnauthorizedReason.invalidToken),
     );
+  });
+
+  test('an expired token is session_expired and keeps the device', () async {
     final t = await db.transaction((tx) => refresh.create(tx, d));
     clock.advance(const Duration(days: 30));
     await expectLater(
       refresh.rotate(t),
       unauthorized(UnauthorizedReason.sessionExpired),
     );
-    expect(
-      (await device())['revoked_at'],
-      isNull,
-      reason: 'expiry keeps the device',
+    expect((await device())['revoked_at'], isNull);
+  });
+
+  test('a token of a revoked device is device_revoked', () async {
+    final t = await db.transaction((tx) => refresh.create(tx, d));
+    await db.execute('UPDATE devices SET revoked_at = @t', {
+      't': iso(clock.now()),
+    });
+    await expectLater(
+      refresh.rotate(t),
+      unauthorized(UnauthorizedReason.deviceRevoked),
     );
-    final t2 = await db.transaction((tx) => refresh.create(tx, d));
+  });
+
+  test('a token of a disabled user is device_revoked', () async {
+    final t = await db.transaction((tx) => refresh.create(tx, d));
     await db.execute('UPDATE users SET disabled = 1');
     await expectLater(
-      refresh.rotate(t2),
+      refresh.rotate(t),
       unauthorized(UnauthorizedReason.deviceRevoked),
     );
   });

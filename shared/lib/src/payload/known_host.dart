@@ -5,7 +5,7 @@ import 'payload.dart';
 /// A pinned SSH host key. The local ledger's pins win over this synced copy.
 class KnownHostMeta extends Payload {
   KnownHostMeta({
-    super.schemaVersion = 1,
+    super.schemaVersion = Payload.knownSchemaVersion,
     required this.hostItemId,
     required this.keyType,
     required this.sha256Fingerprint,
@@ -21,7 +21,7 @@ class KnownHostMeta extends Payload {
     return KnownHostMeta(
       schemaVersion: r.integer('schemaVersion', min: 1),
       hostItemId: r.uuid('hostItemId'),
-      keyType: r.text('keyType', max: PayloadLimits.keyType, required: true),
+      keyType: r.trimmedText('keyType', max: PayloadLimits.keyType),
       sha256Fingerprint: fingerprint,
       extra: r.extra(const {
         'schemaVersion',

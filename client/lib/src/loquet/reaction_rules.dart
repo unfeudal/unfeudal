@@ -10,7 +10,7 @@ extension on ReactionEngine {
     }
     if (first != null &&
         _now().difference(first) >= const Duration(days: 365)) {
-      final r = _out(
+      final r = _gate(
         const Reaction(
           LoquetMood.happy,
           line: LineKey.oneYear,
@@ -20,14 +20,15 @@ extension on ReactionEngine {
       );
       if (r != null) return r;
     }
-    if (_now().hour >= 5 && _now().hour < 8) {
-      final r = _out(
+    final hour = _now().hour;
+    if (hour >= 5 && hour < 8) {
+      final r = _gate(
         const Reaction(LoquetMood.yawn, line: LineKey.earlyYawn),
         once: 'yawn:$_day',
       );
       if (r != null) return r;
     }
-    return _out(
+    return _gate(
       Reaction(
         LoquetMood.happy,
         line: LineKey.welcome,
@@ -39,20 +40,20 @@ extension on ReactionEngine {
   Reaction? _connected(ConnectSucceeded event) {
     memory.connections++;
     unawaited(memory.save());
-    for (final (count, line) in [
-      (100, LineKey.connections100),
-      (1000, LineKey.connections1000),
+    for (final (count, line, onceKey) in [
+      (100, LineKey.connections100, 'connections100'),
+      (1000, LineKey.connections1000, 'connections1000'),
     ]) {
       if (memory.connections == count) {
-        final r = _out(
+        final r = _gate(
           Reaction(LoquetMood.happy, line: line, important: true),
-          once: line.name,
+          once: onceKey,
         );
         if (r != null) return r;
       }
     }
     if (event.user == 'root' && !_rootHosts.contains(event.hostId)) {
-      final r = _out(
+      final r = _gate(
         const Reaction(
           LoquetMood.happy,
           accessory: LoquetAccessory.hardHat,
@@ -69,20 +70,20 @@ extension on ReactionEngine {
     if (t.weekday == DateTime.friday &&
         t.hour >= 17 &&
         event.tags.contains('prod')) {
-      final r = _out(
+      final r = _gate(
         const Reaction(LoquetMood.happy, line: LineKey.fridayProd),
         once: 'friday:$_day',
       );
       if (r != null) return r;
     }
-    return _out(const Reaction(LoquetMood.happy, line: LineKey.connected));
+    return _gate(const Reaction(LoquetMood.happy, line: LineKey.connected));
   }
 
   Reaction? _hostCreated(String name) {
     memory.hostsCreated++;
     unawaited(memory.save());
     if (name == 'localhost') {
-      final r = _out(
+      final r = _gate(
         const Reaction(LoquetMood.happy, line: LineKey.localhost),
         once: 'localhost',
         egg: true,
@@ -90,7 +91,7 @@ extension on ReactionEngine {
       if (r != null) return r;
     }
     if (memory.hostsCreated == 1) {
-      final r = _out(
+      final r = _gate(
         const Reaction(
           LoquetMood.happy,
           line: LineKey.firstHost,
@@ -101,14 +102,14 @@ extension on ReactionEngine {
       if (r != null) return r;
     }
     if (memory.hostsCreated == 42) {
-      final r = _out(
+      final r = _gate(
         const Reaction(LoquetMood.happy, line: LineKey.host42),
         once: 'host42',
         egg: true,
       );
       if (r != null) return r;
     }
-    return _out(const Reaction(LoquetMood.happy));
+    return _gate(const Reaction(LoquetMood.happy));
   }
 
   Reaction? _clicked() {
@@ -118,7 +119,7 @@ extension on ReactionEngine {
       ..removeWhere((c) => t.difference(c) > const Duration(seconds: 4));
     if (_clicks.length >= 10) {
       _clicks.clear();
-      final r = _out(
+      final r = _gate(
         const Reaction(LoquetMood.dizzy, line: LineKey.dizzy),
         once: 'dizzy:$_day',
         egg: true,
@@ -126,14 +127,14 @@ extension on ReactionEngine {
       if (r != null) return r;
     }
     if (baseline == LoquetMood.concerned) {
-      return _out(
+      return _gate(
         const Reaction(
           LoquetMood.concerned,
-          reasons: true,
+          showsReasons: true,
           hold: Duration(seconds: 6),
         ),
       );
     }
-    return _out(Reaction(baseline, line: LineKey.idleClick));
+    return _gate(Reaction(baseline, line: LineKey.idleClick));
   }
 }

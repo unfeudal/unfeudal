@@ -8,7 +8,7 @@ import '../vault/vault.dart';
 class PlannedHost {
   const PlannedHost({
     required this.source,
-    required this.duplicate,
+    required this.isDuplicate,
     required this.keyPath,
     required this.jumpAlias,
   });
@@ -16,7 +16,7 @@ class PlannedHost {
   final SshConfigHost source;
 
   /// A personal host with the same name (case-insensitive) is already in the vault.
-  final bool duplicate;
+  final bool isDuplicate;
 
   /// `IdentityFile` expanded; null when unset or unreadable.
   final String? keyPath;
@@ -35,12 +35,11 @@ class PlannedKey {
 }
 
 class ImportPlan {
-  const ImportPlan(this.hosts, this.keys, this.warnings);
+  ImportPlan(this.hosts, this.keys, List<SshConfigWarning> warnings)
+    : warnings = List.unmodifiable(warnings);
 
   final List<PlannedHost> hosts;
   final List<PlannedKey> keys;
-
-  /// Growable: [SshConfigImporter.apply] adds the keys it could not open.
   final List<SshConfigWarning> warnings;
 }
 
@@ -87,7 +86,7 @@ class SshConfigImporter {
         for (final h in valid)
           PlannedHost(
             source: h,
-            duplicate: existing.contains(h.alias.toLowerCase()),
+            isDuplicate: existing.contains(h.alias.toLowerCase()),
             keyPath: keys[_expand(h.identityFile)]?.path,
             jumpAlias: jumps[h.alias],
           ),
@@ -97,8 +96,9 @@ class SshConfigImporter {
     );
   }
 
-  /// Writes the hosts named in [aliases] and the keys they use; returns the number of hosts written.
-  Future<int> apply(
+  /// Writes the hosts named in [aliases] and the keys they use; returns the number of hosts written and the keys that
+  /// did not open.
+  Future<({int written, List<SshConfigWarning> warnings})> apply(
     ImportPlan plan, {
     required Set<String> aliases,
     Map<String, String> passphrases = const {},
@@ -111,13 +111,14 @@ class SshConfigImporter {
     // ids first, so a jump link resolves whatever the order; a jump to a host not chosen is dropped
     final ids = {for (final h in chosen) h.source.alias: newId()};
     final identities = <String, String?>{};
+    final warnings = <SshConfigWarning>[];
     for (final h in chosen) {
       final path = h.keyPath;
       if (path == null || identities.containsKey(path)) continue;
       final key = plan.keys.firstWhere((k) => k.path == path);
       identities[path] = await _writeIdentity(key, passphrases[path]);
       if (identities[path] == null) {
-        plan.warnings.add(
+        warnings.add(
           SshConfigWarning(
             h.source.line,
             SshConfigWarningKind.keyUnreadable,
@@ -138,7 +139,7 @@ class SshConfigImporter {
         ).toJson(),
       );
     }
-    return chosen.length;
+    return (written: chosen.length, warnings: warnings);
   }
 
   HostMeta _meta(SshConfigHost h, {String? identityId, String? jumpHostId}) =>

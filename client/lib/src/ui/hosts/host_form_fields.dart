@@ -135,9 +135,7 @@ mixin _HostFormFields on State<HostEditorPanel> {
   }) {
     final orgId = _orgId;
     final identities = AppScope.read(context).vault!
-        .ofKind(ItemKind.identity)
-        .where((e) => e.state == EntryState.ok && e.orgId == orgId)
-        .toList();
+        .usableOfKind(ItemKind.identity, orgId: orgId);
     return [
       entryPicker(
         key: 'host-identity',
@@ -150,6 +148,8 @@ mixin _HostFormFields on State<HostEditorPanel> {
             : null,
         onChanged: editable ? (v) => setState(() => _identityId = v) : null,
       ),
+      if (_newIdentityPlace() case final place? when editable)
+        _newIdentityButtons(l, place),
       if (orgId != null)
         Column(
           key: const Key('host-identity-mode'),
@@ -178,16 +178,46 @@ mixin _HostFormFields on State<HostEditorPanel> {
     ];
   }
 
-  List<Widget> _placementFields(
-    AppLocalizations l, {
+  // Generate, import or add a password into [place]; the new identity becomes the host's.
+  Widget _newIdentityButtons(AppLocalizations l, IdentityPlace place) => Wrap(
+    key: const Key('host-identity-new'),
+    spacing: 4,
+    children: [
+      for (final (key, label, show) in [
+        ('host-identity-generate', l.keyGenerate, showGenerateKey),
+        ('host-identity-import', l.keyImport, showImportKey),
+        ('host-identity-password', l.keyPassword, showAddPassword),
+      ])
+        TextButton(
+          key: Key(key),
+          style: smallButton,
+          onPressed: () async {
+            final id = await show(context, place);
+            if (id != null && mounted) setState(() => _identityId = id);
+          },
+          child: Text(label),
+        ),
+    ],
+  );
+  // A personal host's new identity is personal; an org host's goes to its folder, when it is shared there and
+  // this account may write it. Null hides the buttons.
+  IdentityPlace? _newIdentityPlace() {
+    final orgId = _orgId;
+    if (orgId == null) return (orgId: null, folderId: null);
+    final folderId = _folderId;
+    final orgs = AppScope.read(context).orgs;
+    return folderId != null &&
+            _identityMode == IdentityMode.shared &&
+            (orgs?.writer.canEdit(orgId, folderId) ?? false)
+        ? (orgId: orgId, folderId: folderId)
+        : null;
+  }
+
+  List<Widget> _placementFields({
     required bool editable,
     required ResolvedHost? resolved,
   }) {
     final vault = AppScope.read(context).vault!;
-    final folders = vault
-        .ofKind(ItemKind.folder)
-        .where((e) => e.state == EntryState.ok && e.orgId == _orgId)
-        .toList();
     return [
       JumpHostPicker(
         key: const Key('jump-picker'),
@@ -200,14 +230,6 @@ mixin _HostFormFields on State<HostEditorPanel> {
           final String folder => vault.entry(folder)?.name,
         },
         onChanged: editable ? (v) => setState(() => _jumpHostId = v) : null,
-      ),
-      entryPicker(
-        key: 'host-folder',
-        label: l.hostFolder,
-        none: l.folderRoot,
-        entries: folders,
-        value: _folderId,
-        onChanged: editable ? (v) => setState(() => _folderId = v) : null,
       ),
     ];
   }

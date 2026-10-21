@@ -62,7 +62,7 @@ class _LoquetSpotState extends State<LoquetSpot> {
   AppState? _state;
   Object? _textFor;
   String? _text;
-  DateTime? _hoverSince;
+  Duration? _hoverSince;
   Offset _drag = Offset.zero;
   LoquetFx? _landing;
 
@@ -102,18 +102,26 @@ class _LoquetSpotState extends State<LoquetSpot> {
     return _text;
   }
 
+  // With the mascot off: the logo, beside the account name in the sidebar footer.
+  Widget _logo(double size) => widget.placement == LoquetPlacement.sidebar
+      ? _SidebarFooter(
+          face: UfLogo(size: size),
+          name: widget.name,
+        )
+      : UfLogo(size: size);
+
   @override
   Widget build(BuildContext context) {
     final state = _state;
     final size = widget.placement.size;
-    if (state == null || !state.loquet.visible) return UfLogo(size: size);
+    if (state == null || !state.loquet.visible) return _logo(size);
     final l = AppLocalizations.of(context);
     final still = UfMotion.of(context) == UfMotion.still;
     final loquet = state.loquet;
     return ListenableBuilder(
       listenable: loquet,
       builder: (context, _) {
-        if (!loquet.visible) return UfLogo(size: size);
+        if (!loquet.visible) return _logo(size);
         final mood = widget.mood ?? loquet.mood;
         final text =
             loquet.mode == LoquetMode.on &&
@@ -130,7 +138,9 @@ class _LoquetSpotState extends State<LoquetSpot> {
             name: widget.name,
             caption:
                 // reasons asked by a click win over a fixed line (an empty vault)
-                (loquet.reasons ? _reasons(l, loquet.engine.health) : null) ??
+                (loquet.showsReasons
+                    ? _reasons(l, loquet.engine.health)
+                    : null) ??
                 text ??
                 loquetLabel(l, mood),
           );
@@ -196,12 +206,11 @@ class _LoquetSpotState extends State<LoquetSpot> {
 
   // a long hover: the eyes follow the cursor
   Widget _followingCursor(LoquetController loquet, Widget face) => MouseRegion(
-    onEnter: (_) => _hoverSince = DateTime.now(),
+    onEnter: (e) => _hoverSince = e.timeStamp,
     onExit: (_) => _hoverSince = null,
     onHover: (e) {
       final since = _hoverSince;
-      if (since != null &&
-          DateTime.now().difference(since) >= const Duration(seconds: 1)) {
+      if (since != null && e.timeStamp - since >= const Duration(seconds: 1)) {
         loquet.watch((e.localPosition.dx / widget.placement.size).clamp(0, 1));
       }
     },
@@ -210,15 +219,13 @@ class _LoquetSpotState extends State<LoquetSpot> {
 }
 
 class _SidebarFooter extends StatelessWidget {
-  const _SidebarFooter({
-    required this.face,
-    required this.name,
-    required this.caption,
-  });
+  const _SidebarFooter({required this.face, required this.name, this.caption});
 
   final Widget face;
   final String? name;
-  final String caption;
+
+  /// Null with the mascot off.
+  final String? caption;
 
   @override
   Widget build(BuildContext context) {
@@ -241,12 +248,13 @@ class _SidebarFooter extends StatelessWidget {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-              Text(
-                caption,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: small.copyWith(color: UfColors.of(context).muted),
-              ),
+              if (caption case final caption?)
+                Text(
+                  caption,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: small.copyWith(color: UfColors.of(context).muted),
+                ),
             ],
           ),
         ),
@@ -263,7 +271,7 @@ String _reasons(AppLocalizations l, VaultHealth h) => [
       MoodReason.oldKeys => l.loquetReasonOldKeys(h.keysOver5Years),
       MoodReason.staleSync => l.loquetReasonStaleSync,
     },
-].join(' · ');
+].join(l.listSeparator);
 
 /// What Loquet says, in a small floating panel.
 class LoquetBubble extends StatelessWidget {

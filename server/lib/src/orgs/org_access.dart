@@ -32,7 +32,7 @@ class MemberRow {
       status == MemberStatus.confirmed && !disabled && role != OrgRole.member;
 }
 
-typedef OrgTeam = ({String name, Set<String> memberIds});
+typedef TeamSeats = ({String name, Set<String> memberIds});
 
 /// One org as the permission rules see it, read in one transaction.
 class OrgSnapshot {
@@ -48,7 +48,7 @@ class OrgSnapshot {
   final String orgId;
   final String name;
   final Map<String, MemberRow> members;
-  final Map<String, OrgTeam> teams;
+  final Map<String, TeamSeats> teams;
   final List<AclEntry> acl;
 
   /// Live folders to their parent: trashed ones included, purged ones out.
@@ -157,7 +157,7 @@ Future<OrgSnapshot?> loadOrg(Tx tx, String orgId) async {
     ))
       r['user_id']! as String: MemberRow.fromRow(r),
   };
-  final teams = <String, OrgTeam>{};
+  final teams = <String, TeamSeats>{};
   for (final r in await tx.query(
     'SELECT t.id, t.name, tm.user_id FROM teams t '
     'LEFT JOIN team_members tm ON tm.team_id = t.id WHERE t.org_id = @o',
@@ -176,11 +176,13 @@ Future<OrgSnapshot?> loadOrg(Tx tx, String orgId) async {
       {'o': orgId},
     ))
       AclEntry(
-        r['folder_id']! as String,
-        PrincipalType.values.byName(r['principal_type']! as String),
-        r['principal_id']! as String,
-        _permissions(r['allow']),
-        _permissions(r['deny']),
+        folderId: r['folder_id']! as String,
+        principalType: PrincipalType.values.byName(
+          r['principal_type']! as String,
+        ),
+        principalId: r['principal_id']! as String,
+        allow: _permissions(r['allow']),
+        deny: _permissions(r['deny']),
       ),
   ];
   final folders = {
@@ -288,7 +290,7 @@ void requireRoleManager(
   Iterable<OrgRole> touched,
   String message,
 ) {
-  if (caller.role != OrgRole.owner && touched.any((r) => r != OrgRole.member)) {
+  if (caller.role != OrgRole.owner && touched.any((r) => r.isOwnerManaged)) {
     throw ApiError(ApiErrorCode.forbidden, message);
   }
 }

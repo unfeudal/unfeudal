@@ -10,7 +10,7 @@ import '../json.dart';
 /// expiry only: it reveals nothing secret). An invalid token is ignored.
 Response info(Request request) {
   final deps = depsOf(request);
-  final full =
+  final isAuthenticated =
       deps.access.verifyHeader(request.headers['authorization']) != null;
   final config = deps.config;
   return jsonResponse(
@@ -18,13 +18,13 @@ Response info(Request request) {
       api: [1],
       minClient: config.minClientVersion,
       latestClient: latestClientVersion,
-      capabilities: full
+      capabilities: isAuthenticated
           ? deps.features.capabilities()
           : deps.features.publicCapabilities(),
-      server: full ? serverVersion : null,
-      instanceEpoch: full ? deps.instanceEpoch : null,
-      source: full ? '${config.sourceUrl}' : null,
-      trashDays: full ? config.trashRetentionDays : null,
+      server: isAuthenticated ? serverVersion : null,
+      instanceEpoch: isAuthenticated ? deps.instanceEpoch : null,
+      source: isAuthenticated ? '${config.sourceUrl}' : null,
+      trashDays: isAuthenticated ? config.trashRetentionDays : null,
     ).toJson(),
   );
 }

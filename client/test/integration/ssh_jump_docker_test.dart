@@ -13,6 +13,7 @@ import 'package:unfeudal_client/src/ssh/ssh_connector.dart';
 import 'package:unfeudal_shared/unfeudal_shared.dart';
 
 import '../support/fakes.dart';
+import 'sshd_image.dart';
 
 const net = 'uf-jump',
     bastionName = 'uf-jump-bastion',
@@ -20,8 +21,6 @@ const net = 'uf-jump',
 // What the openssh-server-ssh-tunnel mod sets, mounted instead of downloaded at each start:
 // the download from lscr.io can stall on CI runners past the start deadline.
 const tunnelConf = 'AllowTcpForwarding yes\nGatewayPorts clientspecified\n';
-const image =
-    'lscr.io/linuxserver/openssh-server:10.3_p1-r1-ls239@sha256:bef23ec7e4b6849f8c61b7e5fc1c67fc38bafe100539d5c34fc2d682c582bbf2';
 
 Future<void> docker(List<String> args) async {
   final r = await Process.run('docker', args);
@@ -77,7 +76,7 @@ void main() {
         'PUBLIC_KEY=${key.publicKey}',
         '-v',
         '${sshdConf.path}:/config/sshd/sshd_config.d:ro',
-        image,
+        sshdImage,
       ]);
     }
     final deadline = DateTime.now().add(const Duration(seconds: 90));

@@ -67,6 +67,26 @@ void main() {
     },
   );
 
+  testWidgets('dragging a host onto a folder moves it there', (t) async {
+    final s = await shell(t);
+    late String folder, host;
+    await t.runAsync(() async {
+      folder = await s.vault!.saveFolder(FolderMeta(name: 'Prod'));
+      host = await s.vault!.upsertItem(type: 'host', meta: hostJson('web'));
+    });
+    await pumpReal(t, rounds: 5);
+    final drag = await t.startGesture(
+      t.getCenter(find.byKey(Key('host-$host'))),
+    );
+    await drag.moveBy(const Offset(0, 20));
+    await t.pump();
+    await drag.moveTo(t.getCenter(find.byKey(Key('folder-$folder'))));
+    await t.pump();
+    await drag.up();
+    await pumpReal(t, rounds: 10);
+    expect(s.vault!.entry(host)!.folderId, folder);
+  });
+
   testWidgets(
     'layout: sidebar 272 resizable within 220-400, saved per device',
     (t) async {
@@ -100,47 +120,57 @@ void main() {
     expect(t.widget<EditableText>(paletteField).focusNode.hasFocus, isTrue);
   });
 
-  testWidgets(
-    'tree: nested folders, palette search by name, address and tag; trashed hidden; unreadable labelled',
-    (t) async {
-      final s = await shell(t);
-      await t.runAsync(() async {
-        final v = s.vault!;
-        final f = await v.saveFolder(FolderMeta.fromJson(folderJson('prod')));
-        await v.upsertItem(
-          type: 'host',
-          folderId: f,
-          meta: hostJson('web', address: '10.1.1.1', tags: ['nginx']),
-        );
-        await v.upsertItem(
-          type: 'host',
-          meta: hostJson('db', address: 'db.lan'),
-        );
-        final gone = await v.upsertItem(
-          type: 'host',
-          meta: hostJson('retired-box'),
-        );
-        await v.trashItem(gone);
-        await s.sync!.syncNow();
-        s.mirror!.upsertItems([
-          await sealItem(SymmetricCipher.newKey(), meta: hostJson('x')),
-        ]);
-        await v.reload();
-      });
-      await t.pumpAndSettle();
-      expect(find.text('web'), findsOneWidget);
-      expect(find.text('retired-box'), findsNothing);
-      expect(find.text(l10n(t).treeUnreadable), findsOneWidget);
-      for (final (q, name) in [
-        ('web', 'web'),
-        ('db.lan', 'db'),
-        ('nginx', 'web'),
-      ]) {
-        await search(t, q);
-        expect(paletteRow(name), findsOneWidget, reason: q);
-      }
-    },
-  );
+  testWidgets('tree: trashed hosts hidden, unreadable items labelled', (
+    t,
+  ) async {
+    final s = await shell(t);
+    await t.runAsync(() async {
+      final v = s.vault!;
+      await v.upsertItem(type: 'host', meta: hostJson('web'));
+      final gone = await v.upsertItem(
+        type: 'host',
+        meta: hostJson('retired-box'),
+      );
+      await v.trashItem(gone);
+      await s.sync!.syncNow();
+      s.mirror!.upsertItems([
+        await sealItem(SymmetricCipher.newKey(), meta: hostJson('x')),
+      ]);
+      await v.reload();
+    });
+    await t.pumpAndSettle();
+    expect(find.text('web'), findsOneWidget);
+    expect(find.text('retired-box'), findsNothing);
+    expect(find.text(l10n(t).treeUnreadable), findsOneWidget);
+  });
+
+  testWidgets('palette search finds a host by name, address and tag', (
+    t,
+  ) async {
+    final s = await shell(t);
+    await t.runAsync(() async {
+      final v = s.vault!;
+      final f = await v.saveFolder(FolderMeta.fromJson(folderJson('prod')));
+      await v.upsertItem(
+        type: 'host',
+        folderId: f,
+        meta: hostJson('web', address: '10.1.1.1', tags: ['nginx']),
+      );
+      await v.upsertItem(
+        type: 'host',
+        meta: hostJson('db', address: 'db.lan'),
+      );
+    });
+    await t.pumpAndSettle();
+    for (final (q, name) in [
+      ('web', 'web'),
+      ('db.lan', 'db'),
+      ('nginx', 'web'),
+    ]) {
+      await search(t, q);
+      expect(paletteRow(name), findsOneWidget, reason: q);
+    }
+  });
 
   testWidgets(
     'the search lists matching snippets; without a session they insert nothing',
@@ -206,10 +236,12 @@ void main() {
     t,
   ) async {
     final opened = <Uri>[];
+    final original = openExternalUrl;
     openExternalUrl = (u) async {
       opened.add(u);
       return true;
     };
+    addTearDown(() => openExternalUrl = original);
     await shell(
       t,
       harness: SyncHarness(
@@ -267,7 +299,7 @@ void main() {
     },
   );
 
-  testWidgets('rejected write: retry, keep a copy, discard', (t) async {
+  testWidgets('rejected write: retry pushes it again', (t) async {
     final h = SyncHarness();
     final s = await shell(t, harness: h);
     late String id;

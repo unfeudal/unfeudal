@@ -145,44 +145,51 @@ void main() {
     },
   );
 
-  test(
-    'trash and restore; a trashed folder trashes its subtree; no folder cycle',
-    () async {
-      final m = LocalMirror.inMemory();
-      final v = await testVault(key, m);
-      final top = await v.saveFolder(FolderMeta.fromJson(folderJson('top')));
-      final sub = await v.saveFolder(
-        FolderMeta.fromJson(folderJson('sub')),
-        parentId: top,
-      );
-      final host = await v.upsertItem(
-        type: 'host',
-        folderId: sub,
-        meta: hostJson('web'),
-      );
-      await expectLater(
-        v.saveFolder(
-          FolderMeta.fromJson(folderJson('top')),
-          id: top,
-          parentId: sub,
-        ),
-        throwsArgumentError,
-      );
-      await v.trashItem(top);
-      expect(
-        (v.isTrashed(top), v.isTrashed(sub), v.isTrashed(host)),
-        (true, true, true),
-      );
-      expect(v.ofKind(ItemKind.host), isEmpty);
-      await v.restoreItem(top);
-      expect(v.ofKind(ItemKind.host).single.id, host);
-      await v.trashItem(host);
-      expect(
-        m.outbox().firstWhere((e) => e.item.id == host).item.deleted,
-        isTrue,
-      );
-    },
-  );
+  test('a folder cannot move under itself', () async {
+    final m = LocalMirror.inMemory();
+    final v = await testVault(key, m);
+    final top = await v.saveFolder(FolderMeta.fromJson(folderJson('top')));
+    final sub = await v.saveFolder(
+      FolderMeta.fromJson(folderJson('sub')),
+      parentId: top,
+    );
+    await expectLater(
+      v.saveFolder(
+        FolderMeta.fromJson(folderJson('top')),
+        id: top,
+        parentId: sub,
+      ),
+      throwsArgumentError,
+    );
+  });
+
+  test('trash and restore; a trashed folder trashes its subtree', () async {
+    final m = LocalMirror.inMemory();
+    final v = await testVault(key, m);
+    final top = await v.saveFolder(FolderMeta.fromJson(folderJson('top')));
+    final sub = await v.saveFolder(
+      FolderMeta.fromJson(folderJson('sub')),
+      parentId: top,
+    );
+    final host = await v.upsertItem(
+      type: 'host',
+      folderId: sub,
+      meta: hostJson('web'),
+    );
+    await v.trashItem(top);
+    expect(
+      (v.isTrashed(top), v.isTrashed(sub), v.isTrashed(host)),
+      (true, true, true),
+    );
+    expect(v.ofKind(ItemKind.host), isEmpty);
+    await v.restoreItem(top);
+    expect(v.ofKind(ItemKind.host).single.id, host);
+    await v.trashItem(host);
+    expect(
+      m.outbox().firstWhere((e) => e.item.id == host).item.deleted,
+      isTrue,
+    );
+  });
 
   test('an identity secret opens back', () async {
     final m = LocalMirror.inMemory();

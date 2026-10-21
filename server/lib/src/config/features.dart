@@ -11,7 +11,7 @@ class Features {
 
   bool enabled(Flag flag) => _overrides[flag] ?? flag != Flag.plainHttpLan;
 
-  /// Without a token: `sync` plus the enabled flags among recovery_kit, plain_http_lan and mascot.
+  /// Without a token: `sync` plus the enabled flags a client needs before sign-in.
   List<String> publicCapabilities() => _capabilities(_public);
 
   /// With a valid access token: `sync` plus every enabled flag.
