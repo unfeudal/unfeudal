@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # Build context: the repository root (server/ depends on ../shared).
-FROM dart:3.13.5@sha256:8604cbd137b6d67c24f49b916f2aa9b67d71b539576e0178bf161d831c9e344f AS build
+FROM dart:3.14.0-315.3.beta@sha256:d4057f49c8e04e8795486a6f4b449b5d3db9ace5a8fb2a3599fc9263c77daad8 AS build
 WORKDIR /src/server
 COPY shared/pubspec.yaml /src/shared/
 COPY server/pubspec.yaml server/pubspec.lock ./
@@ -11,7 +11,7 @@ COPY server ./
 RUN dart pub get --offline && dart build cli --target bin/server.dart -o /out
 
 # Same Debian release as the dart image, so the binary finds the glibc it was linked against.
-FROM debian:trixie-slim@sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46aea49f11f
+FROM debian:trixie-slim@sha256:a72b4433de1cf7d6bae0c4cee74d0547f58601a643b3375f070c51600d63b6b2
 ARG VERSION=dev
 LABEL org.opencontainers.image.title="unfeudal-server" \
       org.opencontainers.image.version="${VERSION}" \
