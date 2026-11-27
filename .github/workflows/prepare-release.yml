@@ -15,7 +15,7 @@ jobs:
     environment: bot
     steps:
       - id: app
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         with:
           app-id: ${{ secrets.RELEASE_APP_ID }}
           private-key: ${{ secrets.RELEASE_APP_KEY }}
@@ -23,7 +23,7 @@ jobs:
           permission-pull-requests: write
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: {token: "${{ steps.app.outputs.token }}", persist-credentials: true}
-      - uses: dart-lang/setup-dart@6afc89df92d6eb3834022f73cd65adc8cdfcb92d # v1.8.1
+      - uses: dart-lang/setup-dart@2286a0c042b44434fe26d292bbce8d34f7ec662b # v1.8.2
       - id: bump
         run: cd tool && dart pub get && dart run bin/bump.dart "$PACKAGE" "$LEVEL" >> "$GITHUB_OUTPUT"
         env:
