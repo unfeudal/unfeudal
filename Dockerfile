@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # Build context: the repository root (server/ depends on ../shared).
-FROM dart:3.13.5@sha256:8604cbd137b6d67c24f49b916f2aa9b67d71b539576e0178bf161d831c9e344f AS build
+FROM dart:3.14.0@sha256:c78970229c8944bd6076caf4e5977ef569ba66750d301a2149f63b41a6725cec AS build
 WORKDIR /src/server
 COPY shared/pubspec.yaml /src/shared/
 COPY server/pubspec.yaml server/pubspec.lock ./
